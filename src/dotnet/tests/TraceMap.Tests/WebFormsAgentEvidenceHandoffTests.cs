@@ -582,7 +582,7 @@ public sealed class WebFormsAgentEvidenceHandoffTests
             "case-001", "case-001.private.html", "inspection.snapshot.json", WebFormsAgentEvidenceHandoff.HashFile(inspection),
             "agent-evidence-handoff.json");
         try { test(root, inspection, handoff); }
-        finally { Directory.Delete(root, recursive: true); }
+        finally { SqliteConnection.ClearAllPools(); TempDirectory.DeleteTree(root); }
 
         static object Witness(string factId, string caller, string callee, int line, string path = "source/Page.aspx.cs") => new
         {

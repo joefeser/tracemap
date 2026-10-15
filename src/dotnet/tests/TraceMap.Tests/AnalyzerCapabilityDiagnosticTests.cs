@@ -213,7 +213,7 @@ public sealed class AnalyzerCapabilityDiagnosticTests
         var result = ScanEngine.Scan(new ScanOptions(repo, scanOut));
         SqliteIndexWriter.Write(Path.Combine(scanOut, "index.sqlite"), result.Manifest, result.Facts);
 
-        await using (var connection = new SqliteConnection($"Data Source={Path.Combine(scanOut, "index.sqlite")}"))
+        await using (var connection = new SqliteConnection($"Data Source={Path.Combine(scanOut, "index.sqlite")};Pooling=False"))
         {
             await connection.OpenAsync();
             var count = await ExecuteScalarAsync<long>(
@@ -229,7 +229,7 @@ public sealed class AnalyzerCapabilityDiagnosticTests
         }
 
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([Path.Combine(scanOut, "index.sqlite")], combinedPath, ["legacy-source"]));
-        await using (var connection = new SqliteConnection($"Data Source={combinedPath}"))
+        await using (var connection = new SqliteConnection($"Data Source={combinedPath};Pooling=False"))
         {
             await connection.OpenAsync();
             var count = await ExecuteScalarAsync<long>(
@@ -502,7 +502,7 @@ public sealed class AnalyzerCapabilityDiagnosticTests
 
     private static async Task RewriteFirstCapabilitySchemaAsync(string indexPath, string schemaVersion)
     {
-        await using var connection = new SqliteConnection($"Data Source={indexPath}");
+        await using var connection = new SqliteConnection($"Data Source={indexPath};Pooling=False");
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
         command.CommandText = """

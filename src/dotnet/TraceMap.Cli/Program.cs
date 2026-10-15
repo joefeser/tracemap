@@ -439,7 +439,8 @@ public static class TraceMapCommand
         {
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
-            WebFormsVbImportContextPath = values.GetValueOrDefault("--webforms-vb-import-context")
+            WebFormsVbImportContextPath = values.GetValueOrDefault("--webforms-vb-import-context"),
+            VisualBasicCompilationContextPath = values.GetValueOrDefault("--vb-compilation-context")
         };
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
@@ -2878,6 +2879,7 @@ public static class TraceMapCommand
               --include <glob>         Repeatable inventory inclusion.
               --exclude <glob>         Repeatable inventory exclusion.
               --target-framework <tfm> Semantic target-framework selection.
+              --vb-compilation-context <json> Explicit hash-bound projectless VB inputs; no reference discovery.
 
             Diagnostic options:
               --diagnostic-progress <file>
@@ -3117,7 +3119,8 @@ public static class TraceMapCommand
               --exact-from-symbol       Require exact symbol identity for --from-symbol.
               --from-webforms-event <id>  Start from a WebForms event/root fact or selector.
               --from-source <label>      Constrain start evidence to a source label.
-              --to-surface <kind>        database-api, sql-query, sql-persistence, http-route, http-client,
+              --to-surface <kind>        database-operations (source SQL + compiled database API),
+                                          database-api, sql-query, sql-persistence, http-route, http-client,
                                           package-config, wcf-operation, asmx-service,
                                           asmx-operation, asmx-client, asmx-config,
                                           asmx-metadata, legacy-data, dependency-surface,

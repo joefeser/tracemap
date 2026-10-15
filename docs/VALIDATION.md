@@ -1,5 +1,139 @@
 # TraceMap Validation Guide
 
+PR #872 review correction: legacy-webforms/0.13.12 retains the exact selected
+registration hash when declarations share one line; App_Code candidates remain
+Tier3 and assembly registrations remain structurally scoped. This extractor fix
+requires a fresh scan. Path algorithm 1.9 constructs explicit-reference candidates
+from source-call and metadata declarations even without IL rows; existing retained
+witnesses can be requeried, but no IL observations or database terminal are invented.
+Run AppCodeRegistrationMatrixTests, ExplicitVisualBasicContextTests and their
+adjacent legacy/source-metadata suites. VaultExportTests pins canonical projected
+path markers as Tier4 gaps, never navigation; genuinely unsafe artifact paths and
+malformed markers remain rejected. GroupedCompiledPathHandoffTests pins corrected
+persistence wording, exact legacy projection readback and unknown-commit refusal.
+
+The evidence-admission debugging ledger is
+`docs/validation/EVIDENCE_ADMISSION_DEBUGGING_LEDGER.md`. Run
+`HttpEntryBoundaryRegressionTests` before reviewing this branch: it exercises
+event/constructor/direct-control/property/lifecycle body HTTP routes through
+ordinary and bounded readers, with markup-only, NameOf, deferred lambda,
+ByRef, writable/virtual getter and inert lifecycle negatives. Its harness is
+not ASP.NET runtime evidence. Semantic extractor 0.10.4 adds only source-defined
+nonvirtual read-only getter call edges; a fresh scan is required for those edges.
+No framework dispatch or markup-to-handler CallEdge is fabricated.
+The real `samples/http-entry-boundaries` net48 fixture adds signed System.Web
+override identities and MyBase/MyClass negative controls. Path algorithm 1.8
+blocks sibling override candidates immediately after explicit nonvirtual calls;
+ordinary virtual candidate paths remain available. Fresh 0.10.4 source facts
+are needed for dispatchKind; old facts cannot recover that evidence by requery.
+
+Grouped report positive/partial readback: `GroupedCompiledPathHandoffTests`
+checks route presence independently of truncation, including all four
+positive/empty and truncated/non-truncated combinations. HTML explicitly states
+that retained static routes survive incomplete enumeration and terminal tiers
+do not upgrade an entire route. Grouping is still lossless; traversal limits,
+path algorithm, machine-readable schemas and coverage flags are unchanged.
+
+Semantic extractor 0.10.3 fixes explicit-reference member identities when
+Roslyn retargets signature types to a loaded dependency version. The resolved
+metadata token is decoded from the same captured, hash-verified PE reference;
+the DLL's original parameter scopes and versions are preserved. No version
+wildcards, name-only matching, or provenance promotion are introduced. The
+external-wrapper matrix includes an overloaded ByRef method referencing an
+older dependency version, checked through ordinary and bounded readers.
+This extraction fix requires a fresh scan; requerying 0.10.2 facts cannot fix
+their encoded identities. Run the three bridge suites below plus
+`FrameworkSignatureCandidateTests`. Full-suite, pinned OSS and authentic
+Windows/private validation remain separate and are not implied by these tests.
+
+Path algorithm 1.7 preserves explicit-reference witnesses in compact bounded
+CallEdge projection. The external-wrapper matrix must pass through BOTH ordinary
+and bounded combined-index readers; the positive/negative cases assert the
+same reachability outcome. Algorithm 1.6 dropped these properties during bounded
+reading even though the source facts retained them. A requery of an existing
+0.10.2 scan suffices for this reader fix; no new source scan is needed.
+
+Explicit reference member bridge: run `ExplicitVisualBasicContextTests`,
+`SourceMetadataReconciliationTests`, and `CombinedDependencyPathTests`.
+The synthetic external DLL test compiles a wrapper with parameterized command
+text, scans a VB caller with hash-pinned references, persists and combines the
+facts, and checks mixed database paths. Wrong hashes/identities, absent proof,
+duplicate declarations and virtual dispatch must not bridge. Compiled-only
+queries must not use this source-reference candidate. Unbound provenance stays
+unbound. Semantic extractor 0.10.2 and path algorithm 1.6 are required; old facts
+need a fresh scan, not just a requery. The rule is
+`combined.paths.explicit-reference-member.v1`. No original-build equivalence,
+command-value propagation, or runtime database-use claim follows. Full-suite,
+pinned OSS and authentic Windows/private checks remain separate gates.
+
+Retained IL inspection: run `python3 -m unittest discover -s scripts/validation
+-p test_inspect_retained_il_body.py` (on one shell line). The read-only helper
+`scripts/inspect-retained-il-body.py` follows exact source-index-local
+`ilBodyFactId` links and counts `ManagedIlCallObserved`, not source `CallEdge`.
+It verifies call/body file hashes and refuses ambiguous selectors and bounded
+query overflow. Its console-only output is diagnostic, not a new admission
+artifact. Private identities require the explicit `--local-details` flag.
+`IlBodyEvidenceExtractorTests.Unbound_provenance_still_records_operand_aware_bodies`
+also pins that IL calls survive value/command gaps. Neither inspection nor
+analysis alone proves graph admission or database reachability.
+
+Nested projectless VB delegation: the
+`ExplicitVisualBasicContextTests.Syntax_page_reaches_semantic_database_body_only_through_unique_bridge`
+matrix includes a concrete field calling a same-named protected nested method,
+a missing base class, an inherited receiver with a source-visible wrapper,
+and a wrapper-name negative control. It asserts exact Tier1 declaration/call
+identities, real scan/index/combine/path behavior, and that unrelated sibling
+database operations remain unreachable. A custom wrapper name alone is not a
+database operation. These cases pass without an extractor change; they do not
+establish why a private retained call is absent. Use
+`prompts/check-save-nested-call-facts.md` to distinguish extraction, combination,
+identity and traversal evidence in an existing run. Full-suite, pinned OSS and
+authentic Windows/private acceptance remain separate validation gates.
+
+For namespace-only App_Code registration candidates, run
+`AppCodeRegistrationMatrixTests` with `LegacyWebFormsExtractorTests`,
+`VisualBasicWebFormsCompositionTests`, `WebFormsGapFamilyRegressionTests`,
+`MigrationRegressionCorpusTests` and `IntegratedMigrationReportTests`.
+Scan `samples/webforms-pattern-matrix` and `samples/stacked-migration-regression`.
+The 89-case matrix and known exclusions are in
+`docs/validation/MIGRATION_REGRESSION_COVERAGE.md`. Full-solution and authentic
+Windows/private validation remain separate gates; focused passes do not imply them.
+
+Retained semantic/registration diagnostics: run
+`python3 scripts/validation/test_retained_gap_inventory.py`. The tests pin exact
+file-overlap counts without exporting private identifiers or their hashes,
+missing file evidence, closed registration-state labels, deduplication and
+privacy-projected hashing. `prompts/diagnose-semantic-registration-families.md`
+uses the accepted scan without rebuilding or rescanning. Overlap is correlation,
+not a root-cause or deduplicated-defect claim; unknown state remains unavailable.
+
+The reported-shape follow-up extends `WebFormsGapFamilyRegressionTests` with
+implicit With event receivers and VB Page.IsPostBack candidates. Run the adjacent
+VB composition, legacy WebForms, stacked migration and integrated report suites.
+Also run `python3 scripts/validation/test_retained_gap_inventory.py` for the public
+compiled-reason catalog and separate compiled/other-known/unknown-rule totals.
+These counts are gap occurrences, not unique defects or runtime coverage.
+
+Runtime distribution capacity: run `RuntimeInventoryBoundaryTests` plus
+`Runtime_digest_pins_dependency_bytes_without_paths_or_timestamp_discovery` and
+`Retained_tool_copy_matches_the_pinned_distribution_without_rewriting_run_or_copying_external_runtime`.
+All DLL/EXE/SO/dylib/deps/runtimeconfig files, including satellites and nested
+build hosts, remain hashed. The traversal has one 4,096-entry limit counting
+files and directories (including ignored files), not a separate 512-file limit.
+Per-file 256-MiB, aggregate 2-GiB, cancellation and reparse-point guards remain.
+This is bounded distribution provenance, not proof of a minimal dependency set.
+Use a fresh isolated build and new preflight/run after changing the tool; never
+trim runtime files or resume old tool identity to bypass inventory failure.
+
+For the bounded WebForms gap-family batch, run `WebFormsGapFamilyRegressionTests`,
+`VisualBasicWebFormsCompositionTests`, `LegacyWebFormsExtractorTests`,
+`LegacyWebFormsEventIdentityTests`, `MigrationRegressionCorpusTests` and
+`IntegratedMigrationReportTests`. The synthetic matrix pins escaped VB event
+receivers; Boolean literal lifecycle comparisons, negation, shadows and depth;
+config registration inheritance/clear; literal versus dynamic postbacks.
+Use `prompts/validate-webforms-gap-family-batch.md` for one private acceptance.
+No claimed reduction in private gap counts follows from synthetic coverage alone.
+
 For the first backend extraction report projection, run
 `BackendExtractionSampleTests`, `GroupedCompiledPathHandoffTests`,
 `ConstructedGenericSampleTests`, `FrameworkSignatureCandidateTests`,
@@ -4698,6 +4832,15 @@ terminal beyond the depth bound is recovered as a scope-legal
 TerminalReachabilityPrewalk witness; mixed-query depth recovery is unchanged;
 and the twelve-layer deep-projectless chain recovers the identical
 scope-legal witness at depth 8 that ordinary enumeration finds at depth 24.
+
+## VB compilation-context regression gate
+
+See [the executable coverage matrix](validation/VB_COMPILATION_CONTEXT_MATRIX.md)
+and `.github/workflows/vb-compilation-context-matrix.yml` for the bounded,
+cross-platform projectless/semantic/import/registration/path gate. It does not
+replace private compatibility checks. The opt-in explicit-input semantic path and
+its separate successful/refused binding tests are documented in
+[EXPLICIT_VB_CONTEXT.md](validation/EXPLICIT_VB_CONTEXT.md).
 
 ## Runtime-floor evidence for pre-4.0 assemblies (#853)
 

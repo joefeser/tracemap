@@ -34,6 +34,8 @@ public sealed record CombinedDependencyPathOptions(
     public bool CompiledOnly { get; init; }
     [JsonIgnore]
     public Action<RetainedMethodGraph>? MethodGraphObserver { get; init; }
+    [JsonIgnore]
+    public Action<RetainedMethodGraph>? ZeroPathGraphObserver { get; init; }
     internal IReadOnlyList<CombinedPathSymbolRoot>? SymbolRoots { get; init; }
     // Deterministic work bound, including nonterminal/cyclic exploration.
     public int MaxTraversalWork { get; init; } = 100_000;
@@ -396,7 +398,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.3";
+    private const string AlgorithmVersion = "1.9";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -421,6 +423,7 @@ public static partial class CombinedDependencyPathReporter
         "surface-evidence",
         "symbol-reconciliation",
         "compiled-source-identity",
+        "explicit-reference-member-candidate",
         "projectless-source-pdb-identity",
         "projectless-publish-method-candidate",
         "projectless-publish-member-candidate",
@@ -625,9 +628,9 @@ public static partial class CombinedDependencyPathReporter
                 throw new ArgumentException($"paths --to-surface '{surfaceKind}' is an edge kind, not a terminal surface.");
             }
 
-            if (!CombinedTerminalSurfaceKinds.AllSet.Contains(surfaceKind))
+            if (surfaceKind != "database-operations" && !CombinedTerminalSurfaceKinds.AllSet.Contains(surfaceKind))
             {
-                throw new ArgumentException($"paths --to-surface must be one of {CombinedTerminalSurfaceKinds.ValidationList}.");
+                throw new ArgumentException($"paths --to-surface must be database-operations or one of {CombinedTerminalSurfaceKinds.ValidationList}.");
             }
         }
 
@@ -752,6 +755,16 @@ public static partial class CombinedDependencyPathReporter
                     gaps.Add(gap);
                 }
             }
+        }
+
+        // Keep zero-path diagnostics separate from path acceptance. Reuse the
+        // constructed graph and only the unused work allowance; never rebuild it.
+        if (options.MethodGraphObserver is null && options.ZeroPathGraphObserver is not null &&
+            search is not null && search.Paths.Count == 0 && startNodes.Count != 0 &&
+            search.Work < options.MaxTraversalWork)
+        {
+            options.ZeroPathGraphObserver(BuildMethodGraph(graph, read, startNodes,
+                options with { MaxTraversalWork = options.MaxTraversalWork - search.Work }));
         }
 
         var reportPaths = legacyMode
@@ -1168,7 +1181,7 @@ public static partial class CombinedDependencyPathReporter
                 SafePath(edge.FilePath),
                 edge.StartLine,
                 edge.EndLine,
-                edge.EdgeKind));
+                edge.EdgeKind) { SuppressTargetDispatch = factsById.GetValueOrDefault(edge.EdgeId)?.Properties.GetValueOrDefault("dispatchKind") == "explicit-nonvirtual" });
         }
 
         // A resumable or externally assembled index can retain the authoritative
@@ -1199,7 +1212,7 @@ public static partial class CombinedDependencyPathReporter
                 SafePath(fact.FilePath),
                 fact.StartLine,
                 fact.EndLine,
-                "calls"));
+                "calls") { SuppressTargetDispatch = fact.Properties.GetValueOrDefault("dispatchKind") == "explicit-nonvirtual" });
         }
 
         graphStorage?.MarkObservationStage("surface-projection");
@@ -4828,7 +4841,7 @@ public static partial class CombinedDependencyPathReporter
                         break;
                     }
                     work++;
-                    if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
+                    if (!TryAdvanceDispatchMode(current.DispatchMode, edge, out var nextMode)) continue;
                     var next = new TerminalInventoryKey(current.RootNodeId, edge.ToNodeId, nextMode);
                     if (predecessors.ContainsKey(next)) continue;
                     if (queue.Count >= maxFrontier)
@@ -4969,7 +4982,7 @@ public static partial class CombinedDependencyPathReporter
                 if (work >= maxWork)
                     return new TerminalWitnessResult(null, work, true, false, current.NodeId);
                 work++;
-                if (!TryAdvanceDispatchMode(current.DispatchMode, edge.EdgeKind, out var nextMode)) continue;
+                if (!TryAdvanceDispatchMode(current.DispatchMode, edge, out var nextMode)) continue;
                 // The baseline bit is tracked only where it gates edges; mixed-mode
                 // key identity stays byte-identical to the scope-less prewalk.
                 var nextEntered = compiledOnly && (current.CompiledBaselineEntered || edge.EdgeKind != "legacy-root-selection");
@@ -5024,9 +5037,12 @@ public static partial class CombinedDependencyPathReporter
 
     private static bool TryAdvanceDispatchMode(
         DispatchTraversalMode current,
-        string edgeKind,
+        GraphEdge edge,
         out DispatchTraversalMode next)
     {
+        var edgeKind = edge.EdgeKind;
+        var nonvirtualTarget = (current & DispatchTraversalMode.NonvirtualTarget) != 0;
+        current &= ~DispatchTraversalMode.NonvirtualTarget;
         next = current;
         if (edgeKind is "implements" or "overrides")
         {
@@ -5035,9 +5051,11 @@ public static partial class CombinedDependencyPathReporter
         }
         else if (edgeKind is "interface-candidate" or "override-candidate")
         {
+            if (nonvirtualTarget) return false;
             if (current == DispatchTraversalMode.Relationship) return false;
             next = DispatchTraversalMode.Candidate;
         }
+        if (edge.SuppressTargetDispatch) next |= DispatchTraversalMode.NonvirtualTarget;
         return true;
     }
 
@@ -5050,6 +5068,8 @@ public static partial class CombinedDependencyPathReporter
 
         var isRelationshipEdge = edge.EdgeKind is "implements" or "overrides";
         var isCandidateEdge = edge.EdgeKind is "interface-candidate" or "override-candidate";
+        if (isCandidateEdge && graph.EdgesById[state.EdgeIds[^1]].SuppressTargetDispatch)
+            return true;
         if (!isRelationshipEdge && !isCandidateEdge)
         {
             return false;
@@ -5325,6 +5345,8 @@ public static partial class CombinedDependencyPathReporter
             notes.Add(new CombinedPathNote("FrameworkSignatureCandidate", "This route includes a unique embedded desktop framework-version signature candidate. Declaring assembly identity remains exact, but runtime binding and compatibility are unproven; argument and return-value propagation cannot cross this candidate."));
         }
 
+        if (edges.Any(edge => edge.EdgeKind == "explicit-reference-member-candidate"))
+            notes.Add(new CombinedPathNote("ExplicitReferenceMemberCandidate", "The compiler reference bytes and complete member identity match one retained compiled method. Original-build correspondence and runtime loading remain unproven; provenance is unchanged and command values are not propagated across this candidate."));
         if (edges.Any(edge => edge.EdgeKind is "compiled-source-identity" or "projectless-source-pdb-identity" or "compiled-il-call" or "compiled-il-callvirt-candidate"))
         {
             notes.Add(new CombinedPathNote("BoundCompiledIlEvidence", "Exact bound source identity or uniquely owned checksum-matched PDB sequence points and admitted IL call operands are static evidence only. They do not prove execution, branch feasibility, virtual dispatch, or external assembly resolution."));
@@ -5512,7 +5534,9 @@ public static partial class CombinedDependencyPathReporter
         return graph.Nodes.Values
             .Where(node => node.SurfaceKind is not null)
             .Where(node => explicitSurfaceKind || IsDefaultTerminalSurface(node, startFactIds))
-            .Where(node => surfaceKind is null || string.Equals(node.SurfaceKind, surfaceKind, StringComparison.Ordinal))
+            .Where(node => surfaceKind is null || (surfaceKind == "database-operations"
+                ? node.SurfaceKind is "database-api" or "sql-query" or "sql-persistence"
+                : string.Equals(node.SurfaceKind, surfaceKind, StringComparison.Ordinal)))
             .Where(node => surfaceName is null || SurfaceNameMatches(node, surfaceName))
             .Where(node => messageDirection is null || !IsMessageSurfaceKind(node.SurfaceKind) || string.Equals(node.OperationDirection, messageDirection, StringComparison.Ordinal))
             .Select(node => node.NodeId)
@@ -6928,6 +6952,12 @@ public static partial class CombinedDependencyPathReporter
 
         public void RecordSourceFact(string nodeId, string factType)
         {
+            // Calls are body observations too, even when no outgoing graph edge
+            // can be constructed. Keep availability separate from connectivity.
+            if (factType is FactTypes.CallEdge or FactTypes.MethodInvoked || IsSourceBodyEvidenceFactType(factType))
+            {
+                SourceBodyEvidenceNodeIds.Add(nodeId);
+            }
             if (factType == FactTypes.CallEdge)
             {
                 CallFactSourceNodeIds.Add(nodeId);
@@ -6935,10 +6965,6 @@ public static partial class CombinedDependencyPathReporter
             else if (factType == FactTypes.MethodInvoked)
             {
                 MethodInvocationSourceNodeIds.Add(nodeId);
-            }
-            else if (IsSourceBodyEvidenceFactType(factType))
-            {
-                SourceBodyEvidenceNodeIds.Add(nodeId);
             }
         }
 
@@ -7108,7 +7134,8 @@ public static partial class CombinedDependencyPathReporter
     {
         None,
         Relationship,
-        Candidate
+        Candidate,
+        NonvirtualTarget = 4
     }
 
     private sealed record TerminalWitnessKey(
@@ -7303,6 +7330,8 @@ public static partial class CombinedDependencyPathReporter
         string? CandidateBridgeKind = null,
         IReadOnlyList<string>? SupportingRelationshipIds = null)
     {
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        public bool SuppressTargetDispatch { get; init; }
         public string? CompiledAttachmentLinkSha256 { get; init; }
         public CombinedPathEdge ToReportEdge()
         {

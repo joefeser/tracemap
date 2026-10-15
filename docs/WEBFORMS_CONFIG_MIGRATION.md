@@ -720,6 +720,31 @@ SQL execution. The failed run stays failed. The full-run repeated-I/O cause
 remains unproven; indexed typed reconciliation/gap lookups remove avoidable
 full-payload passes but are not a demonstrated explanation for that counter.
 
+When a grouped handler requery finds no terminal path and has traversal work
+remaining, it also writes `method-graph.local.json` and `method-graph.local.html`
+from the same constructed graph. The receipt's `zeroPathDiagnosticReport` names
+this separate diagnostic and binds both additional artifacts. Its unfiltered
+outgoing traversal uses only the remaining work allowance, with its own cutoffs;
+it does not change the grouped query's path count, truncation status or tiers.
+No remaining work means no diagnostic graph. Diagnostic edges are not accepted
+terminal paths, and an absent edge does not prove absent application behavior.
+
+The diagnostic graph's `sourceDatabaseAudit` uses rule
+`diagnostic.graph.source-database-terminal-audit.v1` to compare retained
+`DatabaseOperationCandidate` facts with their projected terminals, exact caller
+attachments and bounded caller/terminal reachability. Counts cover admitted
+operation facts, not just the reachable subgraph. Local detail lists are capped
+at 128 rows (or the smaller graph record bound), with `rowsTruncated` explicit.
+Reachable `CallEdge`/`MethodInvoked` facts bearing database-operation spellings
+are joined to operation facts by exact source index, caller, target, path and
+line span. These are fact counts, not deduplicated call-site counts. Names alone
+are not API proof: a lookalike `ExecuteNonQuery` remains a name observation.
+Empty site matches do not prove an extraction bug. A terminal attached to an
+unreachable caller differs from a missing fact or a missing projection; none
+of these source-evidence states is explained solely by compiled-IL provenance
+gaps. This audit is contained in the existing local-only, generator/input-hashed
+method-graph artifact and does not add edges or promote evidence tiers.
+
 Recovery bypasses full graph composition. A later public reproduction identified
 and fixed repeated whole-table decodes in VB bridge admission using indexed
 fact-type reads; the authentic Windows corpus stays below the unchanged logical
