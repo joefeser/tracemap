@@ -39,14 +39,40 @@ public sealed class VaultExportTests
             FromEndpoint: "GET /api/orders/{}", FromSource: "client", ToSurface: "sql-query"));
         if (kind == "reverse") await CombinedReverseReporter.WriteAsync(new(combined, reverse,
             Format: "json", Surface: "sql-query", SurfaceName: "orders", To: "sources"));
+        static bool Redacted(string? path) => path?.StartsWith("absolute-path-hash:", StringComparison.Ordinal) == true;
+        IEnumerable<string?> expectedFacts;
+        if (kind == "combined")
+        {
+            var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+            expectedFacts = inventory.Nodes.Where(node => Redacted(node.FilePath)).Select(node => node.CombinedFactId)
+                .Concat(inventory.Edges.Where(edge => Redacted(edge.FilePath)).SelectMany(edge => edge.SupportingFactIds));
+        }
+        else if (kind == "paths")
+        {
+            var report = JsonSerializer.Deserialize<CombinedDependencyPathReport>(
+                await File.ReadAllTextAsync(Path.Combine(paths, "paths-report.json")), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+            expectedFacts = report.Paths.Where(row => row.Nodes.Any(node => Redacted(node.FilePath))
+                || row.Edges.Any(edge => Redacted(edge.FilePath))).SelectMany(row => row.SupportingFactIds);
+        }
+        else
+        {
+            var report = JsonSerializer.Deserialize<CombinedReverseReport>(
+                await File.ReadAllTextAsync(Path.Combine(reverse, "reverse-report.json")), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+            expectedFacts = report.SelectedSurfaces.Where(surface => Redacted(surface.FilePath)).SelectMany(surface => surface.SupportingFactIds)
+                .Concat(report.Paths.SelectMany(row => row.Nodes.Where(node => Redacted(node.FilePath)).Select(node => node.CombinedFactId)
+                    .Concat(row.Edges.Where(edge => Redacted(edge.FilePath)).SelectMany(edge => edge.SupportingFactIds))));
+        }
+        var expected = expectedFacts.OfType<string>().Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        Assert.NotEmpty(expected);
         var output = Path.Combine(temp.Path, "vault");
         var result = await VaultExporter.ExportAsync(new(kind == "combined" ? combined : null, output,
             PathsReportPaths: kind == "paths" ? [Path.Combine(paths, "paths-report.json")] : null,
             ReverseReportPaths: kind == "reverse" ? [Path.Combine(reverse, "reverse-report.json")] : null,
             SourceClaimCatalogPath: catalog, MinimumClaimLevel: claim, Date: "2026-06"));
         Assert.True(result.Graph.Settings.Partial);
-        Assert.Contains(result.Graph.Gaps, gap => gap.Classification == "RedactedEvidenceLocation"
-            && gap.EvidenceTier == EvidenceTiers.Tier4Unknown);
+        var redactedGap = Assert.Single(result.Graph.Gaps, gap => gap.Classification == "RedactedEvidenceLocation");
+        Assert.Equal(EvidenceTiers.Tier4Unknown, redactedGap.EvidenceTier);
+        Assert.Equal(expected, redactedGap.SupportingFactIds);
         Assert.DoesNotContain(result.Graph.Nodes.SelectMany(node => node.EvidenceLocations ?? [])
             .Concat(result.Graph.Edges.SelectMany(edge => edge.EvidenceLocations ?? [])), row => row.FilePath.StartsWith("absolute-path-hash:", StringComparison.Ordinal));
         foreach (var file in new[] { "graph.json", "Start Here.md" })

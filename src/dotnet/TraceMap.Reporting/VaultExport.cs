@@ -829,6 +829,7 @@ public static class VaultExporter
         CancellationToken cancellationToken)
     {
         var compatibleCount = 0;
+        var redactedGaps = new RedactedLocationGapAccumulator(gaps);
         foreach (var path in paths.OrderBy(value => value, StringComparer.Ordinal))
         {
             byte[]? bytes = null;
@@ -854,14 +855,15 @@ public static class VaultExporter
                     "compatible",
                     report.Limitations ?? [],
                     SourceProvenance(report.Snapshot.Sources)));
-                var redactedGapIds = gaps.Select(gap => gap.Id).ToHashSet(StringComparer.Ordinal);
-                foreach (var marker in report.SelectedSurfaces.Select(surface => surface.FilePath)
-                    .Concat(report.Paths.SelectMany(row => row.Nodes.Select(node => node.FilePath)
-                        .Concat(row.Edges.Select(edge => edge.FilePath))))
-                    .OfType<string>().Where(IsRedactedLocation).Distinct(StringComparer.Ordinal))
+                var claim = InputClaimLevel(report.Snapshot.Sources, sourceClaims);
+                foreach (var surface in report.SelectedSurfaces.Where(surface => surface.FilePath is { } file && IsRedactedLocation(file)))
+                    redactedGaps.Add(surface.FilePath!, claim, surface.SupportingFactIds);
+                foreach (var row in report.Paths)
                 {
-                    var gap = RedactedLocationGap(marker, InputClaimLevel(report.Snapshot.Sources, sourceClaims));
-                    if (redactedGapIds.Add(gap.Id)) gaps.Add(gap);
+                    foreach (var node in row.Nodes.Where(node => node.FilePath is { } file && IsRedactedLocation(file)))
+                        redactedGaps.Add(node.FilePath!, claim, [node.CombinedFactId]);
+                    foreach (var edge in row.Edges.Where(edge => edge.FilePath is { } file && IsRedactedLocation(file)))
+                        redactedGaps.Add(edge.FilePath!, claim, edge.SupportingFactIds);
                 }
                 foreach (var root in report.ReverseRoots)
                 {
@@ -912,6 +914,7 @@ public static class VaultExporter
             }
         }
 
+        redactedGaps.Complete();
         return compatibleCount;
     }
 
@@ -2432,8 +2435,8 @@ public static class VaultExporter
 
     private static void ApplyRedactedLocationSafety(List<VaultGraphNode> nodes, List<VaultGraphEdge> edges, List<VaultGraphGap> gaps)
     {
-        var gapIds = gaps.Select(gap => gap.Id).ToHashSet(StringComparer.Ordinal);
-        IReadOnlyList<VaultEvidenceLocation>? Project(IReadOnlyList<VaultEvidenceLocation>? locations, string claim)
+        var redactedGaps = new RedactedLocationGapAccumulator(gaps);
+        IReadOnlyList<VaultEvidenceLocation>? Project(IReadOnlyList<VaultEvidenceLocation>? locations, string claim, IReadOnlyList<string> supportingFactIds)
         {
             if (locations is null) return null;
             var redacted = locations.Where(location => IsRedactedLocation(location.FilePath.Trim())).ToArray();
@@ -2442,15 +2445,49 @@ public static class VaultExporter
             // original absolute location, and never treat the marker as a path.
             foreach (var location in redacted)
             {
-                var gap = RedactedLocationGap(location.FilePath.Trim(), claim);
-                if (gapIds.Add(gap.Id)) gaps.Add(gap);
+                redactedGaps.Add(location.FilePath.Trim(), claim, supportingFactIds);
             }
             return locations.Except(redacted).ToArray();
         }
         for (var i = 0; i < nodes.Count; i++) nodes[i] = nodes[i] with
-            { EvidenceLocations = Project(nodes[i].EvidenceLocations, nodes[i].ClaimLevel) };
+            { EvidenceLocations = Project(nodes[i].EvidenceLocations, nodes[i].ClaimLevel, nodes[i].SupportingFactIds) };
         for (var i = 0; i < edges.Count; i++) edges[i] = edges[i] with
-            { EvidenceLocations = Project(edges[i].EvidenceLocations, edges[i].ClaimLevel) };
+            { EvidenceLocations = Project(edges[i].EvidenceLocations, edges[i].ClaimLevel, edges[i].SupportingFactIds) };
+        redactedGaps.Complete();
+    }
+
+    private sealed class RedactedLocationGapAccumulator
+    {
+        private readonly List<VaultGraphGap> gaps;
+        private readonly Dictionary<string, (int Index, HashSet<string> Facts)> entries = new(StringComparer.Ordinal);
+
+        public RedactedLocationGapAccumulator(List<VaultGraphGap> gaps)
+        {
+            this.gaps = gaps;
+            for (var i = 0; i < gaps.Count; i++)
+                if (gaps[i].RuleId == RedactedLocationRuleId)
+                    entries[gaps[i].Id] = (i, (gaps[i].SupportingFactIds ?? []).ToHashSet(StringComparer.Ordinal));
+        }
+
+        public void Add(string marker, string claim, IEnumerable<string?> supportingFactIds)
+        {
+            var gap = RedactedLocationGap(marker, claim);
+            if (!entries.TryGetValue(gap.Id, out var entry))
+            {
+                entry = (gaps.Count, new HashSet<string>(StringComparer.Ordinal));
+                entries.Add(gap.Id, entry);
+                gaps.Add(gap);
+            }
+            foreach (var factId in supportingFactIds)
+                if (!string.IsNullOrWhiteSpace(factId)) entry.Facts.Add(factId);
+        }
+
+        public void Complete()
+        {
+            // One deterministic sort per gap, not per contributing record.
+            foreach (var entry in entries.Values)
+                gaps[entry.Index] = gaps[entry.Index] with { SupportingFactIds = DistinctSorted(entry.Facts) };
+        }
     }
 
     private static VaultGraphGap RedactedLocationGap(string marker, string claim)
