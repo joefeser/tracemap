@@ -8,5 +8,12 @@
 - [x] Run focused suites, full .NET tests, Python diagnostics, and public CLI smoke.
 - [x] Record results, deferred external validation, and reviewer regression checklist.
 
+## Windows pre-PR completion
+
+- [x] Reproduce and fix missing sanitized fallback hash with a portable regression.
+- [x] Validate the real net48 HTTP fixture on Windows without weakening path assertions.
+- [x] Gate new HTTP tests and distinguish historical controls from candidate failures.
+- [ ] Complete frozen full-suite and final-head CI validation before opening a PR.
+
 No private artifacts or application code are committed. Framework dispatch is not
 a fabricated semantic call. No PR creation or merge is part of this goal.

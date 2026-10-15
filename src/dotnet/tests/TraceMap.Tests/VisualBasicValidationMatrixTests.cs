@@ -9,6 +9,25 @@ namespace TraceMap.Tests;
 // sanitized gaps, and the per-file semantic/syntax-fallback boundary.
 public sealed class VisualBasicValidationMatrixTests
 {
+    [Fact]
+    public void Projectless_semantic_unavailable_gap_hashes_only_its_sanitized_message()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "PrivateName.vb"), "Public Class Widget\nEnd Class\n");
+        var result = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")));
+        var gap = Assert.Single(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
+            && fact.RuleId == RuleIds.VisualBasicSemanticWorkspace
+            && fact.Properties.GetValueOrDefault("gapKind") == "SemanticAnalysisUnavailable");
+        var message = gap.Properties["message"];
+        Assert.Equal("category-only", gap.Properties["sanitization"]);
+        Assert.Equal(FactFactory.Hash(message, 32), gap.Properties["messageHash"]);
+        Assert.DoesNotContain("PrivateName", message, StringComparison.Ordinal);
+        Assert.DoesNotContain(repo, message, StringComparison.Ordinal);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+    }
+
     // ---------- Generated and designer sources ----------
 
     [Fact]
