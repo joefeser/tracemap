@@ -1340,10 +1340,11 @@ public static class LegacyBaselineArtifacts
 
     private static bool IsUnderRepoRelative(string path, string repoRoot, string relativeRoot)
     {
-        var relative = Path.GetRelativePath(repoRoot, Path.GetFullPath(path));
+        var relative = Path.GetRelativePath(repoRoot, Path.GetFullPath(path)).Replace('\\', '/');
+        relativeRoot = relativeRoot.Replace('\\', '/').TrimEnd('/');
         return !relative.StartsWith("..", StringComparison.Ordinal)
             && !Path.IsPathRooted(relative)
-            && (relative == relativeRoot || relative.StartsWith(relativeRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal) || relative.StartsWith(relativeRoot + Path.AltDirectorySeparatorChar, StringComparison.Ordinal));
+            && (relative == relativeRoot || relative.StartsWith(relativeRoot + "/", StringComparison.Ordinal));
     }
 
     private static bool GitCheckIgnore(string path, string repoRoot)

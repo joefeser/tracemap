@@ -6,6 +6,18 @@ namespace TraceMap.Tests;
 
 public sealed class LegacyBaselineArtifactsTests
 {
+    [Fact]
+    public async Task Create_refuses_an_ignored_neighbor_of_the_allowed_storage_root()
+    {
+        var output = Path.Combine(RepoRoot(), ".tmp", "legacy-baselines-neighbor", Guid.NewGuid().ToString("N"));
+        var result = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            "samples/synthetic-legacy-scan", "synthetic-alpha", "boundary-control", output,
+            CreatedAt: "2026-06", DryRun: true));
+        Assert.Equal(LegacyBaselineClassifications.Rejected, result.Manifest.Safety.Classification);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Category == "output-storage");
+        Assert.False(Directory.Exists(output));
+    }
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

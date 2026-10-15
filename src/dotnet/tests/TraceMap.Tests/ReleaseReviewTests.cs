@@ -204,7 +204,7 @@ public sealed class ReleaseReviewTests
             EvidenceTiers.Tier3SyntaxOrTextual, new EvidenceSpan("sql/setup.sql", 1, 1, null, "sql-execution-context", "sql-execution-context/0.1.0"));
         SqliteIndexWriter.Write(beforeIndex, before, []);
         SqliteIndexWriter.Write(afterIndex, after, [fact]);
-        await using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={afterIndex}"))
+        await using (var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={afterIndex};Pooling=False"))
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
