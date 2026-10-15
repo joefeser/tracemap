@@ -1714,15 +1714,9 @@ public sealed class WebFormsReviewExecutionTests
         public void Dispose()
         {
             Output.Dispose(); Error.Dispose();
-            if (!Directory.Exists(Root)) return;
-            // Git creates read-only loose objects on Windows. These belong only
-            // to this test's temporary repository; do not follow reparse points.
-            var git = Path.Combine(Source, ".git");
-            if (Directory.Exists(git))
-                foreach (var file in Directory.EnumerateFiles(git, "*", new EnumerationOptions
-                { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false }))
-                    File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
-            Directory.Delete(Root, recursive: true);
+            // Some cases relocate the source repository inside Root. Clean the
+            // whole owned temporary tree rather than only its original Git path.
+            TempDirectory.DeleteTree(Root);
         }
     }
 }
