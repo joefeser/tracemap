@@ -53,21 +53,21 @@ Operational boundaries:
   approval.
 
 The trusted Baz batch, bounded Codex recovery, and local-review fallback require
-verified capabilities. This example uses immutable Agent Control Kit `v0.5.5`
-at `ab398330c03fbe34b7fdd600efa9698adf003a67`. Before a loop, verify the exact
+verified capabilities. This example uses immutable Agent Control Kit `v0.5.6`
+at `d8a78c7e4a1c7157e64f8bfdb19946e1e18dec28`. Before a loop, verify the exact
 checkout, stable identity, release receipt, and consumer lane. The lane requires
 ACK `>=0.5.2 <0.6.0` plus trustedHostedReviewerQuorum and the other declared capabilities; version range alone is insufficient. This example
 uses the verified local release installation; set `ACK_ROOT` to the actual
 release checkout and retain its matching receipt when installing elsewhere:
 
 ```bash
-ACK_ROOT="$HOME/.local/share/agent-control-kit/releases/v0.5.5"
-ACK_RELEASE_RECEIPT="$ACK_ROOT/.agent-control/tmp/releases/v0.5.5.json"
-ACK_SHA=ab398330c03fbe34b7fdd600efa9698adf003a67
+ACK_ROOT="$HOME/.local/share/agent-control-kit/releases/v0.5.6"
+ACK_RELEASE_RECEIPT="$ACK_ROOT/.agent-control/tmp/releases/v0.5.6.json"
+ACK_SHA=d8a78c7e4a1c7157e64f8bfdb19946e1e18dec28
 
 git -C "$ACK_ROOT" fetch origin --tags
 test "$(git -C "$ACK_ROOT" rev-parse HEAD)" = "$ACK_SHA"
-test "$(git -C "$ACK_ROOT" rev-parse 'v0.5.5^{commit}')" = "$ACK_SHA"
+test "$(git -C "$ACK_ROOT" rev-parse 'v0.5.6^{commit}')" = "$ACK_SHA"
 npm --prefix "$ACK_ROOT" run build
 node "$ACK_ROOT/dist/cli.js" version --json
 node "$ACK_ROOT/dist/cli.js" release verify \
@@ -115,10 +115,10 @@ node --test scripts/pr-review-loop-lane.test.mjs
 After verifying the pinned ACK installation, run:
 
 ```sh
-ACK_ROOT=/path/to/verified/ack-v0.5.5 node --test scripts/pr-review-loop-consumer.test.mjs
+ACK_ROOT=/path/to/verified/ack-v0.5.6 node --test scripts/pr-review-loop-consumer.test.mjs
 ```
 
-This uses ACK 0.5.5's actual packet loader with an explicit repository root and
+This uses ACK 0.5.6's actual packet loader with an explicit repository root and
 lane path. Git-backed loading must establish repo-local committed provenance;
 missing, altered, external, untracked and overlay configurations are rejected.
 The resulting packet then enters ACK's offline simulator. Missing and
