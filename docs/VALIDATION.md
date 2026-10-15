@@ -1,8 +1,20 @@
 # TraceMap Validation Guide
 
+Semantic extractor 0.10.3 fixes explicit-reference member identities when
+Roslyn retargets signature types to a loaded dependency version. The resolved
+metadata token is decoded from the same captured, hash-verified PE reference;
+the DLL's original parameter scopes and versions are preserved. No version
+wildcards, name-only matching, or provenance promotion are introduced. The
+external-wrapper matrix includes an overloaded ByRef method referencing an
+older dependency version, checked through ordinary and bounded readers.
+This extraction fix requires a fresh scan; requerying 0.10.2 facts cannot fix
+their encoded identities. Run the three bridge suites below plus
+`FrameworkSignatureCandidateTests`. Full-suite, pinned OSS and authentic
+Windows/private validation remain separate and are not implied by these tests.
+
 Path algorithm 1.7 preserves explicit-reference witnesses in compact bounded
 CallEdge projection. The external-wrapper matrix must pass through BOTH ordinary
-and bounded combined-index readers; all six positive/negative cases assert the
+and bounded combined-index readers; the positive/negative cases assert the
 same reachability outcome. Algorithm 1.6 dropped these properties during bounded
 reading even though the source facts retained them. A requery of an existing
 0.10.2 scan suffices for this reader fix; no new source scan is needed.

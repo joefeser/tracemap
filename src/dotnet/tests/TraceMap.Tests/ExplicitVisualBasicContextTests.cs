@@ -12,6 +12,7 @@ public sealed class ExplicitVisualBasicContextTests
 {
     [Theory]
     [InlineData("exact", true)]
+    [InlineData("retargeted-reference", true)]
     [InlineData("page-chain", true)]
     [InlineData("hash-mismatch", false)]
     [InlineData("identity-mismatch", false)]
@@ -67,8 +68,8 @@ public sealed class ExplicitVisualBasicContextTests
                 }
             }
             """.Replace("public int", mode == "virtual" ? "public virtual int" : "public int", StringComparison.Ordinal)
-                .Replace("string text", mode == "page-chain" ? "ref string text" : "string text", StringComparison.Ordinal)
-                .Replace("public class ExternalWrapper {", mode == "page-chain"
+                .Replace("string text", mode is "page-chain" or "retargeted-reference" ? "ref string text" : "string text", StringComparison.Ordinal)
+                .Replace("public class ExternalWrapper {", mode is "page-chain" or "retargeted-reference"
                     ? "public class ExternalWrapper { public int Execute(string unused) { return 0; }"
                     : "public class ExternalWrapper {", StringComparison.Ordinal)
                 .Replace("return command.ExecuteNonQuery();", mode == "page-chain"
@@ -79,6 +80,16 @@ public sealed class ExplicitVisualBasicContextTests
             referencePaths.Distinct().Select(path => Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(path)),
             new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
         using (var output = File.Create(library)) Assert.True(compiled.Emit(output).Success);
+        if (mode == "retargeted-reference")
+        {
+            using var image = new MemoryStream(File.ReadAllBytes(library));
+            using var assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(image);
+            var reference = Assert.Single(assembly.MainModule.AssemblyReferences, r => r.Name == "System.Data.Common");
+            reference.Version = new Version(2, 0, 0, 0);
+            var rewritten = library + ".rewritten";
+            assembly.Write(rewritten);
+            File.Move(rewritten, library, overwrite: true);
+        }
         WebFormsWizardNativeTests.InitGit(repo);
         static string Hash(string path) => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path)));
         var context = Path.Combine(temp.Path, "context.json");
@@ -92,6 +103,13 @@ public sealed class ExplicitVisualBasicContextTests
             { VisualBasicCompilationContextPath = context });
         var call = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.CallEdge
             && fact.Properties.GetValueOrDefault("explicitReferenceSha256") == Hash(library));
+        if (mode == "retargeted-reference")
+        {
+            var target = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+                && fact.TargetSymbol == call.Properties["targetMetadataIdentity"]);
+            Assert.Contains("version:7:2.0.0.0", target.TargetSymbol);
+            Assert.Contains("&", target.TargetSymbol);
+        }
         Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved);
         Assert.DoesNotContain(scan.Facts, fact => fact.FactType == FactTypes.DatabaseOperationCandidate);
         var retained = scan.Facts.Select(fact => {

@@ -1108,6 +1108,23 @@ public static class ManagedMetadataExtractor
     private static MetadataObservation Observation(string kind, int token, string factType, string ruleId, string identity, string memberKind, IReadOnlyDictionary<string, string> properties) =>
         new($"{kind}:{Token(token)}", identity, factType, ruleId, memberKind, Token(token), properties);
 
+    internal static string MethodDefinitionIdentity(MetadataReader reader, MethodDefinitionHandle handle)
+    {
+        var assembly = reader.GetAssemblyDefinition();
+        var reference = AssemblyReferenceIdentity(reader.GetString(assembly.Name), assembly.Version.ToString(),
+            assembly.Culture.IsNil ? null : reader.GetString(assembly.Culture),
+            PublicKeyTokenFromPublicKey(assembly.PublicKey.IsNil ? [] : reader.GetBlobBytes(assembly.PublicKey)));
+        var identity = AssemblyArtifactIdentity(reference, reader.GetString(reader.GetModuleDefinition().Name), TargetFramework(reader));
+        var method = reader.GetMethodDefinition(handle);
+        var name = reader.GetString(method.Name);
+        var decoded = method.DecodeSignature(new MetadataTypeProvider(reader), genericContext: null);
+        var signature = MethodSignature(decoded.ReturnType, decoded.ParameterTypes, method.GetGenericParameters().Count,
+            decoded.Header.CallingConvention == SignatureCallingConvention.VarArgs ? "vararg" : "default",
+            decoded.Header.IsInstance, (decoded.Header.RawValue & 0x40) != 0);
+        var kind = name is ".ctor" or ".cctor" ? "constructor" : "method";
+        return $"{TypeIdentity(identity, reader, method.GetDeclaringType())}|{kind}:{EncodeIdentityComponent(name)}|{signature}";
+    }
+
     internal static string TypeIdentity(string assemblyIdentity, CecilTypeDefinition type)
     {
         var (ns, names) = CecilTypeName(type);

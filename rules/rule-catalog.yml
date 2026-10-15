@@ -3958,6 +3958,7 @@ rules:
       - CompiledIlArtifactContext gap
     limitations:
       - Only explicit projectless VB contexts emit this reference-byte witness. Old scans without the witness cannot be joined by name, version, or inferred file identity.
+      - From vb-semantic/0.10.3, the resolved metadata MethodDef token is decoded from the captured reference image rather than reconstructed from retargeted Roslyn parameter types. Only a single captured module with a matching module name and valid method token is supported; no companion module or installed assembly is substituted. This preserves encoded dependency versions, not runtime binding claims.
       - Requires exact full metadata identity and raw-file hash and exactly one matching method across retained inputs. Missing or ambiguous evidence produces no connection. Virtual, abstract, override and interface dispatch are excluded; no runtime receiver target is inferred.
       - Assemblies without TargetFrameworkAttribute retain the unknown target-framework identity. Exact byte equality is still required; this does not infer a framework version or relax source declaration reconciliation.
       - The compiler reference is not proof of original application build, runtime loading, or source-to-binary correspondence. Bound or unbound metadata provenance remains unchanged. The edge is one-way and is not a compiled-only root or a command argument/return propagation bridge.
