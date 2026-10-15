@@ -19,7 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         revision: [base, candidate]
-        test-class: [WebFormsReviewInputValidationTests, VaultExportTests]
+        test-class: [WebFormsReviewInputValidationTests, VaultExportTests, EvidenceDocsExportTests]
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

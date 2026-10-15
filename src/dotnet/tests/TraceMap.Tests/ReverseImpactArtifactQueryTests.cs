@@ -146,7 +146,10 @@ public sealed class ReverseImpactArtifactQueryTests
         var directoryOutput = Path.Combine(temp.Path, "existing-directory");
         var danglingOutput = Path.Combine(temp.Path, "dangling-output.json");
         Directory.CreateDirectory(directoryOutput);
-        File.CreateSymbolicLink(danglingOutput, Path.Combine(temp.Path, "missing-target.json"));
+        var target = Path.Combine(temp.Path, "temporary-target");
+        Directory.CreateDirectory(target);
+        using var danglingLink = DirectoryLinkFixture.Create(danglingOutput, target);
+        Directory.Delete(target);
 
         foreach (var outputPath in new[] { directoryOutput, danglingOutput })
         {

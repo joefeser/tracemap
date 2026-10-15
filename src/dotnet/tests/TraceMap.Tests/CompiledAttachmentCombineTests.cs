@@ -207,6 +207,10 @@ public sealed class CompiledAttachmentCombineTests
             SqliteIndexWriter.Write(fixture.ChildIndex, result.Manifest, result.Facts);
             return fixture;
         }
-        public void Dispose() => Directory.Delete(Path, true);
+        public void Dispose()
+        {
+            SqliteConnection.ClearAllPools();
+            TempDirectory.DeleteTree(Path);
+        }
     }
 }

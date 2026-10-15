@@ -65,3 +65,14 @@ the SQL/HTTP compatibility workflow on the hardening branch before a PR. Histori
 baseline test failures are visible non-gating diagnostics; candidate failures are
 still fatal. Frozen full-suite and final-head CI validation are pending. No PR or
 draft should be opened until those results have been reviewed.
+
+The first hosted Windows retry passed the portable hash guard but exposed the
+legacy-sample diagnostic test's dependence on installed .NET 3.5 tooling. That
+test now copies the same three legacy source files into a net10.0 diagnostic
+harness with an explicit missing-type error; its partial Tier1/no-duplicate and
+categorical diagnostic/privacy assertions remain. This is not legacy framework
+compatibility acceptance. The first full personal-Windows run also exposed
+Windows-only fixture cleanup, separator, pooled-file and symlink privilege
+assumptions, plus a CRLF header check that bypassed docs-export hashing. These
+are being fixed under the pre-PR gate; no clean full-suite claim is made yet.
+Adapter Validation can now be manually dispatched on the branch before a PR.

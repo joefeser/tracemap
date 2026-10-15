@@ -274,9 +274,23 @@ public sealed class VisualBasicValidationMatrixTests
     public void Reduced_vb_scan_reports_sanitized_gaps_with_safe_diagnostic_ids()
     {
         var repoRoot = FindRepoRoot();
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        // Exercise diagnostics, not the host's optional .NET 3.5/WinForms toolset.
+        // Keep the legacy source and partial-semantic assertions in a portable
+        // SDK harness with a deliberate source diagnostic on every platform.
+        foreach (var name in new[] { "CatalogModels.vb", "CatalogService.vb", "LegacyQueueBridge.vb" })
+            File.Copy(Path.Combine(repoRoot, "samples", "vb-legacy-sample", name), Path.Combine(repo, name));
+        File.WriteAllText(Path.Combine(repo, "DiagnosticHarness.vbproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(repo, "Broken.vb"), "Public Class Broken\nPrivate value As MissingPublicFixtureType\nEnd Class\n");
+        Commit(repo);
         var result = ScanEngine.Scan(new ScanOptions(
-            Path.Combine(repoRoot, "samples", "vb-legacy-sample"),
-            Path.Combine(Path.GetTempPath(), "tracemap-vb-matrix-reduced")));
+            repo, Path.Combine(temp.Path, "scan")));
 
         Assert.Equal("FailedOrPartial", result.Manifest.BuildStatus);
         Assert.EndsWith("Reduced", result.Manifest.AnalysisLevel, StringComparison.Ordinal);
