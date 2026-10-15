@@ -48,10 +48,13 @@ page or the whole application are inventoried. Deliver:
 6. A prioritized missing-input list. Identify the first concrete evidence needed
    to implement the slice safely; do not use generic "more analysis needed."
 
-The actual on-chain caller was confirmed as CreateBidGroup and the correct
-external target was the ByRef overload. Earlier AddLinesBatch and scalar-returning
-overload investigations must not be substituted for the accepted chain. Verify
-against retained references, not this prose alone.
+Correction from the subsequent retained-chain handoff: the two retained chains
+were SelectCartItems and SelectCartCount through ExecProc_DataSet to
+DbDataAdapter.Fill. The earlier claim that CreateBidGroup/ExecProc_Scalar was on
+these retained paths was incorrect. Treat these as read/refresh routes, not proof
+of a Save write. Verify exact identities against the retained artifacts; never
+substitute an earlier narrative for the chain records. Follow-up contract work is
+specified in prompts/extract-save-read-and-write-contracts.md.
 
 Return only a sanitized summary: document created yes/no, chain and operation
 record counts (not business-operation counts), contract categories supported versus
