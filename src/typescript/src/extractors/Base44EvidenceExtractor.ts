@@ -4011,28 +4011,55 @@ function resolveSingleAssignedRuntimeAlias(
   if (!ts.isIdentifier(declaration.name) || !declaration.initializer) return null;
   const initializer = unwrapAliasExpression(declaration.initializer);
   if (!initializerIsNullish(initializer)) return null;
-  const useStatement = findAncestor(use, ts.isStatement);
-  if (!useStatement || !useStatement.parent || !ts.isBlock(useStatement.parent)) return null;
-  const useBlock = useStatement.parent;
-  const useIndex = useBlock.statements.findIndex((statement) => statement === useStatement);
-  if (useIndex < 1) return null;
+  const bindingName = declaration.name.getText(source);
   const assignments: ts.BinaryExpression[] = [];
-  for (let index = 0; index < useIndex; index++) {
-    const statement = useBlock.statements[index];
-    const collect = (node: ts.Node): void => {
-      if (ts.isFunctionLike(node)) return;
-      if (ts.isBinaryExpression(node)) {
-        const target = unwrapAliasExpression(node.left);
-        if (ts.isIdentifier(target) && target.text === declaration.name.getText(source)
-          && resolveLexicalBinding(target.text, target, source)?.node === declaration) {
-          assignments.push(node);
-        }
-      }
-      ts.forEachChild(node, collect);
+  let destructuringOverwrite = false;
+  const patternBinds = (pattern: ts.Expression): boolean => {
+    if (!ts.isArrayLiteralExpression(pattern) && !ts.isObjectLiteralExpression(pattern)) return false;
+    let bound = false;
+    const visit = (node: ts.Node): void => {
+      if (bound || ts.isFunctionLike(node)) return;
+      if (ts.isIdentifier(node) && node.text === bindingName) bound = true;
+      ts.forEachChild(node, visit);
     };
-    collect(statement);
+    visit(pattern);
+    return bound;
+  };
+  const collectStatement = (statement: ts.Statement): void => {
+    // Only an assignment that IS the scanned statement dominates the use;
+    // an assignment wrapped in a conditional, try, loop, or call argument
+    // does not prove the alias value on every path.
+    if (!ts.isExpressionStatement(statement)) return;
+    const node = unwrapAliasExpression(statement.expression);
+    if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return;
+    const target = unwrapAliasExpression(node.left);
+    if (patternBinds(target)) {
+      // A destructuring write to the alias invalidates the sole-assignment
+      // proof; the alias value is not statically known after it.
+      destructuringOverwrite = true;
+      return;
+    }
+    if (ts.isIdentifier(target) && target.text === bindingName
+      && resolveLexicalBinding(target.text, target, source)?.node === declaration) {
+      assignments.push(node);
+    }
+  };
+  // An assignment dominates the use only when it precedes it at the same or an
+  // enclosing block level; walk the enclosing block chain so a nested use (for
+  // example inside a try body) still finds its dominating assignment.
+  let statement: ts.Statement | undefined = findAncestor(use, ts.isStatement) ?? undefined;
+  while (statement?.parent && ts.isBlock(statement.parent)) {
+    const block = statement.parent;
+    const useIndex = block.statements.indexOf(statement);
+    for (let index = 0; index < useIndex; index += 1) collectStatement(block.statements[index]);
+    let next: ts.Statement | undefined;
+    for (let current: ts.Node | undefined = block.parent; current; current = current.parent) {
+      if (ts.isFunctionLike(current)) break;
+      if (ts.isStatement(current)) { next = current; break; }
+    }
+    statement = next;
   }
-  if (assignments.length !== 1 || assignments[0].operatorToken.kind !== ts.SyntaxKind.EqualsToken) return null;
+  if (destructuringOverwrite || assignments.length !== 1) return null;
   const assignedFactory = factoryAlias(assignments[0].right, source, aliases, factoryAliases);
   if (assignedFactory) return { prefix: assignedFactory, kind: "source-import-or-derived" };
   const chain = expressionChain(unwrapAliasExpression(assignments[0].right));

@@ -1009,6 +1009,14 @@ function validateSdkIdentityJson(fact: Base44PacketFact, identityJson: string, s
       || evidence.find((item) => item.kind === "package-manifest")?.authorityPath !== "package.json") {
       throw new Error(`Base44 fact ${fact.factId} has an invalid frontend-package SDK identity`);
     }
+    // The frontend lock resolves exactly one SDK version; an identity claiming
+    // any other semver against the same package authority is a forgery.
+    const lockAdmission = sdkImportFacts.find((sdkImport) => sdkImport.evidence.filePath === "package-lock.json"
+      && sdkImport.properties.importKind === "package-lock-resolution"
+      && sdkImport.properties.requestedPackage === "@base44/sdk");
+    if (lockAdmission && lockAdmission.properties.requestedVersion !== identity.version) {
+      throw new Error(`Base44 fact ${fact.factId} has a frontend SDK identity version that disagrees with the package-lock resolution`);
+    }
     for (const item of evidence.filter((candidate) => candidate.kind === "package-manifest" || candidate.kind === "package-lock-resolution")) {
       if (!sdkImportFacts.some((sdkImport) => sdkImport.evidence.filePath === item.authorityPath
         && sdkImport.properties.sourceFileSha256 === item.authoritySha256

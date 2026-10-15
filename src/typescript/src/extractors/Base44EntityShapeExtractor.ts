@@ -440,6 +440,8 @@ function analyzeBoundedHelperReturn(
   if (resolveVisibleVariableDeclaration(helperName, callee, context)) return null;
   for (let current: ts.Node | undefined = callee; current; current = current.parent) {
     if (ts.isFunctionLike(current) && current.parameters.some((parameter) => bindingNames(parameter.name).includes(helperName))) return null;
+    if (ts.isCatchClause(current) && current.variableDeclaration
+      && bindingNames(current.variableDeclaration.name).includes(helperName)) return null;
     if (current === context.source) break;
   }
   const visitKey = `helper-return:${helperName}`;
@@ -448,6 +450,16 @@ function analyzeBoundedHelperReturn(
   }
   const declaration = findVisibleFunctionDeclaration(helperName, callee, context.source);
   if (!declaration?.body) return null;
+  // An async or generator call yields a Promise or iterator, not the declared
+  // return shape; only a directly awaited async call resolves to it.
+  const asynchronous = Boolean(declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword))
+    || Boolean(declaration.asteriskToken);
+  if (asynchronous && !directlyAwaitedCall(call, context)) {
+    return unresolvedAnalysis("helper-return", "helper-return-async-unresolved", `call:${helperName}`);
+  }
+  if (!statementTerminatesExecution(declaration.body)) {
+    return unresolvedAnalysis("helper-return", "helper-return-fallthrough-unresolved", `call:${helperName}`);
+  }
   const returns = collectHelperReturnStatements(declaration);
   if (returns.length === 0 || returns.length > maxHelperReturns) {
     return unresolvedAnalysis("helper-return", returns.length === 0
@@ -489,7 +501,28 @@ function findVisibleFunctionDeclaration(bindingName: string, useNode: ts.Node, s
   return null;
 }
 
+function directlyAwaitedCall(call: ts.CallExpression, context: ShapeContext): boolean {
+  for (let current: ts.Node | undefined = call.parent; current && current !== context.source; current = current.parent) {
+    if (ts.isAwaitExpression(current)) return true;
+    if (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isTypeAssertionExpression(current)
+      || ts.isNonNullExpression(current) || ts.isSatisfiesExpression(current)) continue;
+    return false;
+  }
+  return false;
+}
+
 function collectHelperReturnStatements(declaration: ts.FunctionDeclaration): ts.ReturnStatement[] {
+  // A return inside a finally block overrides every return the try or catch
+  // blocks could have taken; those inner returns can never become the value.
+  const overridingTries = new Set<ts.TryStatement>();
+  const scanOverriding = (node: ts.Node): void => {
+    if (node !== declaration.body && ts.isFunctionLike(node)) return;
+    if (ts.isTryStatement(node) && node.finallyBlock && containsFunctionExternalReturn(node.finallyBlock, declaration)) {
+      overridingTries.add(node);
+    }
+    ts.forEachChild(node, scanOverriding);
+  };
+  ts.forEachChild(declaration.body!, scanOverriding);
   const returns: ts.ReturnStatement[] = [];
   const visit = (node: ts.Node): void => {
     if (returns.length > maxHelperReturns) return;
@@ -501,7 +534,29 @@ function collectHelperReturnStatements(declaration: ts.FunctionDeclaration): ts.
     ts.forEachChild(node, visit);
   };
   ts.forEachChild(declaration.body!, visit);
-  return returns;
+  return returns.filter((statement) => {
+    for (let current: ts.Node | undefined = statement.parent; current; current = current.parent) {
+      if (ts.isTryStatement(current) && overridingTries.has(current) && current.finallyBlock
+        && !isAncestor(current.finallyBlock, statement)) return false;
+      if (current === declaration.body) break;
+    }
+    return true;
+  });
+}
+
+function containsFunctionExternalReturn(root: ts.Node, declaration: ts.FunctionDeclaration): boolean {
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== declaration.body && node !== root && ts.isFunctionLike(node)) return;
+    if (ts.isReturnStatement(node)) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(root);
+  return found;
 }
 
 function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeContext, visitedBindings: Set<string>, inheritedPresence: Presence): ShapeAnalysis {
@@ -1691,6 +1746,9 @@ function payloadShapeContract(analysis: ShapeAnalysis): {
   const finiteConditionalSpreadExecution = analysis.fields.length > 0
     && analysis.gaps.length > 0
     && analysis.gaps.every((gap) => conditionalSpreadExecutionSource.test(gap))
+    // An unresolved spread can add arbitrary fields at runtime; only a payload
+    // whose every spread is itself field-bounded may claim deferred execution.
+    && analysis.spreads.every((spread) => spread.resolution !== "unresolved")
     && analysis.spreads.some((spread) => spread.resolution === "partial"
       && spread.fieldNames.length > 0
       && ["call-expression", "binary-expression", "property-access"].includes(spread.expressionType));
@@ -1902,7 +1960,9 @@ function resolveClosedStringPropertyMap(expression: ts.Expression, context: Shap
   for (const property of unwrapped.properties) {
     if (!ts.isPropertyAssignment(property)) return null;
     const name = staticPropertyName(property.name);
-    if (!name || !isSafeFieldName(name) || stringValues.has(name)) return null;
+    // An object-literal `__proto__` property sets the prototype instead of
+    // defining an own enumerable string property; the map is not closed.
+    if (!name || name === "__proto__" || !isSafeFieldName(name) || stringValues.has(name)) return null;
     const value = unwrapExpression(property.initializer);
     if (!ts.isStringLiteralLike(value)) return null;
     stringValues.set(name, [value.text]);
@@ -1949,12 +2009,16 @@ function finiteDominatingTruthyMapGuardKeys(identifier: ts.Identifier, useNode: 
   const binding = resolveDeclarationAt(identifier.text, identifier, context);
   if (!binding || !ts.isVariableDeclarationList(binding.parent)
     || (binding.parent.flags & ts.NodeFlags.Const) === 0) return [];
-  const collected: string[] = [];
+  let domain: string[] | null = null;
   for (const guard of precedingTerminatingIfStatements(useNode)) {
     const keys = falseBranchTruthyMapKeys(guard.expression, identifier.text, binding, context, new Set(visited));
-    if (keys.length > 0) collected.push(...keys);
+    if (keys.length === 0) continue;
+    // Surviving every terminating guard requires the key to be truthy in each
+    // guard's own map; the live domain is the intersection, never the union.
+    domain = domain === null ? keys : domain.filter((key) => keys.includes(key));
+    if (domain.length === 0) return [];
   }
-  return unique(collected);
+  return domain ?? [];
 }
 
 function precedingTerminatingIfStatements(useNode: ts.Node): ts.IfStatement[] {
@@ -2175,7 +2239,9 @@ function expressionChain(expression: ts.Expression): string[] | null {
 
 function unwrapExpression(expression: ts.Expression): ts.Expression {
   let current = expression;
-  while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isTypeAssertionExpression(current) || ts.isNonNullExpression(current) || ts.isSatisfiesExpression(current)) current = current.expression;
+  // `await` resolves to the operand's value (identity for non-thenables);
+  // thenable-shaped operands stay gated by the async helper rules.
+  while (ts.isParenthesizedExpression(current) || ts.isAsExpression(current) || ts.isTypeAssertionExpression(current) || ts.isNonNullExpression(current) || ts.isSatisfiesExpression(current) || ts.isAwaitExpression(current)) current = current.expression;
   return current;
 }
 

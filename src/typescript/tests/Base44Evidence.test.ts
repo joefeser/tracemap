@@ -2619,6 +2619,102 @@ export function Screen(user) {
     expect(fields.every((field: {origin: string}) => field.origin.startsWith("filter:"))).toBe(true);
   });
 
+  it("fails closed on helper fallthrough, finally-override, and async return paths", async () => {
+    const {packet} = await mutationHookFixture(`
+function fallthrough(active) {
+  if (active) return { present: 1 };
+}
+function overridden() {
+  try {
+    return { try_only: 1 };
+  } finally {
+    return { finally_wins: 1 };
+  }
+}
+async function asyncData() {
+  return { async_field: 1 };
+}
+export function Screen(active) {
+  const a = base44.entities.FallthroughItem.create(fallthrough(active));
+  const b = base44.entities.FinallyItem.create(overridden());
+  const c = base44.entities.AsyncItem.create(asyncData());
+  return [a, b, c];
+}
+`);
+    const fallthrough = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "FallthroughItem")!;
+    expect(JSON.parse(fallthrough.properties.analysisGapsJson)).toContain("helper-return-fallthrough-unresolved");
+    expect(fallthrough.properties.completeness).not.toBe("complete");
+    const overriddenFact = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "FinallyItem")!;
+    const overriddenFields = JSON.parse(overriddenFact.properties.fieldsJson).map((field: {name: string}) => field.name);
+    expect(overriddenFields).toEqual(["finally_wins"]);
+    expect(JSON.parse(overriddenFact.properties.analysisGapsJson)).toEqual([]);
+    const asyncFact = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "AsyncItem")!;
+    expect(JSON.parse(asyncFact.properties.analysisGapsJson)).toContain("helper-return-async-unresolved");
+  });
+
+  it("resolves awaited async and awaited sync helper payloads", async () => {
+    const {packet} = await mutationHookFixture(`
+async function asyncData() {
+  return { async_field: 1 };
+}
+function syncData() {
+  return { sync_field: 1 };
+}
+export async function Screen() {
+  const a = await asyncData();
+  const first = base44.entities.AwaitedAsyncItem.create(a);
+  const second = base44.entities.AwaitedSyncItem.create(await syncData());
+  return [first, second];
+}
+`);
+    for (const [entity, field] of [["AwaitedAsyncItem", "async_field"], ["AwaitedSyncItem", "sync_field"]] as const) {
+      const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+        && fact.targetSymbol === entity)!;
+      expect(payload.properties).toMatchObject({ completeness: "complete", outerKind: "object" });
+      expect(JSON.parse(payload.properties.fieldsJson).map((item: {name: string}) => item.name)).toEqual([field]);
+    }
+  });
+
+  it("rejects a catch parameter that shadows a module-local helper name", async () => {
+    const {packet} = await mutationHookFixture(`
+function payloadData() {
+  return { from_helper: 1 };
+}
+export function Screen(producer) {
+  try {
+    return producer();
+  } catch (payloadData) {
+    return base44.entities.CatchShadowItem.create(payloadData());
+  }
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "CatchShadowItem")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-expression-unresolved:call-expression");
+  });
+
+  it("intersects dominating guard maps instead of unioning their key domains", async () => {
+    const {packet} = await mutationHookFixture(`
+const PRIMARY = { a: "primary_a", b: "primary_b" };
+const SHARED = { a: "shared_a" };
+export function Screen(props) {
+  const kind = props.field;
+  if (!PRIMARY[kind]) return;
+  if (!SHARED[kind]) return;
+  return base44.entities.GuardIntersectItem.create({ [PRIMARY[kind]]: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "GuardIntersectItem")!;
+    const fields = JSON.parse(payload.properties.fieldsJson).map((field: {name: string}) => field.name);
+    expect(fields).toEqual(["primary_a"]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual([]);
+  });
+
   it("models closed React object state and mutually exclusive mutation branches without erasing unsafe state flow", async () => {
     const {packet} = await mutationHookFixture(`
 import { useState } from "react";

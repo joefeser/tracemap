@@ -1,8 +1,9 @@
 # Base44 normalized query evidence v2 — issue #713
 
 Extractor `base44-evidence/0.5.0` introduced `88mph.entity-query.v2`
-descriptors. Extractor `base44-evidence/0.15.0` preserves that descriptor
-schema and adds the bounded string-normalization admission below. V2 retains
+descriptors. Extractor `base44-evidence/0.18.0` preserves that descriptor
+schema and adds the bounded string-normalization admission below plus
+reference-typed `limit`/`skip` pagination controls. V2 retains
 v1's source-bound filter/list/deleteMany argument structure, exact UTF-16
 spans, traversal bounds, value redaction, and typed gaps.
 
@@ -27,8 +28,9 @@ This does not infer the reference's type or value, turn a reference into an
 implicit equality claim, or authorize a narrower database/runtime contract.
 The replacement runtime must accept the SDK's open query-object behavior.
 Root filter bindings, spreads, computed or duplicate filter keys, logical composition,
-unsupported expressions, dynamic controls, unknown operators, empty operator
-objects, and traversal overflow remain unresolved.
+unsupported expressions, unknown operators, empty operator
+objects, and traversal overflow remain unresolved. Numeric `limit`/`skip`
+controls admit nonnegative literals and redacted references.
 
 The version bump is intentional: v1 defined an implicit reference as
 unresolved. Consumers must explicitly admit v2 and the exact reviewed producer
