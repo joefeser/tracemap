@@ -966,7 +966,7 @@ public sealed class CiWorkflowProducerEvidenceTests
         var outside = Path.Combine(temp.Path, "outside");
         Directory.CreateDirectory(repo);
         WriteWorkflow(outside, "pack.yml", PureCiWorkflow);
-        Directory.CreateSymbolicLink(Path.Combine(repo, ".github"), Path.Combine(outside, ".github"));
+        using var link = DirectoryLinkFixture.Create(Path.Combine(repo, ".github"), Path.Combine(outside, ".github"));
         var result = Read(repo);
         Assert.Empty(result.Rows);
         Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-linked-path");
