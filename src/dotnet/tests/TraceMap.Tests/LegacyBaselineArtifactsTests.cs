@@ -6,6 +6,25 @@ namespace TraceMap.Tests;
 
 public sealed class LegacyBaselineArtifactsTests
 {
+    [Theory]
+    [InlineData(".tmp\\legacy-baselines")]
+    [InlineData(".kiro\\baselines\\legacy")]
+    public async Task Create_interprets_backslashes_only_as_native_separators(string storageRoot)
+    {
+        var output = Path.Combine(RepoRoot(), storageRoot, Guid.NewGuid().ToString("N"));
+        var result = await LegacyBaselineArtifacts.CreateAsync(new LegacyBaselineCreateOptions(
+            "samples/synthetic-legacy-scan", "synthetic-alpha", "boundary-control", output,
+            CreatedAt: "2026-06", DryRun: true));
+        if (OperatingSystem.IsWindows())
+            Assert.Equal(LegacyBaselineClassifications.PublicSafe, result.Manifest.Safety.Classification);
+        else
+        {
+            Assert.Equal(LegacyBaselineClassifications.Rejected, result.Manifest.Safety.Classification);
+            Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Category == "output-storage");
+        }
+        Assert.False(Directory.Exists(output));
+    }
+
     [Fact]
     public async Task Create_refuses_an_ignored_neighbor_of_the_allowed_storage_root()
     {
