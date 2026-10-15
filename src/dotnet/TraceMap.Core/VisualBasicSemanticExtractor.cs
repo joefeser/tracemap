@@ -3214,6 +3214,8 @@ public static partial class VisualBasicSemanticExtractor
             model.GetEnclosingSymbol(evidenceNode.SpanStart)?.ContainingAssembly ?? sourceSymbol.ContainingAssembly,
             targetSymbol.ContainingAssembly);
 
+        WebFormsFrameworkEntry.AddWitness(properties, model, targetSymbol, relationshipKind);
+
         return CreateSemanticFact(
             FactTypes.SymbolRelationship,
             RuleIds.VisualBasicSemanticSymbolRelationship,

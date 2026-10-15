@@ -17,3 +17,9 @@ method do not reach HTTP. Framework dispatch timing and runtime use are unproven
 This fixture is not a copied application, generated designer replacement,
 complete WebForms hosting model, or proof that missing private property callers
 are markup expressions. See the evidence-admission debugging ledger.
+
+Issue #873 adds `Profile.ascx` and `EntryVariants.aspx`: two source-registered
+instances reference the same exact property, while missing receivers/members,
+Eval and chained expressions remain gaps. The regression mutation matrix adds
+duplicate IDs, conflicting registrations, wrong assemblies and template scope.
+See `docs/validation/WEBFORMS_HTTP_ENTRY_RELATIONSHIPS.md` for the supported grammar.
