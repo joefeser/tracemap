@@ -212,6 +212,19 @@ widening-only: it may improve smoke values or prevent unsafe storage narrowing,
 but it cannot create database constraints. See
 [Base44 UI input semantics v1](BASE44_UI_INPUT_SEMANTICS_V1.md).
 
+Extractor `base44-evidence/0.16.0` and `base44-evidence/0.17.0` existed only on
+the never-merged 88mph evidence-authority branches and are superseded: their
+behavior folds into `0.18.0` below. Packets carrying those versions remain
+validatable.
+
+Extractor `base44-evidence/0.18.0` preserves payload shape v3, entity-selector
+v1, and query descriptor v2/v3, and admits bounded zero-argument
+string-normalization chains such as `code.trim().toUpperCase()` as redacted
+runtime-deferred query operands plus reference-typed `limit`/`skip` pagination
+controls. Conditional object spreads classify as runtime proof with typed
+execution gaps, and guarded computed payload fields resolve through closed
+const string-property maps. Arbitrary helper calls remain unresolved.
+
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
 conservative: every directly resolved callsite for that parameter must supply
