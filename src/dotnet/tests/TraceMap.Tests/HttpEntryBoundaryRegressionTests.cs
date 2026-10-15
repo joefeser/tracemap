@@ -65,7 +65,11 @@ public sealed class HttpEntryBoundaryRegressionTests
             && f.TargetSymbol?.Contains("System.Web.UI.Control.CreateChildControls", StringComparison.Ordinal) == true
             && f.ContractElement == "Overrides" && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
         var entries = scan.Facts.Where(f => f.FactType == FactTypes.WebFormsEntryRelationship).ToArray();
-        Assert.Equal(4, entries.Count(f => f.RuleId == RuleIds.WebFormsEntryContainment));
+        Assert.Equal(6, entries.Count(f => f.RuleId == RuleIds.WebFormsEntryContainment));
+        Assert.Contains(entries, f => f.RuleId == RuleIds.WebFormsEntryProperty && f.Evidence.FilePath == "MatchingHost.aspx");
+        Assert.DoesNotContain(entries, f => f.RuleId == RuleIds.WebFormsEntryProperty && f.Evidence.FilePath == "ShadowedHost.aspx");
+        Assert.Contains(scan.Facts, f => f.RuleId == RuleIds.WebFormsEntryProperty && f.FactType == FactTypes.AnalysisGap
+            && f.Evidence.FilePath == "ShadowedHost.aspx" && f.Properties.GetValueOrDefault("gapKind") == "ConflictingControlReceiver");
         var propertyEntry = Assert.Single(entries, f => f.RuleId == RuleIds.WebFormsEntryProperty && f.Evidence.FilePath == "Host.aspx");
         Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, propertyEntry.EvidenceTier);
         Assert.Contains("ProfileWidget.Profile", propertyEntry.TargetSymbol);

@@ -33,3 +33,37 @@ not an acceptance receipt. Final focused/full/CLI results pending in validation-
 No third-party app build/restore/hosting or endpoint/database execution. Corpora
 remain outside the checkout. No push, PR, external reviewer or workflow mutation
 authorized. Windows/private and other pinned adapter checks remain separate gates.
+
+## Paused checkpoint — 2026-10-15
+
+Paused at the user's request to change locations. Implementation commit:
+38b6e33db2682b1fb24cc640d0b83ca645bb03ae. The following checkpoint adds
+page/base-scope receiver identity checks: conflicting inherited fields refuse a
+property candidate; an explicitly matching field remains supported. Candidate
+boundaries still leave runtime receiver identity and getter invocation unproven.
+The shadow fixture first reproduced the false positive, then the focused real
+framework regression passed (1/1) with -warnaserror after the fix.
+Log: /tmp/tracemap-873-shadow-checkpoint.log.
+
+Validation status is PARTIAL, not completion of issue #873:
+- Earlier corrected HTTP suite: 18/18; relevant Python diagnostics: 60/60.
+- Earlier broad focused run: 596/597; the remaining test expectation was corrected
+  and covered by the subsequent 18/18 HTTP run. Rerun the full focused selection.
+- At 38b6e33d the solution and trusted corpus diagnostic built with zero warnings.
+  Full frozen suite was deliberately cancelled after 3,184 observed passes and no
+  observed failures when receiver shadowing was found. This is NOT a full pass.
+- Final static corpus counts at that earlier head: Kaliko 7 containment entries,
+  CsrFence 0 new entries. Update the corpus readback's preliminary 13 count.
+- Runtime hashes from the earlier freeze are obsolete after this follow-up build.
+
+Resume here: review the receiver-scope change; update coverage/rule documentation
+and fixture README; run focused regressions. Then freeze the new local HEAD and
+runtime files, run the complete .NET suite without concurrent builds, relevant
+Python diagnostics, public CLI sample smoke, and static-only pinned corpus reads.
+Record exact commands, results, hashes and limitations in validation-receipt.md;
+update tasks.md only after those acceptance steps finish. Create the final local
+handoff. Do not push or open/merge a PR without approval.
+
+Supporting logs/scripts are under /tmp/tracemap-873-* and may be ephemeral. The
+worktree and committed fixtures are the durable resume source. No work is running
+on this task after this checkpoint.
