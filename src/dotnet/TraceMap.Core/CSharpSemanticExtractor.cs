@@ -4381,6 +4381,8 @@ public static class CSharpSemanticExtractor
         AddSymbolProperties(properties, "target", targetSymbol);
         AddAssemblyProperties(properties, model.GetEnclosingSymbol(evidenceNode.SpanStart)?.ContainingAssembly ?? sourceSymbol.ContainingAssembly, targetSymbol.ContainingAssembly);
 
+        WebFormsFrameworkEntry.AddWitness(properties, model, targetSymbol, relationshipKind);
+
         return CreateSemanticFact(
             FactTypes.SymbolRelationship,
             RuleIds.CSharpSemanticSymbolRelationship,

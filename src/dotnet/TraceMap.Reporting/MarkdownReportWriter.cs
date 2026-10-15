@@ -321,6 +321,12 @@ public static class MarkdownReportWriter
 
         AddFactSection(
             lines,
+            "WebForms Entry Relationships (not calls)",
+            result.Facts.Where(fact => fact.FactType == FactTypes.WebFormsEntryRelationship),
+            fact => $"- `{fact.ContractElement}` ({fact.EvidenceTier}) `{fact.SourceSymbol}` → `{fact.TargetSymbol}` at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`; rule `{fact.RuleId}`; first unresolved boundary: {fact.Properties.GetValueOrDefault("firstUnresolvedBoundary")}");
+
+        AddFactSection(
+            lines,
             "WebForms Events",
             result.Facts.Where(fact => fact.FactType is FactTypes.WebFormsPageDeclared
                 or FactTypes.WebFormsControlDeclared
