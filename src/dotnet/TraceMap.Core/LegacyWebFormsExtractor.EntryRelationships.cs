@@ -16,6 +16,12 @@ public static partial class LegacyWebFormsExtractor
             .ToLookup(f => f.Evidence.FilePath, StringComparer.Ordinal);
         internal ILookup<string, CodeFact> PropertiesByOwner { get; } = facts.Where(f => f.FactType == FactTypes.PropertyDeclared)
             .ToLookup(f => f.Properties.GetValueOrDefault("targetContainingSymbolId") ?? "", StringComparer.Ordinal);
+        internal ILookup<string, CodeFact> MembersByOwner { get; } = facts.Where(f => f.EvidenceTier == EvidenceTiers.Tier1Semantic
+                && f.FactType is FactTypes.FieldDeclared or FactTypes.PropertyDeclared or FactTypes.MethodDeclared or FactTypes.EventDeclared)
+            .ToLookup(f => f.Properties.GetValueOrDefault("targetContainingSymbolId") ?? "", StringComparer.Ordinal);
+        internal ILookup<string, CodeFact> BasesByType { get; } = facts.Where(f => f.FactType == FactTypes.SymbolRelationship
+                && f.EvidenceTier == EvidenceTiers.Tier1Semantic && f.ContractElement == "InheritsFrom")
+            .ToLookup(f => f.Properties.GetValueOrDefault("sourceSymbolId") ?? "", StringComparer.Ordinal);
         internal ILookup<string, CodeFact> MethodsById { get; } = facts.Where(f => f.FactType == FactTypes.MethodDeclared)
             .ToLookup(f => f.Properties.GetValueOrDefault("targetSymbolId") ?? "", StringComparer.Ordinal);
         internal IReadOnlyList<CodeFact> Overrides { get; } = facts.Where(f => f.FactType == FactTypes.SymbolRelationship
@@ -118,6 +124,25 @@ public static partial class LegacyWebFormsExtractor
                 EntryGap(manifest, evidence, RuleIds.WebFormsEntryProperty, "UnresolvedControlType", [pageFact], facts);
                 continue;
             }
+            var scope = EntryPageScope(page, existing, comparison);
+            if (scope is null)
+            {
+                EntryGap(manifest, evidence, RuleIds.WebFormsEntryProperty, "UnavailablePageScope", [pageFact, candidate.Relation], facts);
+                continue;
+            }
+            var receiverMembers = scope.Value.TypeIds.SelectMany(id => existing.MembersByOwner[id])
+                .Where(f => string.Equals(f.Properties.GetValueOrDefault("fieldName") ?? f.Properties.GetValueOrDefault("propertyName")
+                    ?? f.Properties.GetValueOrDefault("name") ?? f.ContractElement, parsed.Groups["control"].Value, comparison))
+                .OrderBy(f => f.FactId, StringComparer.Ordinal).Take(2).ToArray();
+            if (receiverMembers.Length > 1 || receiverMembers.Any(f => f.FactType != FactTypes.FieldDeclared
+                    || f.Properties.GetValueOrDefault("fieldType") != candidate.Type.TargetSymbol
+                    || f.Properties.GetValueOrDefault("calleeAssemblyName") != candidate.Type.Properties.GetValueOrDefault("targetSymbolAssemblyName")
+                    || f.Properties.GetValueOrDefault("calleeAssemblyVersion") != candidate.Type.Properties.GetValueOrDefault("targetSymbolAssemblyVersion")))
+            {
+                EntryGap(manifest, evidence, RuleIds.WebFormsEntryProperty, "ConflictingControlReceiver",
+                    new[] { pageFact, candidate.Relation, candidate.Type }.Concat(scope.Value.Support).Concat(receiverMembers).ToArray(), facts);
+                continue;
+            }
             var typeId = candidate.Type.Properties.GetValueOrDefault("targetSymbolId");
             var members = existing.PropertiesByOwner[typeId ?? ""].Where(f => f.FactType == FactTypes.PropertyDeclared
                 && f.EvidenceTier == EvidenceTiers.Tier1Semantic && !string.IsNullOrEmpty(typeId)
@@ -132,9 +157,29 @@ public static partial class LegacyWebFormsExtractor
             var member = members[0];
             facts.Add(EntryFact(manifest, RuleIds.WebFormsEntryProperty, EvidenceTiers.Tier3SyntaxOrTextual,
                 evidence, "declarative-property-reference", candidate.Relation.TargetSymbol!, member.TargetSymbol!,
-                "Binding evaluation and getter invocation are unproven.", [pageFact, candidate.Relation, candidate.Type, member],
+                "Binding evaluation, receiver instance and getter invocation are unproven.",
+                new[] { pageFact, candidate.Relation, candidate.Type, member }.Concat(scope.Value.Support).Concat(receiverMembers).ToArray(),
                 new Dictionary<string, string> { ["targetSymbolId"] = member.Properties["targetSymbolId"],
                     ["surfaceIdentity"] = SurfaceIdentity(page.FilePath), ["controlId"] = parsed.Groups["control"].Value }));
+        }
+    }
+
+    private static (IReadOnlySet<string> TypeIds, IReadOnlyList<CodeFact> Support)? EntryPageScope(
+        WebFormsPage page, EntryEvidenceIndex index, StringComparison comparison)
+    {
+        var types = index.TypesByPath[page.LinkedCodePath ?? ""].Where(f => f.EvidenceTier == EvidenceTiers.Tier1Semantic
+            && string.Equals(WebFormsDeclarationQualifiedName(f), page.PageTypeName, comparison)).ToArray();
+        if (types.Length != 1 || types[0].Properties.GetValueOrDefault("targetSymbolId") is not { Length: > 0 } typeId) return null;
+        var support = new List<CodeFact> { types[0] };
+        var ids = new HashSet<string>(StringComparer.Ordinal) { typeId };
+        while (true)
+        {
+            var bases = index.BasesByType[typeId].ToArray();
+            if (bases.Length == 0) return (ids, support);
+            var targets = bases.Select(f => f.Properties.GetValueOrDefault("targetSymbolId")).Distinct(StringComparer.Ordinal).ToArray();
+            if (targets.Length != 1 || targets[0] is not { Length: > 0 } next || ids.Count >= 16 || !ids.Add(next)) return null;
+            support.AddRange(bases);
+            typeId = next;
         }
     }
 
