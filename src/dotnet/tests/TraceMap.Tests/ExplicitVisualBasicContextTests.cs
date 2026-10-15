@@ -12,6 +12,7 @@ public sealed class ExplicitVisualBasicContextTests
 {
     [Theory]
     [InlineData("exact", true)]
+    [InlineData("page-chain", true)]
     [InlineData("hash-mismatch", false)]
     [InlineData("identity-mismatch", false)]
     [InlineData("virtual", false)]
@@ -22,7 +23,9 @@ public sealed class ExplicitVisualBasicContextTests
         using var temp = new TempDirectory(OperatingSystem.IsMacOS() ? "/private/tmp" : null);
         var repo = Path.Combine(temp.Path, "repo");
         Directory.CreateDirectory(repo);
-        File.WriteAllText(Path.Combine(repo, "Caller.vb"), """
+        var callerPath = mode == "page-chain" ? "App_Code/Caller.vb" : "Caller.vb";
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(repo, callerPath))!);
+        File.WriteAllText(Path.Combine(repo, callerPath), """
             Public Class Caller
                 Public Sub Run(command As System.Data.Common.DbCommand)
                     Dim service As New ExternalWrapper()
@@ -30,6 +33,29 @@ public sealed class ExplicitVisualBasicContextTests
                 End Sub
             End Class
             """);
+        if (mode == "page-chain")
+        {
+            File.WriteAllText(Path.Combine(repo, "Page.aspx.vb"), """
+                Public Class Page
+                    Public Sub Click()
+                        Dim worker As New Caller()
+                        worker.Run(Nothing)
+                    End Sub
+                End Class
+                """);
+            File.WriteAllText(Path.Combine(repo, callerPath), """
+                Public Class Caller
+                    Public Sub Run(command As System.Data.Common.DbCommand)
+                        Save(command)
+                    End Sub
+                    Private Sub Save(command As System.Data.Common.DbCommand)
+                        Dim service As New ExternalWrapper()
+                        Dim text As String = "synthetic"
+                        service.Execute(command, text)
+                    End Sub
+                End Class
+                """);
+        }
         var referencePaths = new[] { typeof(object).Assembly.Location, typeof(System.Data.Common.DbCommand).Assembly.Location,
             System.Reflection.Assembly.Load("System.Runtime").Location, typeof(System.ComponentModel.Component).Assembly.Location };
         var library = Path.Combine(temp.Path, "ExternalWrapper.dll");
@@ -40,7 +66,15 @@ public sealed class ExplicitVisualBasicContextTests
                     return command.ExecuteNonQuery();
                 }
             }
-            """.Replace("public int", mode == "virtual" ? "public virtual int" : "public int", StringComparison.Ordinal));
+            """.Replace("public int", mode == "virtual" ? "public virtual int" : "public int", StringComparison.Ordinal)
+                .Replace("string text", mode == "page-chain" ? "ref string text" : "string text", StringComparison.Ordinal)
+                .Replace("public class ExternalWrapper {", mode == "page-chain"
+                    ? "public class ExternalWrapper { public int Execute(string unused) { return 0; }"
+                    : "public class ExternalWrapper {", StringComparison.Ordinal)
+                .Replace("return command.ExecuteNonQuery();", mode == "page-chain"
+                    ? "return command.ExecuteScalar();" : "return command.ExecuteNonQuery();", StringComparison.Ordinal)
+                .Replace("public int Execute(System", mode == "page-chain"
+                    ? "public object Execute(System" : "public int Execute(System", StringComparison.Ordinal));
         var compiled = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create("ExternalWrapper", [syntax],
             referencePaths.Distinct().Select(path => Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(path)),
             new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
@@ -51,7 +85,7 @@ public sealed class ExplicitVisualBasicContextTests
         File.WriteAllText(context, JsonSerializer.Serialize(new {
             schemaVersion = "vb-compilation-context.v1", commitSha = GitMetadataProvider.Detect(repo).CommitSha,
             rootNamespace = "", optionStrict = true, optionInfer = true, optionExplicit = true, imports = Array.Empty<string>(),
-            sources = new[] { new { path = "Caller.vb", sha256 = Hash(Path.Combine(repo, "Caller.vb")) } },
+            sources = new[] { new { path = callerPath, sha256 = Hash(Path.Combine(repo, callerPath)) } },
             references = referencePaths.Append(library).Distinct().Select(path => new { path, sha256 = Hash(path) }).ToArray()
         }));
         var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan"), CompiledInputPaths: [library], IlBodyEvidence: true)
@@ -76,7 +110,8 @@ public sealed class ExplicitVisualBasicContextTests
         SqliteIndexWriter.Write(index, scan.Manifest, retained);
         var combined = Path.Combine(temp.Path, "combined.sqlite");
         await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["retained"]));
-        var root = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.MethodDeclared && fact.ContractElement == "Run");
+        var root = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.MethodDeclared
+            && (mode == "page-chain" ? fact.Properties.GetValueOrDefault("name") == "Click" : fact.ContractElement == "Run"));
         var result = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "paths"),
             FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true });
         Assert.Equal(expected, result.Paths.Count > 0);
@@ -85,6 +120,12 @@ public sealed class ExplicitVisualBasicContextTests
                 ToSurface: "database-operations", MaxDepth: 16) { ExactFromSymbol = true },
             new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
         Assert.Equal(expected, bounded.Report.Paths.Count > 0);
+        if (mode == "page-chain")
+        {
+            Assert.Contains(bounded.Report.Paths, path => path.Nodes.Last().SurfaceName == "DbCommand.ExecuteScalar"
+                && path.Edges.Any(edge => edge.EdgeKind == "explicit-reference-member-candidate")
+                && path.Edges.Any(edge => edge.EdgeKind == "projectless-vb-receiver-bridge"));
+        }
         var compiledOnly = await CombinedDependencyPathReporter.BuildReportAsync(new(combined, Path.Combine(temp.Path, "compiled-only"),
             FromSymbol: root.TargetSymbol, ToSurface: "database-operations", MaxDepth: 16)
             { ExactFromSymbol = true, CompiledOnly = true });

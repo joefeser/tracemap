@@ -1,5 +1,10 @@
 # Compare the exact retained body with the existing graph
 
+For follow-up to the completed 26-call readback, use
+`prompts/check-save-owner-symbol-identity.md` instead. The original helper's
+owner declaration-node count did not test symbol-node presence; do not infer
+that an owner is absent from that count.
+
 Three-minute total limit. Read-only. NO build, scan, preflight, requery, DLL
 search, SDK changes, application execution, or changes to evidence/checkpoints.
 Fast-forward the clean tool checkout on codex/evidence-admission-hardening;
