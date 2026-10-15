@@ -4866,8 +4866,9 @@ authorization). Import-time verification: no `.snk`/`.pfx` files and no secret
 patterns (license strings, invoice-URL passwords, storage-account keys —
 `Documentation/azure.txt` caught by GitHub push protection — or the
 PostSharp license key in `src/PostSharp.Custom.targets`, caught by review)
-survive in the committed tree; the golden IL suites are intact (412 committed
-files: 411 vendored plus `PROVENANCE.md`; 17 junk-class files at the pin —
+survive in the committed tree; the golden IL suites are intact (411 committed
+files: 410 vendored plus `PROVENANCE.md` — the third-party ECMA-335.pdf is
+excluded as outside the co-author authorization); 17 junk-class files at the pin —
 SourceSafe bindings and test `.pdb`s — are excluded by this repository's
 ignore rules, as documented in the provenance). The private git
 history stays in the private staging repo — a history scan recorded on the

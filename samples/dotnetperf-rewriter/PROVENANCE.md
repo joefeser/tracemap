@@ -43,6 +43,10 @@ remains available in the private staging repository for audit.
   storage-account connection string with an access key (caught by GitHub push
   protection on first import attempt; treat the `netperftest` account key as
   burned and rotate or confirm-dead)
+- `Documentation/Errata/Ecma-335.pdf` — the ECMA-335 specification PDF itself:
+  third-party copyrighted standard material outside the co-author release
+  authorization ("your code and mine"); freely and permanently available from
+  ecma-international.org, so exclusion costs nothing
 - `src/PostSharp.Custom.targets` — contained a plaintext PostSharp license key
   (caught by review after both the import sweep and push protection missed it;
   treat the PostSharp key as burned; the file only wired the already-excluded
