@@ -228,12 +228,14 @@ public sealed class WebFormsReviewInputValidationTests
         await fixture.CreateParent();
         var before = fixture.ParentHashes();
         var path = Path.Combine(fixture.Source, "Lookup.aspx.vb");
+        using var sourceLink = OperatingSystem.IsWindows() && mutation == "link"
+            ? CreateWindowsSourceLink(path, fixture.Root) : null;
         switch (mutation)
         {
             case "same-size": File.WriteAllText(path, File.ReadAllText(path).Replace("Load", "Save", StringComparison.Ordinal)); break;
             case "size-change": File.AppendAllText(path, "\n' changed source\n"); break;
             case "missing": File.Delete(path); break;
-            case "link":
+            case "link" when !OperatingSystem.IsWindows():
                 var destination = Path.Combine(fixture.Root, "other.vb");
                 File.Move(path, destination);
                 File.CreateSymbolicLink(path, destination);
@@ -245,6 +247,16 @@ public sealed class WebFormsReviewInputValidationTests
         Assert.Equal("WEBFORMS_REVIEW_" + code, error.Message);
         Assert.Equal(before.OrderBy(pair => pair.Key), fixture.ParentHashes().OrderBy(pair => pair.Key));
         Assert.False(Directory.Exists(fixture.Output));
+
+        static DirectoryLinkFixture CreateWindowsSourceLink(string path, string root)
+        {
+            // A junction exercises the same reject-before-reading boundary
+            // without requiring Windows symlink privileges.
+            var destination = Path.Combine(root, "linked-source-target");
+            Directory.CreateDirectory(destination);
+            File.Move(path, Path.Combine(destination, Path.GetFileName(path)));
+            return DirectoryLinkFixture.Create(path, destination);
+        }
     }
 
     [Fact]
