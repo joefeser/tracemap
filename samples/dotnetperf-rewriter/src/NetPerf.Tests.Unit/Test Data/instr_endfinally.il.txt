@@ -1,0 +1,470 @@
+﻿.assembly extern mscorlib 
+{
+    .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+    .ver 2:0:0:0
+}
+.assembly endfinally_instr
+{
+    .hash algorithm 0x00008004
+    .ver 1:0:0:0
+}
+
+.module endfinally_instr.exe
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+
+.class private auto ansi beforefieldinit endfinally_instr.main
+    extends [mscorlib]System.Object
+{
+
+    // should pass
+    .method private hidebysig static void Main(string[] args) cil managed
+    {
+        .entrypoint
+        .maxstack 8
+
+        // these should pass
+        call void endfinally_instr.main::InsideFinallyOrFaultHandler_LexicallyLast()
+        call void endfinally_instr.main::InsideFinallyOrFaultHandler_LexicallyMiddle()
+        call void endfinally_instr.main::InsideFinallyOrFaultHandler_LexicallyFirst()
+        call void endfinally_instr.main::NestedFinallyOrFaultHandlerInsideProtectedRegion()
+        call void endfinally_instr.main::NestedFinallyorFaultInsideCatchHandler()
+        call void endfinally_instr.main::NestedFinallyOrFaultInsideFilterHandler()
+
+        // these should fail
+        call void endfinally_instr.main::InsideProtectedRegion()
+        call void endfinally_instr.main::InsideCatchHandler()
+        call void endfinally_instr.main::InsideFilterCodeForFilter()
+        call void endfinally_instr.main::InsideFilterHandler()
+        call void endfinally_instr.main::InsideUnprotectedCode()
+        call void endfinally_instr.main::InsideNestedProtectedRegion()
+        call void endfinally_instr.main::InsideNestedCatchHandler()
+        call void endfinally_instr.main::InsideNestedFilterCodeForFilterHandler()
+        call void endfinally_instr.main::InsideNestedFilterHandler()
+
+        ret
+    }
+
+    // should pass
+    .method public hidebysig static void InsideFinallyOrFaultHandler_LexicallyLast() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } finally {
+            nop
+            nop
+            endfinally
+        }
+
+        .try {
+            nop
+        } fault {
+            nop
+            nop
+            endfault
+        }
+
+        method_end: ret
+    }
+
+    // should pass
+    .method public hidebysig static void InsideFinallyOrFaultHandler_LexicallyMiddle() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } finally {
+            nop
+            endfinally
+            nop
+        }
+
+        .try {
+            nop
+        } fault {
+            nop
+            endfault
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // should pass
+    .method public hidebysig static void InsideFinallyOrFaultHandler_LexicallyFirst() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } finally {
+            endfinally
+            nop
+            nop
+        }
+
+        .try {
+            nop
+        } fault {
+            endfault
+            nop
+            nop
+        }
+
+        method_end: ret
+    }
+
+    //should pass
+    .method public hidebysig static void NestedFinallyOrFaultHandlerInsideProtectedRegion() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            .try {
+                nop
+            } finally {
+                endfinally
+            }
+
+        } catch [mscorlib]System.Object {
+            leave method_end
+        }
+
+        .try {
+            .try {
+                nop
+            } fault {
+                endfault
+            }
+
+        } catch [mscorlib]System.Object {
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    //should pass
+    .method public hidebysig static void NestedFinallyorFaultInsideCatchHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            .try {
+                nop
+            } finally {
+                endfinally
+            }
+
+            leave method_end
+        }
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            .try {
+                nop
+            } fault {
+                endfault
+            }
+
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    //should pass
+    .method public hidebysig static void NestedFinallyOrFaultInsideFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+        } {
+            .try {
+                nop
+            } finally {
+                endfinally
+            }
+        }
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+        } {
+            .try {
+                nop
+            } fault {
+                endfault
+            }
+        }
+
+        method_end: ret
+    }
+
+    // should fail
+    .method public hidebysig void InsideProtectedRegion() cil managed 
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            endfinally
+        } catch [mscorlib]System.Object {
+            nop
+            leave method_end
+        }
+
+        .try {
+            nop
+            endfault
+        } catch [mscorlib]System.Object {
+            nop
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    // should fail
+    .method public hidebysig void InsideCatchHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            endfinally
+            leave method_end
+        }
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            endfault
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    // should fail
+    .method public hidebysig void InsideFilterCodeForFilter() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            endfinally
+            ldc.i4.1
+            endfilter
+        } {
+            nop
+            leave method_end
+        }
+
+        .try {
+            nop
+        } filter {
+            endfault
+            ldc.i4.1
+            endfilter
+        } {
+            nop
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    // should fail
+    .method public hidebysig void InsideFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+        } {
+            nop
+            endfinally
+        }
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+        } {
+            nop
+            endfault
+        }
+
+        method_end: ret
+    }
+    
+    //should fail
+    .method public hidebysig void InsideUnprotectedCode() cil managed
+    {
+        .maxstack 8
+
+        nop
+        endfinally
+        nop
+        nop
+        endfault
+        nop
+
+        method_end: ret
+    }
+
+    // should fail
+    .method public hidebysig void InsideNestedProtectedRegion() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } finally {
+            .try {
+                endfinally
+            } catch [mscorlib]System.object {
+                leave method_end
+            }
+        }
+
+        .try {
+            nop
+        } fault {
+            .try {
+                endfault
+            } catch [mscorlib]System.object {
+                leave method_end
+            }
+        }
+
+        method_end: ret
+    }
+
+    //should fail
+    .method public hidebysig void InsideNestedCatchHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } finally {
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                endfinally
+                leave method_end
+            }
+        }
+
+        .try {
+            nop
+        } fault {
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                endfault
+                leave method_end
+            }
+        }
+
+        method_end: ret
+    }
+
+    //should fail
+    .method public hidebysig void InsideNestedFilterCodeForFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } finally {
+            .try {
+                nop
+            } filter {
+                endfinally
+                ldc.i4.1
+                endfilter
+            } {
+                nop
+            }
+        }
+
+        .try {
+            nop
+        } fault {
+            .try {
+                nop
+            } filter {
+                endfault
+                ldc.i4.1
+                endfilter
+            } {
+                nop
+            }
+        }
+
+        method_end: ret
+    }
+
+    //should fail
+    .method public hidebysig void InsideNestedFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } finally {
+            .try {
+                nop
+            } filter {
+                
+                ldc.i4.1
+                endfilter
+            } {
+                nop
+                endfinally
+            }
+        }
+
+        .try {
+            nop
+        } fault {
+            .try {
+                nop
+            } filter {
+                
+                ldc.i4.1
+                endfilter
+            } {
+                nop
+                endfault
+            }
+        }
+
+        method_end: ret
+    }
+    
+}

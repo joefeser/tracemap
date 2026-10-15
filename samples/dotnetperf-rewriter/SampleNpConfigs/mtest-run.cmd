@@ -1,0 +1,1 @@
+"C:\Program Files (x86)\Microsoft Visual Studio 10.0\Common7\IDE\MSTest.exe" /testsettings:C:\dev\NetPerf\Local.testsettings /testcontainer:C:\dev\NetPerf\bin\Debug\NetPerf.Tests.dll /testcontainer:C:\dev\NetPerf\NetPerf.Tests.Integration\bin\Debug\NetPerf.Tests.Integration.dll

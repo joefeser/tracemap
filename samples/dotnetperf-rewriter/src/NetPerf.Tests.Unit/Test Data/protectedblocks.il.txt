@@ -1,0 +1,114 @@
+﻿.assembly extern mscorlib 
+{
+    .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+    .ver 2:0:0:0
+}
+.assembly protectedblocks
+{
+    .hash algorithm 0x00008004
+    .ver 1:0:0:0
+}
+ 
+.module protectedblocks.exe
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+
+.class private auto ansi beforefieldinit protectedblocks.main
+    extends [mscorlib]System.Object
+{
+
+    .method private hidebysig static void Main(string[] args) cil managed
+    {
+        .entrypoint
+        .maxstack 8
+
+        ret
+    }
+
+    // Every method can have associated with it a set of exception entries, called the exception set. Each exception 
+    // entry consists of 
+    // *  Optional: a type token (the type of exception to be handled) or filterstart (the address of the first 
+    //    instruction of the user-supplied filter code)  
+    // *  Required: protected block  
+    // *  Required: handler region. There are four kinds of handler regions: catch handlers, filtered 
+    //    handlers, finally handlers, and fault handlers. (A filtered handler is the code that runs if the filter 
+    //    evaluates to true.)
+    //
+    // If an exception entry contains a filterstart, then filterstart strictly precedes handlerstart. The filter starts at 
+    // the instruction specified by filterstart and contains all instructions up to (but not including) that specified by 
+    // handlerstart. The lexically last instruction in the filter must be endfilter. If there is no filterstart then the filter 
+    // is empty (hence it does not overlap with any region). 
+    // No two regions (protected block, filter, handler region) of a single exception entry may overlap with one 
+    // another. 
+    // Each region must begin and end on an instruction boundary. 
+    // For every pair of exception entries in an exception set, one of the following must be true: 
+    // *  They nest: all three regions of one entry shall be within a single region of the other entry, with 
+    // the further restriction that the enclosing region shall not be a filter. [Note: Functions called from 
+    // within a filter can contain exception handling. end note] 
+    // *  They are disjoint: all six regions of the two entries are pairwise-disjoint (no addresses overlap).  
+    // *  They mutually protect: the protected blocks are the same and the other regions are pairwise-
+    // disjoint. In this case, all handlers shall be either catch handlers or filtered handlers. The 
+    // precedence of the handler regions is determined by their ordering in the Exception Handler Table 
+    // (Partition II).
+    //
+    .method public hidebysig static void ProtectedBlocks_Base() cil managed
+    {
+        .maxstack 8
+
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        ret
+    }
+
+}

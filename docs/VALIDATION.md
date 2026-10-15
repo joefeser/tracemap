@@ -4856,3 +4856,17 @@ net20/net35 assemblies carry no TargetFrameworkAttribute and resolve
 clr-2.x from their mscorlib 2.0.0.0 reference while net40+ resolve the
 attribute basis. Runtime-floor properties ride the existing
 ManagedAssemblyDeclared fact; no new fact type or schema change.
+
+## dotnetperf oracle import (#856 stage 1)
+
+`samples/dotnetperf-rewriter/` is a vendor import at pinned SHA `db8c3359`
+minus the documented exclusions (see its `PROVENANCE.md` for origin, authors,
+superseded EULA, exclusions, and the co-author's written Apache-2.0 release
+authorization). Import-time verification: no `.snk`/`.pfx` files and no secret
+patterns (license strings, invoice-URL passwords, storage-account keys —
+`Documentation/azure.txt` was caught by GitHub push protection and excluded)
+survive in the imported tree; the golden IL suites are intact (429 files, ~35 MB). The private git
+history stays in the private staging repo — a history scan recorded on the
+issue found keys and license material that make history unpublishable. Wiring
+the instrumenter/validator/goldens into `IlRewriteEvidenceExtractor` coverage
+is the follow-up stage on the issue.
