@@ -1,5 +1,20 @@
 # TraceMap Validation Guide
 
+The evidence-admission debugging ledger is
+`docs/validation/EVIDENCE_ADMISSION_DEBUGGING_LEDGER.md`. Run
+`HttpEntryBoundaryRegressionTests` before reviewing this branch: it exercises
+event/constructor/direct-control/property/lifecycle body HTTP routes through
+ordinary and bounded readers, with markup-only, NameOf, deferred lambda,
+ByRef, writable/virtual getter and inert lifecycle negatives. Its harness is
+not ASP.NET runtime evidence. Semantic extractor 0.10.4 adds only source-defined
+nonvirtual read-only getter call edges; a fresh scan is required for those edges.
+No framework dispatch or markup-to-handler CallEdge is fabricated.
+The real `samples/http-entry-boundaries` net48 fixture adds signed System.Web
+override identities and MyBase/MyClass negative controls. Path algorithm 1.8
+blocks sibling override candidates immediately after explicit nonvirtual calls;
+ordinary virtual candidate paths remain available. Fresh 0.10.4 source facts
+are needed for dispatchKind; old facts cannot recover that evidence by requery.
+
 Grouped report positive/partial readback: `GroupedCompiledPathHandoffTests`
 checks route presence independently of truncation, including all four
 positive/empty and truncated/non-truncated combinations. HTML explicitly states

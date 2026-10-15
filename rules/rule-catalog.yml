@@ -4849,6 +4849,18 @@ rules:
       - Default-member indexing is retained at Tier1Semantic only when Roslyn resolves exactly one default property; ambiguous or unresolved default members are omitted.
       - A property access proves a reference in source; it does not prove the accessor executes, that the getter or setter is reachable, or that any value flows at runtime.
 
+  - id: vb.semantic.readonly-getter-call.v1
+    name: Visual Basic source read-only getter call
+    description: Connects a compiler-resolved evaluated member read to its source-defined nonvirtual read-only getter identity, retaining PropertyAccessed separately.
+    evidenceTier: Tier1Semantic
+    emits:
+      - CallEdge
+    limitations:
+      - Only explicit member access with a source-defined read-only getter is supported. Writable properties are excluded because getter and setter display identities are not distinct in this adapter.
+      - Default/indexed properties, virtual/override/abstract getters, external getters, ByRef argument contexts, NameOf, deferred anonymous functions and invalid/assignment-target contexts are excluded.
+      - The edge records source semantics, not runtime execution or value propagation. Markup containment, declarative data binding and framework lifecycle dispatch never manufacture this edge.
+      - Requires vb-semantic/0.10.4 and a fresh scan; requerying older facts does not add accessor calls.
+
   - id: vb.semantic.methodinvocation.v1
     name: Visual Basic semantic method invocation
     description: Records compiler-resolved Visual Basic sub and function invocations with resolved containing types and receiver symbols.
@@ -4869,6 +4881,7 @@ rules:
     emits:
       - CallEdge
     limitations:
+      - Since vb-semantic/0.10.4, explicit MyBase/MyClass calls retain dispatchKind=explicit-nonvirtual. Path algorithm 1.8 preserves this through bounded projection and refuses an immediate override/interface-candidate hop after that call, including terminal-witness traversal. Ordinary virtual calls remain candidates, not proven runtime targets.
       - Edges are compiler-resolved call sites, not proven execution: dynamic dispatch to overrides, delegates, and interface dispatch beyond the resolved target are not expanded. Event composition is retained separately and is not represented as an executed CallEdge.
       - Late-bound invocations and unresolved callees produce no Tier1 edge; bounded Tier3 syntax edges and Tier4 call-site gaps may accompany them.
       - The caller is the lexically containing symbol at the call site; runtime call paths, recursion depth, and branch feasibility are not proven.

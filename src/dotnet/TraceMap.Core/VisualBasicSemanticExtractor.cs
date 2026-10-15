@@ -1609,6 +1609,7 @@ public static partial class VisualBasicSemanticExtractor
                 && property.ContainingType.TypeKind != TypeKind.Error)
             {
                 facts.Add(CreatePropertyAccessFact(projectPath, filePath, memberAccess, model, property));
+                AddReadOnlyGetterCall(projectPath, filePath, memberAccess, model, property, facts);
             }
         }
 
@@ -1624,6 +1625,44 @@ public static partial class VisualBasicSemanticExtractor
                 facts.Add(CreatePropertyAccessFact(projectPath, filePath, invocation, model, defaultProperty));
             }
         }
+    }
+
+    private static void AddReadOnlyGetterCall(string? projectPath, string filePath,
+        MemberAccessExpressionSyntax node, SemanticModel model, IPropertySymbol property,
+        List<SemanticFactCandidate> facts)
+    {
+        // Getter and setter display identities are not distinct in this adapter.
+        // Admit only source-defined, nonvirtual read-only getters, and only an
+        // evaluated property operation. NameOf is symbol evidence, not execution.
+        if (!property.IsReadOnly || property.IsIndexer || property.IsDefault()
+            || property.GetMethod is not { IsVirtual: false, IsOverride: false, IsAbstract: false } getter
+            || !getter.Locations.Any(location => location.IsInSource)
+            || model.GetEnclosingSymbol(node.SpanStart) is not IMethodSymbol caller
+            || model.GetOperation(node) is not IPropertyReferenceOperation operation)
+            return;
+        // Roslyn can still return a property operation for an invalid write to
+        // a read-only property in a partial compilation. It is not a getter call.
+        if (node.Parent is AssignmentStatementSyntax assignment && assignment.Left == node)
+            return;
+        for (IOperation? parent = operation.Parent; parent is not null; parent = parent.Parent)
+        {
+            if (parent is INameOfOperation or IAnonymousFunctionOperation or IInvalidOperation
+                || parent is IArgumentOperation { Parameter.RefKind: not RefKind.None })
+                return;
+        }
+        var properties = AddAssemblyProperties(AddSymbolProperties(AddSymbolProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callerSymbol"] = caller.ToDisplayString(SymbolFormat),
+                ["calleeSymbol"] = getter.ToDisplayString(SymbolFormat),
+                ["calleeName"] = getter.Name,
+                ["calleeContainingType"] = property.ContainingType.ToDisplayString(SymbolFormat),
+                ["callKind"] = "SemanticReadOnlyPropertyGet",
+                ["limitations"] = "Source-defined nonvirtual read-only getter only; no setter, default/indexed property, ByRef argument, deferred lambda, runtime execution or framework dispatch claim."
+            }, "source", caller), "target", getter), caller.ContainingAssembly, getter.ContainingAssembly);
+        facts.Add(CreateSemanticFact(FactTypes.CallEdge, RuleIds.VisualBasicSemanticReadOnlyGetterCall,
+            projectPath, filePath, node, sourceSymbol: caller.ToDisplayString(SymbolFormat),
+            targetSymbol: getter.ToDisplayString(SymbolFormat), contractElement: getter.Name, properties: properties));
     }
 
     private static SemanticFactCandidate CreatePropertyAccessFact(
@@ -1851,6 +1890,8 @@ public static partial class VisualBasicSemanticExtractor
 
         // This is reference-byte identity, not source-build provenance. Keep it
         // separate from declaration reconciliation and from runtime dispatch.
+        if (expression is MemberAccessExpressionSyntax { Expression: MyBaseExpressionSyntax or MyClassExpressionSyntax })
+            callProperties["dispatchKind"] = "explicit-nonvirtual";
         if (ExplicitReferenceHashes.TryGetValue(model.Compilation, out var referenceHashes)
             && method.ContainingAssembly is { } targetAssembly
             && model.Compilation.GetMetadataReference(targetAssembly) is { } reference
