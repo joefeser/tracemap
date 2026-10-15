@@ -3,6 +3,16 @@ namespace TraceMap.Tests;
 public sealed class TemporaryFixtureCleanupTests
 {
     [Fact]
+    public void Cleanup_accepts_the_canonical_OS_temporary_parent()
+    {
+        using var temp = new TempDirectory();
+        var canonical = TraceMap.Cli.WebFormsReviewPreflightCommand.PhysicalPath(temp.Path);
+        File.WriteAllText(System.IO.Path.Combine(canonical, "owned.txt"), "public fixture");
+        TempDirectory.DeleteTree(canonical);
+        Assert.False(Directory.Exists(temp.Path));
+    }
+
+    [Fact]
     public void Cleanup_removes_readonly_git_objects_without_following_external_links()
     {
         using var temp = new TempDirectory();
