@@ -18,7 +18,7 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
         Assert.Equal(RuleIds.LegacyDataEdmxSymbolComposition, scope.RuleId);
         Assert.Equal(EvidenceTiers.Tier2Structural, scope.EvidenceTier);
         Assert.Equal("same-directory-designer-file", scope.Properties.GetValueOrDefault("scopeRule"));
-        Assert.Equal(fixture.DesignerPath, scope.Properties.GetValueOrDefault("scopedFilePaths"));
+        Assert.Equal(fixture.DesignerPath.Replace('\\', '/'), scope.Properties.GetValueOrDefault("scopedFilePaths"));
         Assert.Equal(result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataMetadataDeclared
                 && fact.Properties.GetValueOrDefault("metadataFormat") == "edmx").FactId,
             scope.Properties.GetValueOrDefault("sourceMetadataFactId"));
@@ -1487,7 +1487,7 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
         var result = fixture.Scan();
 
         var scope = result.Facts.Single(fact => fact.FactType == FactTypes.LegacyDataGeneratedFileScope);
-        Assert.Equal(fixture.DesignerPath, scope.Properties.GetValueOrDefault("scopedFilePaths"));
+        Assert.Equal(fixture.DesignerPath.Replace('\\', '/'), scope.Properties.GetValueOrDefault("scopedFilePaths"));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
             && fact.Properties.GetValueOrDefault("classification") == "UnresolvedGeneratedNamespace");
@@ -1511,16 +1511,16 @@ public sealed class LegacyDataEdmxSymbolCompositionTests
 
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.SymbolRelationship
             && fact.Properties.GetValueOrDefault("relationshipKind") == "MapsToConceptualEntity"
-            && fact.Evidence.FilePath == Path.Combine("src", "Model.edmx"));
+            && fact.Evidence.FilePath == "src/Model.edmx");
         var unavailable = result.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
             && fact.Properties.GetValueOrDefault("classification") == "ClrSymbolEvidenceUnavailable"
-            && fact.Evidence.FilePath == Path.Combine("Broken", "Model.edmx"));
+            && fact.Evidence.FilePath == "Broken/Model.edmx");
         Assert.NotEmpty(unavailable);
         Assert.DoesNotContain(result.Facts, fact => fact.FactType == FactTypes.AnalysisGap
             && fact.RuleId == RuleIds.LegacyDataEdmxSymbolComposition
             && fact.Properties.GetValueOrDefault("classification") is "MissingGeneratedCode" or "UnresolvedGeneratedNamespace"
-            && fact.Evidence.FilePath == Path.Combine("Broken", "Model.edmx"));
+            && fact.Evidence.FilePath == "Broken/Model.edmx");
     }
 
     private static async Task<List<Dictionary<string, string>>> ReadRowsAsync(SqliteConnection connection, string sql)

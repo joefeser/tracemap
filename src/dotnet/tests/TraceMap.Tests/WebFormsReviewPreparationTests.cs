@@ -711,6 +711,6 @@ public sealed class WebFormsReviewPreparationTests
                 if (File.Exists(Path.Combine(directory.FullName, "AGENTS.md")) && Directory.Exists(Path.Combine(directory.FullName, "samples"))) return directory.FullName;
             throw new InvalidOperationException("Public fixtures unavailable");
         }
-        public void Dispose() { Output.Dispose(); Error.Dispose(); if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true); }
+        public void Dispose() { Output.Dispose(); Error.Dispose(); TempDirectory.DeleteTree(Root); }
     }
 }
