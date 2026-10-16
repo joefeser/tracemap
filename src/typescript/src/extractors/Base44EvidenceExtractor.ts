@@ -4015,15 +4015,20 @@ function resolveSingleAssignedRuntimeAlias(
   const assignments: ts.BinaryExpression[] = [];
   let destructuringOverwrite = false;
   const patternBinds = (pattern: ts.Expression): boolean => {
-    if (!ts.isArrayLiteralExpression(pattern) && !ts.isObjectLiteralExpression(pattern)) return false;
-    let bound = false;
-    const visit = (node: ts.Node): void => {
-      if (bound || ts.isFunctionLike(node)) return;
-      if (ts.isIdentifier(node) && node.text === bindingName) bound = true;
-      ts.forEachChild(node, visit);
-    };
-    visit(pattern);
-    return bound;
+    const target = unwrapAliasExpression(pattern);
+    if (ts.isIdentifier(target)) return target.text === bindingName
+      && resolveLexicalBinding(target.text, target, source)?.node === declaration;
+    if (ts.isArrayLiteralExpression(target)) return target.elements.some(element =>
+      !ts.isOmittedExpression(element) && patternBinds(ts.isSpreadElement(element) ? element.expression : element));
+    if (ts.isObjectLiteralExpression(target)) return target.properties.some(property => {
+      if (ts.isPropertyAssignment(property)) return patternBinds(property.initializer);
+      if (ts.isShorthandPropertyAssignment(property)) return patternBinds(property.name);
+      if (ts.isSpreadAssignment(property)) return patternBinds(property.expression);
+      return false;
+    });
+    // Defaults read their RHS; only the LHS is an assignment target.
+    return ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && patternBinds(target.left);
   };
   const collectStatement = (statement: ts.Statement): void => {
     // Only an assignment that IS the scanned statement dominates the use;
@@ -4046,16 +4051,15 @@ function resolveSingleAssignedRuntimeAlias(
         && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
         && ts.isIdentifier(node.operand) && node.operand.text === bindingName
         && resolveLexicalBinding(bindingName, node.operand, source)?.node === declaration) destructuringOverwrite = true;
-      if ((ts.isForOfStatement(node) || ts.isForInStatement(node)) && ts.isIdentifier(node.initializer)
-        && node.initializer.text === bindingName
-        && resolveLexicalBinding(bindingName, node.initializer, source)?.node === declaration) destructuringOverwrite = true;
+      if ((ts.isForOfStatement(node) || ts.isForInStatement(node)) && !ts.isVariableDeclarationList(node.initializer)
+        && patternBinds(node.initializer)) destructuringOverwrite = true;
       ts.forEachChild(node, scanWrites);
     };
     scanWrites(statement);
     const node = direct;
     if (!node || !ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return;
     const target = unwrapAliasExpression(node.left);
-    if (patternBinds(target)) {
+    if ((ts.isArrayLiteralExpression(target) || ts.isObjectLiteralExpression(target)) && patternBinds(target)) {
       // A destructuring write to the alias invalidates the sole-assignment
       // proof; the alias value is not statically known after it.
       destructuringOverwrite = true;
