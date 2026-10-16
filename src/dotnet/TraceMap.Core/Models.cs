@@ -451,6 +451,7 @@ public static class FactTypes
     public const string PdbSourceDocumentReconciled = nameof(PdbSourceDocumentReconciled);
     public const string ManagedIlBodyDeclared = nameof(ManagedIlBodyDeclared);
     public const string ManagedIlCallObserved = nameof(ManagedIlCallObserved);
+    public const string ManagedLateBindingCensus = nameof(ManagedLateBindingCensus);
     public const string ManagedIlCallValuesObserved = nameof(ManagedIlCallValuesObserved);
     public const string ManagedIlReturnValuesObserved = nameof(ManagedIlReturnValuesObserved);
     public const string ManagedIlDatabaseCommandCandidate = nameof(ManagedIlDatabaseCommandCandidate);
@@ -687,6 +688,7 @@ public static class RuleIds
     public const string DotNetPdbGap = "dotnet.compiled.pdb-gap.v1";
     public const string DotNetIlBody = "dotnet.compiled.il-body.v1";
     public const string DotNetIlCall = "dotnet.compiled.il-call.v1";
+    public const string DotNetIlLateBindingCensus = "dotnet.il.late-binding-census.v1";
     public const string DotNetIlValues = "dotnet.compiled.il-values.v1";
     public const string DotNetIlCommandBinding = "dotnet.compiled.il-command-binding.v1";
     public const string DotNetIlGap = "dotnet.compiled.il-gap.v1";
@@ -719,7 +721,7 @@ public static class ScannerVersions
     public const string ManagedMetadataExtractor = "managed-metadata/0.2.0+cecil-0.11.6"; // 0.2.0: ManagedAssemblyDeclared gains runtimeFloor* properties (#853)
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.13+srm-10.0.0+cecil-0.11.6";
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.0+srm-10.0.0+cecil-0.11.6"; // 0.2.0: per-assembly ManagedLateBindingCensus (#854)
     public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
     public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";

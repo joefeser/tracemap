@@ -216,6 +216,18 @@ internal static class IlBodyEvidenceExtractor
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal);
 
+    internal const string CensusLimitation =
+        "Observed IL call sites in admitted/partial bodies only; density is the late-bound share of observed calls, not of all code. "
+        + "Late-bound means the call target encodes Microsoft.VisualBasic.CompilerServices LateBinding/NewLateBinding helper members; "
+        + "other dynamic mechanisms (Reflection, DLR, delegates) are not counted. High density downgrades source-lane call-graph weight "
+        + "for the affected members; it proves compilation-time late binding, not runtime behavior.";
+
+    private static string CensusBucket(int lateBound, int observed) => lateBound == 0 ? "none"
+        : observed == 0 ? "unknown"
+        : (double)lateBound / observed <= 0.10 ? "low"
+        : (double)lateBound / observed <= 0.50 ? "moderate"
+        : "high";
+
     internal static IReadOnlyList<CodeFact> MaterializeFacts(
         ScanManifest manifest,
         IlBodyEvaluation evaluation,
@@ -251,6 +263,36 @@ internal static class IlBodyEvidenceExtractor
                 facts.Add(GapFact(manifest, outcome.SafeLocator, gapKind, common));
             if (outcome.Outcome is not ("admitted" or "partial"))
                 continue;
+
+            // Per-assembly late-binding census (#854): observed IL call sites whose
+            // target is the Visual Basic late-binding helper (LateBinding/NewLateBinding
+            // in Microsoft.VisualBasic.CompilerServices) versus all observed calls. The
+            // raw namespace and type names appear verbatim inside the encoded target
+            // identity, so detection does not depend on identity length framing.
+            var observedCalls = 0;
+            var lateBoundCalls = 0;
+            foreach (var body in input.Bodies)
+            {
+                foreach (var call in body.Calls)
+                {
+                    observedCalls++;
+                    if (call.TargetIdentity.Contains("Microsoft.VisualBasic.CompilerServices", StringComparison.Ordinal)
+                        && call.TargetIdentity.Contains("LateBinding", StringComparison.Ordinal))
+                        lateBoundCalls++;
+                }
+            }
+            facts.Add(FactFactory.Create(manifest,
+                FactTypes.ManagedLateBindingCensus, RuleIds.DotNetIlLateBindingCensus,
+                EvidenceTiers.Tier2Structural, IlEvidence(outcome.SafeLocator),
+                targetSymbol: outcome.SafeLocator, contractElement: "il-late-binding-census",
+                properties: CopyToSorted(common, new (string Key, string Value)[]
+                {
+                    ("observedIlCallCount", observedCalls.ToString(CultureInfo.InvariantCulture)),
+                    ("lateBoundCallCount", lateBoundCalls.ToString(CultureInfo.InvariantCulture)),
+                    ("lateBindingDensity", CensusBucket(lateBoundCalls, observedCalls)),
+                    ("censusScope", outcome.Outcome == "admitted" ? "admitted-bodies" : "partial-bodies"),
+                    ("limitation", CensusLimitation)
+                })));
 
             foreach (var body in input.Bodies.OrderBy(item => item.MetadataToken, StringComparer.Ordinal))
             {
