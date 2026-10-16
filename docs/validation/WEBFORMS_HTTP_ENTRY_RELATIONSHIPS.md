@@ -53,8 +53,8 @@ The privacy-projected `legacy-flows` report omits this local inventory and its i
 hashes. No new shareable artifact hashes private source input. Grouped handoff
 continues to describe the existing call paths and does not admit these candidates.
 
-Versions: legacy-webforms **0.14.1**, vb-semantic **0.10.6**, csharp-semantic
-**0.22.3**. A fresh scan is required. Requery alone cannot reconstruct missing
+Versions: legacy-webforms **0.14.2**, vb-semantic **0.10.6**, csharp-semantic
+**0.22.4**. A fresh scan is required. Requery alone cannot reconstruct missing
 instance/property/framework witnesses from earlier scans. Historical version
 receipts remain historical; existing path classifications and algorithm are unchanged.
 
