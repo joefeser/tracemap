@@ -939,6 +939,7 @@ public static partial class VisualBasicSemanticExtractor
                         ["isDefault"] = property.IsDefault() ? "True" : "False",
                         ["isReadOnly"] = property.IsReadOnly ? "True" : "False",
                         ["isWriteOnly"] = property.IsWriteOnly ? "True" : "False",
+                        ["isStatic"] = property.IsStatic.ToString(),
                         ["getterAccessibility"] = property.GetMethod?.DeclaredAccessibility.ToString() ?? "Unavailable",
                         ["getterPubliclyAccessible"] = PublicTypeChain(property.ContainingType).ToString(),
                         ["parameterCount"] = property.Parameters.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)

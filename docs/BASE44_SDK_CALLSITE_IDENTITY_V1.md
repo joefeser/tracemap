@@ -80,3 +80,6 @@ repository-wide default.
 This contract proves only static package identity at an extracted callsite. It
 does not prove bundling, runtime reachability, backend compatibility, or that a
 declared operation succeeds.
+
+Promotion repair 0.18.1 limitations and preserved versions are recorded in
+[the adapter contract](BASE44_STATIC_EVIDENCE_ADAPTER.md#promotion-repair-producer-0181).

@@ -52,7 +52,8 @@ public static partial class LegacyWebFormsExtractor
             if (registrations.Length == 0) continue;
             if (registrations.Length != 1)
             {
-                EntryGap(manifest, control.Evidence, RuleIds.WebFormsEntryContainment, "MissingOrAmbiguousRegistration", [pageFact, control], facts);
+                EntryGap(manifest, control.Evidence, RuleIds.WebFormsEntryContainment, "MissingOrAmbiguousRegistration", new[] { pageFact, control }
+                    .Concat(registrations.Select(r => CreateUserControlRegistrationFact(manifest, page, r))).ToArray(), facts);
                 continue;
             }
             var compositions = facts.Where(f => f.FactType == FactTypes.WebFormsCompositionDeclared
@@ -160,7 +161,8 @@ public static partial class LegacyWebFormsExtractor
             if (member.Properties.GetValueOrDefault("getterAccessibility") != "Public"
                 || member.Properties.GetValueOrDefault("getterPubliclyAccessible") != "True"
                 || member.Properties.GetValueOrDefault("parameterCount") != "0"
-                || member.Properties.GetValueOrDefault("isDefault") != "False")
+                || member.Properties.GetValueOrDefault("isDefault") != "False"
+                || member.Properties.GetValueOrDefault("isStatic") != "False")
             {
                 facts.Add(EntryFact(manifest, RuleIds.WebFormsEntryProperty, EvidenceTiers.Tier4Unknown,
                     evidence, "unresolved-entry", candidate.Relation.TargetSymbol!, member.TargetSymbol!,

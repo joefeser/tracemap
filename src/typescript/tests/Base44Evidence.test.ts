@@ -13,6 +13,72 @@ const shaA = "a".repeat(64);
 const shaB = "b".repeat(64);
 
 describe("Base44 source-bound static evidence", () => {
+  it.each([
+    "if (flag) client = fake;", "while (flag) { client = fake; break; }",
+    "try { client = fake; } catch {}", "flag && (client = fake);",
+    "consume(client = fake);", "if (flag) [client] = [fake];", "client ||= fake;",
+    "(() => { client = fake; })();", "for (client of candidates) {}"
+  ])("refuses a null-initialized client overwritten through nested flow: %s", async (overwrite) => {
+    const {packet} = await mutationHookFixture(`
+export function run(flag, fake, candidates) {
+  let client = null;
+  client = base44;
+  ${overwrite}
+  client.entities.ReplacedClient.list();
+}`);
+    expect(packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "ReplacedClient")).toEqual([]);
+  });
+
+  it("admits a single dominating module assignment and preserves nested shadowing", async () => {
+    const {packet} = await mutationHookFixture(`
+let client = null;
+client = base44;
+{ let client = {}; client = unrelated; }
+client.entities.ModuleClient.list();
+`);
+    expect(packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "ModuleClient")).toHaveLength(1);
+  });
+
+  it.each([
+    ["if (flag) return { alternate: 1 };", ["alternate", "original"]],
+    ["if (flag) throw new Error();", ["original"]],
+    ["throw new Error();", []],
+    ["return { alternate: 1 }; unreachable();", ["alternate"]],
+    ["if (flag) return { alternate: 1 }; else throw new Error();", ["alternate"]],
+  ])("retains only possible helper values across finally completion: %s", async (completion, names) => {
+    const {packet} = await mutationHookFixture(`
+function payload(flag) { try { return { original: 1 }; } finally { ${completion} } }
+export function run(flag) { return base44.entities.FinallyPaths.create(payload(flag)); }
+`);
+    const payload = packet.facts.find(f => f.factType === FactTypes.Base44EntityPayload && f.targetSymbol === "FinallyPaths")!;
+    expect(JSON.parse(payload.properties.fieldsJson).map((f: {name:string}) => f.name).filter((n:string) => n !== "<dynamic>").sort()).toEqual(names);
+    if (!names.length) expect(payload.properties.completeness).not.toBe("complete");
+  });
+
+  it.each(["toString", "constructor", "__proto__"])("does not treat a plain-object truthiness guard as an own-key domain: %s", async (key) => {
+    const {packet} = await mutationHookFixture(`
+export function run(input) {
+  const fields = { known: "safe" };
+  const key = input || "${key}";
+  if (!fields[key]) return;
+  return base44.entities.InheritedKey.create({ [key]: 1 });
+}`);
+    const payload = packet.facts.find(f => f.factType === FactTypes.Base44EntityPayload && f.targetSymbol === "InheritedKey")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("dynamic-computed-property");
+  });
+
+  it.each(["01.2.3", "1.02.3", "1.2.03"])("refuses noncanonical SDK numeric versions: %s", async (version) => {
+    const {packet} = await mutationHookFixture(`
+import { createClient } from "npm:@base44/sdk@${version}";
+const client = createClient();
+client.entities.BadVersion.list();
+`);
+    const operation = packet.facts.find(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "BadVersion")!;
+    expect(operation.properties.sdkIdentityJson).toBeFalsy();
+    expect(operation.properties.sdkIdentityGap).toBeTruthy();
+  });
+
   it("expands finite source-derived entity selectors without erasing the source call identity", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/dynamic-entities.ts"), `import { base44 } from "@base44/sdk";
@@ -2206,6 +2272,7 @@ export async function submit(message, specialContext, getPayload) {
 export async function submit(req, runtimeKey, value) {
   const { voice_choice } = await req.json();
   const VOICE_MAP = {
+    __proto__: null,
     male: "onyx",
     female: "nova"
   };
@@ -2699,8 +2766,8 @@ export function Screen(producer) {
 
   it("intersects dominating guard maps instead of unioning their key domains", async () => {
     const {packet} = await mutationHookFixture(`
-const PRIMARY = { a: "primary_a", b: "primary_b" };
-const SHARED = { a: "shared_a" };
+const PRIMARY = { __proto__: null, a: "primary_a", b: "primary_b" };
+const SHARED = { __proto__: null, a: "shared_a" };
 export function Screen(props) {
   const kind = props.field;
   if (!PRIMARY[kind]) return;

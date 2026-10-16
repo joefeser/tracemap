@@ -7848,7 +7848,7 @@ rules:
 
   - id: legacy.webforms.entry-property.v1
     name: WebForms declarative instance property reference
-    description: Resolves a bounded data-binding expression to an exact control instance and one directly declared semantic property with a public parameterless getter on a public containing-type chain, without emitting a getter call.
+    description: Resolves a bounded data-binding expression to an exact control instance and one directly declared semantic property with a public parameterless instance getter on a public containing-type chain, without emitting a getter call.
     evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
     emits:
       - WebFormsEntryRelationship

@@ -53,7 +53,7 @@ The privacy-projected `legacy-flows` report omits this local inventory and its i
 hashes. No new shareable artifact hashes private source input. Grouped handoff
 continues to describe the existing call paths and does not admit these candidates.
 
-Versions: legacy-webforms **0.14.2**, vb-semantic **0.10.6**, csharp-semantic
+Versions: legacy-webforms **0.14.3**, vb-semantic **0.10.7**, csharp-semantic
 **0.22.4**. A fresh scan is required. Requery alone cannot reconstruct missing
 instance/property/framework witnesses from earlier scans. Historical version
 receipts remain historical; existing path classifications and algorithm are unchanged.
@@ -82,3 +82,11 @@ Containment report TargetSymbolId preserves the resolved target type identity.
 New generator hashes use exact assembly bytes, or exact containing application bundle
 bytes for a single-file entry assembly; they never substitute the dotnet host.
 This does not certify other scanner components for single-file deployment.
+
+Promotion review refinements: public getters must also be instance members;
+Shared/static properties remain unresolved. Ambiguous-registration gaps retain
+all competing registration facts in their support list and bounded-input digest.
+A missing source/designer field does not invalidate the unique markup control
+candidate: WebForms may generate that member during compilation. Such a candidate
+remains Tier3 and explicitly does not prove receiver-instance binding. Known
+conflicting source members still refuse it.
