@@ -144,3 +144,9 @@ promotion-head full-suite receipt. Existing npm dependency advisories (vitest,
 Any review-fix commits on this branch require a separate explicit reconciliation
 PR back to dev; do not merge unrelated main-only work into dev. No main merge
 authorized.
+
+Round 2: Baz found a destructuring false negative in the alias-write guard.
+The target walker now ignores property keys and default-value reads, follows
+actual object/array/rest/default assignment targets, and checks lexical identity.
+The sibling for-in/of destructuring surface uses the same target walker.
+TypeScript build and all 310 tests passed, including 11 target/read/shadow cases.

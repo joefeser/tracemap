@@ -14,6 +14,31 @@ const shaB = "b".repeat(64);
 
 describe("Base44 source-bound static evidence", () => {
   it.each([
+    ["({ client: other } = source);", true],
+    ["({ [client]: other } = source);", true],
+    ["[other = client] = source;", true],
+    ["({ other = client } = source);", true],
+    ["{ let client; ({ client } = source); }", true],
+    ["({ other: client } = source);", false],
+    ["({ client } = source);", false],
+    ["({ other: [client = fallback] } = source);", false],
+    ["[...client] = source;", false],
+    ["({ ...client } = source);", false],
+    ["for ([client] of source) {}", false],
+  ])("distinguishes destructuring writes from reads and property keys: %s", async (statement, admitted) => {
+    const {packet} = await mutationHookFixture(`
+export function run(source, fallback) {
+  let client = null;
+  client = base44;
+  let other;
+  ${statement}
+  client.entities.DestructuringClient.list();
+}`);
+    expect(packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "DestructuringClient"))
+      .toHaveLength(admitted ? 1 : 0);
+  });
+
+  it.each([
     "if (flag) client = fake;", "while (flag) { client = fake; break; }",
     "try { client = fake; } catch {}", "flag && (client = fake);",
     "consume(client = fake);", "if (flag) [client] = [fake];", "client ||= fake;",
