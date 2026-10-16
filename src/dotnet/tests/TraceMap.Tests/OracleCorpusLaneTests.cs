@@ -42,31 +42,25 @@ public sealed class OracleCorpusLaneTests
             second.Facts.Select(fact => fact.FactId).Order(StringComparer.Ordinal));
 
         var declaration = Assert.Single(first.Facts, fact => fact.FactType == FactTypes.ManagedAssemblyDeclared);
-        // These fixtures were rebuilt with 4.x-era tooling, so the attribute basis
-        // fires; both bases are acceptable with basis-consistent floor values, and
-        // the floor never guesses outside its documented shapes.
-        var basis = declaration.Properties["runtimeFloorBasis"];
-        var floor = declaration.Properties["runtimeFloor"];
-        if (basis == "target-framework-attribute")
-            Assert.StartsWith(".NETFramework,Version=v", floor, StringComparison.Ordinal);
-        else
-        {
-            Assert.Equal("mscorlib-assembly-reference", basis);
-            Assert.True(floor is "clr-2.x" or "clr-4.x", $"unexpected runtime floor {floor}");
-            Assert.Matches(@"^\d+\.\d+\.\d+\.\d+$", declaration.Properties["runtimeFloorSourceVersion"]);
-        }
+        // The committed fixtures are immutable corpus bytes rebuilt with 4.x-era
+        // tooling (.NETFramework,Version=v4.0 verbatim in the attribute blob), so
+        // the observed basis pins EXACTLY — a regression in attribute extraction
+        // that falls back to mscorlib must fail here, not pass conditionally.
+        Assert.Equal("target-framework-attribute", declaration.Properties["runtimeFloorBasis"]);
+        Assert.Equal(".NETFramework,Version=v4.0", declaration.Properties["runtimeFloor"]);
+        Assert.False(declaration.Properties.ContainsKey("runtimeFloorSourceVersion"));
 
         Assert.Contains(first.Facts, fact => fact.FactType == FactTypes.ManagedLateBindingCensus);
         Assert.Contains(first.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved);
     }
 
     [Theory]
-    [InlineData("NormalPublicClass.netmodule", "etmodule")]
-    [InlineData("ConflictingNameSpace.netmodule", "etmodule")]
+    [InlineData("NormalPublicClass.netmodule", "ManagedNetmoduleInputUnsupported")]
+    [InlineData("ConflictingNameSpace.netmodule", "ManagedNetmoduleInputUnsupported")]
     // MultiModule.dll is a multi-module assembly manifest referencing the
     // .netmodules — its own typed boundary, distinct from a bare netmodule.
     [InlineData("MultiModule.dll", "MultiModuleManagedAssemblyUnsupported")]
-    public void Era_unsupported_input_shapes_stay_typed_boundaries(string inputName, string marker)
+    public void Era_unsupported_input_shapes_stay_typed_boundaries(string inputName, string expectedGap)
     {
         var input = TestAssembly(inputName);
         Assert.True(File.Exists(input), input);
@@ -74,8 +68,9 @@ public sealed class OracleCorpusLaneTests
         var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out"),
             CompiledInputPaths: [input], IlBodyEvidence: true));
         Assert.DoesNotContain(scan.Facts, fact => fact.FactType == FactTypes.ManagedAssemblyDeclared);
+        // Exact gap-name pins: a differently named gap must fail the boundary claim.
         Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.AnalysisGap
-            && (fact.ContractElement?.Contains(marker, StringComparison.Ordinal) == true
-                || fact.Properties.GetValueOrDefault("gapKind")?.Contains(marker, StringComparison.Ordinal) == true));
+            && (fact.ContractElement == expectedGap
+                || fact.Properties.GetValueOrDefault("gapKind") == expectedGap));
     }
 }
