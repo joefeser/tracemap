@@ -47,6 +47,13 @@ remains available in the private staging repository for audit.
   third-party copyrighted standard material outside the co-author release
   authorization ("your code and mine"); freely and permanently available from
   ecma-international.org, so exclusion costs nothing
+- `src/NetPerf.UI/Infrastructure/Reflector.cs` — copied source from the
+  separate "Front-End for DOSBox" project (`code.google.com/p/fed/`, per its
+  own header), used for a Vista-style folder dialog; third-party source outside
+  the co-author authorization. Removing it leaves `NetPerf.UI` uncompilable
+  as-pinned; a revival replaces it with a supported folder-dialog API. A
+  header-attribution sweep confirmed this is the only foreign-origin source
+  file in the tree.
 - `src/.nuget/` — the solution NuGet bootstrap: the third-party `NuGet.exe`
   binary, stock Microsoft `NuGet.targets` MSBuild integration, and the default
   template `NuGet.Config` (nothing first-party; flagged independently by the
@@ -55,6 +62,13 @@ remains available in the private staging repository for audit.
   (caught by review after both the import sweep and push protection missed it;
   treat the PostSharp key as burned; the file only wired the already-excluded
   vendored PostSharp binaries)
+
+## Notice retention
+
+In-file copyright notices (e.g. `CommonAssemblyInfo.cs`: "Copyright ©
+2010-2013 Joe Feser and Stephen Ward") are retained verbatim per Apache-2.0
+section 4; the Apache grant applies on top of, not instead of, the authors'
+existing notices.
 
 ## Retained first-party material in `Documentation/Errata`
 

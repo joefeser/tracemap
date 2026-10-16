@@ -4866,10 +4866,12 @@ authorization). Import-time verification: no `.snk`/`.pfx` files and no secret
 patterns (license strings, invoice-URL passwords, storage-account keys —
 `Documentation/azure.txt` caught by GitHub push protection — or the
 PostSharp license key in `src/PostSharp.Custom.targets`, caught by review)
-survive in the committed tree; the golden IL suites are intact (408 committed
-files: 407 vendored plus `PROVENANCE.md` — the third-party ECMA-335.pdf and
-the `src/.nuget/` bootstrap binary are excluded as outside the co-author
-authorization; the Errata recordings are owner-confirmed first-party); 17 junk-class files at the pin —
+survive in the committed tree; the golden IL suites are intact (407 committed
+files: 406 vendored plus `PROVENANCE.md` — the third-party ECMA-335.pdf, the
+`src/.nuget/` bootstrap binary and the FED-derived `Reflector.cs` are excluded
+as outside the co-author authorization; a header-attribution sweep found no
+other foreign-origin source; the Errata recordings are owner-confirmed
+first-party; in-file author notices are retained per Apache-2.0 §4); 17 junk-class files at the pin —
 SourceSafe bindings and test `.pdb`s — are excluded by this repository's
 ignore rules, as documented in the provenance). The private git
 history stays in the private staging repo — a history scan recorded on the
