@@ -107,3 +107,9 @@ witnesses remain unavailable; this does not broaden C# property extraction.
 Follow-up validation: HTTP-entry, C# semantic, legacy WebForms and current-version
 regressions passed 87/87 with warnings as errors. Prior repair head c2dc16d7
 passed the frozen 598-test suite and its hosted .NET adapter check.
+
+Round 3 follow-up: three executable validation prompts derive the WebForms
+extractor expectation from ScannerVersions in the selected tool revision rather
+than pinning 0.13.12. Verified all three references resolve to the current 0.14.2
+constant; historical receipts and the prompts' bounded private-validation scope
+are unchanged. This is a documentation-only correction; no private scan was run.
