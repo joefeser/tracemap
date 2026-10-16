@@ -1,0 +1,304 @@
+// Metadata version: v2.0.50727
+.assembly extern mscorlib
+{
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89 )                         // .z\V.4..
+  .ver 2:0:0:0
+}
+.assembly ILTest
+{
+  .hash algorithm 0x00008004
+  .ver 1:0:0:0
+}
+.module ILTest.exe
+// MVID: {F0DB5ED5-B283-4FA9-967E-2F34302E0AC6}
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+// Image base: 0x002B0000
+
+
+// =============== CLASS MEMBERS DECLARATION ===================
+
+.class private auto ansi beforefieldinit ILTest.Program
+       extends [mscorlib]System.Object
+{
+  .method private hidebysig static void  Main(string[] args) cil managed
+  {
+    .entrypoint
+    .maxstack  8
+    ldc.i4.0
+    call       void ILTest.Program::MultipleReturns(bool)
+    ret
+  } // end of method ILTest::Main
+
+  .method public hidebysig static void  MultipleReturns(bool firstMessage) cil managed
+  {
+    .maxstack  8
+    IL_0000:  ldarg.0
+    IL_0001:  brfalse.s  IL_000e
+
+    IL_0003:  ldstr      "this is the first message"
+    IL_0008:  call       void [mscorlib]System.Console::WriteLine(string)
+    IL_000d:  ret
+
+    IL_000e:  ldstr      "this is the default message"
+    IL_0013:  call       void [mscorlib]System.Console::WriteLine(string)
+    IL_0018:  ret
+  } // end of method ILTest::MultipleReturns
+
+  .method public hidebysig static void  SingleReturn() cil managed
+  {
+    .maxstack  8
+    IL_0003:  ldstr      "this is the first message"
+    IL_0008:  call       void [mscorlib]System.Console::WriteLine(string)
+    IL_000d:  ret
+  } // end of method ILTest::SingleReturn
+
+  .method public hidebysig static void  SingleTailCall(int32 recurseDepth) cil managed
+  {
+    .maxstack  8
+    ldc.i4.1
+    ldarg.0
+    sub
+    tail.
+    call void ILTest.Program::SingleTailCall(int32)
+    ret
+  } // end of method ILTest::SingleTailCall
+
+  .method public hidebysig static void  MultipleTailCalls(int32 recurseDepth) cil managed
+  {
+    .maxstack  8
+    ldarg.0
+    ldc.i4.5
+    blt singlestep
+    ldc.i4.5
+    ldarg.0
+    sub
+    tail.
+    call void ILTest.Program::MultipleTailCalls(int32)
+    ret
+    singlestep: ldc.i4.1
+    ldarg.0
+    sub
+    tail.
+    call void ILTest.Program::MultipleTailCalls(int32)
+    ret
+  } // end of method ILTest::MultipleTailCalls
+
+  .method public hidebysig static void  TailCallAndReturn(int32 recurseDepth) cil managed
+  {
+    .maxstack  8
+    ldc.i4.1
+    ldarg.0
+    bgt recurse
+    ret
+    recurse: ldc.i4.1
+    ldarg.0
+    sub
+    tail.
+    call void ILTest.Program::TailCallAndReturn(int32)
+    ret
+  } // end of method ILTest::TailCallAndReturn
+
+  .method public hidebysig static void ExitMethodWithJmp(int32 recurseDepth) cil managed
+  {
+    .maxstack 8
+    ldc.i4.1
+    ldarg.0
+    sub
+    ldc.i4.0
+    ble.s method_end
+    jmp void ILTest.Program::JmpTargetMethod(int32)
+    method_end: ret
+  }
+
+  .method public hidebysig static void ExitMethodWithJmpAndTail(int32 recurseDepth) cil managed
+  {
+    .maxstack 8
+    ldc.i4.1
+    ldarg.0
+    sub
+    ldc.i4.0
+    ble.s tail_check
+    jmp void ILTest.Program::JmpTargetMethod(int32)
+    tail_check: ldc.i4.2
+    ldarg.0
+    sub
+    ldc.i4.2
+    ble.s method_end
+    ldarg.0
+    tail.
+    call void ILTest.Program::ExitMethodWithJmpAndTail(int32)
+    ret
+    nop
+    nop
+    method_end: ret
+  }
+
+  .method public hidebysig void JmpTargetMethod(int32 recurseDepth) cil managed
+  {
+    .maxstack 8
+    nop
+    ret
+  }
+
+  .method public hidebysig static void ShortMethod() cil managed
+  {
+    .maxstack 8
+    ret
+  }
+
+  .method public hidebysig specialname rtspecialname instance void  .ctor() cil managed
+  {
+    .maxstack  8
+    IL_0000:  ldarg.0
+    IL_0001:  call       instance void [mscorlib]System.Object::.ctor()
+    IL_0006:  ret
+  } // end of method ILTest::.ctor
+
+  .method public hidebysig specialname rtspecialname instance void SingleBranchToSingleReturn() cil managed
+  {
+    .maxstack 8
+    ldc.i4 100
+    ldc.i4 90
+    sub
+    ldc.i4.0
+    bgt methodExit
+    nop
+    methodExit: ret
+  }
+
+  .method public hidebysig specialname rtspecialname instance void MultipleBranchesToSingleReturn() cil managed
+  {
+    .maxstack 8
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    beq methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bge methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bgt methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    ble methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    blt methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    br methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    brtrue methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    brfalse methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bge.un methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bgt.un methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    ble.un methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    blt.un methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bne.un methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    beq.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bge.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bgt.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    ble.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    blt.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    br.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    brtrue.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    brfalse.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bge.un.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bgt.un.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    ble.un.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    blt.un.s methodExit
+    nop
+    ldc.i4.0
+    ldc.i4.0
+    bne.un.s methodExit
+  methodExit:
+    nop
+    ret
+  }
+
+  .method public hidebysig specialname rtspecialname instance void MultipleBranchesToMultipleReturns() cil managed
+  {
+    .maxstack 8
+    ldc.i4.0
+    brfalse.s methodExit_2
+    ldc.i4.1
+    brtrue.s methodExit_2
+  methodExit_1:
+    nop
+    ret
+    ldc.i4.0
+    brfalse.s methodExit_1
+    ldc.i4.1
+    brtrue.s methodExit_1
+  methodExit_2:
+    nop
+    ret
+  }
+
+} // end of class ILTest.Program

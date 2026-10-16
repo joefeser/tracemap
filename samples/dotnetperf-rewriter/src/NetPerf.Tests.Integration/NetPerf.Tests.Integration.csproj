@@ -1,0 +1,149 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>
+    </ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{CF062438-CE0D-4BA2-BF8D-25D3CE1C9CDB}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>MetadataDashboard.NetPerf.Tests.Integration</RootNamespace>
+    <AssemblyName>NetPerf.Tests.Integration</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <ProjectTypeGuids>{3AC096D0-A1C2-E12C-1390-A8335801FDAB};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <SccProjectName>
+    </SccProjectName>
+    <SccLocalPath>
+    </SccLocalPath>
+    <SccAuxPath>
+    </SccAuxPath>
+    <SccProvider>
+    </SccProvider>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>..\bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyOriginatorKeyFile>..\NetPerfKey.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Autofac">
+      <HintPath>..\..\Libraries\Autofac.dll</HintPath>
+    </Reference>
+    <Reference Include="CallGraphTestClasses, Version=1.0.0.0, Culture=neutral, PublicKeyToken=6e7f4f61cb04e60d, processorArchitecture=MSIL" />
+    <Reference Include="Microsoft.VisualStudio.QualityTools.UnitTestFramework, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
+    <Reference Include="Should.Fluent">
+      <HintPath>..\..\Libraries\Should.Fluent.dll</HintPath>
+    </Reference>
+    <Reference Include="SqLiteNet.Driver">
+      <HintPath>..\..\Libraries\SqLiteNet.Driver.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core">
+      <RequiredTargetFramework>3.5</RequiredTargetFramework>
+    </Reference>
+    <Reference Include="System.Data" />
+    <Reference Include="System.ServiceModel" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <CodeAnalysisDependentAssemblyPaths Condition=" '$(VS100COMNTOOLS)' != '' " Include="$(VS100COMNTOOLS)..\IDE\PrivateAssemblies">
+      <Visible>False</Visible>
+    </CodeAnalysisDependentAssemblyPaths>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\NetPerf.Common\Properties\CommonAssemblyInfo.cs">
+      <Link>Properties\CommonAssemblyInfo.cs</Link>
+    </Compile>
+    <Compile Include="CallGraphTestClassesNS\CallGraphTestBaseClass.cs" />
+    <Compile Include="CallGraphTestClassesNS\CallGraphValidateBaseClass.cs" />
+    <Compile Include="CallGraphTestClassesNS\ChildClassTests.cs" />
+    <Compile Include="CallGraphTestClassesNS\GenericMethodTests.cs" />
+    <Compile Include="CallGraphTestClassesNS\InterfaceTestClassesTests.cs" />
+    <Compile Include="CallGraphTestClassesNS\InternalAndPrivateClassHelperTests.cs" />
+    <Compile Include="CallGraphTestClassesNS\NormalClassGenericChildClassTests.cs" />
+    <Compile Include="CallGraphTestClassesNS\NormalClassInheritedTests.cs" />
+    <Compile Include="CallGraphTestClassesNS\NormalPublicClassInheritedStaticTests.cs" />
+    <Compile Include="CallGraphTestClassesNS\NormalPublicClassTests.cs" />
+    <Compile Include="CallGraphTestClassesNS\RecursiveClassesTests.cs" />
+    <Compile Include="CallGraphTestClassesNS\TestGen.cs" />
+    <Compile Include="CallGraphTestClassesNS\VerifyInstrumentationData.cs" />
+    <Compile Include="CallGraphTestClassesNS\VerifyMethodEnterAndExits.cs" />
+    <Compile Include="CallGraphTestClassesNS\VerifyMultipleAssemblies.cs" />
+    <Compile Include="CallGraphTester.cs" />
+    <Compile Include="IntegrationTestIClientMessageService.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="!Template.cs" />
+    <Compile Include="Utilities\ReflectionDefaultValues.cs" />
+    <Compile Include="Utilities\ReflectionExtensionMethods.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\NetPerfKey.snk">
+      <Link>NetPerfKey.snk</Link>
+    </None>
+    <None Include="TestAssemblies\ConflictingNameSpace.netmodule" />
+    <None Include="TestAssemblies\NormalPublicClass.netmodule" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\NetPerf.Client\NetPerf.Client.csproj">
+      <Project>{1030EE77-5700-4A86-9AF0-7FC40C6C7E7E}</Project>
+      <Name>NetPerf.Client %28NetPerf.Client\NetPerf.Client%29</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\NetPerf.Common\NetPerf.Common.csproj">
+      <Project>{F9E2B03A-C51D-4BFC-9278-6E61677115E2}</Project>
+      <Name>NetPerf.Common %28NetPerf.Common\NetPerf.Common%29</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Netperf.Core.Interfaces\Netperf.Core.Interfaces.csproj">
+      <Project>{CCFB35F2-EECE-405D-9C19-A2E7CDCADB57}</Project>
+      <Name>Netperf.Core.Interfaces</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\Netperf.Core\Netperf.Core.csproj">
+      <Project>{424472DD-015E-4635-B733-4647D1C3585C}</Project>
+      <Name>Netperf.Core</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup />
+  <ItemGroup>
+    <Content Include="TestAssemblies\CallGraphTestClasses.dll" />
+    <Content Include="TestAssemblies\CallGraphTestClasses.pdb" />
+    <Content Include="TestAssemblies\CallGraphTestClasses.xml" />
+    <Content Include="TestAssemblies\CallGraphTestClassesDuplicates.dll" />
+    <Content Include="TestAssemblies\CallGraphTestClassesDuplicates.pdb" />
+    <Content Include="TestAssemblies\MultiModule.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PostBuildEvent>attrib -r $(TargetDir)*.*
+copy /y $(SolutionDir)..\Libraries\SqLite*.dll  $(TargetDir)SqLite*.dll
+copy /y $(ProjectDir)TestAssemblies\*.* $(TargetDir)*.*</PostBuildEvent>
+  </PropertyGroup>
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

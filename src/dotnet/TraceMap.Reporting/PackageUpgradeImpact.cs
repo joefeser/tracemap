@@ -124,11 +124,15 @@ public sealed record PackageImpactGap(
     string? SourceLabel = null,
     string? ScanId = null,
     string? CommitSha = null,
-    IReadOnlyList<KeyValuePair<string, string>>? Metadata = null);
+    IReadOnlyList<KeyValuePair<string, string>>? Metadata = null)
+{
+    public IReadOnlyList<string> SupportingFactIds { get; init; } = [];
+    public int SupportingFactIdsOmittedCount { get; init; }
+}
 
 public static class PackageUpgradeImpactReporter
 {
-    private const string Version = "1.0";
+    private const string Version = "1.1";
     private const string DeltaVersion = "package-delta.v1";
     private const string RuleId = "package.upgrade.impact.v1";
     private const int MarkdownRowLimit = 200;
@@ -181,7 +185,7 @@ public static class PackageUpgradeImpactReporter
         var read = await ReadIndexAsync(connection, cancellationToken);
         var selectedSources = ApplySourceFilter(read.Sources, options.Source);
         var selectedSourceIds = selectedSources.Select(source => source.SourceIndexId).ToHashSet(StringComparer.Ordinal);
-        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts)
+        var surfaces = CombinedDependencyReporter.BuildSurfaces(read.Facts.Where(fact => !PackageDecisionCorrelationReporter.IsBuildOutputPackage(fact)).ToArray())
             .Where(surface => surface.SurfaceKind == "package-config")
             .Where(surface => surface.FactType == FactTypes.PackageReferenced)
             .Where(surface => !string.IsNullOrWhiteSpace(surface.PackageName))
@@ -200,13 +204,22 @@ public static class PackageUpgradeImpactReporter
             .ThenBy(change => change.Id, StringComparer.Ordinal)
             .ToArray();
 
+        var buildOutputFactsBySource = read.Facts
+            .Where(PackageDecisionCorrelationReporter.IsBuildOutputPackage)
+            .GroupBy(fact => fact.SourceIndexId, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => PackageGapFactEvidence.Bound(group.Select(fact => fact.OriginalFactId)), StringComparer.Ordinal);
         var coverageWarnings = selectedSources
             .SelectMany(source => CoverageWarningsFor(source, read.KnownGaps
                 .Where(gap => gap.SourceIndexId == source.SourceIndexId || string.Equals(gap.SourceLabel, source.Label, StringComparison.Ordinal))
                 .Select(gap => $"{gap.Category}: {gap.Example}")
-                .ToArray()))
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(value => value, StringComparer.Ordinal)
+                .ToArray())
+                .Concat(buildOutputFactsBySource.ContainsKey(source.SourceIndexId)
+                    ? new[] { "Build-output package evidence has unknown freshness and is excluded from current-source impact findings." } : [])
+                .Distinct(StringComparer.Ordinal)
+                .Select(warning => (Source: source, Warning: warning, FactIds: warning.StartsWith("Build-output package evidence", StringComparison.Ordinal)
+                    ? buildOutputFactsBySource[source.SourceIndexId] : (Ids: (IReadOnlyList<string>)Array.Empty<string>(), OmittedCount: 0))))
+            .OrderBy(item => item.Source.Label, StringComparer.Ordinal)
+            .ThenBy(item => item.Warning, StringComparer.Ordinal)
             .ToArray();
         var reducedCoverage = coverageWarnings.Length > 0;
         var findings = new List<PackageImpactFinding>();
@@ -242,9 +255,9 @@ public static class PackageUpgradeImpactReporter
             }
         }
 
-        foreach (var warning in coverageWarnings.Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal))
+        foreach (var item in coverageWarnings)
         {
-            AddGap(gaps, options.MaxGaps, ref gapCapReached, CoverageGap(warning, selectedSources));
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, CoverageGap(item.Warning, item.Source) with { SupportingFactIds = item.FactIds.Ids, SupportingFactIdsOmittedCount = item.FactIds.OmittedCount });
         }
 
         var reportCoverage = reducedCoverage || gapCapReached || findingCapReached ? "ReducedCoverage" : "FullEvidenceAvailable";
@@ -542,11 +555,10 @@ public static class PackageUpgradeImpactReporter
             ]));
     }
 
-    private static PackageImpactGap CoverageGap(string warning, IReadOnlyList<CombinedReportSource> sources)
+    private static PackageImpactGap CoverageGap(string warning, CombinedReportSource source)
     {
-        var source = sources.OrderBy(item => item.Label, StringComparer.Ordinal).FirstOrDefault();
         return new PackageImpactGap(
-            $"package-coverage:{CombinedReportHelpers.Hash($"{warning}:{source?.ScanId}", 24)}",
+            $"package-coverage:{CombinedReportHelpers.Hash($"{source.SourceIndexId}:{warning}:{source.ScanId}", 24)}",
             "ReducedCoverage",
             warning,
             RuleId,
@@ -705,7 +717,7 @@ public static class PackageUpgradeImpactReporter
             builder.AppendLine("| --- | --- | --- | --- |");
             foreach (var gap in report.Gaps.Take(MarkdownRowLimit))
             {
-                builder.AppendLine($"| {Cell(gap.Classification)} | {Cell(gap.ChangeId ?? "n/a")} | {Cell(gap.Message)} | {Cell($"{gap.RuleId} {gap.EvidenceTier}")} |");
+                builder.AppendLine($"| {Cell(gap.Classification)} | {Cell(gap.ChangeId ?? "n/a")} | {Cell(gap.Message)} | {Cell($"{gap.RuleId} {gap.EvidenceTier}" + PackageGapFactEvidence.Summary(gap.SupportingFactIds, gap.SupportingFactIdsOmittedCount))} |");
             }
         }
 

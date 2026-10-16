@@ -1,9 +1,30 @@
 using TraceMap.Cli;
+using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
 public sealed class CliTests
 {
+    [Fact]
+    public void Scan_error_line_names_differing_snapshot_paths_when_known()
+    {
+        var exception = new SourceSnapshotException(details: ["src/Generated.cs (appeared)", "src/Old.sql (disappeared)"]);
+
+        var line = TraceMapCommand.FormatScanError(exception);
+
+        Assert.StartsWith("error: SourceSnapshotChangedDuringScan (", line);
+        Assert.Contains("src/Generated.cs (appeared)", line);
+        Assert.Contains("src/Old.sql (disappeared)", line);
+    }
+
+    [Fact]
+    public void Scan_error_line_stays_categorical_without_snapshot_details()
+    {
+        var line = TraceMapCommand.FormatScanError(new SourceSnapshotException());
+
+        Assert.Equal("error: SourceSnapshotChangedDuringScan", line);
+    }
+
     [Fact]
     public async Task Help_for_scan_returns_usage()
     {

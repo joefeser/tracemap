@@ -244,7 +244,10 @@ public sealed record PackageDecisionGap(
     string? FilePath = null,
     int? StartLine = null,
     int? EndLine = null,
-    IReadOnlyList<string>? SupportingFactIds = null);
+    IReadOnlyList<string>? SupportingFactIds = null)
+{
+    public int SupportingFactIdsOmittedCount { get; init; }
+}
 
 public sealed record PackageDecisionSummary(
     int SourceCount,
@@ -514,6 +517,20 @@ public static class PackageDecisionCorrelationReporter
             AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-selector:{Hash("selector")}", "SelectorNoMatch", "No admitted decision record was available for correlation.", RuleId, EvidenceTiers.Tier4Unknown));
         if (findingCapReached)
             AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap($"pd-cap:{Hash("findings")}", "TruncatedByLimit", "The package decision correlation finding limit was reached; coverage gaps remain reported.", RuleId, EvidenceTiers.Tier4Unknown));
+
+        // Preserve existing diagnostic priority when the gap budget is small.
+        var buildOutputFacts = index.Facts.Where(IsBuildOutputPackage)
+            .ToLookup(fact => fact.SourceIndexId, StringComparer.Ordinal);
+        foreach (var source in sources.Where(source => buildOutputFacts.Contains(source.SourceIndexId)))
+        {
+            var evidence = PackageGapFactEvidence.Bound(buildOutputFacts[source.SourceIndexId].Select(fact => fact.CombinedFactId));
+            AddGap(gaps, options.MaxGaps, ref gapCapReached, new PackageDecisionGap(
+                "pd-build-output:" + Hash(source.SourceIndexId), "BuildOutputFreshnessUnknown",
+                "Build-output package observations have no proven producing commit and are excluded from current-source correlation.",
+                RuleId, EvidenceTiers.Tier4Unknown, SourceLabel: source.Label,
+                SourceIndexId: source.SourceIndexId, ScanId: source.ScanId, CommitSha: SafeCommit(source.CommitSha),
+                SupportingFactIds: evidence.Ids) { SupportingFactIdsOmittedCount = evidence.OmittedCount });
+        }
 
         var selectedExact = Filter(exact, options.Classification);
         var selectedMismatch = Filter(mismatch, options.Classification);
@@ -974,9 +991,15 @@ public static class PackageDecisionCorrelationReporter
     /// </summary>
     private static IReadOnlyList<CombinedFactRow> PackageEvidenceRows(IEnumerable<CombinedFactRow> facts, string sourceIndexId) =>
         facts.Where(fact => fact.SourceIndexId == sourceIndexId)
+            .Where(fact => !IsBuildOutputPackage(fact))
             .Select(fact => fact.FactType == FactTypes.PackageReferenced ? fact : ProjectSwiftLockfileEvidence(fact))
             .OfType<CombinedFactRow>()
             .ToArray();
+
+    internal static bool IsBuildOutputPackage(CombinedFactRow fact) =>
+        fact.FactType == FactTypes.PackageReferenced &&
+        (fact.Properties.GetValueOrDefault("evidenceSource") == "build-output"
+            || fact.Properties.GetValueOrDefault("manifestKind") == "deps.json");
 
     private static CombinedFactRow? ProjectSwiftLockfileEvidence(CombinedFactRow fact)
     {
@@ -1673,7 +1696,8 @@ public static class PackageDecisionCorrelationReporter
         if (gap.CommitSha is not null) parts.Add($"commit `{Cell(gap.CommitSha)}`");
         if (gap.FilePath is not null) parts.Add($"at `{Cell(gap.FilePath)}:{gap.StartLine}-{gap.EndLine}`");
         if (gap.ExtractorId is not null || gap.ExtractorVersion is not null) parts.Add($"extractor `{Cell(gap.ExtractorId)}@{Cell(gap.ExtractorVersion)}`");
-        if (gap.SupportingFactIds is { Count: > 0 }) parts.Add($"facts `{Cell(string.Join(',', gap.SupportingFactIds))}`");
+        if (gap.SupportingFactIds is { Count: > 0 } || gap.SupportingFactIdsOmittedCount > 0)
+            parts.Add(Cell(PackageGapFactEvidence.Summary(gap.SupportingFactIds, gap.SupportingFactIdsOmittedCount).TrimStart()));
         return parts.Count == 0 ? string.Empty : " " + string.Join(' ', parts);
     }
 

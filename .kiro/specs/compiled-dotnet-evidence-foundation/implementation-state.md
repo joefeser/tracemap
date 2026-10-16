@@ -1,3 +1,1537 @@
+# Current continuation: #767 duplicate narrowing IL retention
+
+Branch `codex/767-duplicate-il-retention`, fresh origin/dev base
+`e5de6a4b2ccf2df97afe307c09097c4f5e5984ff` (#844 merged), target dev. Reconciled
+AGENTS, main/dev, five issue bodies/comments, #844 final review history, no open
+PRs, specs/docs/code/tests and worktrees. Codex eventually completed clean on
+#844, but the duplicate-input IL assertion gap remained in merged code. This
+bounded follow-up repairs that gap before starting another language feature.
+Primary Base44 edits and all sibling worktrees preserved; site lane excluded.
+
+Shared invariant: each admitted duplicate retains independently inspected IL
+under its own artifact locator while source reconciliation remains ambiguous.
+The narrowing helper now selects members per locator and checks member/body/call
+locator consistency. Both FromLong and FromInteger run through its independent
+SRM/Cecil identity/token/checked-conversion assertions. Sixteen omitted or
+misattributed body/call counterexamples reject evidence loss/cross-input reuse.
+Exact gap locators and reversed-input facts/IL provenance are pinned. Existing
+compiler refusal, truncated PE and bounded-work cases remain unchanged. No
+production rule/schema change or derived public artifact; no binary execution.
+
+Validation: focused 7/7; full unfiltered local solution 3,432 passed, zero failed,
+one documented Windows deep-corpus skip (20m37s), warnings as errors and no
+introduced warnings. Duplicate CLI smoke: 2,735 facts, two locators, four expected
+bodies/calls, no source joins, identical reverse-order facts/report bytes. Artifact
+validator 7/7 and privacy/spec/whitespace guards pass. Final-head public CI and
+live ACK required. Exact commands use SDK 10.0.302 and logs /tmp/tracemap-retention-*:
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Narrowing_matrix
+dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI: two public VB scans with original and temporary byte-identical compiled
+inputs, --il-body-evidence, reversed input order, separate outputs, artifact
+validation and facts/report comparison. Acceptance matrix is the duplicate
+narrowing retention section of CLR_SIGNATURE_EQUIVALENCE_MATRIX.md.
+
+Limitations: no source-to-binary authenticity, PDB/rewrite/runtime or F# source
+claim. Unbound input/ambiguity/framework gaps remain explicit. Non-.NET local
+and pinned source OSS smoke reruns deferred for this assertion-only change.
+Authorized private catalog/Windows/MSVC receipts remain unavailable/uninvoked.
+Broad issues remain open. Next candidate: late-bound configuration interactions.
+
+---
+
+# Previous continuation: #767 VB narrowing and Option Strict
+
+Branch `codex/767-vb-narrowing`, fresh origin/dev base
+`37552ae3c6bd2bc03aae19f51b9e0b50740a0408` (#843 merged), target dev. Read AGENTS,
+fetched main/dev and reconciled all five issue bodies/comments, merged/open PRs,
+specs/docs/code/tests and worktrees. No competing open PR or narrowing lane.
+Primary Base44 edits and other worktrees preserved; main-only site work excluded.
+Acceptance matrix: CLR_SIGNATURE_EQUIVALENCE_MATRIX.md narrowing continuation.
+
+Added public NarrowingMatrix (AcceptInteger, FromLong with explicit CInt, and
+FromInteger control) and seven regressions. Committed temporary source variants
+exercise Strict On/Off and implicit/explicit narrowing. Independent Roslyn
+classification/emit pins numeric narrowing, BC30512 refusal and rejected target
+candidate. Successful emitted DLLs are inspected as unbound inputs; rejected
+source is paired only with separate valid fixture bytes. Raw SRM/framework-opcode/
+Cecil readers pin exact signatures/tokens, checked conv.ovf.i4 and call targets.
+Source refusal retains Tier3 syntax calls and Tier4 diagnostic/gap with reduced
+coverage; unaffected controls remain semantic. Duplicate/malformed/work-limit
+cases retain gaps, and repeated scans preserve facts/provenance. No rule/schema
+or public derived-artifact change; no fixture/malformed binary execution.
+
+Validation: focused 7/7; full unfiltered local solution passed 3,432 tests,
+zero failures, one gated Windows deep-corpus skip, in 20m53s with warnings as
+errors and no introduced warnings. The full run includes final diagnostic span
+and site-hash assertions. CLI repeats validated 1,864 facts,
+two source and original-IL AcceptInteger calls, and identical facts/report bytes.
+Artifact validator 7/7; privacy/spec/whitespace guards passed. Final-head public
+CI and live ACK required. ACK 0.5.5 stable, build ab39833, fresh distribution and
+all required lane capabilities verified.
+
+Exact commands (logs /tmp/tracemap-narrow-*):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Narrowing_matrix
+dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI repeats use separate temporary outputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/compiled-dotnet-evidence/vb --out "$smoke_output" --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --il-body-evidence
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limitations: compiler acceptance/IL inspection do not prove runtime overflow or
+source-to-binary authenticity. Unbound input and framework/workspace gaps remain
+explicit. Non-.NET local suites and pinned source OSS smoke reruns are deferred
+for this fixture/test-only slice. The gated Windows deep-corpus local skip is
+expected; authorized private catalog/Windows/MSVC receipts remain unavailable/
+uninvoked. No F# source/PDB/rewrite claim. Next bounded candidate: late-bound
+configuration interactions. Broad issues stay open.
+
+---
+
+# Previous continuation: #767 VB overload ambiguity and strictness
+
+Branch `codex/767-vb-overload-ambiguity`, fresh origin/dev base
+`e14d26f1c4c46c2a58d7dbeb2cf11f192cb6e6e9` (#842 merged), target dev. Read AGENTS,
+fetched main/dev, reconciled all five issue bodies/comments, merged/open PRs,
+current specs/docs/code/tests and worktrees. No open PR/competing overload lane.
+Primary Base44 edits and other worktrees untouched; main-only site work excluded.
+Acceptance matrix is in the VB overload/strictness validation continuation.
+
+Added four public VB methods (two SelectValue overloads and two explicitly cast
+callers), plus six regression cases. Independent Roslyn compilation/emit checks
+successful selection versus ambiguous Nothing under Option Strict On/Off; raw
+SRM/framework-opcode/Cecil readers pin exact signatures/tokens and original call
+operands. Same-opcode callers have distinct targets/body hashes. Failed source
+retains Tier3 name-only calls, Tier4 gaps and reduced coverage without losing an
+unaffected resolved call. The valid binary is separate unbound evidence and
+cannot select a source target. Wrong-table operands and IL work limits remain
+explicit gaps. No production rule/schema or derived public artifact changes.
+No fixture or malformed binary execution.
+
+Validation: SDK 10.0.302 locked restore; focused 6/6 with warnings as errors,
+no introduced warnings. Surrounding suite 484/484, zero failures/skips. Two validated public
+CLI scans emit 1,809 facts with two distinct source/IL overload targets and
+identical facts/report bytes. Artifact validator 7/7 (existing SQLite
+ResourceWarning); privacy/spec/whitespace guards pass. Full final-head .NET/
+public cross-platform CI and live ACK required. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes explicitly deferred for this
+fixture/test-only slice.
+
+Exact commands (logs `/tmp/tracemap-overload-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Overload_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite|FullyQualifiedName~VisualBasicExtractionTests'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI repeats use separate temporary outputs and the public VB fixture assembly:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/compiled-dotnet-evidence/vb --out "$smoke_output" --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --il-body-evidence
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limitations: no source-to-IL ownership or runtime overload execution claim;
+source failure is diagnostic/emit evidence, not execution of an invalid binary.
+Unbound compiled input and framework/workspace gaps remain explicit. No F# source,
+PDB/rewrite or private-corpus claim. Windows/private catalog/MSVC receipts remain
+unavailable/uninvoked. Next bounded #767 candidate is narrowing/late-bound
+configuration interaction; broader acceptance issues stay open.
+
+---
+
+# Previous continuation: #767 VB import-conflict refusal
+
+Branch `codex/767-vb-import-conflicts`, fresh origin/dev base
+`26154c8a2ef14a6f519c239da4a4615f2019f1c3` (#841 merged), target dev. Reconciled
+AGENTS, fetched main/dev, all five issue bodies/comments, merged/open PRs,
+current specs/docs/code/tests and worktrees. No open PR/competing conflict lane.
+Primary Base44 edits and the active site worktree remain untouched. Main-only
+site work excluded. Acceptance matrix is in the import-conflict continuation.
+
+Five tests create committed temporary variants of the public imports fixture:
+ambiguous project imports, missing project import, malformed file alias, fully
+qualified positive control and compiled-member limit. Independent Roslyn emit
+checks diagnostic IDs/error types and exact ambiguous candidates; independent
+SRM decodes the valid binary signature/token. Exact incomplete source identities
+and spans refuse joins, while compiled facts and an unaffected resolved source
+declaration remain separate useful evidence. Failed source stays reduced;
+qualified source succeeds but member limits still yield compiled partial coverage.
+Test receipts deliberately cannot establish build authenticity. No production
+rule/schema or derived public artifact changes; no fixture binary execution.
+
+Validation: SDK 10.0.302 locked restore; focused 5/5 with warnings as errors.
+Surrounding suite 478/478, zero failures/skips. Two validated ambiguous-source CLI scans emit
+1,135 facts, FailedOrPartial/reduced source coverage, no affected source join and
+a retained compiled method; facts/report bytes match. Artifact validator 7/7
+(existing SQLite ResourceWarning); privacy/spec/whitespace guards pass.
+Full final-head .NET/public cross-platform CI and live ACK required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes explicitly
+deferred for this test-only slice.
+
+Exact commands (logs `/tmp/tracemap-import-conflicts-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_conflict_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite|FullyQualifiedName~VisualBasicExtractionTests'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI repeats use a temporary committed copy of public VB source with an additional
+`TraceMap.CompiledFixtures.FileImported` project Import. An initial scan supplies
+safe locator/raw SHA/assembly identity for a local public test receipt, attested
+to that temporary source commit (`public-fixture`/`test-build`). Each repeat uses:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo "$public_variant" --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --out "$smoke_output" --compiled-binding-receipt "$test_receipt"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limitations: compiler failure here is source diagnostic/emit evidence, not a claim
+of executing an MSBuild command on invalid code. Receipts are test attestations;
+framework dependency/workspace gaps remain explicit. No F# source, runtime,
+PDB/original IL/rewrite or private-corpus claims. Windows/private catalog and
+MSVC receipts unavailable/uninvoked. Next bounded #767 candidate is overload
+ambiguity/configuration interaction; keep all broad acceptance issues open.
+
+---
+
+# Previous continuation: #767 VB import identity joins
+
+Branch `codex/767-vb-import-identity`, fresh origin/dev base
+`2aee151eb842b9b21783a6fffe09915932e8bcf4` (#840 merged), target dev. Read AGENTS,
+fetched main/dev and reconciled all five issue bodies/comments, merged/open PRs,
+current specs/docs/code/tests and worktrees. No competing imports lane/open PR.
+Primary Base44 edits and other worktrees preserved; main-only site work excluded.
+Acceptance matrix is in the VB imports validation continuation.
+
+Implemented a public VB project import, file alias and SDK default-import fixture
+with three methods and six tests. Independent raw SRM/Cecil oracles pin signatures,
+namespace/scopes and tokens; hand-authored source declarations and metadata
+identities pin exact spans/joins/provenance. Two ImportToken types share only a
+short name. Unbound, duplicate, malformed and member-limit inputs refuse joins;
+substitution counterexamples and repeated scans retain exact identities.
+No production rule/schema or derived public artifact changes. No binary execution.
+
+Validation: SDK 10.0.302 locked restore; build zero warnings/errors; focused 6/6
+with warnings as errors. Surrounding suite 473/473, zero failures/skips. Two validated
+bound CLI scans emit 1,134 facts and three exact method joins; facts/report bytes
+match. Artifact validator 7/7 (existing SQLite ResourceWarning); privacy/spec/
+whitespace guards pass. Final-head full .NET/public cross-platform CI and live ACK
+required. Duplicate full local .NET, non-.NET local suites and pinned source OSS
+smokes explicitly deferred for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-imports-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite|FullyQualifiedName~VisualBasicExtractionTests'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI repeats used separate temporary outputs and an explicit local test receipt
+constructed from the initial public assembly outcome (safe locator, raw SHA-256,
+assembly identity and checkout commit; `public-fixture`/`test-build` attestation):
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/compiled-dotnet-evidence/vb --out "$smoke_output" --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-binding-receipt /tmp/tracemap-imports-receipt.json
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limitations: receipts attest the test inputs, not independent build authenticity.
+CLI coverage retains unresolved framework dependencies and a redacted workspace
+diagnostic. Compiler import conflicts, overload/configuration variants, PDB,
+original/rewritten IL and runtime remain separate. Private corpus/Windows/MSVC
+receipts unavailable/uninvoked; no customer/private execution. No F# source claim.
+Next: inspect the remaining #767 configuration/import-conflict acceptance before
+moving to broader #766 rules; keep all broad issues open.
+
+---
+
+# Previous continuation: #767 C# ref-like signatures
+
+Branch `codex/767-ref-like-signatures`, fresh origin/dev base
+`c8bbfcd80e6a136bfdc4dcdff766e14a47eb01dd` (#839 merged), target dev. Read AGENTS,
+fetched main/dev, reconciled all five issue bodies/latest comments and merged/open
+PRs, current specs/docs/code/tests. No open PR or competing ref-like worktree.
+Primary Base44 edits and other worktrees preserved; main-only site work excluded.
+Existing RefFieldShape does not cover the selected signatures. Acceptance matrix
+is in the ref-like validation continuation.
+
+Implemented four public C# methods and six tests: Span/ReadOnlySpan VALUETYPE
+constructions, BYREF return/parameters, required return InAttribute modifier,
+separate parameter In flag and return IsReadOnlyAttribute. Independent SRM/Cecil
+oracles and hand-authored identities pin exact single/combined provenance.
+Data-only required/optional/absent modifier variants cannot collapse. Duplicate
+inputs, truncated PE, member limits and reversed input order retain explicit
+ambiguity/gaps/determinism. No production rule/schema or new derived artifact.
+No fixture or mutated assembly execution; no runtime-validity claim for mutations.
+
+Validation: locked restore on SDK 10.0.302; build zero warnings/errors; focused
+6/6 with warnings as errors. Surrounding suite 434/434, zero failures/skips. Two validated CLI scans
+emit 352 facts with four distinct ref-like signatures/endpoints; facts/report
+bytes match. Artifact validator 7/7 (existing SQLite ResourceWarning); privacy,
+spec and whitespace guards pass. Final-head full .NET/public cross-platform CI and live ACK required.
+Duplicate full local .NET, non-.NET local suites and pinned source OSS smokes are
+explicitly deferred for this fixture/test-only change.
+
+Commands (logs `/tmp/tracemap-ref-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Ref_like_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Two CLI repeats use new temporary outputs and the absolute public C# assembly:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$PWD/samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: bounded PR/live ACK (verified 0.5.5 stable, ab39833, distFresh=true;
+lane capabilities satisfied). Do not infer lifetime/escape safety or external
+IsByRefLike classification from TypeRefs, or source/PDB/IL/rewrite identity from
+signatures. Source imports/overload interactions and broader #767 acceptance
+remain; no F# source claim. Authorized private corpus/Windows/MSVC access remains
+unavailable/uninvoked; public fixtures require neither. Prior Windows wizard
+instability remains separate unresolved evidence. Keep broad issues open.
+
+# Current continuation: #767 VB late-bound source gaps and helper IL
+
+Branch `codex/767-late-bound-il-matrix`, fresh origin/dev base
+`cc15f276f3aac34309c7cd1a0bbc763d167b667a` (#838 merged), target dev. Read AGENTS,
+fetched main/dev and reconciled issues/comments, current code/specs and open PRs.
+No open PR or competing late-binding worktree. Preserve primary Base44 dirty
+files and other worktrees; exclude main-only site changes. Acceptance matrix is
+in the late-binding validation continuation. Prior #838 Windows wizard failures
+remain unresolved intermittent evidence despite its passing rerun; no repair here.
+
+Implemented one public VB fixture with file-local Option Strict Off, two unknown
+receiver calls and one typed control. Five regression cases pin independent raw
+SRM/framework-opcode/Cecil signatures, scoped helper/MethodDef targets, string
+operands, exact source gaps/tiers/spans, full compiled provenance, a data-only
+string substitution, duplicate identities, malformed helper operands, bounded work
+and repeatability. No production rule/schema or new derived machine-readable
+artifact. Fixture/malformed bytes are never executed. The source gap hashes the
+member expression (value.First), not the invocation's parentheses.
+
+Validation: SDK 10.0.302 locked restore; build zero warnings/errors; focused 5/5
+with warnings as errors. Surrounding suite 461/461 with zero failures/skips. Two validated CLI repeats
+emit 1,672 facts and three exact method/body/call chains (two helpers); facts/report
+bytes match. Artifact
+validator 7/7 (existing SQLite ResourceWarning); privacy and Kiro guards pass.
+Final-head full .NET/public cross-platform CI and live ACK required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes explicitly
+deferred for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-late-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Late_binding_matrix
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite|FullyQualifiedName~VisualBasicExtractionTests'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Two CLI repeats use new temporary outputs and the absolute public VB assembly:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/compiled-dotnet-evidence/vb --out "$smoke_output" --il-body-evidence --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: bounded PR/live ACK (verified 0.5.5 stable, ab39833, distFresh=true;
+lane capabilities satisfied). Runtime targets, overload/copy-back variants, other
+helpers, source-binding/PDB/rewrite joins and ref-like signatures remain open.
+No F# source inference. Authorized private corpus/Windows/MSVC access remains
+unavailable/uninvoked; this public slice requires neither. Keep broad issues open.
+
+# Current continuation: #767 collection indexers and conversion IL
+
+Branch `codex/767-collection-indexer-matrix`, clean worktree from fresh origin/dev
+`7fac0ce83b5dc2a82053806d53cb3645718be367` (#837 merged), target dev. Fetched
+main/dev; reconciled #759/#769/#767/#766/#768 issues/comments, merged/open PRs,
+existing source/compiled tests and specs. No open PR or competing collection
+worktree. Preserve unrelated Base44 edits and other lanes; exclude main-only site.
+The acceptance matrix is in the collection continuation validation document.
+
+Implemented three public collection fixtures and six regression cases. Tests pin
+exact metadata signatures and scoped indexer operands, including !0 on List's
+MemberRef, with independent SRM/opcode/Cecil oracles. Same opcode streams retain
+different body hashes. C#/F# unbox.any Int32 and VB Conversions.ToInteger(Object)
+are distinct encoded evidence. Ambiguous duplicate inputs, malformed wrong-table
+call tokens, bounded truncation and deterministic repeats retain explicit gaps
+and provenance. Production extractors/rules/schemas are unchanged; no new derived
+machine-readable artifact. Fixture and malformed bytes are never executed.
+
+Validation on SDK 10.0.302: locked restore; build with zero warnings/errors;
+focused 6/6 with warnings as errors. Surrounding suite 423/423, zero failures/skips. Privacy, spec and whitespace guards pass. Two validated
+public CLI scans emit 3,303 facts with nine distinct collection wrapper endpoints;
+facts/report bytes match. Artifact validator 7/7 (existing SQLite ResourceWarning).
+Final-head full .NET/public cross-platform CI and live ACK remain required.
+Duplicate full local .NET, non-.NET local suites and pinned source OSS smokes are
+explicitly deferred for this fixture/test-only change.
+
+Commands (logs `/tmp/tracemap-collections-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter 'FullyQualifiedName~Collection_matrix'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Two CLI repeats each use a new temporary output and absolute public inputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --il-body-evidence --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: deliver one bounded PR through live ACK (verified 0.5.5 stable, ab39833,
+distFresh=true, lane capabilities satisfied). Keep broad issues open. Additional
+language dimensions remain, including ref-like types and compiled late binding;
+source/PDB/rewrite/runtime equivalence is not inferred. #769/#768 authorized
+private corpus and Windows/MSVC access remain unavailable/uninvoked. Public
+fixtures require neither. F# assemblies do not imply F# source extraction.
+
+# PR #837 current-head review repair
+
+ACK released Codex P2 after the owner resumed current-head repair following the
+terminal Qodo timeout. Scope is generated-name independence only; no merge or
+reviewer retag authorization. Prior head `1825da27` passed full CI (3,390 .NET
+passed / one platform skip, zero build warnings; Windows corpus 148/148).
+Repair validation: focused 8/8 with warnings as errors, surrounding 417/417
+(zero failures/skips), privacy/spec/whitespace guards passed. Logs are
+/tmp/tracemap-fsevent-repair-focused.log and
+/tmp/tracemap-fsevent-repair-surrounding.log. Commands are the focused and
+surrounding filters below (surrounding uses --no-build --no-restore). Production
+extractors and fixture bytes are unchanged; prior validated CLI smoke remains
+applicable. Final-head CI/live ACK still required. Exact source/metadata/IL and
+provenance contracts are preserved.
+
+# Current continuation: #767 F# cached event wiring
+
+Branch `codex/767-fsharp-event-wiring`, fresh origin/dev base #836 merge
+`9cc14630d0d9595904a9e69718c3bc93fa67907b`; target dev. Fetched main/dev,
+reconciled #759/#769/#767/#766/#768 bodies/comments, merged #836 and current
+code/specs. No open PR or competing F# wiring worktree. Preserve unrelated
+Base44 edits and all other worktrees; exclude main-only site changes.
+
+Correction to the prior audit: #836 has a clean exact-head Codex comment at
+https://github.com/joefeser/tracemap/pull/836#issuecomment-6024417753;
+ACK's retained stale classification did not reflect that result. It merged
+before the audit finished, so its terminal already_merged was not pre-merge
+approval. The F# omission from that deliberately bounded C#/VB slice is the
+scope here. Acceptance matrix is in the F# event wiring continuation doc.
+
+Implemented: public F# DelegateEvent<Action>/CLIEvent fixture; cached delegate
+created once, explicit remove/add setter calls; three-language shared identity,
+original IL, duplicate, wrong-table operand, work-limit and repeat tests. Pin
+constructor ldftn → generated nested Invoke and helper callvirt → OnTick with
+independent SRM/opcode and Cecil readers, exact endpoints and full provenance.
+Field loads/stores are independent-reader assertions, not new field-flow facts.
+The unsupported F# source gap remains explicit. No production rule/schema or
+new derived artifact; fixture and malformed bytes are never executed.
+
+The compiler rejects Event<Action,unit> because Action is a nonstandard event
+delegate, so the fixture uses DelegateEvent<Action> and explicit accessors.
+Constructing delegates separately at each setter site produced distinct helpers;
+the final fixture caches one delegate. Constructor identities use the existing
+constructor category, not the method category. These are fixture/test corrections,
+not weakened production identity checks. Review repair: CI uses floating 10.0.x, so generated spellings cannot be called
+SDK-pinned. Helper selection now follows the constructor ldftn token and raw
+declaring-type handles, corroborated with Cecil tokens. Exact identity encoding
+uses those metadata names, without production formatters or name selectors. A
+data-only renamed-container/type/callback variant pins this invariant.
+
+Validation: locked restore on SDK 10.0.302; focused 7/7. Two validated public
+CLI scans: 3,221 facts, three distinct setter bodies, six exact event-call chains;
+facts/report bytes match. Artifact validator 7/7 (existing SQLite ResourceWarning),
+privacy/Kiro/whitespace guards pass. Surrounding compiled suite 416/416, zero failures/skips and no compiler/analyzer
+warnings; final-head full .NET and public cross-platform CI required. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes explicitly deferred for this
+fixture/test-only change.
+
+Commands (logs /tmp/tracemap-fsevent-*):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Event_wiring_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite' -warnaserror
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Each of two CLI repeats uses a new temporary output and absolute public inputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --il-body-evidence --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: deliver bounded PR through live ACK 0.5.5 stable (ab39833, distFresh=true;
+lane capabilities satisfied). Broader #767/#759, source/PDB/runtime/rewrite
+acceptance remains open. #769/#768 private authorized corpus/isolated Windows
+access unavailable/uninvoked; public CI cannot satisfy private receipts.
+
+# Current continuation: #767 WithEvents/Handles original-IL matrix
+
+Branch `codex/767-event-wiring-matrix`, fresh dev base #835 merge
+`d4678de1046c3a801db6f39e7724892e86c7ec73`; target dev. #835 exact-head
+CI/ACK passed after an evidence-backed Qodo false-positive disposition. No open
+PR or competing event-wiring worktree; unrelated Base44 edits and other worktrees
+preserved. Main-only site work excluded. Current acceptance table is in the event
+wiring matrix documentation. Private #769/#768 access unavailable/uninvoked.
+
+Scope: VB WithEvents/Handles versus explicit C# remove/assign/add wiring.
+Independent raw SRM signatures/accessor handles, bounded framework-opcode decoding
+and Cecil tokens/flags/offsets pin property/getter/setter/event/add/remove/handler
+identities and original-body observations. VB setter synchronization is a reader
+assertion, not a new emitted behavior claim. Method-pointer ldftn observations
+are distinct from runtime calls. Duplicate locators retain individual provenance;
+wrong-table operands/work limits fail closed; repeats are byte-identical.
+No production rule/schema or new derived artifact. No source/PDB/runtime/rewrite
+or F# wiring equivalence claim. Malformed bytes and fixtures are never executed.
+
+Initial assertions were corrected to reflect the existing contract: the IL-call
+rule includes ldftn method-reference observations, and fact-type selection must
+distinguish declarations from gaps referencing the same endpoint. No production
+identity check was weakened. Focused 4/4 pass with warnings treated as errors.
+Two validated IL-enabled CLI scans yield 2,142 facts, two setter bodies and four
+exact event-call chains with byte-identical facts/report. Validator self-tests
+7/7 (existing SQLite ResourceWarning), privacy/spec/whitespace guards pass.
+Surrounding compiled suite passes 413/413, zero failures/skips; full final-head CI required. Duplicate full
+local .NET, non-.NET local suites and pinned source OSS smokes explicitly deferred
+for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-events-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Event_wiring_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Each CLI repeat uses a new temporary output and absolute public fixture inputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --il-body-evidence --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: finish validation, open bounded PR and follow live ACK 0.5.5 (stable
+ab39833, distFresh=true, required lane capabilities available). Broader epic,
+language and private Windows/corpus acceptance remain open.
+
+# Current continuation: #767 C#/VB async and iterator PDB matrix
+
+Branch `codex/767-state-machine-pdb-matrix`, fresh dev base #834 merge
+`d86f74e789d9e5b4565ea15b0e3c1505256c969f`; target dev. #834 exact-head
+CI and ACK passed before the owner merged. No competing open PR/state-machine
+worktree. Unrelated primary Base44 edits and all other worktrees preserved;
+main-only site work excluded. Current acceptance table is in the state-machine
+matrix documentation. Private #769/#768 access remains unavailable/uninvoked.
+
+Scope: two generated MoveNext endpoints per C#/VB fixture, exact PDB kickoff-table
+selection, Cecil compiler-attribute and kickoff corroboration, full SRM/Cecil
+sequence-point comparison, metadata/PDB/document/sequence identities and provenance.
+An ordinary Boolean instance MoveNext shares the iterator's name/signature but
+remains distinct. Missing/duplicate metadata candidates fail locally; truncated
+PDB and sequence limits fail closed. No inferred generated source ownership,
+F# state-machine, runtime or rewrite equivalence. No production rule/schema or
+new derived artifact. Binaries and malformed bytes are read only, never executed.
+
+Focused tests pass 6/6 with warnings treated as errors. Public bound CLI scans
+produce 1,950 C# / 1,351 VB facts, each with three exact MoveNext PDB chains;
+repeated facts/report bytes match. Focused tests also repeat bound scan facts
+and PDB provenance. Validator self-tests pass 7/7 (existing SQLite ResourceWarning);
+privacy, spec and whitespace guards pass. Surrounding compiled suite passes
+409/409, zero failures/skips.
+Full final-head CI required; duplicate full local .NET, non-.NET local suites
+and pinned source OSS smokes explicitly deferred for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-state-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~State_machine_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+For each C#/VB public fixture, a preliminary unbound CLI inventory supplies its
+exact safe locator, raw hash and assembly identity. A temporary existing-schema
+`compiled-input-binding-set.v1` receipt binds those values to the current fixture
+commit and declared public test build, matching the existing test receipt helper.
+Two fresh output directories then receive the same bound command:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo "$fixture_source" --compiled-input "$fixture_assembly" --out "$smoke_output" --compiled-binding-receipt "$public_binding" --pdb-input "$fixture_pdb"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: finish surrounding validation, open the bounded PR, follow live ACK 0.5.5
+(stable build ab39833, distFresh=true, lane capabilities available). Broader
+#759/#767 and private #768/#769 acceptance stays open.
+
+# Current continuation: #767 C#/VB nested generic ownership
+
+Branch `codex/767-nested-generic-matrix`, fresh dev base #833 merge
+`2f13e1dc5b138065d183768458b5336d3fbe2579`; target dev. #833 final-head
+CI and ACK passed before the owner merged. No competing open PR/nested lane;
+unrelated Base44 changes and other worktrees preserved. Main-only site work is
+excluded. See the current acceptance table in the nested matrix documentation.
+
+Scope: six named methods per C#/VB fixture, outer/inner/method generic ownership,
+VAR/MVAR ordinals, nested total arity and constructed argument order. Independent
+raw SRM and Cecil oracles precede exact single/combined fact assertions. Per-input
+duplicate identities retain ambiguity/provenance, malformed PE and member-budget
+refusals remain Tier4 partial, and reverse-input output repeats byte-identically.
+No production rule/schema or derived machine-readable artifact added. Binaries
+are read only, never executed. No source/PDB/IL/runtime or F# nested-type claim.
+Private corpus/isolated Windows access remains unavailable and uninvoked.
+
+The first golden signature omitted local assembly scope for constructed self
+types. Corrected the test expectation after inspecting the existing scoped
+signature contract; C#/VB self constructions are analogous but have distinct
+canonical signatures. No identity check was weakened. Focused tests pass 5/5 with
+zero compiler/analyzer warnings. Two validated CLI scans produce 442 facts and
+12 selected methods, with byte-identical facts/reports. Validator self-tests pass
+7/7 (existing Python SQLite ResourceWarning); privacy/spec/whitespace guards pass.
+Surrounding compiled regression run passes 403/403, zero failures/skips.
+Full final-head CI required;
+duplicate full local .NET, non-.NET local suites and pinned source OSS smokes
+explicitly deferred for this fixture/test-only slice.
+
+Commands (logs `/tmp/tracemap-nested-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Nested_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Each CLI smoke uses a fresh temporary output directory and absolute public inputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: complete local validation, open bounded PR and follow live ACK 0.5.5
+(stable, build ab39833, distFresh=true, required lane capabilities available).
+Broader #759/#767 acceptance and private #768/#769 stay open.
+
+# Current continuation: #767 C#/VB receiver call sites
+
+Branch `codex/767-receiver-dispatch-matrix`, fresh dev base #832 merge
+`d95df3da863f18838198c151d879e63e7fa41476`; target dev. No competing open PR or
+receiver worktree. Unrelated primary Base44 edits and all other worktrees preserved.
+#832 Windows package smoke subsequently passed; its ACK already-merged audit
+is not retrospectively upgraded to merge approval.
+
+Scope: C# base/virtual and VB Me/MyBase/MyClass static encoded targets, exact
+metadata/original-body/call relationships, independent raw SRM and Cecil oracles,
+operand-aware hash distinction, per-input duplicate provenance, malformed call
+token and work-limit refusal, repeatability. Fixtures and mutated DLLs are read
+only, never loaded/executed. No production rule/schema or derived artifact added.
+Private corpus/isolated Windows access remains unavailable and uninvoked under
+#769/#768. Runtime dispatch/source ownership/PDB/rewrite equivalence are not claimed.
+
+Initial build corrected the manifest property name to RepoName. Positive tests
+confirmed C# virtual calls reference the base slot while VB Me references the
+override. Wrong-table call tokens produce IlCallTargetIdentityUnavailable by the
+existing SRM target-reader contract; the initial expected generic operand-gap
+name was corrected, without production changes. Focused validation passes 8/8
+with zero warnings/errors; two validated IL-enabled CLI scans produce 1,641
+facts and five receiver chains with byte-identical facts/reports. Validator
+self-tests pass 7/7; privacy/spec/whitespace guards pass. Surrounding compiled suite passes 398/398 with zero failures/skips.
+Full final-head .NET/public CI required; duplicate full local .NET, non-.NET local
+suites and pinned source OSS smokes explicitly deferred for this fixture/test slice.
+
+Commands (logs `/tmp/tracemap-receiver-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Receiver_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Repeated CLI scans use temporary outputs and absolute public input paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --il-body-evidence
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: finish validation, open bounded PR and follow live ACK. Broader receiver,
+language, IL/PDB/rewrite and private-lane acceptance remain open.
+
+# Current continuation: #767 quotation/expression-tree signatures
+
+Branch `codex/767-quotation-expression-matrix`, fresh dev base #831 merge
+`eafa68e7072fb8a6f992fae6fbe6225dcfe707e7`; target dev. No open competing PR
+or active quotation lane found. Unrelated primary Base44 edits/worktrees preserved.
+Scope: C#/VB Expression<Func<Int32>>, F# FSharpExpr<Int32> and shared Func<Int32>
+method signatures, exact SRM/Cecil tokens/type references/assembly scopes,
+single/combined fact provenance, ambiguity/malformed/member-limit/repeat cases,
+and the explicit F# source-unsupported gap. No production rule/schema or derived
+machine artifact. No fixture execution, tree-content or runtime equivalence claim.
+Private corpus/isolated Windows access remains unavailable and uninvoked; #768,
+#769 and parent #759 remain open. Public Windows CI is separate evidence.
+
+Focused tests pass 8/8 with zero warnings/errors. Repeated CLI scans produce
+615 facts and nine selected methods; validated facts/reports are byte-identical.
+Validator self-tests pass 7/7; privacy/spec/whitespace guards pass. Surrounding
+compiled-suite validation passes 390/390 (zero failures/skips). Full final-head
+.NET/public-adapter CI remains required. Duplicate full local .NET, non-.NET local
+suites and pinned source OSS smokes are explicitly deferred for this fixture/test
+slice. The initial focused test caught a handwritten F# namespace length of 26
+instead of 27; the raw SRM/Cecil oracle passed and the golden framing was corrected.
+No production identity check was changed or weakened.
+
+Commands (logs `/tmp/tracemap-quotation-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Quotation_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice, with separate temporary outputs and absolute public fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+PR #832 opened at `ee95fa67`. Initial exact-head CI passed all gates with
+3,364 .NET tests and one skip; no reruns. Settled ACK review authorized two
+repairs: explicit no-edge expectations and per-input duplicate evidence.
+The shared invariant is evidence separation, audited across this slice's
+single/combined/reversed/duplicate/rejected cases and bound F# scan. No production
+change or unrelated matrix rewrite is needed. Tests now pin both expected safe
+locators, each outcome/gap and three distinct method facts per input, with raw/
+binding provenance, and assert no relationship source endpoints in metadata-only
+output. The matrix states no-edge expectations for every case. Repair focused validation passes 8/8 with zero warnings/errors; privacy/spec/
+whitespace guards pass. Final-head CI/ACK remain required. Untyped
+quotations, splices, captures, generated helpers, conversions and runtime behavior
+remain future scope; broad issue acceptance is not inferred from this slice.
+
+# Current continuation: #767 union factories
+
+Branch `codex/767-union-factory-matrix`, base #830 merge
+`f77773472691c31764b16fd611a4356a126103f8`; target dev. No competing PR/lane.
+Scope: F# union-case factory signatures and mapping attributes versus ordinary
+C#/VB lookalikes, independent SRM/Cecil oracles, exact identities/provenance,
+negative/ambiguous/malformed/bounded/repeat cases and F# source-unsupported gap.
+No runtime union equivalence, source extraction, production rule or schema change.
+Private corpus/Windows worker access remains unavailable and uninvoked.
+Focused validation passes 9/9 with warnings treated as errors. Two CLI scans
+produce 585 facts, six selected factory endpoints, no metadata-reader disagreement
+and byte-identical validated facts/reports. Artifact validator self-tests pass 7/7;
+privacy, Kiro and whitespace guards pass (unchanged Python SQLite ResourceWarning).
+Surrounding compiled tests pass 383/383 (zero failures or skips).
+Full .NET CI on the final head is required;
+a duplicate full local run, non-.NET local suites and pinned source OSS smokes are
+explicitly deferred for this fixture/test-only slice. No full acceptance claim
+comes from issue status or merge ancestry.
+
+The first attribute oracle exposed Cecil's enum-resolution requirement. The
+independent test resolver now admits only the exact pinned FSharp.Core restore
+asset and rejects unknown or wrong-version identities. SRM pins raw constructor
+and attribute fields; Cecil independently decodes enum arguments. The package's
+SourceConstructFlags enum also pins Int32 underlying storage and SumType=1 /
+UnionCase=8. An introduced xUnit2031 warning was fixed with the predicate overload;
+no suppression was added. Production dependency resolution is unchanged.
+
+Commands (logs `/tmp/tracemap-union-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Union_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke runs twice with separate temporary outputs and absolute public inputs:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: PR CI and live ACK. Full union helper,
+layout, generic/struct/null representation, quotation and runtime coverage remain
+open, as do all epic acceptance issues.
+
+# Current continuation: #767 record-generated members
+
+Branch `codex/767-record-generated-matrix`, initially based on #828 `6f168354`.
+#829 subsequently merged at `874db8a9454562061cfb889117d8359a317f1503`;
+that fresh origin/dev is integrated without rewriting pushed history. Target dev.
+Scope: selected C#/F# record-generated object overrides and ordinary VB lookalikes,
+independent SRM/Cecil metadata oracles, exact identities/provenance and bounded
+negative cases. No runtime equality or F# source-extraction claim. No production
+rule/schema change or new derived artifact. Private corpus/Windows access remains
+unavailable and uninvoked. No duplicate active record lane was found; primary
+checkout unrelated Base44 edits and all other worktrees remain untouched.
+
+Initial focused metadata tests: 7/7. Locked restore and warnings-as-errors test
+build pass. After integrating #829, two public CLI scans produce 532 facts with byte-identical validated
+facts/reports. Validator self-tests 7/7, privacy and Kiro guards pass (unchanged
+Python SQLite ResourceWarning). Non-.NET local suites and pinned source OSS smoke
+checks are deferred for this fixture/test-only scope; public adapter CI remains
+required. Final pre-integration focused validation passes 9/9. The old-base full local run
+was intentionally cancelled without a result when #829 merged; it is not passing
+evidence. All 375 metadata/source/PDB/IL/rewrite tests pass on the combined
+tree with warnings treated as errors (zero warnings). Full .NET CI on the final
+head is required; a second full local run is explicitly deferred to that CI.
+
+The first surrounding suite exposed one test-wide uniqueness assumption:
+record-generated IL legitimately adds another constrained call. The IL fixture
+assertion now selects RenderConstrained by its independent SRM declaring type and
+MethodDef token instead of asserting one constrained call in the whole assembly.
+An intermediate repair selected the wrong declaring type and failed explicitly;
+correcting the oracle to GenericCallShapes restored the exact test (9/9 focused).
+This preserves the intended exact call assertion; no production logic changed.
+
+Commands (logs `/tmp/tracemap-record-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Record_matrix -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Record_matrix|FullyQualifiedName~Direct_call_kinds_carry_exact_target_identities_tokens_and_offsets|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke runs twice with separate temporary outputs and absolute public input paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Next: require full cross-platform CI and exact-head PR review.
+All epic issues remain open; discriminated unions/quotations, further VB receiver
+interactions and generated-member/PDB relationships require separate slices.
+
+# Current continuation: #767 modules/currying (2026-10-06)
+
+Branch `codex/767-module-currying-matrix`, base #828 merge
+`6f168354a17a90dd16236105e9b1c366d4b76198`; target dev. No competing open
+PR found. Other worktrees and unrelated Base44 edits preserved.
+
+Scope: public C# static class, VB Module and F# module method identities;
+F# compiled names and curried/tupled argument groups checked separately from
+CLR signatures using independent metadata readers. No source extraction for
+F#, runtime invocation, production rule/schema change or new derived artifact.
+Validation: locked restore and build pass with zero warnings; focused 10/10.
+Two CLI scans yield 490 facts and nine selected module methods, no reader
+disagreement, and byte-identical facts/reports. Artifacts validate; validator
+self-tests 7/7, private-path, Kiro and diff checks pass. The unchanged SQLite
+ResourceWarning remains in the Python validator self-test. All 366 surrounding
+metadata/source/PDB/IL/rewrite tests pass. Full .NET passes 3,340 tests, zero
+failures and one Windows ASP.NET publish skip (3,341 total; 18.65 minutes).
+
+The metadata oracle corrected two initial assumptions: F# consumes CompiledName
+rather than retaining a method attribute, and the VB module attribute references
+Microsoft.VisualBasic.Core assembly 15.0.0.0 rather than the SDK major version.
+Raw blobs/constructor scopes and independent Cecil decoding pin the actual
+emissions. Review corrected the initial alias conclusion: CompilationSourceName
+retains curried, tupled and sourceAlias, now pinned independently by SRM and Cecil.
+This metadata does not prove physical source ownership.
+
+PR #829 review repair audits all source reconciliation fixture paths and the
+module/operator/optional source matrix siblings. Active configuration paths replace
+Debug literals; independent declaration identities and exact spans reject
+self-consistent wrong-source substitutions. Focused repair tests pass 16/16. Release build has zero warnings/errors;
+41 source/module tests pass after moving all three original Debug fixture
+directories aside. Source workspace loading recreated empty C#/VB Debug
+directories, preserved separately before restoring original outputs.
+All 368 surrounding metadata/source/PDB/IL/rewrite tests pass after repair.
+Privacy, Kiro and whitespace guards pass. The full-suite result above predates
+this assertion/configuration-only repair; full local rerun is deferred to fresh CI.
+
+Repair commands (logs `/tmp/tracemap-829-*`):
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Module_matrix|FullyQualifiedName~Module_source_matrix|FullyQualifiedName~Operator_source_matrix|FullyQualifiedName~Optional_source_matrix_joins|FullyQualifiedName~Source_matrix_oracles|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Release --no-restore -warnaserror
+# Move only this worktree's compiled fixture bin/Debug directories aside; restore afterward.
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Release --no-build --no-restore --filter 'FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~Module_matrix'
+```
+
+Commands (logs `/tmp/tracemap-modules-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Module_matrix|FullyQualifiedName~Module_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI twice with separate temporary outputs and absolute public fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Private corpus/Windows worker access remains unavailable and uninvoked; public
+CI remains a separate gate. Non-.NET local suites and pinned source OSS smokes
+are explicitly deferred for this fixture/test-only slice; public CI still runs
+adapter validation. All epic issues and Tasks 10/11 stay open. Next: PR/live ACK, then select
+another documented language interaction.
+
+---
+
+# Current continuation: #767 operators/conversions (2026-10-05)
+
+Branch `codex/767-operator-conversion-matrix`, base #827 merge
+`c155a35f3ed111f03fd88e2957e0326093a5eb7b`; integration target dev.
+No open PR or competing lane found; other worktrees and Base44 edits preserved.
+
+Scope: public C#/VB/F# addition, implicit/explicit conversion and ordinary
+operator-looking method metadata. Independent raw SRM signatures/tokens/flags
+and Cecil oracle; single/combined identities and per-input provenance; negative,
+ambiguous, malformed and bounded cases. No runtime execution or new derived
+artifact; no production operator-classification or conversion edge claim.
+
+Validation: locked restore and build pass without warnings; focused 10/10 and
+surrounding metadata/source/PDB/IL/rewrite 357/357 pass. Two CLI scans retain 478
+facts and all 12 selected methods, no reader disagreement, and byte-identical
+facts/reports. Both outputs validate; validator self-tests 7/7, private-path,
+Kiro and diff checks pass. The validator emits its unchanged SQLite
+ResourceWarning. Full .NET passes 3,331 tests, zero failures and one Windows
+ASP.NET publish skip (3,332 total; 15.18 minutes).
+
+Initial golden assertions incorrectly omitted self-type assembly scope and
+assumed every ordinary op_-prefixed method lacked SpecialName. Tests now retain
+scope and pin the independently observed F# SpecialName difference; neither
+comparison is weakened into a name-only or scope-free identity claim.
+
+Commands (logs `/tmp/tracemap-operators-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Operator_matrix|FullyQualifiedName~Operator_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice with separate temporary outputs and absolute public fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Private corpus and Windows worker access remain unavailable/uninvoked. Public
+Windows CI is a separate gate. Non-.NET local suites and pinned source OSS smokes
+are explicitly deferred for this fixture/test-only slice; CI exercises all
+adapters. Broader #767, Tasks 10/11 and all epic issues remain open. Next steps:
+PR/live ACK, then select a remaining documented interaction.
+
+---
+
+# Current continuation: #767 explicit interfaces (2026-10-05)
+
+Branch `codex/767-explicit-interface-matrix`, base #826 merge
+`b40267b167b46910f6846bb6f0db6e80d8aa58f4`; target dev. No competing open PR
+or active worktree found. Other worktrees and unrelated Base44 edits preserved.
+
+ACK review repair: Qodo identified missing per-member raw/binding hash checks.
+The shared accessor/member helper now ties each fact's locator and assembly to
+its input outcome, hashes the known public fixture bytes, and checks the outcome's
+binding digest. Accessor, constraint and default matrices share this invariant.
+Six corruption cases cover all three languages in single/combined scans, wrong
+raw/binding hashes and jointly corrupted fact/outcome raw hashes. Unbound inputs
+legitimately share the empty binding-set digest; tests do not require distinct
+binding hashes or claim source-bound receipt coverage.
+
+Initial public Windows CI at `d5c85aaa` failed in existing VB optional-source
+binding (`commitSha=unknown`) and Web Forms replay (`SOURCE_IDENTITY_CHANGED`).
+One unchanged-head rerun of each passed; original failures retained in PR #827
+comment `6006749796`. Root cause remains unproven; no identity check was relaxed.
+All initial-head CI passed before ACK authorized this test-only repair.
+Post-repair validation: 348/348 surrounding metadata/source/PDB/IL/rewrite tests
+pass with `-warnaserror`; private-path, Kiro self-test and diff checks pass.
+Command: the surrounding filter listed below, with `--no-restore -warnaserror`
+and rebuilding instead of `--no-build`; log `/tmp/tracemap-827-hash-repair-final.log`.
+The full 3,316-test local run belongs to the initial implementation head; it was
+not repeated for this assertion-only repair. Fresh public CI remains required.
+
+Scope: ISharedFormatter/ExplicitShape in C#/VB/F#, declaration/body/decoy
+identity separation, independent SRM MethodImpl and Cecil override token
+oracles, exact single/combined fact assertions, seven new metadata regressions
+and strengthened bound F# gap test. F# emits no Final flag for this explicit
+method; C#/VB do. No production dispatch edge, schema or extractor-version
+change; no runtime loading and no new derived artifact.
+
+Validation: focused 8/8 pass, build warning-free. Two CLI scans yield 460 facts,
+all nine fixture methods, no reader disagreement and byte-identical facts/reports.
+Artifacts validate; seven validator self-tests, privacy, Kiro and whitespace
+checks pass (unchanged Python SQLite ResourceWarning). Initial uniform Final-flag
+expectation failed on F# and is now pinned as a language-specific distinction
+by both readers. All 342 surrounding metadata/source/PDB/IL/rewrite tests pass.
+Full .NET passes 3,316 tests, zero failures, one Windows ASP.NET publish skip
+(3,317 total; 15.42 minutes). Cross-platform CI and live ACK remain separate
+PR gates.
+
+Commands from this worktree (logs `/tmp/tracemap-767-interfaces-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Explicit_interface_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice, separate temporary outputs and absolute fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Private Windows/corpus access is unavailable and uninvoked. Non-.NET local
+suites and pinned source-adapter OSS smokes are explicitly deferred for this
+fixture/test-only slice; public CI still exercises the adapters. All epic
+issues and Tasks 10/11 remain open. Next work should select a remaining reviewed
+language interaction or separately scope a production relationship contract.
+
+---
+
+# Current continuation: #767 default values (2026-10-05)
+
+Branch `codex/767-default-value-matrix`, base #825 merge
+`74364fe5eb4168757d508a232d59958d21eb73a3`; target dev. No competing open PR
+or active worktree found. Existing worktrees and unrelated Base44 edits retained.
+
+ACK repair: Qodo identified that combined-scan tokens were only format-checked
+while exact token assertions covered single-input scans. The same pattern
+existed in the constraint matrix. Both now select one combined endpoint and
+assert its exact raw MethodDef token, signature and optional markers against
+the single-input observation. A temporary combined-token corruption failed all
+11 default/constraint oracle rows; the mutation was removed. Post-repair focused
+validation passes 20/20 with warnings as errors; surrounding metadata/source/
+PDB/IL/rewrite validation passes 335/335 (2m47s). Privacy/spec/whitespace guards
+pass. The full-suite result below predates
+this assertion-only repair; fresh full coverage will run in CI.
+
+Scope: six DefaultShape methods per C#/VB/F# fixture; required/no-default,
+integer 7/9, string/null and decimal attribute encoding. Ten new metadata cases
+plus strengthened bound F# regression. SRM raw constant/attribute evidence and
+Cecil decoded values remain independent of TraceMap signatures/optional markers.
+No production default facts, schema or extractor-version change; no runtime
+execution or new derived artifact. Default-value production coverage remains a
+gap. The case/acceptance matrix documents all four child-issue boundaries.
+
+Validation: final focused 11/11 and zero-warning build pass. Two CLI scans
+produce 442 facts each, all 18 default methods and no reader disagreement;
+artifacts validate and facts/reports repeat byte-for-byte. Seven artifact
+validator tests, privacy guard, Kiro self-test and whitespace checks pass. The
+unchanged Python validator reports a SQLite ResourceWarning. All 335 surrounding
+compiled/PDB/IL/rewrite cases pass. Full .NET passes 3,309 tests, zero failures,
+one Windows ASP.NET publish skip (3,310 total; 17.59 minutes). Cross-platform
+CI and live ACK remain separate PR gates. Initial warning-as-error build rejected untyped F# null
+attribute input because the compiler would ignore the attributes; explicitly
+typing null as string fixed the fixture.
+
+Commands from this worktree (logs `/tmp/tracemap-767-defaults-*`):
+
+```sh
+# Post-repair focused command (surrounding command below also rerun):
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice, separate temporary outputs and absolute fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Private Windows/corpus access is unavailable and uninvoked. Non-.NET local
+suites and pinned source-adapter OSS smokes are explicitly deferred for this
+fixture/test-only change; public CI still validates adapters. All epic issues
+and Tasks 10/11 remain open. Next work should select a remaining language
+interaction or separately scope bounded production default evidence.
+
+---
+
+# Current continuation: #767 generic constraints (2026-10-05)
+
+Branch `codex/767-generic-constraint-matrix`, base #824 merge
+`5adfaeb6fad63ecade0bab29a0fabf682ebd38fa`; integration target dev. Existing
+worktrees and unrelated Base44 edits preserved. No competing open PR found.
+
+Scope: five public generic methods per language, independent SRM/Cecil
+constraint oracle, exact MethodDef-token joins, nine new regressions and a
+strengthened bound F# gap test. F# struct emits flags 8/no type row; C#/VB
+emit flags 24/System.ValueType. Method signature equality does not establish
+constraint equivalence. Production constraint facts remain a gap; no extractor,
+identity schema or version changed, no new derived artifact, no runtime loading.
+
+Validation: warning-as-error build and 10 focused cases pass. Two CLI scans
+produce 418 facts each with 15 constraint methods, no reader disagreement and
+byte-identical facts/reports; artifact conformance passes. Seven artifact
+validator tests, private-path, Kiro self-test and whitespace guards pass. The
+unchanged Python validator reports a SQLite ResourceWarning. All 325 surrounding
+compiled/PDB/IL/rewrite tests pass. Full .NET passes 3,299 tests, zero failures,
+one Windows ASP.NET publish skip (3,300 total; 15.32 minutes). CI and live ACK
+remain separate PR gates. Initial fixture build caught a VB
+parameter/function name collision and was corrected. Initial golden assumptions exposed the F#
+struct encoding difference; both readers now must agree on the language-specific
+expected metadata.
+
+Commands from this worktree (logs `/tmp/tracemap-767-constraints-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke twice, separate temporary outputs and absolute fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Private Windows/corpus execution is unavailable and uninvoked. Source-adapter
+OSS smokes and non-.NET adapter local suites are deferred for this fixture/test
+slice; public CI still exercises the adapters. All epic issues and Tasks 10/11
+remain open. Next work should select one remaining reviewed language interaction
+or design bounded production constraint evidence separately.
+
+---
+
+# Current continuation: #767 property/event accessors (2026-10-05)
+
+Branch `codex/767-property-event-matrix`, based on verified #823 merge
+`c389b20dfc0fc3865f8faae12d3df74524031980`; main remains `7f026f5a`.
+No open PR or competing worktree was found. Unrelated Base44 edits and other
+worktrees were preserved. Scope: fixtures/tests/docs only; no production rule,
+identity, schema or extractor-version change.
+
+Delivered: matched Value/Snapshot/Changed metadata shapes in C#/VB/F#;
+independent SRM property/event accessor handles join fixture assertions to
+exact method tokens, preserving distinct endpoints. Value has a setter while
+Snapshot does not despite equal property signatures. VB has an extra explicit
+raiser. The ordinary get_Unbound method is not an accessor. Ten new tests
+cover these shapes, deterministic reversal, duplicate ambiguity, truncated
+headers and member limits. The existing bound F# regression also retains the
+new properties/event while refusing source reconciliation.
+
+Validation: ten new tests and all 316 surrounding compiled/PDB/IL/rewrite
+tests pass; warning-as-error build is clean. Full .NET passes 3,290 tests,
+zero failures, one Windows ASP.NET publish skip (3,291 total, 14.84 minutes).
+Cross-platform CI and live ACK remain separate PR gates.
+Two CLI scans produce 397 facts each, including six properties, three events
+and three getter-looking ordinary methods, with no reader disagreement and
+byte-identical facts/reports. Artifact conformance and seven validator tests,
+private-path guard, Kiro self-test and whitespace checks pass. The unchanged
+Python validator reports a SQLite ResourceWarning. JVM 36 and Python 64 tests
+plus Python endpoint smoke pass. Initial concurrent TypeScript validation had
+257 passes and one MSB4018 shared .NET deps.json file-lock failure. The
+unchanged serial rerun after .NET completion passes all 258 TypeScript tests.
+
+Commands from this worktree (logs `/tmp/tracemap-767-accessors-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Property_event_matrix' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+npm ci --prefix src/typescript
+npm run check --prefix src/typescript
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-767-accessors-python-venv
+/tmp/tracemap-767-accessors-python-venv/bin/python -m pip install -e 'src/python[dev]'
+/tmp/tracemap-767-accessors-python-venv/bin/python -m pytest src/python/tests
+PYTHON_BIN=/tmp/tracemap-767-accessors-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke, twice with separate temporary outputs and absolute fixture paths:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limits: oracle associations are test evidence, not new production accessor
+edges. No equivalent event delivery/storage, source extraction for F#,
+PDB/IL/rewrite ownership or runtime behavior is claimed. Private/Windows worker
+access is unavailable and was not invoked. Source-adapter OSS smokes are
+deferred because extraction is unchanged. All epic issues and Tasks 10/11
+remain open. Next public work should choose another reviewed language
+interaction; private catalog and independent Windows PDB oracle are separate.
+
+---
+
+# Current continuation: #767 nullable/F# option matrix (2026-10-05)
+
+Branch `codex/767-nullable-option-matrix`, based on verified #822 merge
+`756368375582a9e0f10cceab18890e9905261b28`. Main remains `7f026f5a`.
+No open PR or competing worktree was found; unrelated Base44 edits and other
+worktrees were preserved. Scope: public fixture/test matrix only. No production
+extractor, schema, rule, identity encoding or version change.
+
+Delivered: three matched Nullable<Int32> methods; distinct FSharpOption and
+FSharpValueOption signatures; F# ?arg option-valued signature without CLI
+optional markers; exact metadata/provenance goldens, determinism, duplicate
+ambiguity and malformed/member-budget gaps. The bound F# regression retains
+all four new methods while withholding all source reconciliation edges.
+FSharp.Core is pinned to package 10.1.302 / assembly 10.1.0.0. Eight new tests
+and one strengthened existing test pass; warning-as-error build is clean.
+The surrounding compiled/PDB/IL/rewrite suite passes 306/306. Full .NET
+validation passes 3,280 tests, zero failures, one Windows ASP.NET publish skip
+(3,281 total, 17.77 minutes). Cross-platform CI and ACK remain separate PR gates.
+Two CLI scans produce 359 facts each with six OptionShape methods, three
+signature shapes, no reader disagreement and byte-identical facts/reports;
+artifact conformance passes. TypeScript 258, JVM 36, Python 64 and Python
+endpoint smoke pass. Artifact validator self-tests pass 7/7 (the unchanged
+Python script reports a SQLite ResourceWarning); private-path, Kiro self-test
+and whitespace guards pass.
+
+Commands from this worktree (logs `/tmp/tracemap-767-option-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Nullable_option_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+npm ci --prefix src/typescript
+npm run check --prefix src/typescript
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-767-option-python-venv
+/tmp/tracemap-767-option-python-venv/bin/python -m pip install -e 'src/python[dev]'
+/tmp/tracemap-767-option-python-venv/bin/python -m pytest src/python/tests
+PYTHON_BIN=/tmp/tracemap-767-option-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+CLI smoke (run twice with fresh temporary outputs; use absolute fixture paths):
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out "$smoke_output" --compiled-input "$fixture_root/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" --compiled-input "$fixture_root/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" --compiled-input "$fixture_root/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+python3 scripts/validate-adapter-artifacts.py "$smoke_output"
+```
+
+Limits: only documented metadata shape equivalence. No F# source extraction,
+option runtime/allocation semantics, default substitution, PDB/IL ownership or
+rewrite equivalence is inferred. No private/Windows worker was invoked. Source
+adapter OSS smokes are deferred because source extraction is unchanged. The
+private catalog and independent Windows PDB oracle remain unavailable; all
+five epic issues and Tasks 10/11 remain open. Next: another bounded reviewed
+language dimension, not full epic completion.
+
+---
+
+# Current continuation: #767 bound source optional-marker coverage (2026-10-05)
+
+Branch `codex/767-source-optional-ordinals`, based on verified #821 merge
+`a0de5398e38982a2ac606e06f102bc4f02a9a036` from fresh `origin/dev`.
+Main remains `7f026f5a`; no open PR or competing worktree for this slice was
+found. Root Base44 edits and other worktrees were preserved.
+
+Scope: nine tests for real bound C#/VB optional-marker joins and injected
+comparator rejection/ambiguity/summary bounds; add source reconciliation to
+portable metadata CI. Both source observation and compiled endpoint evidence
+remain separate. The previous optional review allegation was not reproducible:
+source ordinals are integers sorted numerically. No production change, identity
+encoding, rule, schema or extractor-version change is needed. A temporary
+lexical-sort mutation failed all nine tests and was removed.
+
+Validation so far: nine new tests pass; the metadata/source filter passes 80/80;
+warning-as-error solution build has zero warnings/errors. Full .NET validation
+passes 3,272 tests with zero failures and one Windows ASP.NET publish skip
+(3,273 total, 19.35 minutes). CLI modern-sample artifacts validate. TypeScript 258, JVM 36,
+Python 64 and Python endpoint smoke pass. Artifact
+validator self-tests pass 7/7 (Python emitted an existing SQLite ResourceWarning);
+private-path and whitespace guards pass. Locked restore and CLI artifact conformance also pass.
+The first PR CI run passed the Linux full suite and public Windows corpus/
+mutation checks but exposed a Windows cleanup failure in the newly included
+existing CLI reconciliation test (79 passed, one failed). Its pooled SQLite
+verification connection retained the index handle after disposal. Disable
+pooling only for that fixture connection; retain every evidence assertion and
+the Windows CI gate. Post-fix warning-as-error metadata/source run passes 80/80 with no warnings;
+full local totals above precede this test-only pooling correction. Fresh
+cross-platform CI and ACK are required on the repair head.
+
+Commands from this worktree (logs retained under `/tmp/tracemap-767-source-*`):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Optional_source_matrix' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests' -warnaserror
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan --repo samples/modern-sample --out /tmp/tracemap-767-source-cli
+python3 scripts/validate-adapter-artifacts.py /tmp/tracemap-767-source-cli
+npm ci --prefix src/typescript
+npm run check --prefix src/typescript
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-767-source-python-venv
+/tmp/tracemap-767-source-python-venv/bin/python -m pip install -e 'src/python[dev]'
+/tmp/tracemap-767-source-python-venv/bin/python -m pytest src/python/tests
+PYTHON_BIN=/tmp/tracemap-767-source-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+Limits: test-only/CI change; pinned source-adapter OSS checks
+are deferred because no scanner or adapter behavior changed. No F# source,
+default-value semantics, runtime, Windows-private-worker or corpus acceptance
+is claimed. Tasks 10/11 and #759/#766/#767/#768/#769 remain open. Next public
+work should select another documented language dimension; private catalog and
+independent Windows PDB oracle remain separate blockers.
+
+---
+
+# Current continuation: #767 optional-parameter agreement (2026-10-05)
+
+Branch `codex/767-optional-parameter-evidence`, based on `origin/dev`
+`e9212c53acbdfc83e8dbfc4a83c2272576715db2` (#820 merged). No open PRs or
+competing optional-parameter worktree were present at reconciliation.
+Implementation complete: require dual-reader agreement on the existing
+`optionalParameterOrdinals` evidence, numeric ordinal ordering, and correct
+setter-only property index parameter selection. Add public C#/VB/F# marker
+fixtures and targeted regressions. Defaults, caller substitution, runtime
+behavior and F# source extraction remain unclaimed. No private/Windows worker
+is needed or authorized by this slice. Tasks 10/11 and all epic issues remain
+open. No fact schema or identity format changes; extractor version is now
+`managed-metadata/0.1.3+cecil-0.11.6`.
+
+Evidence: two disagreement regressions failed on the merged base; adding the
+agreement check alone then failed the wide-ordinal and sparse-setter cases.
+All 20 optional/signature-filter tests now pass (five new cases plus existing
+signature and optional-reconciliation tests). The surrounding compiled lane
+passes 289/289. Locked restore and warning-as-error solution build pass with
+zero warnings/errors. Full .NET suite passes 3,263 tests, zero failures,
+with one Windows ASP.NET publish skip on macOS (3,264 total; 18.34 minutes).
+
+Two three-language CLI scans emit 347 facts each, including 12 optional-method
+observations, correct numeric marker lists and no reader disagreement. All
+required artifacts exist; artifact conformance passes and facts/report are
+byte-identical. TypeScript passes 258 tests, JVM 36, Python 64; the Python
+endpoint smoke passes with expected reduced-coverage labels. Artifact-validator
+self-tests pass 7/7, private-path guard, Kiro self-test and whitespace checks pass.
+
+Commands (from this worktree):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Optional_parameter|FullyQualifiedName~Clr_signature' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore --logger 'console;verbosity=normal'
+npm ci --prefix src/typescript
+npm run check --prefix src/typescript
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home gradle -p src/jvm test
+python3 -m venv /tmp/tracemap-767-optional-python-venv
+/tmp/tracemap-767-optional-python-venv/bin/python -m pip install -e 'src/python[dev]'
+/tmp/tracemap-767-optional-python-venv/bin/python -m pytest src/python/tests
+PYTHON_BIN=/tmp/tracemap-767-optional-python-venv/bin/python ./scripts/smoke-python-endpoints.sh
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+```
+
+The repeat CLI command is the three-input loop recorded in the #820 section
+below, using a new temporary output directory and the current extractor.
+Source-adapter pinned OSS smokes are deferred because only compiled-metadata
+agreement changes; no source resolver changes. Cross-platform CI is pending;
+Windows/private workers, native PDB/ILDAsm parity and private corpus receipts
+remain deferred. Delivery targets `dev`; live ACK is the review authority.
+Next implementation work is default-value/other #767 dimensions in separate
+bounded slices.
+
+---
+
+# Current continuation: #767 CLR signature matrix (2026-10-05)
+
+Branch: `codex/767-clr-signature-matrix`, based on fetched `origin/dev`
+`9dde9bb5f400221e0d8502b5008d61884596230f`. Implementation and local validation complete; PR/ACK delivery pending.
+Scope: public C#/VB/F# matched method-signature fixtures and exact metadata
+assertions for overloads, by-reference parameters, method generic arity and
+array rank, plus ambiguity, malformed input and bounded rejection. No new
+source extraction, identity joins, runtime execution or private input.
+Tasks 10/11 and issues #759/#766/#767/#768/#769 remain open. The validation below proves only this bounded public fixture slice.
+
+The 14 new `Clr_signature` cases pass on macOS with .NET SDK 10.0.302.
+Locked restore and `dotnet build src/dotnet/TraceMap.sln --no-restore
+-warnaserror` pass with zero warnings/errors. Two CLI scans of
+`samples/modern-sample` with all three explicit fixture assemblies each emit
+329 facts, including 21 matrix methods; `facts.ndjson` and `report.md` are
+byte-identical. Both pass `validate-adapter-artifacts.py`. The artifact
+validator self-tests pass 7/7; private-path guard, Kiro self-test and diff
+check pass. The broader compiled filter passes 284/284. The full suite passes 3,258
+tests, zero failures, with one explicit Windows ASP.NET publish skip on macOS
+(3,259 total, 16m23s).
+
+The runnable case matrix and reconciliation are in
+`docs/validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md`. Golden strings are
+hand-authored test inputs; no new derived machine-readable format is added.
+The existing cross-platform metadata filter includes the partial test class.
+Source-adapter OSS smokes and unrelated TypeScript/JVM/Python adapter checks
+are deferred because this changes only public fixtures, tests and docs.
+Windows CI remains pending; no Windows/private worker was invoked. The last
+recorded private dependency blocker is historical #788 evidence, not freshly
+verified. Next: open a dev PR and follow live ACK;
+then expand remaining #767 dimensions in separate bounded slices.
+
+Exact local validation commands (from this worktree):
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet build src/dotnet/TraceMap.sln --no-restore -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Clr_signature' -warnaserror
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests|FullyQualifiedName~PortablePdbExtractorTests|FullyQualifiedName~IlBodyEvidenceExtractorTests|FullyQualifiedName~IlRewrite'
+dotnet test src/dotnet/TraceMap.sln --no-build --no-restore
+python3 scripts/test_validate_adapter_artifacts.py
+./scripts/check-private-paths.sh
+node scripts/kiro-review.mjs --self-test
+git diff --check
+run_root=$(mktemp -d)
+for label in first second; do
+  dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll scan \
+    --repo samples/modern-sample --out "$run_root/$label" \
+    --compiled-input "$PWD/samples/compiled-dotnet-evidence/csharp/bin/Debug/net10.0/CompiledEvidence.CSharp.dll" \
+    --compiled-input "$PWD/samples/compiled-dotnet-evidence/vb/bin/Debug/net10.0/CompiledEvidence.VisualBasic.dll" \
+    --compiled-input "$PWD/samples/compiled-dotnet-evidence/fsharp/bin/Debug/net10.0/CompiledEvidence.FSharp.dll"
+done
+python3 scripts/validate-adapter-artifacts.py "$run_root/first" "$run_root/second"
+cmp "$run_root/first/facts.ndjson" "$run_root/second/facts.ndjson"
+cmp "$run_root/first/report.md" "$run_root/second/report.md"
+```
+
+---
+
 # Compiled .NET Evidence Foundation Implementation State
 
 Status: Tasks 1-9 are merged into `dev`; PR #774 completed its authorized exact-head ACK review and was merged into `dev` as `ed2fdf1c028b034a9a6013908e8f5b8c29d900a7` on 2026-09-21. The first Task 10 slice (bounded operand-aware IL body/call evidence, PR #775) is also merged into `dev` as `46b2baa125bed00ee9ac1964ce50febd55c3e68e` on 2026-09-21, including the owner-requested P1/P2 follow-up `2d20b4a3` (prefix-operand signed/unsigned distinction and exact UTF-16 literal hashing). PR #779 (slice 4, bounded rewrite PDB identity evidence) merged into `dev` as `7be1f51c0360a7f80e3b7304aee9677fe3c92ddc` on 2026-09-22. PR #780 (slice 5, public control-flow and exception-handling rewrite suite) merged into `dev` as `2766de6933d4d60bb632389eff24bc4bfc2313f0` on 2026-09-22. PR #781 (slice 6, public metadata operands and member shapes) merged into `dev` as `dbb4f10aef8201da7e046b428b7a5c4a2e5105c2` on 2026-09-22; GitHub reported `MERGED` with this exact merge commit, and current `origin/dev` resolved to the same SHA before this integration branch was created. PR #782 (the public ECMA-335 integration continuation: topology suite, embedded portable PDB binding, Git-SHA fixture hardening) merged into `dev` as the true merge commit `dc446ab560c7badf1f1518814685b33ccb9c375d` on 2026-09-22 (second parent `a52d239d7c1e3abb32eb6c1d20ba7a466a2508f1`); every PR check passed on that head, including `public-mutation-matrix (windows-latest)` at 118/118 and all three `package-smoke` operating systems. The remaining Task 10 public rewrite suite from #766 and Task 11 remain open.

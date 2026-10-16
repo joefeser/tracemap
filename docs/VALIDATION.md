@@ -1,12 +1,182 @@
 # TraceMap Validation Guide
 
+PR #872 review correction: legacy-webforms/0.13.12 retains the exact selected
+registration hash when declarations share one line; App_Code candidates remain
+Tier3 and assembly registrations remain structurally scoped. This extractor fix
+requires a fresh scan. Path algorithm 1.9 constructs explicit-reference candidates
+from source-call and metadata declarations even without IL rows; existing retained
+witnesses can be requeried, but no IL observations or database terminal are invented.
+Run AppCodeRegistrationMatrixTests, ExplicitVisualBasicContextTests and their
+adjacent legacy/source-metadata suites. VaultExportTests pins canonical projected
+path markers as Tier4 gaps, never navigation; genuinely unsafe artifact paths and
+malformed markers remain rejected. GroupedCompiledPathHandoffTests pins corrected
+persistence wording, exact legacy projection readback and unknown-commit refusal.
+
+The evidence-admission debugging ledger is
+`docs/validation/EVIDENCE_ADMISSION_DEBUGGING_LEDGER.md`. Run
+`HttpEntryBoundaryRegressionTests` before reviewing this branch: it exercises
+event/constructor/direct-control/property/lifecycle body HTTP routes through
+ordinary and bounded readers, with markup-only, NameOf, deferred lambda,
+ByRef, writable/virtual getter and inert lifecycle negatives. Its harness is
+not ASP.NET runtime evidence. Semantic extractor 0.10.4 adds only source-defined
+nonvirtual read-only getter call edges; a fresh scan is required for those edges.
+No framework dispatch or markup-to-handler CallEdge is fabricated.
+The real `samples/http-entry-boundaries` net48 fixture adds signed System.Web
+override identities and MyBase/MyClass negative controls. Path algorithm 1.8
+blocks sibling override candidates immediately after explicit nonvirtual calls;
+ordinary virtual candidate paths remain available. Fresh 0.10.4 source facts
+are needed for dispatchKind; old facts cannot recover that evidence by requery.
+
+Grouped report positive/partial readback: `GroupedCompiledPathHandoffTests`
+checks route presence independently of truncation, including all four
+positive/empty and truncated/non-truncated combinations. HTML explicitly states
+that retained static routes survive incomplete enumeration and terminal tiers
+do not upgrade an entire route. Grouping is still lossless; traversal limits,
+path algorithm, machine-readable schemas and coverage flags are unchanged.
+
+Semantic extractor 0.10.3 fixes explicit-reference member identities when
+Roslyn retargets signature types to a loaded dependency version. The resolved
+metadata token is decoded from the same captured, hash-verified PE reference;
+the DLL's original parameter scopes and versions are preserved. No version
+wildcards, name-only matching, or provenance promotion are introduced. The
+external-wrapper matrix includes an overloaded ByRef method referencing an
+older dependency version, checked through ordinary and bounded readers.
+This extraction fix requires a fresh scan; requerying 0.10.2 facts cannot fix
+their encoded identities. Run the three bridge suites below plus
+`FrameworkSignatureCandidateTests`. Full-suite, pinned OSS and authentic
+Windows/private validation remain separate and are not implied by these tests.
+
+Path algorithm 1.7 preserves explicit-reference witnesses in compact bounded
+CallEdge projection. The external-wrapper matrix must pass through BOTH ordinary
+and bounded combined-index readers; the positive/negative cases assert the
+same reachability outcome. Algorithm 1.6 dropped these properties during bounded
+reading even though the source facts retained them. A requery of an existing
+0.10.2 scan suffices for this reader fix; no new source scan is needed.
+
+Explicit reference member bridge: run `ExplicitVisualBasicContextTests`,
+`SourceMetadataReconciliationTests`, and `CombinedDependencyPathTests`.
+The synthetic external DLL test compiles a wrapper with parameterized command
+text, scans a VB caller with hash-pinned references, persists and combines the
+facts, and checks mixed database paths. Wrong hashes/identities, absent proof,
+duplicate declarations and virtual dispatch must not bridge. Compiled-only
+queries must not use this source-reference candidate. Unbound provenance stays
+unbound. Semantic extractor 0.10.2 and path algorithm 1.6 are required; old facts
+need a fresh scan, not just a requery. The rule is
+`combined.paths.explicit-reference-member.v1`. No original-build equivalence,
+command-value propagation, or runtime database-use claim follows. Full-suite,
+pinned OSS and authentic Windows/private checks remain separate gates.
+
+Retained IL inspection: run `python3 -m unittest discover -s scripts/validation
+-p test_inspect_retained_il_body.py` (on one shell line). The read-only helper
+`scripts/inspect-retained-il-body.py` follows exact source-index-local
+`ilBodyFactId` links and counts `ManagedIlCallObserved`, not source `CallEdge`.
+It verifies call/body file hashes and refuses ambiguous selectors and bounded
+query overflow. Its console-only output is diagnostic, not a new admission
+artifact. Private identities require the explicit `--local-details` flag.
+`IlBodyEvidenceExtractorTests.Unbound_provenance_still_records_operand_aware_bodies`
+also pins that IL calls survive value/command gaps. Neither inspection nor
+analysis alone proves graph admission or database reachability.
+
+Nested projectless VB delegation: the
+`ExplicitVisualBasicContextTests.Syntax_page_reaches_semantic_database_body_only_through_unique_bridge`
+matrix includes a concrete field calling a same-named protected nested method,
+a missing base class, an inherited receiver with a source-visible wrapper,
+and a wrapper-name negative control. It asserts exact Tier1 declaration/call
+identities, real scan/index/combine/path behavior, and that unrelated sibling
+database operations remain unreachable. A custom wrapper name alone is not a
+database operation. These cases pass without an extractor change; they do not
+establish why a private retained call is absent. Use
+`prompts/check-save-nested-call-facts.md` to distinguish extraction, combination,
+identity and traversal evidence in an existing run. Full-suite, pinned OSS and
+authentic Windows/private acceptance remain separate validation gates.
+
+For namespace-only App_Code registration candidates, run
+`AppCodeRegistrationMatrixTests` with `LegacyWebFormsExtractorTests`,
+`VisualBasicWebFormsCompositionTests`, `WebFormsGapFamilyRegressionTests`,
+`MigrationRegressionCorpusTests` and `IntegratedMigrationReportTests`.
+Scan `samples/webforms-pattern-matrix` and `samples/stacked-migration-regression`.
+The 89-case matrix and known exclusions are in
+`docs/validation/MIGRATION_REGRESSION_COVERAGE.md`. Full-solution and authentic
+Windows/private validation remain separate gates; focused passes do not imply them.
+
+Retained semantic/registration diagnostics: run
+`python3 scripts/validation/test_retained_gap_inventory.py`. The tests pin exact
+file-overlap counts without exporting private identifiers or their hashes,
+missing file evidence, closed registration-state labels, deduplication and
+privacy-projected hashing. `prompts/diagnose-semantic-registration-families.md`
+uses the accepted scan without rebuilding or rescanning. Overlap is correlation,
+not a root-cause or deduplicated-defect claim; unknown state remains unavailable.
+
+The reported-shape follow-up extends `WebFormsGapFamilyRegressionTests` with
+implicit With event receivers and VB Page.IsPostBack candidates. Run the adjacent
+VB composition, legacy WebForms, stacked migration and integrated report suites.
+Also run `python3 scripts/validation/test_retained_gap_inventory.py` for the public
+compiled-reason catalog and separate compiled/other-known/unknown-rule totals.
+These counts are gap occurrences, not unique defects or runtime coverage.
+
+Runtime distribution capacity: run `RuntimeInventoryBoundaryTests` plus
+`Runtime_digest_pins_dependency_bytes_without_paths_or_timestamp_discovery` and
+`Retained_tool_copy_matches_the_pinned_distribution_without_rewriting_run_or_copying_external_runtime`.
+All DLL/EXE/SO/dylib/deps/runtimeconfig files, including satellites and nested
+build hosts, remain hashed. The traversal has one 4,096-entry limit counting
+files and directories (including ignored files), not a separate 512-file limit.
+Per-file 256-MiB, aggregate 2-GiB, cancellation and reparse-point guards remain.
+This is bounded distribution provenance, not proof of a minimal dependency set.
+Use a fresh isolated build and new preflight/run after changing the tool; never
+trim runtime files or resume old tool identity to bypass inventory failure.
+
+For the bounded WebForms gap-family batch, run `WebFormsGapFamilyRegressionTests`,
+`VisualBasicWebFormsCompositionTests`, `LegacyWebFormsExtractorTests`,
+`LegacyWebFormsEventIdentityTests`, `MigrationRegressionCorpusTests` and
+`IntegratedMigrationReportTests`. The synthetic matrix pins escaped VB event
+receivers; Boolean literal lifecycle comparisons, negation, shadows and depth;
+config registration inheritance/clear; literal versus dynamic postbacks.
+Use `prompts/validate-webforms-gap-family-batch.md` for one private acceptance.
+No claimed reduction in private gap counts follows from synthetic coverage alone.
+
+For the first backend extraction report projection, run
+`BackendExtractionSampleTests`, `GroupedCompiledPathHandoffTests`,
+`ConstructedGenericSampleTests`, `FrameworkSignatureCandidateTests`,
+`LazyConstructorLoggingTests` and `CompiledTwoHopCutoffTests`.
+See [backend extraction scope and trial instructions](BACKEND_EXTRACTION_INVENTORY.md).
+The synthetic library is scanned, never executed; retained-query coverage is not
+a full-site database/HTTP inventory.
+
+For effective inherited ASP.NET VB imports, run `WebFormsVbImportContextTests`,
+`VisualBasicConfiguredImportsTests`, `FrameworkSignatureCandidateTests`,
+`ScanExecutionReceiptTests`, and the focused
+`Effective_vb_context_is_forwarded_and_resume_rechecks_its_hash` workflow test.
+Run `scripts/tests/Test-WebFormsVbImportsCapture.ps1` under .NET Framework PowerShell
+for the actual mapped-configuration capture boundary. A valid context
+is current-environment observer evidence, not authenticated historical build
+proof. See the effective-import section in
+`docs/validation/framework-signature-candidates.md` for limitations and results.
+
+For mixed desktop framework signature joins, run `FrameworkSignatureCandidateTests`
+and `scripts/tests/Test-WebFormsGraphShare.ps1`. See the
+[candidate matrix](validation/framework-signature-candidates.md) for exact-match
+priority, identity refusals, ambiguity, provenance, dispatch and value-flow gaps.
+Synthetic PE coverage does not replace authentic Windows ASP.NET publishing.
+
+For generated compilation snapshot changes (PR #847), run ScanEngineTests and
+CliTests in Debug with warnings as errors. Exact generated compilation inputs
+receive a post-generation digest (4,096 files / 64 MiB maximum), are included in
+source snapshot identity, and remain verified. obj/bin names only nominate
+capture candidates, as do compiler-observed Hidden/System inputs omitted by
+FileInventory (including custom intermediate directories). Immutable compiler
+checksums are mandatory in each case; other build output remains outside the
+source inventory. Run CSharpFullSnapshotStabilityTests, ExactSourceScopeTests,
+VisualBasic tests and the Git-sensitive WebFormsWizardExecutionTests as well.
+
+
 For the reproducible source + compiled website + separate DLL operator workflow,
 run `./scripts/wlocal.ps1` in PowerShell 7. It builds public fixture projects,
 scans and combines independent inputs, generates reports, and asserts attached,
 separate and missing-provider behavior plus cap/Fill/repeatability boundaries.
 See the [local replay and artifact map](../samples/fixture-build/lazy-constructor/README.md).
-The current gate requires at least 32 local passes, including five operator
-layouts, and separately requires authentic Windows publishing when requested.
+The current gate requires 21 command-return cases, sixteen profile cases, seven getter-return
+cases, seven structured argument cases and five operator layouts (plus the native and
+property corpus checks), and separately requires authentic Windows publishing when requested.
 Historical validation counts below describe their named older heads.
 
 For deep projectless cross-DLL command evidence, run:
@@ -77,6 +247,13 @@ empty repository prefix remains valid. `GitMetadataOutputTests` pins this
 distinction without scheduling-dependent sleeps. A targeted identity fixture
 pass does not replace a new exact-head full regression after a failure.
 
+`LazyConstructorLoggingTests` joins the nonparallel Git-metadata-sensitive
+collection because its selected compiled roots require a real scan commit.
+An early `LAZY_CORPUS_GIT_IDENTITY_UNAVAILABLE` assertion distinguishes failed
+Git identity acquisition from route-resolution failures without fabricating a
+commit. This isolation is not proof that all concurrent production probes
+succeed; the scanner keeps bounded probes and explicit unknown-identity gaps.
+
 For native compiled Web Forms completed-run copies, validate the execution,
 preflight, preparation, input-validation, evidence-query and native-scale suites.
 The 2026-09-28 rebuilt slice passed 201 tests with zero failures/skips in 3 minutes
@@ -100,6 +277,16 @@ private receipt contract, and C++/CLI feasibility inventory are documented in
 does not make the historical corpus a public CI dependency.
 
 ## Required Matrix
+
+For HTTP legacy compatibility, run `OutboundHttpCoverageTests` and
+`OutboundHttpLegacyCoverageTests` plus `scripts/validation/http-coverage-smoke.py`.
+The representative net452/net472 C#/VB matrices are generated from public
+reference metadata, not work-machine contributions. The projectless net472 VB
+Website control must emit a Tier3 `vb.syntax.http-candidate.v1` HTTP candidate,
+retain it through path/inventory reports, and emit `vb.syntax.http-coverage-gap.v1`
+with its partial-coverage message in Markdown; zero HTTP facts is not clean absence.
+Public Windows results must identify the tested commit/run. Private application
+validation and pinned OSS smokes remain separately reported gates.
 
 Every language adapter should have:
 
@@ -187,6 +374,7 @@ Current default behavior:
 
 - checks `git`, `.NET`, `node`, and `npm`
 - builds the .NET solution and TypeScript adapter
+- restores the checked-in .NET sample projects before scanning; the endpoint server uses the real ASP.NET framework reference so the positive path does not depend on an unresolved-attribute fallback
 - scans `samples/modern-sample`
 - scans `samples/endpoint-server-aspnet`
 - scans `samples/typescript-modern-sample`
@@ -4136,3 +4324,561 @@ default logical database ceiling is 512 MiB, including facts and the order roste
 the page cache is 8 MiB. Sorter temporary files are outside that logical ceiling,
 and type-specific semantic indexes remain managed. These checks do not replace representative 8x source and
 compiled-distribution elapsed-time, total-disk and peak-memory measurements.
+
+### Public CLR method-signature equivalence (#767)
+
+The [bounded three-language signature matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md)
+pins overloads, by-reference parameters, method generic arity and array rank
+with independent golden strings and distinct assembly/member endpoints.
+Run the `Clr_signature` filter or the existing `ManagedMetadataExtractorTests`
+filter. The existing portable distribution lane includes these tests. This is
+metadata shape evidence, not source, PDB, IL, rewrite or runtime equivalence.
+
+The optional-parameter continuation uses the `Optional_parameter` filter in
+that same metadata class. It requires independent reader agreement on markers,
+numeric ordering beyond ordinal 9, and sparse setter-only Param-row handling.
+Marker equality does not prove equal default constants or caller behavior.
+
+For the bound C#/VB optional-marker source join, run the
+`FullyQualifiedName~Optional_source_matrix` filter. It covers wide numeric
+ordinals, both source/metadata evidence endpoints, comparator rejection and
+summary bounds. The portable local-distribution lane now includes all
+`SourceMetadataReconciliationTests` alongside `ManagedMetadataExtractorTests`.
+See the [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#bound-source-optional-marker-continuation).
+
+For the nullable/F# option matrix, use
+`FullyQualifiedName~Nullable_option_matrix|FullyQualifiedName~Fsharp_fixture_retains`.
+The fixture pins FSharp.Core 10.1.302 and verifies Nullable, option, value-option
+and F# optional-argument metadata without claiming F# source extraction. See
+[the case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nullable-and-f-option-continuation).
+
+For property/event accessor evidence, run
+`FullyQualifiedName~Property_event_matrix|FullyQualifiedName~Fsharp_fixture_retains`.
+The public C#/VB/F# matrix uses metadata semantics handles to check accessor
+endpoints and rejects name-only associations. See the
+[case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#propertyevent-accessor-continuation).
+
+### Public generic-constraint matrix (#767)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Generic_constraint_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The oracle distinguishes raw constraint flags/rows from normalized method
+signatures and keeps F# source unsupported. See the CLR matrix for limitations.
+
+### Public default-value matrix (#767)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Default_value_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+Constant rows, null defaults and decimal attributes remain distinct from method
+signatures and optional markers. See the CLR matrix for coverage limitations.
+
+### Public explicit-interface matrix (#767)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Explicit_interface_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+Raw MethodImpl tokens bind fixture declarations and implementing methods; an
+ordinary same-signature method cannot substitute. No runtime dispatch is claimed.
+
+
+### Operator and conversion metadata/source matrix
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Operator_matrix|FullyQualifiedName~Operator_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#operator-and-conversion-continuation)
+pins independent raw metadata oracles, assembly-scoped signatures, source joins,
+per-input provenance, ambiguous/malformed/limited inputs and deterministic repeat
+output. F# source extraction and runtime conversion behavior are not claimed.
+
+
+### Module and currying metadata/source matrix
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Module_matrix|FullyQualifiedName~Module_source_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror`.
+The [case matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#module-and-currying-continuation)
+pins static method identities separately from VB module attributes and F#
+argument-group metadata. Source aliases, runtime calling semantics and F# source
+extraction are not inferred from signature equality.
+
+The module oracle independently decodes CompilationSourceName aliases with SRM
+and Cecil; these names do not prove physical source ownership. Shared source
+matrix oracles pin declaration identities and exact fixture spans for modules,
+operators and optional parameters, with deliberately self-consistent wrong-source
+substitutions rejected. Fixture paths follow the running test assembly configuration.
+Run the source reconciliation suite in Release with `-c Release --no-build
+--no-restore` after a Release build; temporarily make this worktree's three compiled
+fixture `bin/Debug` directories unavailable to prove independence from Debug output,
+then restore those directories.
+
+### Record-generated member matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Record_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [record matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#record-generated-member-continuation)
+pins raw MethodDef signatures and generated markers for C#/F# records versus
+ordinary VB lookalikes. Equal CLR signatures do not prove record or runtime
+semantics. SRM and Cecil independently inspect public binaries without executing
+them. Duplicate, malformed and bounded inputs retain gaps; bound F# source scans
+retain unsupported-source coverage. Run the surrounding compiled suite, full .NET
+suite and repeat CLI artifact validation. Non-.NET local suites and source OSS
+smokes may be explicitly deferred for this fixture/test-only slice; adapter CI
+remains required.
+
+### Union-factory metadata matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Union_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [union-factory matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#union-factory-continuation)
+checks exact self-return signatures and F# type/case mapping against ordinary
+C#/VB lookalikes. SRM and Cecil are independent oracles; Cecil's test-only enum
+resolver admits only the fixture's pinned FSharp.Core restore asset, with explicit
+rejection tests for other identities. Repeat CLI artifacts must validate and be
+byte-identical. Run the surrounding compiled suite locally and require full .NET
+and cross-platform CI before delivery. Full local .NET duplication, non-.NET local
+suites and pinned source OSS smokes are explicitly deferred for this fixture/test-only
+slice. No runtime union or F# source-extraction coverage is inferred.
+
+### Quotation/expression-tree metadata matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~Quotation_matrix|FullyQualifiedName~Fsharp_fixture_retains' -warnaserror
+```
+
+The [quotation matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#quotation-and-expression-tree-continuation)
+pins raw SRM and independent Cecil signatures for expression trees, typed F#
+quotations and delegates, including nested generic arguments and assembly scopes.
+Run the surrounding metadata/source/PDB/IL/rewrite suite, repeated public CLI
+scans and artifact/privacy/spec guards. Require full exact-head .NET and public
+adapter CI; duplicate full local .NET, non-.NET local suites and pinned source
+OSS smokes may be explicitly deferred for this fixture/test-only slice.
+No fixture method is executed; tree contents and runtime semantics are untested.
+
+### C#/VB receiver call-site matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Receiver_matrix -warnaserror
+```
+
+The [receiver matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#receiver-call-site-continuation)
+pins C# base/virtual and VB Me/MyBase/MyClass encoded calls with independent SRM
+and Cecil oracles. It verifies original body/call links, operand-aware identity,
+per-input duplicate evidence, invalid call-token refusal, work limits and repeats.
+Never execute the mutated DLL. Run the surrounding compiled-evidence suite and
+repeat a public CLI scan with `--il-body-evidence`, validating emitted artifacts.
+Require full final-head .NET and public adapter CI. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes are explicitly deferred for
+this fixture/test-only slice. Private Windows and runtime dispatch remain untested.
+
+### C#/VB nested generic ownership matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Nested_matrix -warnaserror
+```
+
+The [nested generic matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nested-generic-ownership-continuation)
+pins GenericParam ownership/ordinals, VAR versus MVAR, inherited outer parameters,
+constructed argument order and assembly scopes using raw SRM and independent
+Cecil. Run the surrounding metadata/source/PDB/IL/rewrite suite, repeated public
+CLI scans and artifact/privacy/spec guards. Require full final-head .NET and
+public cross-platform CI. Duplicate full local .NET, non-.NET local suites and
+pinned source OSS smokes are explicitly deferred for this fixture/test-only slice.
+Neither fixture methods nor malformed bytes are executed; source ownership,
+F# nested types, runtime behavior and private Windows acceptance remain unproven.
+
+### C#/VB async and iterator PDB matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~State_machine_matrix -warnaserror
+```
+
+The [state-machine matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#async-and-iterator-pdb-continuation)
+uses SRM's kickoff table and Cecil's independently read symbols/compiler attributes
+to pin four generated methods and all their sequence points. Missing/duplicate
+metadata rows must refuse joins; truncated PDB and sequence-point limits remain
+explicit gaps. Run the surrounding compiled-evidence suite and repeat a public
+CLI scan; validate emitted artifacts. The focused tests repeat bound PDB scans
+and compare facts/provenance exactly. Require full final-head .NET and public
+cross-platform CI. Duplicate full local .NET, non-.NET local suites and pinned
+source OSS smokes are explicitly deferred for this fixture/test-only slice.
+Do not execute fixture methods or malformed bytes. Private Windows, F# state
+machines, runtime behavior and rewritten IL remain separate acceptance gaps.
+
+### C#/VB/F# event wiring matrix
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Event_wiring_matrix -warnaserror
+```
+
+The [event wiring matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#withevents-and-handles-wiring-continuation)
+pins property/event accessor handles, exact remove/add call operands and handler
+ldftn operands through independent SRM/framework-opcode and Cecil readers. F#
+uses a cached delegate: its constructor targets a generated helper, whose body
+references OnTick; the setter loads the same field at both sites. The
+method-pointer observations do not imply handler execution. Run the surrounding
+compiled-evidence suite, repeated public CLI scans with `--il-body-evidence`,
+artifact validation and privacy/spec guards. Require full final-head .NET and
+public cross-platform CI. Duplicate full local .NET, non-.NET local suites and
+pinned source OSS smokes are explicitly deferred for this fixture/test-only slice.
+No fixture/malformed DLL execution; source/PDB/rewrite/runtime and private Windows
+acceptance remain separate.
+
+### Collection indexer and conversion matrix (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Collection_matrix -warnaserror
+```
+
+This filter checks all three public languages: exact ArrayList/List<Object>
+signatures and scopes, original get_Item operands, C#/F# unboxing versus VB
+conversion-helper calls, independent SRM/opcode/Cecil readers, full per-fact
+provenance, identical-opcode/different-body-hash counterexamples, duplicate-input
+ambiguity, wrong-table operands, bounded work and deterministic repeats. No test
+executes fixture/malformed binaries or claims runtime conversion equivalence.
+
+Run the surrounding metadata/source-reconciliation/PDB/IL/rewrite tests and two
+public CLI scans with all three assemblies and `--il-body-evidence`; validate
+artifacts and compare facts/report bytes. Run artifact-validator tests and
+privacy/spec guards. Require full final-head .NET and public cross-platform CI.
+Duplicate full local .NET, non-.NET local suites and pinned source OSS smokes
+are explicitly deferred for this fixture/test-only slice. F# source extraction,
+private corpus receipts, isolated Windows/MSVC and broad epic acceptance remain
+separate gaps, not satisfied by public CI.
+
+### VB late-bound source and compiled helper matrix (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Late_binding_matrix
+```
+
+Five cases independently pin raw helper signatures/scopes, ldstr versus method
+operands, source gap spans/tiers and the typed direct-call control. A string-only
+mutation changes canonical body identity without inventing a runtime target;
+duplicate inputs, malformed helper tokens, bounded work and repeats stay explicit.
+Do not execute fixture or mutated DLLs. Source-to-binary binding, PDB, rewrite,
+runtime overload selection and other late-binding helpers remain separate gaps.
+
+Run the surrounding metadata/source-reconciliation/PDB/IL/rewrite suite plus
+VisualBasicExtractionTests. Repeat a public CLI scan of the VB fixture source
+with its assembly and `--il-body-evidence`; validate artifacts and compare
+facts/report bytes. Run artifact-validator tests and privacy/spec guards.
+Require full final-head .NET and public cross-platform CI. Duplicate full local
+.NET, non-.NET local suites and pinned source OSS smokes are explicitly deferred
+for this fixture/test-only change. Public CI cannot satisfy private Windows
+corpus/MSVC receipts or broad epic acceptance.
+
+### C# ref-like signature matrix (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Ref_like_matrix
+```
+
+Six cases pin Span/ReadOnlySpan constructions, mutable/readonly by-reference
+signatures and required/optional/absent modifier counterexamples through raw SRM
+and Cecil oracles. Include exact single/combined provenance, duplicate identities,
+truncated PE, member limits and reverse-input repeats. Inspect synthetic mutations
+as data only; no runtime lifetime, source/PDB or rewritten-IL equivalence claim.
+
+Run the surrounding metadata/source-reconciliation/PDB/IL/rewrite suite, two
+validated public CLI scans with the C# fixture assembly, and compare facts/report
+bytes. Run artifact-validator tests plus privacy/spec guards. Require full
+final-head .NET and public cross-platform CI. Duplicate full local .NET,
+non-.NET local suites and pinned source OSS smokes are explicitly deferred for
+this fixture/test-only slice. Public CI does not satisfy private Windows/MSVC
+corpus receipts or broad epic acceptance.
+
+
+### VB imports and source-to-metadata identity (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_matrix
+```
+
+Six cases check project imports, file aliases and SDK defaults using independent
+raw SRM/Cecil metadata and hand-authored full source/metadata identities. Check
+exact spans/provenance, same-name substitution, unbound input, duplicate candidates,
+truncated PE, member limits and deterministic repeats. Do not execute fixture or
+malformed DLLs. Test binding receipts are public test attestations, not independent
+build-authenticity evidence.
+
+Run surrounding metadata/source-reconciliation/PDB/IL/rewrite tests plus
+VisualBasicExtractionTests. Repeat a public VB CLI scan with its compiled assembly
+and an explicit test binding receipt; validate artifacts, three exact joins and
+identical facts/report bytes. Run artifact-validator tests and privacy/spec guards.
+Require full final-head .NET and public cross-platform CI. Duplicate full local
+.NET, non-.NET local suites and pinned source OSS smokes are explicitly deferred
+for this fixture/test-only slice. Compiler import conflicts, configuration variants,
+F# source, private Windows/MSVC receipts and broad epic acceptance remain open.
+
+
+### VB import conflict refusal (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Import_conflict_matrix
+```
+
+Five cases use committed temporary copies of the public VB fixture, including
+three intentionally invalid source variants. An independent Roslyn emit oracle
+must fail with the expected diagnostic/error type; raw SRM verifies the valid
+compiled control. Assert reduced source coverage, exact incomplete identities
+and no affected join, retained compiled facts and an unaffected source control,
+qualified positive/member-limit refusal, full applicable provenance and repeats.
+The malformed alias has an unnamed error type. Never execute fixture binaries.
+
+Run surrounding metadata/source/PDB/IL/rewrite tests plus VisualBasicExtractionTests,
+two validated public CLI scans of the ambiguous-import variant with an explicit
+test binding receipt, and artifact/privacy/spec guards. Require identical facts/
+report bytes and explicit failed source coverage. Test receipts do not prove build
+authenticity. Full final-head .NET/public cross-platform CI is required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes are explicitly
+deferred for this test-only slice. Private Windows/MSVC and broad epic acceptance
+remain separate gaps.
+
+
+### VB overload ambiguity and strictness (#767)
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Overload_matrix
+```
+
+Six cases cover exact String/Uri source and compiled targets, ambiguous Nothing
+under Option Strict On/Off, wrong-table call operands and bounded IL work. The
+independent Roslyn emit oracle records failed compilation and both candidates;
+SRM/framework-opcode/Cecil readers pin original signatures/tokens and call
+operands. Same-opcode callers have different body hashes. Assert source spans,
+full applicable provenance, reduced source coverage and bounded gaps. A retained
+valid binary cannot resolve invalid source. Never execute fixture/mutated DLLs.
+
+Run surrounding metadata/source/PDB/IL/rewrite tests plus VisualBasicExtractionTests,
+two validated public VB CLI scans with its assembly and --il-body-evidence, compare
+facts/report bytes and the two distinct source/IL targets, and run artifact/privacy/
+spec guards. Full final-head .NET/public cross-platform CI is required. Duplicate
+full local .NET, non-.NET local suites and pinned source OSS smokes are explicitly
+deferred for this fixture/test-only slice. Unbound binary input, framework/workspace
+gaps, private Windows/MSVC and broad epic acceptance remain explicit limitations.
+
+### VB narrowing and Option Strict (#767)
+
+```sh
+dotnet restore src/dotnet/TraceMap.sln --locked-mode
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -warnaserror --filter FullyQualifiedName~Narrowing_matrix
+dotnet test src/dotnet/TraceMap.sln --no-restore -warnaserror
+```
+
+Seven cases cover implicit/explicit Long-to-Integer conversion under Strict
+On/Off, an Integer control, duplicate ambiguity, truncated PE and IL work limits.
+Independent Roslyn classification/emit and raw SRM/framework-opcode/Cecil readers
+pin acceptance versus BC30512 refusal, exact source/metadata/call identities and
+checked `conv.ovf.i4` instructions. Assert full applicable provenance, syntax-only
+fallback/reduced source coverage, unbound binary separation and deterministic
+repeats. No fixture or malformed DLL is executed.
+
+Repeat public VB CLI scans with its compiled assembly and `--il-body-evidence`;
+validate artifacts, exact NarrowingMatrix source and IL targets, and identical
+facts/report bytes. Run artifact-validator tests, privacy/spec and whitespace
+guards. Full local solution and final-head public CI are required. Non-.NET local
+suites and pinned source OSS smoke reruns are explicitly deferred for this
+fixture/test-only slice. The gated Windows deep-corpus test remains a documented
+local skip; public Windows CI is not private Windows/MSVC acceptance.
+
+### Duplicate narrowing IL retention (#767, follow-up to #844)
+
+Use the narrowing focused command and full local solution command above. The
+seven-case matrix now requires both narrowing/control bodies and calls for each
+of two input locators; sixteen missing/misattributed-fact counterexamples must
+fail its assertions. Reversed compiled-input order must preserve facts and IL
+provenance. Existing compiler refusal, malformed PE and work-limit cases remain.
+
+CLI smoke: scan the public VB fixture with its original assembly and a temporary
+byte-identical copy, then reverse the two `--compiled-input` arguments. Validate
+both outputs, both per-input NarrowingMatrix bodies/calls, ambiguity gaps, no
+source reconciliation, and identical facts/report bytes. Run artifact-validator,
+privacy/spec/whitespace guards and final-head public CI. Non-.NET local and pinned
+source OSS smokes are deferred for this assertion-only change. The gated Windows
+deep-corpus local skip and private Windows/MSVC acceptance remain explicit gaps.
+
+## Opt-in build-output dependencies
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~DepsJsonEvidenceTests`
+in standard Debug configuration, followed by the full Debug suite. The suite
+checks SDK-shaped direct/transitive graphs, project exclusion, ambiguous graphs,
+duplicate/malformed input, bounds, file/target grouping, CLI opt-in, source
+snapshot independence and a bounded synthetic build during a scan.
+
+Smoke: `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/deps-json-evidence --out <outside-output> --index-deps-json`.
+The flag reads existing build outputs without building; freshness and build commit
+remain unknown. See [the public fixture and evidence contract](../samples/deps-json-evidence/README.md).
+
+## Opt-in CI workflow producer evidence
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter FullyQualifiedName~CiWorkflowProducerEvidenceTests`
+in standard Debug configuration, followed by the full Debug suite, plus
+`--filter FullyQualifiedName~ScanExecutionReceiptTests` for the scan-conditions
+fingerprint binding. The suite checks pure-CI producers, project+CI override
+coexistence, env-templated versions (resolvable and unresolvable), flag-off
+output invariance, duplicate-key collapse/conflict, unparseable/unsupported
+YAML, deep-layout exclusion, resource caps, exclusions/links/output boundary,
+CLI opt-in, coverage reduction, inventory invariance and the pinned
+upgrade-authority fact shape.
+
+Smoke: `dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/ci-workflow-producers --out <outside-output> --index-ci-producers`.
+The flag reads `.github/workflows/*.yml|*.yaml` at exactly that depth without
+building; see [the public fixture and evidence contract](../samples/ci-workflow-producers/README.md).
+
+Independent PR #851 regression coverage also pins inner-env shadowing, opaque
+effective scopes, heredoc/multiline shell data rejection, commands following
+`&&`/`||`, linked `.github` parents, empty property overrides, intact dedupe
+evidence spans, successful-fact provenance fields and project-fallback input
+hashes. These are static definition checks, not workflow execution proof.
+
+Discovery regressions must prove lazy enumeration stops at the candidate/entry
+bound, overflow produces one deterministic gap and no rows, and embedded quoted
+or escaped shell operators cannot truncate an unsafe PackageId into a safe one.
+
+
+## Outbound HTTP coverage follow-up (#861)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter
+FullyQualifiedName~OutboundHttpCoverageTests -warnaserror` and the surrounding
+IntegrationExtractor, VisualBasicExternalBoundary, BackendExtractionSample and
+GroupedCompiledPathHandoff tests, followed by the full .NET solution suite.
+The [public matrix](../samples/outbound-http-coverage/README.md) compiles 166
+net10.0 overloads per language. Native CLI scans of both projects must retain
+semantic callsites and their report projections. Separately scan projectless copies
+and empty source roots with compiled DLL inputs plus `--il-body-evidence`.
+Validate artifacts and compare repeated facts/report output. Never execute fixture
+methods or make network calls. net48/other-framework overload parity, pinned OSS
+source smokes, non-.NET adapters, private Windows acceptance and runtime behavior
+are explicitly deferred for this bounded C#/VB API slice; no broad language-adapter
+or full migration acceptance follows from this fixture.
+
+Legacy HTTP compatibility: use [the public reference matrix](../samples/outbound-http-coverage/LEGACY-COMPATIBILITY.md) and its per-TFM overload inventories. Record application project TFM, TargetFrameworkAttribute and exact referenced assembly/member identities separately. System 2.0.0.0 does not identify an application's TFM. Missing TFM stays unknown. Package-added/backported APIs, other profiles and private application parity remain unvalidated. Run the public static-only smoke with `python3 scripts/validation/http-coverage-smoke.py --output <public-temporary-output>`; Windows CI results must bind an actual run and commit. Never execute fixture methods.
+
+The legacy HTTP fixture TFMs are **representative test targets, not confirmed application targets**. Application-specific compatibility is **pending work-machine validation**, a deferred check that does not block this public branch. Use [InspectHttpFramework](../scripts/diagnostics/InspectHttpFramework/README.md) for read-only XML/metadata collection and its [sanitized return template](../scripts/diagnostics/InspectHttpFramework/SANITIZED-SUMMARY.md). Keep project/config declarations, binary attributes and encoded reference signatures separate; no value wins automatically. Keep the local report, private input hashes, paths and artifacts on the work machine. Public guards: `python3 scripts/validation/test_http_framework_inspection.py`.
+
+## SQL/database migration matrix (#864)
+
+The durable [migration regression corpus](../samples/migration-regression-corpus/README.md)
+maps the parameter, text, event-anchor and integrated-chain fixes to checked-in
+synthetic samples and positive/negative tests. Run `MigrationRegressionCorpusTests`
+alongside `ProjectlessParameterCandidateTests` and `IntegratedMigrationReportTests`.
+The latter includes an unrelated deep event graph that must not starve a known
+operation's reverse caller search. Native scans run in tests; no fixture method,
+SQL statement or HTTP request is executed. Windows compatibility CI runs the corpus.
+
+Integrated source migration acceptance: run `IntegratedMigrationReportTests`
+against `samples/migration-vertical-slice`. The public projectless VB page and
+user-control boundaries traverse an explicit backend wrapper to SQL and outbound
+HTTP; an unconnected SQL operation remains visible. Tests check ordered evidence,
+parameter grouping, broken-edge/binding negatives and deterministic fact ordering.
+Run alongside compiled `SqlWrapperRouteTests`, WebForms composition/event identity,
+and outbound HTTP tests. The report does not join historical compiled reports to
+source paths or infer deployed routes. Use
+`prompts/accept-integrated-migration-report.md` for one private focused acceptance,
+not repeated field-by-field scan requests.
+
+The same tests also scan a synthetic VB UserControl with a `Handles` button
+binding, an implicit same-class helper call and `WebClient.UploadString`. Its
+entry anchor must remain Tier3 syntax evidence, not a handler-resolution fact or
+deployed route. Missing type/call evidence, ambiguous method ownership and
+unrelated bindings must leave the operation unconnected. The full-chain test also
+runs with an unavailable external base and a Windows Forms base: the event chain
+remains visible but neither is classified as a WebForms boundary. Framework
+ancestry assessment is separate from event-chain connectivity, never inferred
+from a short base name, and no DLL or application method is executed.
+
+`VisualBasicSyntaxTypeLookupTests` compares the cached resolver against its prior
+algorithm, pins root isolation/concurrent reads and repeated immutable-result reuse,
+and prints a lookup-only synthetic timing (2000 creations, 20 imports, 500 lookups).
+No wall-clock assertion is used. This is not a private whole-scan speed claim.
+
+Run `ProjectlessParameterCandidateTests` for VB SqlParameter constructor
+syntax witnesses: qualification/import/alias positives, shadows and unrelated
+types, hashed names, dynamic/named argument unknowns and report references.
+These independent construction candidates do not establish command attachment
+or wrapper argument propagation. They are not procedure parameter contracts.
+
+The separate compiled-caller/wrapper acceptance suite is `SqlWrapperRouteTests`.
+Run `python3 scripts/validation/test_sql_wrapper_report.py` for local report
+failure/bounds/provenance guards. The helper consumes an existing closed index
+and exact caller selectors; it does not execute application methods or SQL.
+See `prompts/produce-sql-wrapper-inventory.md` for the SQL-only work-machine
+workflow and explicit missing-input/partial-coverage delivery requirements.
+
+Projectless correction: also run `ProjectlessSqlReportingTests` and
+`MarkdownReportWriterTests`. Independently authored fixtures cover imported
+relative qualification, unrelated same-named types, alias/shadow refusal,
+Open/Close negatives, empty and capped report output, and separate website /
+wrapper-source / admitted-wrapper-IL inputs. No fixture method executes. Source
+arguments are not propagated into a resolved procedure/SQL contract. macOS can
+compile the net472 reference fixture; an exact-head Windows run remains a
+separate platform validation gate, not implicit in a cross-platform build.
+
+Use [the SQL matrix](validation/SQL_DATABASE_MATRIX.md) and public samples under
+samples/sql-database-matrix. Run SqlDatabaseMatrixTests and DatabaseCommandStateTests,
+then adjacent VisualBasicExternalBoundary, IntegrationExtractor, BackendExtractionSample,
+GroupedCompiledPathHandoff and compiled-path regressions. Run the independent oracle
+mutation guards and sql-coverage-smoke.py for 96 native scan outputs across eight
+TFMs, both languages and three modes, with deterministic repeats and artifact validation.
+Require an observed public Windows SQL database compatibility CI receipt at the exact
+code head. Compile/scan only; never execute fixture methods or connect to databases.
+Other providers, full-index migration discovery, private contract capture and private
+application compatibility remain separate, explicitly partial/unavailable checks.
+
+## Compiled-baseline prewalk scope (#852)
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~CompiledBaselinePrewalkTests|FullyQualifiedName~Deep_projectless_handler_crosses'`
+in standard Debug configuration, followed by the full Debug suite. The lanes
+pin: compiled-only depth truncation never emits source-bridge witnesses (all
+witness edges pass the compiled-baseline predicate); a compiled-legal IL
+terminal beyond the depth bound is recovered as a scope-legal
+TerminalReachabilityPrewalk witness; mixed-query depth recovery is unchanged;
+and the twelve-layer deep-projectless chain recovers the identical
+scope-legal witness at depth 8 that ordinary enumeration finds at depth 24.
+
+## VB compilation-context regression gate
+
+See [the executable coverage matrix](validation/VB_COMPILATION_CONTEXT_MATRIX.md)
+and `.github/workflows/vb-compilation-context-matrix.yml` for the bounded,
+cross-platform projectless/semantic/import/registration/path gate. It does not
+replace private compatibility checks. The opt-in explicit-input semantic path and
+its separate successful/refused binding tests are documented in
+[EXPLICIT_VB_CONTEXT.md](validation/EXPLICIT_VB_CONTEXT.md).
+
+## Runtime-floor evidence for pre-4.0 assemblies (#853)
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~Runtime_floor_derivation|FullyQualifiedName~Legacy_reference_overloads_preserve_identity'`
+in standard Debug configuration, followed by the full Debug suite. The lanes
+pin: the derivation unit matrix (attribute basis including the
+present-but-empty case, clr-1.x/2.x/4.x mscorlib bases with 3.5-still-2.x
+and Silverlight-indistinguishable cases, duplicate-reference conflicts,
+netstandard contract family, facade-ambiguous bare System.Runtime,
+precedence, unresolved for unknown majors/reference-free assemblies) and the
+real-binary integration across the SQL-matrix net20–net48 fixtures, where
+net20/net35 assemblies carry no TargetFrameworkAttribute and resolve
+clr-2.x from their mscorlib 2.0.0.0 reference while net40+ resolve the
+attribute basis. Runtime-floor properties ride the existing
+ManagedAssemblyDeclared fact; no new fact type or schema change.
+
+## dotnetperf oracle import (#856 stage 1)
+
+`samples/dotnetperf-rewriter/` is a vendor import at pinned SHA `db8c3359`
+minus the documented exclusions (see its `PROVENANCE.md` for origin, authors,
+superseded EULA, exclusions, and the co-author's written Apache-2.0 release
+authorization). Import-time verification: no `.snk`/`.pfx` files and no secret
+patterns (license strings, invoice-URL passwords, storage-account keys —
+`Documentation/azure.txt` caught by GitHub push protection — or the
+PostSharp license key in `src/PostSharp.Custom.targets`, caught by review)
+survive in the committed tree. Committed corpus size (self-verifying):
+`git ls-tree -r --name-only HEAD -- samples/dotnetperf-rewriter | wc -l` = 408
+= 405 vendored + `PROVENANCE.md` + `CORPUS-SHA256.txt` + `verify_corpus.py`.
+The manifest pins exactly the vendored bytes (metadata sits outside the pin);
+`python3 samples/dotnetperf-rewriter/verify_corpus.py` verifies from committed
+git objects (line-ending-proof) or `--worktree` from tracked files. Excluded as outside the co-author authorization: the
+third-party ECMA-335.pdf, the `src/.nuget/` bootstrap binary, and the
+FED-derived `Reflector.cs` (a header-attribution sweep found no other
+foreign-origin source); the Errata recordings are owner-confirmed
+first-party; in-file author notices are retained per Apache-2.0 §4; 17 junk-class files at the pin —
+SourceSafe bindings and test `.pdb`s — are excluded by this repository's
+ignore rules, as documented in the provenance). The private git
+history stays in the private staging repo — a history scan recorded on the
+issue found keys and license material that make history unpublishable. Wiring
+the instrumenter/validator/goldens into `IlRewriteEvidenceExtractor` coverage
+is the follow-up stage on the issue.

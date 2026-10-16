@@ -5,6 +5,22 @@ namespace TraceMap.Tests;
 
 public sealed class ExactSourceScopeTests
 {
+    [Theory]
+    [InlineData("cs", "public class Sample {}")]
+    [InlineData("vb", "Public Class Sample\nEnd Class")]
+    public void Exact_scope_preserves_generated_compiler_snapshot_without_expanding_source_membership(string extension, string source)
+    {
+        using var temp = new TempDirectory();
+        var project = "Sample." + extension + "proj";
+        var file = "Sample." + extension;
+        File.WriteAllText(Path.Combine(temp.Path, project), "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup></Project>");
+        File.WriteAllText(Path.Combine(temp.Path, file), source);
+        var scan = ScanEngine.Scan(Options(temp.Path, [project, file]) with { Restore = true });
+        Assert.Equal("Succeeded", scan.Manifest.BuildStatus);
+        Assert.Equal(2, scan.Inventory.Count);
+        Assert.Contains(scan.SourceSnapshotInventory!, item => item.RelativePath.StartsWith("obj/", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Complete_literal_selection_is_admitted()
     {

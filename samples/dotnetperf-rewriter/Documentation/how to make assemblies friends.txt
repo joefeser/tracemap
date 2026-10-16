@@ -1,0 +1,42 @@
+In sum, apply the "InternalsVisibleTo" attribute to the assembly. The attribute makes the internal classes
+(not the private ones) of an assembly visible to the assembly specified by the "InternalsVisibleTo" attribute.
+
+If the source assembly is strong-name signed, then the target assembly must be strong-name signed as well.
+
+So, how to make the internal classes of a strong-name signed assembly visible to another strong-name signed assembly?
+
+1) make sure both assemblies are strong-name signed first. Open the properties page for each assembly, and
+under the "Signing" tab make sure "Sign the assembly" is checked. If it isn't, then link the NetPerfKey.snk
+in the root folder into the project (right-click on the project in the SolutionExplorer, select
+Add --> New Existing, find NetPerf.snk, DON'T CLICK THE ADD BUTTON, but click the downward arrow next to it
+and select "Add as Link"). Once NetPerf.snk is linked into the project, you can choose it from the
+combobox on the "Signing" tab.
+
+2) Get the public key of the target assembly. To do this, compile the assembly (after it's been strong-name
+signed) and then open a command prompt, navigate to the assembly's output folder, and run the following
+
+sn -Tp <assembly filename>
+
+you should see output similar to the following
+
+Public key is
+002400000480000094000000060200000024000052534131000400000100010003cce03debec34
+b335524e3d69191caad8fa488fd4543e5a5879bd19dc90d784b572e34f198926f0d42297b0e3b0
+cc9f1107d09e9b41208ce5a056d58322409426eff75d830347ce32ca1b01922b3f313d84bbac04
+4c33de89c1af39f6a2aef7da023edb2080748ae486840b1797059760c7c817cbacfd603569d589
+7e34ecb1
+
+Public key token is bcf36b4d29e79446
+
+2) Open the AssemblyInfo.cs file in the source assembly and add the "InternalsVisibleTo" attribute.
+It should end up looking something like this (using the public key above)
+
+[assembly: InternalsVisibleTo("NetPerf.Common.UnitTests, PublicKey="
+    + "002400000480000094000000060200000024000052534131000400000100010003cce03debec34"
+    + "b335524e3d69191caad8fa488fd4543e5a5879bd19dc90d784b572e34f198926f0d42297b0e3b0"
+    + "cc9f1107d09e9b41208ce5a056d58322409426eff75d830347ce32ca1b01922b3f313d84bbac04"
+    + "4c33de89c1af39f6a2aef7da023edb2080748ae486840b1797059760c7c817cbacfd603569d589"
+    + "7e34ecb1")]
+
+
+3) Finally, save and compile the solutuon, then check in your changes.

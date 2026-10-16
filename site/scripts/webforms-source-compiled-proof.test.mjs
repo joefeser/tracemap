@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +27,31 @@ test("Web Forms proof generator reproduces the checked-in asset", async (t) => {
   const expected = JSON.parse(await readFile(join(root, "src", "assets", "webforms-source-compiled-proof.json"), "utf8"));
   const actual = JSON.parse(await readFile(generated, "utf8"));
   assert.deepEqual(actual, expected);
+});
+
+
+test("proof generator exact bytes survive an autocrlf checkout", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "tracemap-proof-checkout-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const relative = "site/scripts/generate-webforms-source-compiled-proof.mjs";
+  const original = await readFile(resolve(siteRoot, "..", relative));
+  await mkdir(join(root, "site", "scripts"), { recursive: true });
+  await writeFile(join(root, relative), original);
+  await cp(resolve(siteRoot, "..", ".gitattributes"), join(root, ".gitattributes"));
+  const git = (...args) => execFileSync("git", args, { cwd: root, stdio: "pipe" });
+  git("init", "--quiet");
+  git("config", "core.autocrlf", "true");
+  git("add", ".gitattributes", relative);
+  await rm(join(root, relative));
+  git("checkout-index", "--force", "--all");
+  assert.deepEqual(await readFile(join(root, relative)), original);
+
+  // Without the policy, the same Git checkout changes the hashed raw bytes.
+  await writeFile(join(root, ".gitattributes"), "");
+  git("add", ".gitattributes");
+  await rm(join(root, relative));
+  git("checkout-index", "--force", "--all");
+  assert.notDeepEqual(await readFile(join(root, relative)), original);
 });
 
 test("Web Forms proof rejects tier flattening, protected fields, and raw SQL", async (t) => {

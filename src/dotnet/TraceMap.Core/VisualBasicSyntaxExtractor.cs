@@ -11,7 +11,7 @@ namespace TraceMap.Core;
 // with text names only (never compiler-resolved targets, never symbol-ID
 // joins), one Tier4 gap per fallback file, bounded deterministic parse
 // diagnostics, and a deterministic per-file fact budget.
-public static class VisualBasicSyntaxExtractor
+public static partial class VisualBasicSyntaxExtractor
 {
     private const int MaxFactsPerFile = 5000;
     private const int MaxParseDiagnosticGapsPerFile = 20;
@@ -21,10 +21,34 @@ public static class VisualBasicSyntaxExtractor
         ScanManifest manifest,
         IEnumerable<FileInventoryItem> inventory,
         IReadOnlySet<string>? semanticallyAnalyzedFiles,
-        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null)
+        IReadOnlyList<ProtectedSourceSpan>? protectedSourceSpans = null,
+        string? webFormsVbImportContextPath = null)
     {
         var facts = new List<CodeFact>();
-        foreach (var file in inventory
+        var files = inventory.ToArray();
+        var configuredImports = VisualBasicConfiguredImports.Read(repoPath, files);
+        WebFormsVbImportContext? effectiveImports = null;
+        if (!string.IsNullOrWhiteSpace(webFormsVbImportContextPath))
+        {
+            try { effectiveImports = WebFormsVbImportContext.Read(repoPath, manifest.CommitSha, webFormsVbImportContextPath, files); }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException
+                or InvalidOperationException or KeyNotFoundException or ArgumentException)
+            {
+                var rejected = ex as ImportContextRejectedException;
+                facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.VisualBasicSyntaxDeclarations,
+                    EvidenceTiers.Tier4Unknown, new EvidenceSpan(".", 1, 1, null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
+                    properties: new Dictionary<string, string>
+                    {
+                        ["gapKind"] = "WebFormsVbImportContextRejected",
+                        ["receiptSha256"] = rejected?.ReceiptSha256 ?? "unavailable",
+                        ["inspectedScope"] = rejected?.Scope ?? "receipt",
+                        ["rejectionCategory"] = rejected?.Category ?? "unavailable",
+                        ["spanKind"] = "scan-level-external-receipt-no-source-span",
+                        ["message"] = "Effective VB import context is invalid, stale, unavailable or outside its bounded source scope; no context imports were admitted."
+                    }));
+            }
+        }
+        foreach (var file in files
             .Where(item => FileInventory.IsVisualBasicKind(item.Kind))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
@@ -88,8 +112,58 @@ public static class VisualBasicSyntaxExtractor
                 .ToArray() ?? [];
             var budget = new FactBudget(MaxFactsPerFile);
             facts.Add(CreateSemanticUnavailableGap(manifest, file.RelativePath));
+            facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.VisualBasicHttpCoverageGap,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan(file.RelativePath, 1, 1, null, "VisualBasicSyntaxExtractor", ScannerVersions.VisualBasicSyntaxExtractor),
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = "VisualBasicHttpAnalysisPartialWithoutSemantics",
+                    ["coverageEffect"] = "reduces-http-coverage",
+                    ["spanKind"] = "file-level-coverage-not-callsite",
+                    ["message"] = "Bounded explicit-receiver HTTP syntax candidates are available, but framework identity, overloads, inferred receivers and late binding remain unproven. Zero detected HTTP calls does not establish absence or non-use of HTTP operations.",
+                    ["sanitization"] = "category-only"
+                }));
+            var declarationStart = facts.Count;
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxDeclarations, "declarations",
                 () => AddDeclarationFacts(manifest, facts, file.RelativePath, root, budget));
+            if (configuredImports?.Applies(file.RelativePath, files, root) == true)
+            {
+                for (var index = declarationStart; index < facts.Count; index++)
+                {
+                    if (facts[index].FactType != FactTypes.MethodDeclared) continue;
+                    var fact = facts[index];
+                    var properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(), StringComparer.Ordinal)
+                    {
+                        ["configuredImportedNamespaces"] = configuredImports.Namespaces,
+                        ["configuredImportsSource"] = configuredImports.Path,
+                        ["configuredImportsSha256"] = configuredImports.Sha256,
+                        ["configuredImportsKind"] = "root-web-config-framework-vb-imports",
+                        ["configuredImportsLimitation"] = "Explicit root configuration imports only; inherited defaults and provider execution are not verified."
+                    };
+                    facts[index] = FactFactory.Create(manifest, fact.FactType, fact.RuleId, fact.EvidenceTier,
+                        fact.Evidence, fact.ProjectPath, fact.SourceSymbol, fact.TargetSymbol, fact.ContractElement, properties);
+                }
+            }
+            if (effectiveImports?.SourcePaths.Contains(file.RelativePath) == true
+                && !root.Imports.SelectMany(i => i.ImportsClauses).Any(c => c is not SimpleImportsClauseSyntax { Alias: null }))
+            {
+                for (var index = declarationStart; index < facts.Count; index++)
+                {
+                    var fact = facts[index];
+                    if (fact.FactType != FactTypes.MethodDeclared) continue;
+                    var properties = new SortedDictionary<string, string>(fact.Properties.ToDictionary(), StringComparer.Ordinal)
+                    {
+                        ["effectiveImportedNamespaces"] = effectiveImports.Namespaces,
+                        ["effectiveImportsReceiptSha256"] = effectiveImports.ReceiptSha256,
+                        ["effectiveImportsGeneratorSha256"] = effectiveImports.GeneratorSha256,
+                        ["effectiveImportsInputSha256"] = effectiveImports.InputSha256,
+                        ["effectiveImportsKind"] = WebFormsVbImportContext.Kind,
+                        ["effectiveImportsLimitation"] = "Current standalone-root mapping source/configuration/provider bytes verified; no IIS-parent or published-build proof."
+                    };
+                    facts[index] = FactFactory.Create(manifest, fact.FactType, fact.RuleId, fact.EvidenceTier,
+                        fact.Evidence, fact.ProjectPath, fact.SourceSymbol, fact.TargetSymbol, fact.ContractElement, properties);
+                }
+            }
             TryRunPhase(manifest, facts, file.RelativePath, RuleIds.VisualBasicSyntaxEventWiring, "event-composition",
                 () => AddEventCompositionFacts(manifest, facts, file.RelativePath, root, budget));
             // Call-path evidence is more useful than isolated member names when
@@ -195,6 +269,10 @@ public static class VisualBasicSyntaxExtractor
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
+        var importAliasNames = root.Imports.SelectMany(statement => statement.ImportsClauses)
+            .OfType<SimpleImportsClauseSyntax>().Where(clause => clause.Alias is not null)
+            .Select(clause => clause.Alias!.Identifier.ValueText)
+            .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(name => name, StringComparer.Ordinal).ToArray();
         foreach (var statement in root.DescendantNodes().OfType<TypeStatementSyntax>())
         {
             var declared = statement switch
@@ -346,11 +424,22 @@ public static class VisualBasicSyntaxExtractor
                         ["qualifiedContainingType"] = qualifiedContainingType,
                         ["lexicalNamespace"] = GetSyntacticNamespace(statement),
                         ["importedNamespaces"] = string.Join(';', importedNamespaces),
+                        ["importAliasNames"] = string.Join(';', importAliasNames),
+                        ["containingTypeParameters"] = string.Join(';', statement.Ancestors().OfType<TypeBlockSyntax>()
+                            .SelectMany(block => block.BlockStatement.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? [])),
                         ["name"] = methodName,
                         ["bodyStartLine"] = (methodBodyLines.StartLinePosition.Line + 1).ToString(),
                         ["bodyEndLine"] = (methodBodyLines.EndLinePosition.Line + 1).ToString(),
                         ["parameterCount"] = parameterCount.ToString(),
-                        ["parameterTypes"] = string.Join(";", parameterTypes)
+                        ["parameterOptionalFlags"] = string.Join(";", MethodParameters(statement).Select(parameter =>
+                            parameter.Modifiers.Any(SyntaxKind.OptionalKeyword) ? "optional" : "required")),
+                        ["hasParamArray"] = MethodParameters(statement).Any(parameter => parameter.Modifiers.Any(SyntaxKind.ParamArrayKeyword)).ToString(),
+                        ["parameterTypes"] = string.Join(";", parameterTypes),
+                        ["methodTypeParameters"] = statement is MethodStatementSyntax genericMethod
+                            ? string.Join(";", genericMethod.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? [])
+                            : string.Empty,
+                        ["parameterPassingModes"] = string.Join(";", MethodParameters(statement).Select(parameter =>
+                            parameter.Modifiers.Any(SyntaxKind.ByRefKeyword) ? "byref" : "byval"))
                     },
                     budget))
             {
@@ -376,7 +465,15 @@ public static class VisualBasicSyntaxExtractor
                     {
                         ["containingType"] = containingType,
                         ["name"] = propertyName,
-                        ["propertyName"] = propertyName
+                        ["propertyName"] = propertyName,
+                        ["qualifiedContainingType"] = GetSyntacticContainingType(statement),
+                        ["lexicalNamespace"] = GetSyntacticNamespace(statement),
+                        ["importedNamespaces"] = string.Join(';', importedNamespaces),
+                        ["propertyType"] = statement.AsClause is SimpleAsClauseSyntax propertyAs ? propertyAs.Type.ToString().Trim() : string.Empty,
+                        ["parameterCount"] = (statement.ParameterList?.Parameters.Count ?? 0).ToString(),
+                        ["isShared"] = statement.Modifiers.Any(SyntaxKind.SharedKeyword).ToString(),
+                        ["importAliasNames"] = string.Join(';', importAliasNames),
+                        ["containingTypeParameters"] = string.Join(';', statement.Ancestors().OfType<TypeBlockSyntax>().SelectMany(block => block.BlockStatement.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? []))
                     },
                     budget,
                     sourceSymbol: containingType,
@@ -410,6 +507,12 @@ public static class VisualBasicSyntaxExtractor
                                 ["qualifiedContainingType"] = qualifiedContainingType,
                                 ["fieldName"] = fieldName,
                                 ["fieldType"] = fieldType,
+                                ["isArray"] = (name.ArrayBounds is not null || name.ArrayRankSpecifiers.Count > 0).ToString(),
+                                ["lexicalNamespace"] = GetSyntacticNamespace(field),
+                                ["importedNamespaces"] = string.Join(';', importedNamespaces),
+                                ["isShared"] = field.Modifiers.Any(SyntaxKind.SharedKeyword).ToString(),
+                                ["importAliasNames"] = string.Join(';', importAliasNames),
+                                ["containingTypeParameters"] = string.Join(';', field.Ancestors().OfType<TypeBlockSyntax>().SelectMany(block => block.BlockStatement.TypeParameterList?.Parameters.Select(parameter => parameter.Identifier.ValueText) ?? [])),
                                 ["isWithEvents"] = field.Modifiers.Any(SyntaxKind.WithEventsKeyword) ? "True" : "False"
                             },
                             budget,
@@ -472,12 +575,11 @@ public static class VisualBasicSyntaxExtractor
         string? containingMember,
         FactBudget budget)
     {
-        if (!invocationName.Equals("Fill", StringComparison.OrdinalIgnoreCase)
+        var operationKind = DatabaseOperationApi.Kind(invocationName);
+        if (!operationKind.StartsWith("data-adapter", StringComparison.Ordinal)
             || GetInvocationReceiverName(invocation.Expression) is not { Length: > 0 } receiverName
-            || !TryResolveExplicitDataAdapterType(root, invocation, receiverName, out var receiverType))
-        {
-            return true;
-        }
+            || !TryResolveExplicitReceiverType(root, invocation, receiverName, _ => true, out var receiverType)
+            || !IsDatabaseSyntaxReceiver(root, receiverType, invocationName)) return true;
 
         return TryAddSyntaxFact(
             manifest,
@@ -486,11 +588,13 @@ public static class VisualBasicSyntaxExtractor
             RuleIds.VisualBasicSyntaxDatabaseOperation,
             filePath,
             invocation,
-            targetSymbol: $"{receiverType}.Fill",
+            targetSymbol: $"{receiverType}.{invocationName}",
             new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["methodName"] = invocationName,
+                ["commandTextAvailability"] = "unavailable",
                 ["coverageLabel"] = "reduced-syntax-vb-database-operation",
-                ["operationKind"] = "data-adapter-fill",
+                ["operationKind"] = operationKind,
                 ["receiverName"] = receiverName,
                 ["receiverType"] = receiverType,
                 ["resolutionKind"] = "ExplicitSyntaxType",
@@ -500,7 +604,7 @@ public static class VisualBasicSyntaxExtractor
             },
             budget,
             sourceSymbol: containingMember,
-            contractElement: "data-adapter-fill");
+            contractElement: operationKind);
     }
 
     private static bool TryAddExplicitDatabaseCommandOperationFact(
@@ -513,19 +617,14 @@ public static class VisualBasicSyntaxExtractor
         string? containingMember,
         FactBudget budget)
     {
-        var operation = invocationName.ToLowerInvariant() switch
-        {
-            "executescalar" or "executescalarasync" => (Kind: "scalar-candidate", Result: "scalar"),
-            "executereader" or "executereaderasync" => (Kind: "select-candidate", Result: "data-reader"),
-            "executenonquery" or "executenonqueryasync" => (Kind: "execute-candidate", Result: "row-count"),
-            _ => default
-        };
-        if (operation == default
-            || GetInvocationReceiverName(invocation.Expression) is not { Length: > 0 } receiverName
-            || !TryResolveExplicitReceiverType(root, invocation, receiverName, IsKnownDatabaseCommandType, out var receiverType))
-        {
-            return true;
-        }
+        var operationKind = DatabaseOperationApi.Kind(invocationName);
+        if (operationKind.Length == 0 || operationKind.StartsWith("data-adapter", StringComparison.Ordinal)) return true;
+        string? receiverType = null;
+        var receiverName = GetInvocationReceiverName(invocation.Expression) ?? string.Empty;
+        if (receiverName.Length > 0 && TryResolveExplicitReceiverType(root, invocation, receiverName, _ => true, out var explicitType)) receiverType = explicitType;
+        else if (invocation.Expression is MemberAccessExpressionSyntax access
+            && UnwrapParenthesizedExpression(access.Expression) is ObjectCreationExpressionSyntax creation) receiverType = creation.Type.ToString().Trim();
+        if (receiverType is null || !IsDatabaseSyntaxReceiver(root, receiverType, invocationName)) return true;
 
         return TryAddSyntaxFact(
             manifest,
@@ -537,27 +636,47 @@ public static class VisualBasicSyntaxExtractor
             targetSymbol: $"{receiverType}.{invocationName}",
             new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
+                ["methodName"] = invocationName,
+                ["commandTextAvailability"] = "unavailable",
                 ["coverageLabel"] = "reduced-syntax-vb-database-operation",
-                ["operationKind"] = operation.Kind,
+                ["operationKind"] = operationKind,
                 ["receiverName"] = receiverName,
                 ["receiverType"] = receiverType,
                 ["resolutionKind"] = "ExplicitSyntaxType",
-                ["resultKind"] = operation.Result,
+                ["resultKind"] = operationKind switch
+                {
+                    "select-candidate" => "data-reader", "scalar-candidate" => "scalar",
+                    "execute-candidate" => "row-count-or-none", "xml-reader-candidate" => "xml-reader",
+                    "bulk-write-boundary" => "none", _ => "unavailable"
+                },
                 ["ruleLimitations"] = "The invocation receiver has an explicit supported ADO.NET command type in Visual Basic syntax, but compiler identity, provider binding, command text, connection identity, successful execution, and runtime reachability are not established.",
                 ["sqlSourceKind"] = "vb-syntax-explicit-database-command"
             },
             budget,
             sourceSymbol: containingMember,
-            contractElement: operation.Kind);
+            contractElement: operationKind);
     }
 
-    private static bool TryResolveExplicitDataAdapterType(
-        CompilationUnitSyntax root,
-        InvocationExpressionSyntax invocation,
-        string receiverName,
-        out string receiverType)
+    private static bool IsDatabaseSyntaxReceiver(CompilationUnitSyntax root, string type, string method)
     {
-        return TryResolveExplicitReceiverType(root, invocation, receiverName, IsKnownDataAdapterType, out receiverType);
+        if (ResolveHttpTypeNames(root,type).Any(name => DatabaseOperationApi.IsSyntaxType(name,method))) return true;
+        var first = type.Replace("Global.","",StringComparison.OrdinalIgnoreCase).Split('.')[0];
+        if (root.DescendantNodes().OfType<TypeBlockSyntax>().Any(t => t.BlockStatement.Identifier.ValueText.Equals(first,StringComparison.OrdinalIgnoreCase))) return false;
+        var imports = root.Imports.SelectMany(statement => statement.ImportsClauses)
+            .OfType<SimpleImportsClauseSyntax>().ToArray();
+        // A namespace alias owns its prefix. Never discard arbitrary qualification.
+        if (imports.Any(clause => clause.Alias?.Identifier.ValueText.Equals(first,
+                StringComparison.OrdinalIgnoreCase) == true)) return false;
+        if (!type.StartsWith("Global.", StringComparison.OrdinalIgnoreCase)
+            && imports.Where(clause => clause.Alias is null).Any(clause =>
+                DatabaseOperationApi.IsSyntaxType(StripGlobal(clause.Name.ToString()) + "." + type, method))) return true;
+        // Preserve historical reduced candidates for explicitly typed common-provider
+        // names. They remain unresolved syntax, not provider/API availability proof.
+        var kind = DatabaseOperationApi.Kind(method);
+        return kind.StartsWith("data-adapter",StringComparison.Ordinal)
+            ? new[] { "DbDataAdapter", "SqlDataAdapter", "OleDbDataAdapter", "OdbcDataAdapter" }.Contains(type,StringComparer.OrdinalIgnoreCase)
+            : new[] { "DbCommand", "IDbCommand", "SqlCommand", "OdbcCommand", "OleDbCommand", "OracleCommand", "OracleDbCommand", "SQLiteCommand", "SqliteCommand", "DB2Command", "NpgsqlCommand", "MySqlCommand" }.Contains(type,StringComparer.OrdinalIgnoreCase)
+                || type.Equals("IBM.Data.DB2.DB2Command",StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryResolveExplicitReceiverType(
@@ -689,32 +808,6 @@ public static class VisualBasicSyntaxExtractor
         return declaration.Initializer?.Value is ObjectCreationExpressionSyntax creation
             ? creation.Type.ToString().Trim()
             : null;
-    }
-
-    private static bool IsKnownDataAdapterType(string typeName)
-    {
-        var simple = typeName.Split('.').Last();
-        return simple.Equals("DbDataAdapter", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("SqlDataAdapter", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("OleDbDataAdapter", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("OdbcDataAdapter", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsKnownDatabaseCommandType(string typeName)
-    {
-        var simple = typeName.Split('.').Last();
-        return simple.Equals("DbCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("IDbCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("SqlCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("OleDbCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("OdbcCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("OracleCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("OracleDbCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("SQLiteCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("SqliteCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("DB2Command", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("NpgsqlCommand", StringComparison.OrdinalIgnoreCase)
-            || simple.Equals("MySqlCommand", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string SyntaxFillResultKind(InvocationExpressionSyntax invocation)
@@ -897,10 +990,30 @@ public static class VisualBasicSyntaxExtractor
 
     private static (string ReceiverName, string EventName) SyntaxEventName(ExpressionSyntax? expression) => expression switch
     {
-        MemberAccessExpressionSyntax member => (SafeEventReceiverName(member.Expression), member.Name?.Identifier.ValueText ?? string.Empty),
+        MemberAccessExpressionSyntax member => (member.Expression is null ? WithEventReceiverName(member) : SafeEventReceiverName(member.Expression), member.Name?.Identifier.ValueText ?? string.Empty),
         IdentifierNameSyntax identifier => ("implicit", identifier.Identifier.ValueText),
         _ => ("unsupported", string.Empty)
     };
+
+    private static string WithEventReceiverName(SyntaxNode site)
+    {
+        foreach (var ancestor in site.Ancestors())
+        {
+            // A deferred lambda must not borrow an enclosing With receiver.
+            if (ancestor is LambdaExpressionSyntax or MethodBlockBaseSyntax) break;
+            if (ancestor is not WithBlockSyntax block) continue;
+            var expression = block.WithStatement.Expression;
+            if (expression.ContainsDiagnostics) return string.Empty;
+            var name = SafeEventReceiverName(expression);
+            if (name.Length > 0) return name;
+            // A constructed receiver has site identity only, never a resolved
+            // control ID, type identity, or deployed WebForms boundary.
+            return expression is ObjectCreationExpressionSyntax { Type: IdentifierNameSyntax }
+                ? "with-construction-" + FactFactory.Hash($"{block.SpanStart}|{expression}", 24)
+                : string.Empty;
+        }
+        return string.Empty;
+    }
 
     private static string SyntaxHandlerName(ExpressionSyntax? expression)
     {
@@ -926,6 +1039,17 @@ public static class VisualBasicSyntaxExtractor
         if (expression is null)
         {
             return string.Empty;
+        }
+        if (expression.ContainsDiagnostics) return string.Empty;
+        if (expression is WithEventsEventContainerSyntax container)
+        {
+            return container.Identifier.ValueText;
+        }
+        if (expression is IdentifierNameSyntax identifier)
+        {
+            // ValueText unescapes VB bracketed identifiers without accepting
+            // arbitrary expression text as a receiver identity.
+            return identifier.Identifier.ValueText;
         }
         var text = expression.ToString();
         if (text.Equals("Me", StringComparison.OrdinalIgnoreCase)
@@ -1068,12 +1192,15 @@ public static class VisualBasicSyntaxExtractor
         FactBudget budget)
     {
         var invocationName = GetInvocationName(invocation.Expression);
+        if (!AddDatabaseParameterAddCandidate(manifest, facts, filePath, root, invocation, budget)) return false;
         var containingMember = GetContainingMemberName(invocation);
         var argumentTypes = TryGetExplicitInvocationArgumentTypes(invocation);
         var receiverName = GetInvocationReceiverName(invocation.Expression) ?? string.Empty;
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["argumentCount"] = (invocation.ArgumentList?.Arguments.Count ?? 0).ToString(),
+            ["allArgumentsPositional"] = (invocation.ArgumentList?.Arguments.All(argument =>
+                argument is SimpleArgumentSyntax simple && simple.NameColonEquals is null) ?? true).ToString(),
             ["callKind"] = "SyntaxInvocation",
             ["calleeName"] = invocationName,
             ["callerName"] = containingMember ?? string.Empty,
@@ -1093,6 +1220,39 @@ public static class VisualBasicSyntaxExtractor
             // or the return type of an arbitrary factory/property call.
             properties["receiverType"] = inlineCreation.Type.ToString().Trim();
             properties["receiverTypeResolution"] = "inline-object-creation-syntax";
+        }
+        // Only pure identifier/member receivers qualify; invocation/indexer results
+        // must not be flattened into an apparent property chain.
+        bool PureReceiver(ExpressionSyntax expression) => expression is IdentifierNameSyntax or MeExpressionSyntax
+            || expression is MemberAccessExpressionSyntax member && PureReceiver(member.Expression);
+        if (receiverName.Contains('.') && invocation.Expression is MemberAccessExpressionSyntax chainAccess && PureReceiver(chainAccess.Expression))
+        {
+            var parts = receiverName.Split('.');
+            properties["receiverChain"] = receiverName;
+            if (parts[0].Equals("Me", StringComparison.OrdinalIgnoreCase))
+                properties["receiverChainRootKind"] = "self";
+            else if (TryResolveExplicitReceiverType(root, invocation, parts[0], _ => true, out var rootType))
+            {
+                properties["receiverChainRootKind"] = "explicit-variable";
+                properties["receiverChainRootType"] = rootType;
+                var scope = invocation.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault();
+                if (scope?.DescendantNodes().OfType<ModifiedIdentifierSyntax>().Any(identifier =>
+                    identifier.Identifier.ValueText.Equals(parts[0], StringComparison.OrdinalIgnoreCase)
+                    && (identifier.ArrayBounds is not null || identifier.ArrayRankSpecifiers.Count > 0)) == true)
+                    properties["receiverChainRootKind"] = "unresolved-array";
+            }
+            else
+            {
+                // Refuse a type-root interpretation if any lexical value could shadow it.
+                var owner = invocation.Ancestors().OfType<TypeBlockSyntax>().FirstOrDefault();
+                var shadowed = owner is not null && owner.DescendantNodes().Any(node => node switch
+                {
+                    ModifiedIdentifierSyntax identifier => identifier.Identifier.ValueText.Equals(parts[0], StringComparison.OrdinalIgnoreCase),
+                    PropertyStatementSyntax property => property.Identifier.ValueText.Equals(parts[0], StringComparison.OrdinalIgnoreCase),
+                    _ => false
+                });
+                properties["receiverChainRootKind"] = shadowed ? "unresolved-shadow" : "type-name-candidate";
+            }
         }
         if (argumentTypes is not null)
         {
@@ -1114,6 +1274,12 @@ public static class VisualBasicSyntaxExtractor
                     properties,
                     budget,
                     sourceSymbol: containingMember))
+        {
+            return false;
+        }
+
+        if (!TryAddHttpCandidate(manifest, facts, filePath, root, invocation, invocationName,
+                containingMember, properties.GetValueOrDefault("receiverType"), budget))
         {
             return false;
         }
@@ -1236,6 +1402,7 @@ public static class VisualBasicSyntaxExtractor
         var typeName = creation.Type.ToString();
         var containingMember = GetContainingMemberName(creation);
         var compilationUnit = creation.Ancestors().OfType<CompilationUnitSyntax>().FirstOrDefault();
+        if (compilationUnit is not null && !AddDatabaseParameterCandidate(manifest, facts, filePath, compilationUnit, creation, budget)) return false;
         var importedNamespaces = compilationUnit?.Imports
             .SelectMany(statement => statement.ImportsClauses)
             .OfType<SimpleImportsClauseSyntax>()
@@ -1356,6 +1523,7 @@ public static class VisualBasicSyntaxExtractor
 
     private static CodeFact CreateSemanticUnavailableGap(ScanManifest manifest, string filePath)
     {
+        const string message = "Compiler-resolved Visual Basic analysis was unavailable for this file; only syntax-or-textual evidence was emitted for it.";
         return FactFactory.Create(
             manifest,
             FactTypes.AnalysisGap,
@@ -1366,7 +1534,8 @@ public static class VisualBasicSyntaxExtractor
             {
                 ["coverageEffect"] = "reduces-semantic-coverage",
                 ["gapKind"] = "SemanticAnalysisUnavailable",
-                ["message"] = "Compiler-resolved Visual Basic analysis was unavailable for this file; only syntax-or-textual evidence was emitted for it.",
+                ["message"] = message,
+                ["messageHash"] = FactFactory.Hash(message, 32),
                 ["sanitization"] = "category-only"
             });
     }

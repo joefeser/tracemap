@@ -1,0 +1,13 @@
+{
+  "description": "Hand-authored test oracle, not scanner-derived expectations. Counts are per named control and evidence mode.",
+  "controls": {
+    "DynamicDestination": {"semantic": 1, "csharp-projectless": 1, "vb-projectless": 1},
+    "RequestVariable": {"semantic": 1, "csharp-projectless": 1, "vb-projectless": 1},
+    "Wrapper": {"semantic": 0, "csharp-projectless": 0, "vb-projectless": 0},
+    "Inherited": {"semantic": 1, "csharp-projectless": 1, "vb-projectless": 0},
+    "FakeCalls": {"semantic": 0, "csharp-projectless": 4, "vb-projectless": 0},
+    "ContentOnly": {"semantic": 0, "csharp-projectless": 1, "vb-projectless": 0},
+    "FileProtocol": {"semantic": 1, "csharp-projectless": 1, "vb-projectless": 1},
+    "DynamicVerb": {"semantic": 1, "csharp-projectless": 1, "vb-projectless": 1}
+  }
+}

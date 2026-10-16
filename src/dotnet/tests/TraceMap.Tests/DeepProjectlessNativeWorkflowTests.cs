@@ -199,9 +199,19 @@ public sealed class DeepProjectlessNativeWorkflowTests
             var handoff = Path.Combine(bundle, "compiled", "compiled-paths.handoff.local.json");
             var grouped = JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(File.ReadAllBytes(handoff), JsonOptions)!;
             var original = GroupedCompiledPathHandoffBuilder.Restore(grouped);
-            Assert.Equal("1.3", original.Query.AlgorithmVersion);
-            Assert.Equal(12, original.Paths.Count);
-            Assert.InRange(original.Summary.TraversalWorkUnits!.Value, 1, 1000);
+            Assert.Equal("1.9", original.Query.AlgorithmVersion);
+            // Mixed source/publication/IL evidence can retain multiple witnesses
+            // for one route. Pin its bounds and partial label, not an obsolete
+            // pre-publication-bridge path count.
+            Assert.InRange(original.Paths.Count, 12, original.Query.MaxPaths);
+            // This fixture uses ~5,900 units; keep a corpus regression ceiling
+            // independent of the much larger operational safety budget.
+            Assert.InRange(original.Summary.TraversalWorkUnits!.Value, 1, 6500);
+            var cutoffs = original.Gaps.Where(gap => gap.GapKind == "TruncatedByLimit").ToArray();
+            Assert.True(original.Summary.Truncated);
+            Assert.Equal(original.Query.MaxPaths, original.Paths.Count);
+            Assert.Contains(cutoffs, gap => gap.Reason == "path");
+            Assert.All(cutoffs, gap => Assert.Contains(gap.Reason, new[] { "path", "depth", "cycle", "frontier", "work" }));
             Assert.DoesNotContain(original.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "work");
             Console.WriteLine($"deepMixed.paths={original.Paths.Count};work={original.Summary.TraversalWorkUnits};truncated={original.Summary.Truncated}");
             Assert.NotEqual("compiled-il-with-root-attachment", original.Query.TraversalScope);
@@ -215,14 +225,29 @@ public sealed class DeepProjectlessNativeWorkflowTests
             Assert.Equal(new[] { "Lookup_Click" }.Concat(Enumerable.Range(1, 12).Select(n => $"Layer{n:00}"))
                 .Concat(["Run", "Run"]), encodedMethods);
             Assert.Equal("4", encodedLookup.Nodes.Last().CommandBinding!.CommandTypeFromPath!.Origin.Identity);
+            // Keep exact route-count and operand assertions on the encoded IL
+            // view, where source reconciliation cannot multiply path witnesses.
+            var encodedRoutes = await CombinedDependencyPathReporter.BuildSelectedSymbolsAsync(
+                new CombinedDependencyPathOptions(Path.Combine(bundle, "combined.sqlite"), Path.Combine(root, "encoded-routes"),
+                    ToSurface: "database-api", IncludeLegacyRoots: true, MaxDepth: 20, MaxPaths: 256)
+                { CompiledOnly = true, ExactFromSymbol = true, MaxTraversalWork = 100_000 },
+                original.Query.SymbolRoots!, combinedIndex: true);
+            Assert.Equal(12, encodedRoutes.Paths.Count);
             foreach (var handler in new[] { "Lookup_Click", "Branch_Click", "Cycle_Click", "Unknown_Click", "Comparison_Click" })
             {
                 var marker = $"|method:{handler.Length}:{handler}|";
-                var retainedPaths = original.Paths.Where(path => path.Nodes.Any(node => node.SymbolId?.Contains(marker, StringComparison.Ordinal) == true)
+                var retainedPaths = encodedRoutes.Paths.Where(path => path.Nodes.Any(node => node.SymbolId?.Contains(marker, StringComparison.Ordinal) == true)
                     && path.Nodes.Last().SurfaceName == "DbDataAdapter.Fill").ToArray();
+                var mixedPaths = original.Paths.Where(path => path.Nodes.Any(node => node.SymbolId?.Contains(marker, StringComparison.Ordinal) == true)
+                    && path.Nodes.Last().SurfaceName == "DbDataAdapter.Fill").ToArray();
+                Assert.NotEmpty(mixedPaths);
+                Assert.All(mixedPaths, path => Assert.DoesNotContain(path.Nodes, node => node.SymbolId?.Contains("DeepDecoy", StringComparison.Ordinal) == true));
                 Assert.Equal(handler == "Branch_Click" ? 2 : 1, retainedPaths.Length);
                 if (handler is "Unknown_Click" or "Comparison_Click")
+                {
                     Assert.All(retainedPaths, path => Assert.NotEqual("constant-on-encoded-call-path", path.Nodes.Last().CommandBinding?.CommandTextFromPath?.State));
+                    Assert.All(mixedPaths, path => Assert.NotEqual("constant-on-encoded-call-path", path.Nodes.Last().CommandBinding?.CommandTextFromPath?.State));
+                }
                 foreach (var text in handler switch
                 {
                     "Lookup_Click" => new[] { "public.deep_lookup" },
@@ -233,6 +258,8 @@ public sealed class DeepProjectlessNativeWorkflowTests
                 {
                     var identity = $"str:{text.Length}:{Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.Unicode.GetBytes(text)))}";
                     Assert.Contains(retainedPaths, path => path.Nodes.Last().CommandBinding?.CommandTextFromPath is
+                        { State: "constant-on-encoded-call-path" } value && value.Origin.Identity == identity);
+                    Assert.Contains(mixedPaths, path => path.Nodes.Last().CommandBinding?.CommandTextFromPath is
                         { State: "constant-on-encoded-call-path" } value && value.Origin.Identity == identity);
                 }
                 Assert.All(retainedPaths, path => Assert.DoesNotContain(path.Nodes, node => node.SymbolId?.Contains("DeepDecoy", StringComparison.Ordinal) == true));

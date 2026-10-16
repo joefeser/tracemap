@@ -614,12 +614,18 @@ public sealed class MessyWorkspaceRegressionTests
             && fact.Evidence.EndLine == CrossLanguageInvocationLine
             && fact.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic"
             && fact.Properties.GetValueOrDefault("diagnosticId") == "CS0234").ToArray();
-        // The catalog's alternatives are exclusive: a semantic edge cannot
-        // coexist with fallback call evidence or its compilation gap.
+        // Resolution outcomes are exclusive. The C# syntax extractor also keeps
+        // a raw Tier3 observation at resolved callsites; it is not a second
+        // resolved target or permission to upgrade syntax evidence.
+        var syntaxObservationValid = csharpSyntaxCall.Length == 1
+            && csharpSyntaxCall[0].EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            && csharpSyntaxCall[0].Evidence.FilePath == CrossLanguageSourcePath
+            && csharpSyntaxCall[0].Evidence.StartLine == CrossLanguageInvocationLine
+            && csharpSyntaxCall[0].Properties.GetValueOrDefault("coverageLabel") == "syntax-only";
         var semanticOutcome = csharpToVb.Length == 1
             && csharpToVb[0].RuleId == RuleIds.CSharpSemanticCallGraph
             && csharpToVb[0].EvidenceTier == EvidenceTiers.Tier1Semantic
-            && csharpSyntaxCall.Length == 0 && compilationGaps.Length == 0;
+            && syntaxObservationValid && compilationGaps.Length == 0;
         var syntaxFallbackOutcome = csharpToVb.Length == 0 && csharpSyntaxCall.Length == 1
             && csharpSyntaxCall[0].EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
             && csharpSyntaxCall[0].Evidence.FilePath == CrossLanguageSourcePath
@@ -627,7 +633,7 @@ public sealed class MessyWorkspaceRegressionTests
             && compilationGaps.Length > 0;
         Require("MW-CROSSLANGUAGE-001", "extraction",
             semanticOutcome || syntaxFallbackOutcome,
-            $"C# to VB call must be exclusively semantic or explicitly downgraded to syntax plus compilation gap; semantic={csharpToVb.Length}, syntax={csharpSyntaxCall.Length}, gaps={compilationGaps.Length}");
+            $"C# to VB resolution must be semantic with its separate raw syntax observation or explicitly downgraded to syntax plus compilation gap; semantic={csharpToVb.Length}, syntax={csharpSyntaxCall.Length}, gaps={compilationGaps.Length}");
         var vbToFsharp = calls.Where(fact =>
             fact.SourceSymbol?.Contains("VbBridge.Run", StringComparison.Ordinal) == true
             && fact.TargetSymbol?.Contains("Functions.Terminal", StringComparison.Ordinal) == true).ToArray();
@@ -815,14 +821,22 @@ public sealed class MessyWorkspaceRegressionTests
             "cross-assembly MemberRef did not join to one admitted declaration; memberref="
                 + memberReference.Properties.GetValueOrDefault("targetIdentity")
                 + "; declaration=" + declaration.TargetSymbol);
+        var gateway = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedMethodDeclared
+            && fact.TargetSymbol?.Contains("ProcedureGateway", StringComparison.Ordinal) == true
+            && fact.Properties.GetValueOrDefault("metadataName") == "ExecuteProcedure");
+        Assert.True(int.TryParse(gateway.Properties["methodDispatchFlags"], out var gatewayFlags));
+        Assert.Equal(0, gatewayFlags & (int)(System.Reflection.MethodAttributes.Virtual | System.Reflection.MethodAttributes.Static));
+        Assert.Contains(scan.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Properties.GetValueOrDefault("opcode") == "callvirt"
+            && fact.Properties.GetValueOrDefault("targetIdentity") == gateway.TargetSymbol);
         Require("MW-CROSSLANGUAGE-001", "reconciliation",
-            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-callvirt-candidate"
-                && edge.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual
+            graph.Edges.Any(edge => edge.EdgeKind == "compiled-il-call"
+                && edge.EvidenceTier == EvidenceTiers.Tier2Structural
                 && nodes[edge.FromNodeId].DisplayName.Contains("DataAccess", StringComparison.Ordinal)
                 && nodes[edge.FromNodeId].DisplayName.Contains("SelectNames", StringComparison.Ordinal)
                 && nodes[edge.ToNodeId].DisplayName.Contains("ProcedureGateway", StringComparison.Ordinal)
                 && nodes[edge.ToNodeId].DisplayName.Contains("ExecuteProcedure", StringComparison.Ordinal)),
-            "the inherited Open-initialized field callvirt must remain a review-tier compiled candidate");
+            "the encoded callvirt must join its metadata-proven nonvirtual target without claiming runtime field initialization");
 
         // This portion also runs on macOS: two independent bound scans must
         // retain the same exact cross-assembly MemberRef after index combine.
@@ -1546,7 +1560,9 @@ public sealed class MessyWorkspaceRegressionTests
             apiReport.Query.ExactFromSymbol && apiReport.Summary.SelectorCandidateCount == 1
             && apiReport.RootTraversal?.TraversedEdgeKinds.Contains("projectless-publish-method-candidate") == true
             && apiReport.RootTraversal.TraversedEdgeKinds.Contains("compiled-il-call")
-            && apiReport.RootTraversal.TerminalCallerCount == 1
+            // PublicLegacyCommandFlow adds a second, unrelated Fill caller.
+            // Exactly one of the two may be reachable from this selected root.
+            && apiReport.RootTraversal.TerminalCallerCount == 2
             && apiReport.RootTraversal.ReachableTerminalCallerCount == 1
             && apiReport.RootTraversal.ReachableFillMemberRefCount == 1
             && apiReport.RootTraversal.ReachableUnrecognizedFillMemberRefCount == 0

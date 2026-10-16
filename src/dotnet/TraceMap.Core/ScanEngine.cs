@@ -92,7 +92,7 @@ public static class ScanEngine
             }
             catch (SourceInventoryException ex)
             {
-                throw new SourceSnapshotException(ex);
+                throw new SourceSnapshotException(ex, ["source input re-read failed"]);
             }
 
             progress?.FinishStage(
@@ -131,7 +131,11 @@ public static class ScanEngine
                     ? semanticToolchainReducedCoverage ? "semantic-reduced" : "semantic"
                     : semanticToolchainReducedCoverage ? "syntax-reduced" : "syntax";
                 cancellationToken.ThrowIfCancellationRequested();
-                VerifySemanticInputSnapshot(repoPath, fullInventory, semanticResult, semanticInputSnapshot, cancellationToken);
+                var generatedInputs = CaptureGeneratedCompilationInputs(repoPath, fullInventory, semanticResult);
+                var generatedSnapshot = CaptureSemanticInputSnapshot(repoPath, generatedInputs, cancellationToken);
+                semanticInputSnapshot = semanticInputSnapshot.Concat(generatedSnapshot)
+                    .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+                VerifySemanticInputSnapshot(repoPath, fullInventory.Concat(generatedInputs).ToArray(), semanticResult, semanticInputSnapshot, cancellationToken);
                 semanticOperation.Complete(semanticToolchainReducedCoverage
                     ? TraceMapDiagnosticOutcome.Partial
                     : TraceMapDiagnosticOutcome.Succeeded);
@@ -155,10 +159,10 @@ public static class ScanEngine
         }
 
         inventory = IncludeSemanticallyAnalyzedFiles(inventory, fullInventory, semanticResult);
-        var discoveredSnapshotInventory = IncludeSemanticInputs(inventory, fullInventory, semanticResult);
+        var discoveredSnapshotInventory = IncludeSemanticInputs(repoPath, inventory, fullInventory, semanticResult);
         if (options.ExactSourceScope)
         {
-            ValidateExactSourceScope(fullInventory, discoveredSnapshotInventory, options,
+            ValidateExactSourceScope(fullInventory, inventory, options,
                 CSharpSemanticExtractor.CreateSourcePathComparer(repoPath));
         }
         IReadOnlyList<FileInventoryItem> authoritativeSnapshotInventory;
@@ -181,18 +185,19 @@ public static class ScanEngine
                 refreshedFullInventory,
                 semanticResult);
             var refreshedSnapshotInventory = IncludeSemanticInputs(
+                repoPath,
                 refreshedInventory,
                 refreshedFullInventory,
                 semanticResult);
             if (options.ExactSourceScope)
             {
-                ValidateExactSourceScope(refreshedFullInventory, refreshedSnapshotInventory, options,
+                ValidateExactSourceScope(refreshedFullInventory, refreshedInventory, options,
                     sourcePathComparer);
             }
             VerifySourceSnapshotInventoryMembership(discoveredSnapshotInventory, refreshedSnapshotInventory);
             VerifySemanticInputSnapshot(
                 repoPath,
-                refreshedFullInventory,
+                refreshedSnapshotInventory,
                 semanticResult,
                 semanticInputSnapshot,
                 cancellationToken);
@@ -205,7 +210,7 @@ public static class ScanEngine
         }
         catch (SourceInventoryException ex)
         {
-            var transformed = new SourceSnapshotException(ex);
+            var transformed = new SourceSnapshotException(ex, ["source input re-read failed"]);
             progress?.FailActiveStage(ScanProgressReporter.ScanOperation, "SOURCE_VERIFICATION_FAILED");
             preVerificationReceipt?.Fail(transformed, "stage-started");
             throw transformed;
@@ -258,13 +263,20 @@ public static class ScanEngine
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
+        var depsJson = options.IndexDepsJson ? DepsJsonExtractor.Read(options, cancellationToken) : null;
+        var producedPackages = ProjectFileReader.ReadProducedPackages(repoPath, inventory);
+        var ciProducers = options.IndexCiProducers
+            ? CiWorkflowProducerExtractor.Read(options, producedPackages, cancellationToken)
+            : null;
         var nugetLockfiles = ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory);
-        var nugetLockfileGaps = nugetLockfiles.Gaps
+        var packageManifestGaps = nugetLockfiles.Gaps
             .Select(gap => $"NuGet lockfile analysis reported `{gap.Category}`.")
+            .Concat(depsJson?.Gaps.Select(gap => $"Build-output dependency analysis reported `{gap.Kind}`.") ?? [])
+            .Concat(ciProducers?.Gaps.Select(gap => $"CI workflow producer analysis reported `{gap.Kind}`.") ?? [])
             .OrderBy(gap => gap, StringComparer.Ordinal)
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var nugetLockfileReducedCoverage = nugetLockfileGaps.Length > 0;
+        var packageManifestReducedCoverage = packageManifestGaps.Length > 0;
         var migrationFallbackReducedCoverage = migrationFallbackGaps.Length > 0;
         var semanticBuildReducedCoverage = semanticResult.GapFacts.Any(gap =>
             gap.RuleId != RuleIds.DatabaseFrameworkMigrationGap
@@ -273,11 +285,11 @@ public static class ScanEngine
             ? semanticBuildReducedCoverage ? "FailedOrPartial" : "Succeeded"
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
-            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
-            : migrationFallbackReducedCoverage || nugetLockfileReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
-        var provisionalBuildStatus = nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus;
+            ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage || packageManifestReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
+            : migrationFallbackReducedCoverage || packageManifestReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
+        var provisionalBuildStatus = packageManifestReducedCoverage ? "FailedOrPartial" : semanticBuildStatus;
         var provisionalKnownGaps = semanticKnownGaps
-            .Concat(nugetLockfileGaps)
+            .Concat(packageManifestGaps)
             .Concat(pdbEvaluation.KnownGaps)
             .Concat(ilEvaluation.KnownGaps)
             .Concat(ilRewriteEvaluation.KnownGaps)
@@ -298,7 +310,11 @@ public static class ScanEngine
                 ilEvaluation.Provenance?.BoundedInputSha256,
                 ilRewriteEvaluation.Provenance?.BoundedInputSha256,
                 ilRewritePdbEvaluation.Provenance?.BoundedInputSha256,
-                webFormsPublishEvaluation.Provenance?.BoundedInputSha256),
+                webFormsPublishEvaluation.Provenance?.BoundedInputSha256,
+                depsJson is null ? null : $"{depsJson.GeneratorSha256}:{depsJson.BoundedInputSha256}",
+                ciProducersInputSignature: ciProducers is null
+                    ? null
+                    : $"{ciProducers.GeneratorSha256}:{ciProducers.BoundedInputSha256}"),
             git.RepoName,
             git.RemoteUrl,
             git.Branch,
@@ -344,7 +360,7 @@ public static class ScanEngine
             AnalysisLevel = binlogReducedCoverage && !semanticToolchainReducedCoverage
                 ? semanticResult.Attempted ? "Level1SemanticAnalysisReduced" : "Level3SyntaxAnalysisReduced"
                 : semanticAnalysisLevel,
-            BuildStatus = binlogReducedCoverage || nugetLockfileReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
+            BuildStatus = binlogReducedCoverage || packageManifestReducedCoverage ? "FailedOrPartial" : semanticBuildStatus,
             KnownGaps = knownGaps
         };
 
@@ -361,7 +377,11 @@ public static class ScanEngine
                     inventory,
                     targetFrameworkInfos,
                     ProjectFileReader.ReadPackageReferences(repoPath, inventory),
+                    ProjectFileReader.ReadCentralPackageVersions(repoPath, inventory),
+                    producedPackages,
                     nugetLockfiles,
+                    depsJson,
+                    ciProducers,
                     knownGaps,
                     repoPath,
                     semanticResult,
@@ -417,25 +437,27 @@ public static class ScanEngine
                 verificationFullInventory,
                 semanticResult);
             var verificationSnapshotInventory = IncludeSemanticInputs(
+                repoPath,
                 verificationInventory,
                 verificationFullInventory,
                 semanticResult);
             if (options.ExactSourceScope)
             {
-                ValidateExactSourceScope(verificationFullInventory, verificationSnapshotInventory, options,
+                ValidateExactSourceScope(verificationFullInventory, verificationInventory, options,
                     sourcePathComparer);
             }
             VerifySourceSnapshotInventory(authoritativeSnapshotInventory, verificationSnapshotInventory);
             verificationDigest = CreateSourceSnapshotDigest(repoPath, verificationSnapshotInventory);
+            VerifySemanticInputSnapshot(repoPath, verificationSnapshotInventory, semanticResult, semanticInputSnapshot, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             if (!string.Equals(sourceSnapshotDigest, verificationDigest, StringComparison.Ordinal))
-                throw new SourceSnapshotException();
+                throw new SourceSnapshotException(details: ["(whole-tree digest mismatch: file list and sizes identical but some watched file's content changed — re-scan when the tree is idle)"]);
             progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SourceVerification, "completed");
             verificationReceipt?.Complete("succeeded", manifest.AnalysisLevel, "source-snapshot-verified");
         }
         catch (SourceInventoryException ex)
         {
-            var transformed = new SourceSnapshotException(ex);
+            var transformed = new SourceSnapshotException(ex, ["source input re-read failed"]);
             progress?.FailActiveStage(ScanProgressReporter.ScanOperation, "SOURCE_VERIFICATION_FAILED");
             verificationReceipt?.Fail(transformed, "stage-started");
             throw transformed;
@@ -509,7 +531,9 @@ public static class ScanEngine
         string? ilBoundedInputSha256,
         string? ilRewriteBoundedInputSha256,
         string? ilRewritePdbBoundedInputSha256 = null,
-        string? webFormsPublishBoundedInputSha256 = null)
+        string? webFormsPublishBoundedInputSha256 = null,
+        string? depsJsonInputSignature = null,
+        string? ciProducersInputSignature = null)
     {
         var signature = string.Join('\n', inventory.Select(item => $"{item.RelativePath}|{item.Kind}|{item.SizeBytes}"));
         var binlogSignature = MsBuildBinlogExtractor.CreateInputSignature(options.BinlogPaths, repoPath: options.RepoPath);
@@ -527,6 +551,8 @@ public static class ScanEngine
             $"ilrewrite={ilRewriteBoundedInputSha256 ?? string.Empty}",
             $"ilrewritepdb={ilRewritePdbBoundedInputSha256 ?? string.Empty}",
             $"webformspublish={webFormsPublishBoundedInputSha256 ?? string.Empty}");
+        if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonInputSignature}";
+        if (options.IndexCiProducers) optionSignature += $"|ciproducers={ciProducersInputSignature}";
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }
@@ -570,7 +596,7 @@ public static class ScanEngine
                 var path = Path.Combine(repoPath, item.RelativePath.Replace('/', Path.DirectorySeparatorChar));
                 using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 if (stream.Length != item.SizeBytes)
-                    throw new SourceSnapshotException();
+                    throw new SourceSnapshotException(details: [$"{item.RelativePath} (size changed during scan: {item.SizeBytes} -> {stream.Length})"]);
 
                 BinaryPrimitives.WriteInt64BigEndian(lengthBuffer, item.SizeBytes);
                 hash.AppendData(lengthBuffer);
@@ -585,7 +611,7 @@ public static class ScanEngine
                 }
 
                 if (bytesRead != item.SizeBytes || stream.Length != item.SizeBytes)
-                    throw new SourceSnapshotException();
+                    throw new SourceSnapshotException(details: [$"{item.RelativePath} (bytes changed while being read)"]);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -603,7 +629,35 @@ public static class ScanEngine
         var expectedItems = expected.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         var observedItems = observed.OrderBy(item => item.RelativePath, StringComparer.Ordinal).ToArray();
         if (!expectedItems.SequenceEqual(observedItems))
-            throw new SourceSnapshotException();
+            throw new SourceSnapshotException(details: DescribeInventoryDrift(expectedItems, observedItems));
+    }
+
+    private static IReadOnlyList<string> DescribeInventoryDrift(
+        FileInventoryItem[] expectedItems,
+        FileInventoryItem[] observedItems)
+    {
+        var observedByPath = observedItems.ToDictionary(item => item.RelativePath, StringComparer.Ordinal);
+        var expectedPaths = expectedItems.Select(item => item.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var details = new List<string>();
+        foreach (var item in expectedItems)
+        {
+            if (!observedByPath.TryGetValue(item.RelativePath, out var observedItem))
+                details.Add($"{item.RelativePath} (disappeared)");
+            else if (!item.Equals(observedItem))
+                details.Add($"{item.RelativePath} (changed: {item.Kind} {item.SizeBytes} -> {observedItem.Kind} {observedItem.SizeBytes})");
+            if (details.Count >= 3)
+                return details;
+        }
+        foreach (var item in observedItems)
+        {
+            if (!expectedPaths.Contains(item.RelativePath))
+            {
+                details.Add($"{item.RelativePath} (appeared)");
+                if (details.Count >= 3)
+                    return details;
+            }
+        }
+        return details;
     }
 
     private static void VerifySourceSnapshotInventoryMembership(
@@ -619,7 +673,35 @@ public static class ScanEngine
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
             .ToArray();
         if (!expectedItems.SequenceEqual(observedItems))
-            throw new SourceSnapshotException();
+            throw new SourceSnapshotException(details: DescribeMembershipDrift(expectedItems, observedItems));
+    }
+
+    private static IReadOnlyList<string> DescribeMembershipDrift(
+        (string RelativePath, string Kind)[] expectedItems,
+        (string RelativePath, string Kind)[] observedItems)
+    {
+        var observedByPath = observedItems.ToDictionary(item => item.RelativePath, StringComparer.Ordinal);
+        var expectedPaths = expectedItems.Select(item => item.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var details = new List<string>();
+        foreach (var item in expectedItems)
+        {
+            if (!observedByPath.TryGetValue(item.RelativePath, out var observedItem))
+                details.Add($"{item.RelativePath} (disappeared)");
+            else if (observedItem.Kind != item.Kind)
+                details.Add($"{item.RelativePath} (kind changed: {item.Kind} -> {observedItem.Kind})");
+            if (details.Count >= 3)
+                return details;
+        }
+        foreach (var item in observedItems)
+        {
+            if (!expectedPaths.Contains(item.RelativePath))
+            {
+                details.Add($"{item.RelativePath} (appeared)");
+                if (details.Count >= 3)
+                    return details;
+            }
+        }
+        return details;
     }
 
     internal static IReadOnlyDictionary<string, string> CaptureSemanticInputSnapshot(
@@ -658,24 +740,78 @@ public static class ScanEngine
                 if (path.StartsWith("__external__/", StringComparison.Ordinal))
                     continue;
 
-                if (!baseline.TryGetValue(path, out var expected)
-                    || !itemsByPath.TryGetValue(path, out var item)
-                    || !string.Equals(expected, CreateSourceSnapshotDigest(repoPath, [item], cancellationToken), StringComparison.Ordinal))
+                if (semanticResult.CompilationInputFiles is CompilationInputSet compilerInputs
+                    && compilerInputs.Checksums.ContainsKey(path))
+                    compilerInputs.Verify(path, Path.Combine(repoPath, path.Replace('/', Path.DirectorySeparatorChar)));
+                if (!baseline.TryGetValue(path, out var expected))
                 {
-                    throw new SourceSnapshotException();
+                    throw new SourceSnapshotException(details: [$"{path} (no baseline digest captured)"]);
                 }
+                if (!itemsByPath.TryGetValue(path, out var item))
+                    throw new SourceSnapshotException(details: [$"{path} (missing from verification inventory)"]);
+                if (!string.Equals(expected, CreateSourceSnapshotDigest(repoPath, [item], cancellationToken), StringComparison.Ordinal))
+                    throw new SourceSnapshotException(details: [$"{path} (protected input bytes changed)"]);
             }
         }
-        catch (SourceInventoryException ex)
+        catch (Exception ex) when (ex is SourceInventoryException or IOException or UnauthorizedAccessException)
         {
-            throw new SourceSnapshotException(ex);
+            throw new SourceSnapshotException(ex, ["source input re-read failed"]);
         }
     }
 
     private static bool IsSemanticMetadataKind(string kind) =>
         kind is "Solution" or "Project" or "VisualBasicProject" or "MSBuildProps" or "MSBuildTargets";
 
+    // Generated paths nominate inputs for bounded post-generation capture, never an exemption
+    // from hashing. Only exact repository-local compilation inputs are admitted.
+    internal static IReadOnlyList<FileInventoryItem> CaptureGeneratedCompilationInputs(
+        string repoPath, IReadOnlyList<FileInventoryItem> inventory, SemanticExtractionResult semanticResult)
+    {
+        var known = inventory.Select(item => item.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var result = new List<FileInventoryItem>();
+        long bytes = 0;
+        foreach (var path in (semanticResult.CompilationInputFiles ?? new HashSet<string>()).Order(StringComparer.Ordinal))
+        {
+            if (known.Contains(path) || path.StartsWith("__external__/", StringComparison.Ordinal)) continue;
+            var normalized = path.Replace('\\', '/');
+            if (Path.IsPathRooted(path) || normalized.Split('/').Any(segment => segment is ".." or "." or ""))
+                throw new SourceSnapshotException(details: ["invalid generated compilation input path"]);
+            try
+            {
+                var inventoryExcluded = IsKnownGeneratedCompilationInput(path);
+                var current = repoPath;
+                foreach (var segment in normalized.Split('/'))
+                {
+                    current = Path.Combine(current, segment);
+                    inventoryExcluded |= (File.GetAttributes(current) & (FileAttributes.Hidden | FileAttributes.System)) != 0;
+                    if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                        throw new SourceSnapshotException(details: ["linked generated compilation input"]);
+                }
+                if (!inventoryExcluded) continue; // Ordinary new source still requires its initial baseline.
+                var size = new FileInfo(current).Length;
+                if (result.Count >= 4096 || size > 67_108_864 - bytes)
+                    throw new SourceSnapshotException(details: ["generated compilation input capture limit"]);
+                if (semanticResult.CompilationInputFiles is not CompilationInputSet compilerInputs)
+                    throw new SourceSnapshotException(details: ["compilation input lacks immutable compiler evidence"]);
+                compilerInputs.Verify(path, current);
+                bytes += size;
+                result.Add(new(path, path.EndsWith(".vb", StringComparison.OrdinalIgnoreCase) ? "VisualBasic" : "CSharp", size));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new SourceSnapshotException(ex, ["generated compilation input re-read failed"]);
+            }
+        }
+        return result;
+    }
+
+    private static bool IsKnownGeneratedCompilationInput(string relativePath) =>
+        relativePath.Split('/', '\\').SkipLast(1)
+            .Any(segment => segment.Equals("obj", StringComparison.OrdinalIgnoreCase)
+                || segment.Equals("bin", StringComparison.OrdinalIgnoreCase));
+
     private static IReadOnlyList<FileInventoryItem> IncludeSemanticInputs(
+        string repoPath,
         IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<FileInventoryItem> fullInventory,
         SemanticExtractionResult semanticResult)
@@ -685,6 +821,7 @@ public static class ScanEngine
             .Concat(fullInventory.Where(item =>
                 IsSemanticMetadataKind(item.Kind)
                 || compilationInputFiles.Contains(item.RelativePath)))
+            .Concat(CaptureGeneratedCompilationInputs(repoPath, fullInventory, semanticResult))
             .GroupBy(item => item.RelativePath, StringComparer.Ordinal)
             .Select(group => group.First())
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
@@ -724,7 +861,11 @@ public static class ScanEngine
         IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<TargetFrameworkInfo> targetFrameworks,
         IReadOnlyList<PackageReferenceInfo> packageReferences,
+        IReadOnlyList<CentralPackageVersionInfo> centralPackageVersions,
+        IReadOnlyList<ProducedPackageInfo> producedPackages,
         NuGetLockfileReadResult nugetLockfiles,
+        DepsJsonResult? depsJson,
+        CiWorkflowResult? ciProducers,
         IReadOnlyList<string> knownGaps,
         string repoPath,
         SemanticExtractionResult semanticResult,
@@ -770,7 +911,7 @@ public static class ScanEngine
                 properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["status"] = manifest.BuildStatus,
-                    ["reason"] = GetBuildStatusReason(manifest, semanticResult, binlogFacts)
+                    ["reason"] = GetBuildStatusReason(manifest, semanticResult, binlogFacts, knownGaps)
                 })
         };
 
@@ -906,12 +1047,19 @@ public static class ScanEngine
                 ["targetFramework"] = item.TargetFramework ?? string.Empty
             };
             AddSafeVersionProperties(packageProperties, item.Version);
+            if (!string.IsNullOrWhiteSpace(item.VersionOverride))
+            {
+                // Central package management: an explicit per-project override pin. Kept SEPARATE from
+                // `version` — the effective version (override > central > project) is a consumer-side
+                // derivation, never asserted here (rule limitation, rule-catalog project.file.v1).
+                AddSafeVersionProperties(packageProperties, item.VersionOverride, "versionOverride", "unsafe-version-override");
+            }
             facts.Add(FactFactory.Create(
                 manifest,
                 FactTypes.PackageReferenced,
                 RuleIds.ProjectFile,
                 EvidenceTiers.Tier2Structural,
-                new EvidenceSpan(item.ProjectPath, item.Line, item.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                new EvidenceSpan(item.ProjectPath, item.Line, item.EndLine ?? item.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
                 projectPath: item.ProjectPath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
                     || item.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase)
                     ? item.ProjectPath
@@ -919,6 +1067,67 @@ public static class ScanEngine
                 targetSymbol: item.PackageName,
                 properties: packageProperties));
         }
+
+        foreach (var pin in centralPackageVersions)
+        {
+            var pinProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["dependencyGroup"] = "PackageVersion",
+                ["ecosystem"] = "nuget",
+                ["manifestKind"] = Path.GetFileName(pin.PropsPath).Equals("Directory.Packages.props", StringComparison.OrdinalIgnoreCase)
+                    ? "Directory.Packages.props"
+                    : "props",
+                ["package"] = pin.PackageName,
+                ["packageManager"] = "nuget",
+                ["packageName"] = pin.PackageName,
+                ["sourceKind"] = "build-file",
+                ["surfaceKind"] = "package-config",
+                ["targetFramework"] = string.Empty // props pins are TFM-agnostic
+            };
+            AddSafeVersionProperties(pinProperties, pin.Version);
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.CentralPackageVersionDeclared,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(pin.PropsPath, pin.Line, pin.EndLine, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                targetSymbol: pin.PackageName,
+                properties: pinProperties));
+        }
+
+        foreach (var produced in producedPackages)
+        {
+            var producedProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["dependencyGroup"] = "PackageProduced",
+                ["ecosystem"] = "nuget",
+                ["manifestKind"] = "csproj", // PackageProduced: overridden below for VB projects
+                ["package"] = produced.PackageId,
+                ["packageManager"] = "nuget",
+                ["packageName"] = produced.PackageId,
+                ["projectPath"] = produced.ProjectPath,
+                ["sourceKind"] = "build-file",
+                ["surfaceKind"] = "package-config",
+                ["targetFramework"] = string.Empty
+            };
+            if (!produced.ExplicitPackageId)
+                producedProperties["packageIdSource"] = "AssemblyName"; // fallback id — a weaker claim, visible to consumers
+            if (produced.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
+                producedProperties["manifestKind"] = "vbproj";
+            AddSafeVersionProperties(producedProperties, produced.Version);
+            facts.Add(FactFactory.Create(
+                manifest,
+                FactTypes.PackageProduced,
+                RuleIds.ProjectFile,
+                EvidenceTiers.Tier2Structural,
+                new EvidenceSpan(produced.ProjectPath, produced.SpanStart, produced.Line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                projectPath: produced.ProjectPath,
+                targetSymbol: produced.PackageId,
+                properties: producedProperties));
+        }
+
+        if (depsJson is not null) facts.AddRange(DepsJsonExtractor.Materialize(manifest, depsJson));
+        if (ciProducers is not null) facts.AddRange(CiWorkflowProducerExtractor.Materialize(manifest, ciProducers));
 
         foreach (var entry in nugetLockfiles.Entries)
         {
@@ -997,7 +1206,8 @@ public static class ScanEngine
         facts.AddRange(CSharpSemanticExtractor.MaterializeFacts(manifest, migrationSyntaxFallback.Gaps));
         progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback);
         facts.AddRange(CSharpSyntaxExtractor.Extract(repoPath, manifest, inventory, protectedSourceSpans));
-        facts.AddRange(VisualBasicSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles, protectedSourceSpans));
+        facts.AddRange(VisualBasicSyntaxExtractor.Extract(repoPath, manifest, inventory, semanticallyAnalyzedFiles, protectedSourceSpans,
+            options.WebFormsVbImportContextPath));
         progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SyntaxFallback, "completed");
         cancellationToken.ThrowIfCancellationRequested();
         var materializedSemanticFacts = CSharpSemanticExtractor.MaterializeFacts(manifest, semanticResult.Facts);
@@ -1220,7 +1430,8 @@ public static class ScanEngine
     private static string GetBuildStatusReason(
         ScanManifest manifest,
         SemanticExtractionResult semanticResult,
-        IReadOnlyList<CodeFact> binlogFacts)
+        IReadOnlyList<CodeFact> binlogFacts,
+        IReadOnlyList<string> knownGaps)
     {
         if (manifest.BuildStatus == "Succeeded")
         {
@@ -1231,6 +1442,11 @@ public static class ScanEngine
         {
             return "No C# or Visual Basic project was available for MSBuildWorkspace semantic analysis.";
         }
+
+        if (knownGaps.Any(gap => (gap.StartsWith("NuGet lockfile analysis reported", StringComparison.Ordinal)
+            || gap.StartsWith("Build-output dependency analysis reported", StringComparison.Ordinal)
+            || gap.StartsWith("CI workflow producer analysis reported", StringComparison.Ordinal))))
+            return "Package/dependency evidence coverage is partial; inspect package manifest gaps and any separate semantic diagnostics.";
 
         var hasBinlogGap = binlogFacts.Any(fact =>
             fact.FactType == FactTypes.AnalysisGap
@@ -1247,23 +1463,26 @@ public static class ScanEngine
         return "MSBuildWorkspace project load or Roslyn compilation reported gaps; syntax fallback still ran.";
     }
 
-    private static void AddSafeVersionProperties(SortedDictionary<string, string> properties, string? version)
+    private static void AddSafeVersionProperties(SortedDictionary<string, string> properties, string? version, string key = "version", string? redactionReason = "unsafe-package-version")
     {
         if (string.IsNullOrWhiteSpace(version))
         {
-            properties["version"] = string.Empty;
+            properties[key] = string.Empty;
             return;
         }
 
         var trimmed = version.Trim();
         if (IsUnsafePackageVersion(trimmed))
         {
-            properties["versionHash"] = FactFactory.Hash(trimmed, 32);
-            properties["redactionReason"] = "unsafe-package-version";
+            properties[key + "Hash"] = FactFactory.Hash(trimmed, 32);
+            if (redactionReason is not null)
+            {
+                properties[key == "version" ? "redactionReason" : key + "RedactionReason"] = redactionReason;
+            }
             return;
         }
 
-        properties["version"] = trimmed;
+        properties[key] = trimmed;
     }
 
     private static bool IsUnsafePackageVersion(string value)
@@ -1381,6 +1600,7 @@ public static class ScanEngine
 
     private static HashSet<string> NormalizeOptionPaths(string repoPath, IReadOnlyList<string>? paths)
     {
+        repoPath = Path.GetFullPath(repoPath);
         var result = new HashSet<string>(CSharpSemanticExtractor.CreateSourcePathComparer(repoPath));
         foreach (var path in paths ?? [])
         {

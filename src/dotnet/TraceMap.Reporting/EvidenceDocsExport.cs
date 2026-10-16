@@ -2290,6 +2290,7 @@ public static partial class EvidenceDocsExporter
 
     private static string WithMarkdownHash(string content)
     {
+        content = NormalizeLineEndings(content);
         if (!content.StartsWith("---\n", StringComparison.Ordinal))
         {
             return content;

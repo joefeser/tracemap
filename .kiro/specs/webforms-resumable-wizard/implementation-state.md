@@ -1,5 +1,35 @@
 # Implementation state
 
+## PR #802 follow-up repair — 2026-10-03
+
+Owner chose to keep the main-to-dev sync PR and deliver review repairs through
+a separate dev branch, `codex/pr802-dev-review-fixes`, based initially on exact
+reviewed head `d76358f663ce40532fe0954ca9888612d51a4121`. Do not push fixes to main
+or touch the unrelated dirty dev / prior promotion checkouts. No merge authority.
+
+The repair rejects an existing empty project directory rather than treating a
+vacuously true file predicate as interrupted registration. Genuine interrupted
+config artifacts remain recoverable. Other scoped repairs cover absolute scope
+normalization, explicit scope/extractor diagnostic categories, C# interpolation
+and awaited JavaScript regex evidence, packet-limit documentation, and narrowly
+admitted macOS OS aliases while retaining operator-link refusal.
+
+The Windows public-corpus failure occurred before route traversal, at selected
+root admission. Lazy-constructor tests now join the existing nonparallel Git
+identity collection and assert real scan commit identity before composing roots.
+This is a scheduling mitigation plus clearer diagnostics, not proof of a fixed
+Windows runtime defect; fresh Windows CI remains required. Initial focused run:
+100 passed, zero skipped; PowerShell linked-output safety passed on macOS.
+Broad local run: 3227 passed, one Windows platform skip, and two stale extractor
+version assertions failed. Both pins were updated for legacy-webforms/0.13.7.
+The final rebuilt affected suites passed 211/211 with no skips, including those
+two tests, all promotion regressions, packet tests and Git output tests. The
+full suite was not repeated after those final changes; exact-head CI remains a
+gate. Build-environment diagnostics advance to build-environment/0.6.1.
+PowerShell configuration and linked-output scripts, diff whitespace and private
+path guards passed. Real CLI smoke using `--repo . --project ModernSample.csproj`
+completed Level1SemanticAnalysis / Succeeded and emitted all required outputs.
+
 ## Completion audit — 2026-10-01
 
 Implementation #799 is owner-merged into dev as `98ce227f`; its complete tree is

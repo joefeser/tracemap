@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis.Operations;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -51,23 +52,6 @@ public static class CSharpSemanticExtractor
         INamedTypeSymbol? DelegateType,
         INamedTypeSymbol? ExpressionTreeType,
         ITypeSymbol TargetType);
-
-    private static readonly HashSet<string> HttpClientMethods = new(StringComparer.Ordinal)
-    {
-        "GetAsync",
-        "PostAsync",
-        "PutAsync",
-        "DeleteAsync",
-        "SendAsync"
-    };
-
-    private static readonly HashSet<string> JsonHttpMethods = new(StringComparer.Ordinal)
-    {
-        "GetFromJsonAsync",
-        "ReadFromJsonAsync",
-        "PostAsJsonAsync",
-        "PutAsJsonAsync"
-    };
 
     private static readonly HashSet<string> DbSaveMethods = new(StringComparer.Ordinal)
     {
@@ -154,7 +138,7 @@ public static class CSharpSemanticExtractor
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
-        var compilationInputFiles = new HashSet<string>(StringComparer.Ordinal);
+        var compilationInputFiles = new CompilationInputSet();
         var protectedSourceSpans = new List<ProtectedSourceSpan>();
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates = options.CompiledInputPaths is { Count: > 0 }
             || options.CompiledDependencyPaths is { Count: > 0 }
@@ -544,7 +528,7 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> loadedProjectPaths,
         HashSet<string> analyzedFiles,
-        HashSet<string> compilationInputFiles,
+        CompilationInputSet compilationInputFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         IReadOnlySet<string>? selectedProjectPaths,
@@ -597,7 +581,7 @@ public static class CSharpSemanticExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
-        HashSet<string> compilationInputFiles,
+        CompilationInputSet compilationInputFiles,
         List<ProtectedSourceSpan> protectedSourceSpans,
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         int? projectOrdinal,
@@ -655,17 +639,17 @@ public static class CSharpSemanticExtractor
         {
             cancellationToken.ThrowIfCancellationRequested();
             var projection = ToRelativePathProjection(repoPath, document.FilePath);
-            if (!projection.IsExternal && !IsCompilerGeneratedDocument(document, cancellationToken))
+            if (!projection.IsExternal)
             {
                 if (compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath))
                 {
-                    compilationInputFiles.Add(canonicalCompilationInputPath);
+                    compilationInputFiles.Record(canonicalCompilationInputPath, document.GetTextAsync(cancellationToken).GetAwaiter().GetResult());
                 }
                 else if (File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
                 {
                     // A repository-local compilation input that appeared after initial
                     // inventory remains protected so source mutation fails loudly.
-                    compilationInputFiles.Add(projection.Path);
+                    compilationInputFiles.Record(projection.Path, document.GetTextAsync(cancellationToken).GetAwaiter().GetResult());
                 }
                 else
                 {
@@ -3816,47 +3800,19 @@ public static class CSharpSemanticExtractor
             var methodName = method.Name;
             var containingType = method.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty;
             AddDatabaseOperationCandidateFact(projectPath, filePath, invocation, model, method, facts);
-            if (IsHttpClientCall(method))
+            if (OutboundHttpApi.TryClassify(method, out var httpFamily, out var httpVerb))
             {
                 var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["containingType"] = containingType,
-                    ["methodFamily"] = "HttpClient",
                     ["methodName"] = methodName
                 };
+                OutboundHttpApi.AddCallProperties(properties, model.GetOperation(invocation) as IInvocationOperation, httpFamily, httpVerb);
                 AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(invocation.SpanStart));
                 AddSymbolProperties(properties, "target", method);
-                facts.Add(CreateSemanticFact(
-                    FactTypes.HttpCallDetected,
-                    RuleIds.HttpClientInvocation,
-                    projectPath,
-                    filePath,
-                    invocation,
-                    sourceSymbol: GetEnclosingSymbol(model, invocation),
-                    targetSymbol: method.ToDisplayString(SymbolFormat),
-                    contractElement: methodName,
-                    properties: properties));
-            }
-            else if (IsJsonHttpCall(method))
-            {
-                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["containingType"] = containingType,
-                    ["methodFamily"] = "JsonHttpExtension",
-                    ["methodName"] = methodName
-                };
-                AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(invocation.SpanStart));
-                AddSymbolProperties(properties, "target", method);
-                facts.Add(CreateSemanticFact(
-                    FactTypes.HttpCallDetected,
-                    RuleIds.HttpClientInvocation,
-                    projectPath,
-                    filePath,
-                    invocation,
-                    sourceSymbol: GetEnclosingSymbol(model, invocation),
-                    targetSymbol: method.ToDisplayString(SymbolFormat),
-                    contractElement: methodName,
-                    properties: properties));
+                facts.Add(CreateSemanticFact(FactTypes.HttpCallDetected, RuleIds.HttpClientInvocation,
+                    projectPath, filePath, invocation, sourceSymbol: GetEnclosingSymbol(model, invocation),
+                    targetSymbol: method.ToDisplayString(SymbolFormat), contractElement: methodName, properties: properties));
             }
 
             if (IsHttpClientFactoryCreateClient(method) && TryGetLiteralArgument(invocation, 0, out var clientName))
@@ -4011,6 +3967,7 @@ public static class CSharpSemanticExtractor
         {
             properties["sqlOperationName"] = sqlOperationName;
         }
+        if (frameworkFamily == "ado-net") DatabaseOperationApi.AddProperties(properties, model.GetOperation(invocation) as Microsoft.CodeAnalysis.Operations.IInvocationOperation);
         AddSymbolProperties(properties, "source", model.GetEnclosingSymbol(invocation.SpanStart));
         AddSymbolProperties(properties, "target", method);
 
@@ -4203,18 +4160,8 @@ public static class CSharpSemanticExtractor
         out string operationKind,
         out string? sql)
     {
-        operationKind = method.Name switch
-        {
-            "ExecuteReader" or "ExecuteReaderAsync" => "select-candidate",
-            "ExecuteScalar" or "ExecuteScalarAsync" => "scalar-candidate",
-            "ExecuteNonQuery" or "ExecuteNonQueryAsync" => "execute-candidate",
-            _ => string.Empty
-        };
         sql = null;
-        if (operationKind.Length == 0 || method.ContainingType is null || !DerivesFromDbCommand(method.ContainingType))
-        {
-            return false;
-        }
+        if (!DatabaseOperationApi.TryClassify(method, out operationKind, out _)) return false;
 
         var receiver = UnwrapExpression(GetInvocationReceiver(invocation.Expression));
         if (receiver is ObjectCreationExpressionSyntax creation
@@ -4236,21 +4183,6 @@ public static class CSharpSemanticExtractor
             expression = parenthesized.Expression;
         }
         return expression;
-    }
-
-    private static bool DerivesFromDbCommand(INamedTypeSymbol symbol)
-    {
-        for (INamedTypeSymbol? current = symbol; current is not null; current = current.BaseType)
-        {
-            if (IsKnownType(current, "System.Data.Common.DbCommand")
-                || IsKnownType(current, "System.Data.SqlClient.SqlCommand")
-                || IsKnownType(current, "Microsoft.Data.SqlClient.SqlCommand")
-                || IsKnownType(current, "Npgsql.NpgsqlCommand"))
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static string OperationKindFromSql(string? operationName, string fallback) =>
@@ -4854,20 +4786,6 @@ public static class CSharpSemanticExtractor
         }
 
         return null;
-    }
-
-    private static bool IsHttpClientCall(IMethodSymbol method)
-    {
-        return HttpClientMethods.Contains(method.Name)
-            && method.ContainingType is not null
-            && IsKnownType(method.ContainingType, "System.Net.Http.HttpClient");
-    }
-
-    private static bool IsJsonHttpCall(IMethodSymbol method)
-    {
-        return JsonHttpMethods.Contains(method.Name)
-            && method.ContainingType is not null
-            && GetNamespaceName(method.ContainingType).Equals("System.Net.Http.Json", StringComparison.Ordinal);
     }
 
     private static bool IsHttpClientFactoryCreateClient(IMethodSymbol method)
@@ -5506,7 +5424,8 @@ public static class CSharpSemanticExtractor
 
     private static bool IsWorkspaceException(Exception ex)
     {
-        return ex is not OperationCanceledException
+        return ex is not SourceSnapshotException
+            and not OperationCanceledException
             and not OutOfMemoryException
             and not StackOverflowException;
     }

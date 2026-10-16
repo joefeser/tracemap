@@ -228,7 +228,9 @@ public sealed class CSharpFullSnapshotStabilityTests
         var repo = Path.Combine(temp.Path, "repo");
         WriteCustomIntermediateOutputFixture(repo);
 
-        var result = Scan(repo, Path.Combine(temp.Path, "output"));
+        ScanResult result;
+        try { result = Scan(repo, Path.Combine(temp.Path, "output")); }
+        catch (SourceSnapshotException ex) { throw new Xunit.Sdk.XunitException(SourceSnapshotException.Describe(ex)); }
 
         Assert.Equal("Level1SemanticAnalysis", result.Manifest.AnalysisLevel);
         Assert.Equal("Succeeded", result.Manifest.BuildStatus);
@@ -581,6 +583,9 @@ public sealed class CSharpFullSnapshotStabilityTests
         RunGit(repo, "config", "user.email", "fixture@example.invalid");
         RunGit(repo, "config", "user.name", "TraceMap Fixture");
         Commit(repo, "baseline");
+        // Stabilize generated informational-version metadata against the committed SHA
+        // before asserting that an unchanged scan preserves its initial baseline.
+        RunDotnet(repo, "build", "src/IntermediateOutput/IntermediateOutput.csproj", "--nologo", "--verbosity", "quiet");
     }
 
     private static void WriteCaseDriftFixture(string repo)

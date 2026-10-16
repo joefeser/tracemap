@@ -46,6 +46,11 @@ The config has seven operational settings: source root, Web Forms folder,
 backend folder, controls folder, project selection, output root, and page
 selection. Leave `outputRoot` equal to `$ReviewRoot`.
 
+Linked review/output paths are rejected, including operator-created linked
+ancestors. On macOS only the exact OS aliases `/tmp` to `/private/tmp` and
+`/var` to `/private/var` are admitted; other links are not implicitly trusted.
+Page-list replacement remains atomic and must not modify a hard-linked target.
+
 The generated JSONC comments explain those settings in place. Existing review
 roots that contain only `config/webforms-review.json` remain supported. Do not
 keep both names in one root. Comments are supported; trailing commas are

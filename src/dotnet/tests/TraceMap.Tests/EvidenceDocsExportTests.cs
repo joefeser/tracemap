@@ -56,7 +56,10 @@ public sealed class EvidenceDocsExportTests
         Assert.Contains("QUERY_RECIPES.md", result.PlannedFiles);
         Assert.Contains(result.Manifest.Outputs, output => output.Path == "query-recipes.json");
         Assert.Contains(result.Manifest.Outputs, output => output.Path == "QUERY_RECIPES.md");
-        Assert.True(EvidenceDocsExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(outputPath, "QUERY_RECIPES.md"))));
+        var recipesMarkdown = await File.ReadAllTextAsync(Path.Combine(outputPath, "QUERY_RECIPES.md"));
+        Assert.DoesNotContain('\r', recipesMarkdown);
+        Assert.True(EvidenceDocsExporter.IsSelfConsistentMarkdown(recipesMarkdown));
+        Assert.True(EvidenceDocsExporter.IsSelfConsistentMarkdown(recipesMarkdown.Replace("\n", "\r\n", StringComparison.Ordinal)));
         var catalog = EvidenceDocsQueryRecipes.Build();
         Assert.Equal("tracemap-evidence-query-recipes.v1", catalog.SchemaVersion);
         Assert.Equal(10, catalog.Recipes.Count);

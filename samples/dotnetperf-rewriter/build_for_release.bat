@@ -1,0 +1,1 @@
+msbuild src/netperformance.sln /t:ReBuild /p:Configuration=Release;Platform="Any CPU"

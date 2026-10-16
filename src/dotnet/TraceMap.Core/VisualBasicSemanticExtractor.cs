@@ -12,7 +12,7 @@ namespace TraceMap.Core;
 // sanitized workspace/compilation gaps, and honest reduced coverage when
 // loading or compilation fails. Syntax-only fallback lives in
 // VisualBasicSyntaxExtractor; the two are never merged by rule or tier.
-public static class VisualBasicSemanticExtractor
+public static partial class VisualBasicSemanticExtractor
 {
     private const int MaxCallSiteSyntaxFallbackFactsPerDocument = 2000;
     // Language-aware display format mirroring the C# extractor's shape so VB
@@ -42,11 +42,13 @@ public static class VisualBasicSemanticExtractor
         ScanProgressReporter? progress = null)
     {
         options ??= new ScanOptions(repoPath, ".");
+        if (options.VisualBasicCompilationContextPath is not null)
+            return ExtractExplicitContext(repoPath, inventory, options, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var facts = new List<SemanticFactCandidate>();
         var gaps = new List<SemanticFactCandidate>();
         var analyzedFiles = new HashSet<string>(StringComparer.Ordinal);
-        var compilationInputFiles = new HashSet<string>(StringComparer.Ordinal);
+        var compilationInputFiles = new CompilationInputSet();
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates = options.CompiledInputPaths is { Count: > 0 }
             || options.CompiledDependencyPaths is { Count: > 0 }
             || options.CompiledBindingReceiptPaths is { Count: > 0 }
@@ -310,7 +312,7 @@ public static class VisualBasicSemanticExtractor
         List<SemanticFactCandidate> gaps,
         HashSet<string> loadedProjectPaths,
         HashSet<string> analyzedFiles,
-        HashSet<string> compilationInputFiles,
+        CompilationInputSet compilationInputFiles,
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         IReadOnlySet<string>? selectedProjectPaths,
         CancellationToken cancellationToken)
@@ -356,7 +358,7 @@ public static class VisualBasicSemanticExtractor
         List<SemanticFactCandidate> facts,
         List<SemanticFactCandidate> gaps,
         HashSet<string> analyzedFiles,
-        HashSet<string> compilationInputFiles,
+        CompilationInputSet compilationInputFiles,
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates,
         CancellationToken cancellationToken)
     {
@@ -409,17 +411,16 @@ public static class VisualBasicSemanticExtractor
             var compilerGenerated = IsCompilerGeneratedDocument(document.FilePath);
             if (compilationInputPaths.TryGetValue(projection.Path, out var canonicalCompilationInputPath))
             {
-                compilationInputFiles.Add(canonicalCompilationInputPath);
+                compilationInputFiles.Record(canonicalCompilationInputPath, document.GetTextAsync(cancellationToken).GetAwaiter().GetResult());
             }
-            else if (!compilerGenerated
-                && File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
+            else if (File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
             {
                 // A repository-local Visual Basic compilation input that appeared
                 // after initial inventory remains protected so source mutation
                 // fails loudly.
-                compilationInputFiles.Add(projection.Path);
+                compilationInputFiles.Record(projection.Path, document.GetTextAsync(cancellationToken).GetAwaiter().GetResult());
             }
-            else if (!compilerGenerated)
+            else
             {
                 unavailableCompilationInputObserved = true;
             }
@@ -1608,6 +1609,7 @@ public static class VisualBasicSemanticExtractor
                 && property.ContainingType.TypeKind != TypeKind.Error)
             {
                 facts.Add(CreatePropertyAccessFact(projectPath, filePath, memberAccess, model, property));
+                AddReadOnlyGetterCall(projectPath, filePath, memberAccess, model, property, facts);
             }
         }
 
@@ -1623,6 +1625,44 @@ public static class VisualBasicSemanticExtractor
                 facts.Add(CreatePropertyAccessFact(projectPath, filePath, invocation, model, defaultProperty));
             }
         }
+    }
+
+    private static void AddReadOnlyGetterCall(string? projectPath, string filePath,
+        MemberAccessExpressionSyntax node, SemanticModel model, IPropertySymbol property,
+        List<SemanticFactCandidate> facts)
+    {
+        // Getter and setter display identities are not distinct in this adapter.
+        // Admit only source-defined, nonvirtual read-only getters, and only an
+        // evaluated property operation. NameOf is symbol evidence, not execution.
+        if (!property.IsReadOnly || property.IsIndexer || property.IsDefault()
+            || property.GetMethod is not { IsVirtual: false, IsOverride: false, IsAbstract: false } getter
+            || !getter.Locations.Any(location => location.IsInSource)
+            || model.GetEnclosingSymbol(node.SpanStart) is not IMethodSymbol caller
+            || model.GetOperation(node) is not IPropertyReferenceOperation operation)
+            return;
+        // Roslyn can still return a property operation for an invalid write to
+        // a read-only property in a partial compilation. It is not a getter call.
+        if (node.Parent is AssignmentStatementSyntax assignment && assignment.Left == node)
+            return;
+        for (IOperation? parent = operation.Parent; parent is not null; parent = parent.Parent)
+        {
+            if (parent is INameOfOperation or IAnonymousFunctionOperation or IInvalidOperation
+                || parent is IArgumentOperation { Parameter.RefKind: not RefKind.None })
+                return;
+        }
+        var properties = AddAssemblyProperties(AddSymbolProperties(AddSymbolProperties(
+            new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["callerSymbol"] = caller.ToDisplayString(SymbolFormat),
+                ["calleeSymbol"] = getter.ToDisplayString(SymbolFormat),
+                ["calleeName"] = getter.Name,
+                ["calleeContainingType"] = property.ContainingType.ToDisplayString(SymbolFormat),
+                ["callKind"] = "SemanticReadOnlyPropertyGet",
+                ["limitations"] = "Source-defined nonvirtual read-only getter only; no setter, default/indexed property, ByRef argument, deferred lambda, runtime execution or framework dispatch claim."
+            }, "source", caller), "target", getter), caller.ContainingAssembly, getter.ContainingAssembly);
+        facts.Add(CreateSemanticFact(FactTypes.CallEdge, RuleIds.VisualBasicSemanticReadOnlyGetterCall,
+            projectPath, filePath, node, sourceSymbol: caller.ToDisplayString(SymbolFormat),
+            targetSymbol: getter.ToDisplayString(SymbolFormat), contractElement: getter.Name, properties: properties));
     }
 
     private static SemanticFactCandidate CreatePropertyAccessFact(
@@ -1847,6 +1887,22 @@ public static class VisualBasicSemanticExtractor
                 method),
             enclosing?.ContainingAssembly,
             method.ContainingAssembly);
+
+        // This is reference-byte identity, not source-build provenance. Keep it
+        // separate from declaration reconciliation and from runtime dispatch.
+        if (expression is MemberAccessExpressionSyntax { Expression: MyBaseExpressionSyntax or MyClassExpressionSyntax })
+            callProperties["dispatchKind"] = "explicit-nonvirtual";
+        if (ExplicitReferenceHashes.TryGetValue(model.Compilation, out var referenceHashes)
+            && method.ContainingAssembly is { } targetAssembly
+            && model.Compilation.GetMetadataReference(targetAssembly) is { } reference
+            && referenceHashes.TryGetValue(reference, out var referenceHash)
+            && ExplicitReferenceMethodIdentity(reference, method) is { } metadataIdentity)
+        {
+            callProperties["explicitReferenceSha256"] = referenceHash;
+            callProperties["targetMetadataIdentity"] = metadataIdentity;
+            callProperties["referenceDispatch"] = method.IsStatic || (!method.IsVirtual && !method.IsAbstract
+                && !method.IsOverride && method.ContainingType is { TypeKind: not TypeKind.Interface }) ? "direct" : "unresolved";
+        }
 
         facts.Add(CreateSemanticFact(
             FactTypes.CallEdge,
@@ -2419,6 +2475,7 @@ public static class VisualBasicSemanticExtractor
                 receiver),
             enclosing?.ContainingAssembly,
             method.ContainingAssembly);
+        DatabaseOperationApi.AddProperties(properties, model.GetOperation(site) as IInvocationOperation);
         facts.Add(CreateSemanticFact(
             FactTypes.DatabaseOperationCandidate,
             RuleIds.DatabaseOperationCallPattern,
@@ -2500,6 +2557,7 @@ public static class VisualBasicSemanticExtractor
                         method),
                     enclosing?.ContainingAssembly,
                     method.ContainingAssembly);
+                OutboundHttpApi.AddCallProperties(properties, model.GetOperation(invocation) as IInvocationOperation, family, httpMethod);
                 if (TryGetHttpUriArgument(invocation, model, out var uriText))
                 {
                     var normalized = EndpointRouteNormalizer.Normalize(uriText);
@@ -2508,7 +2566,7 @@ public static class VisualBasicSemanticExtractor
                     properties["urlKind"] = "compile-time-constant-path";
                     properties["urlHash"] = FactFactory.Hash(uriText, 32);
                 }
-                else
+                else if (properties["urlKind"] == "unavailable")
                 {
                     AddExternalGap(invocation, "VisualBasicHttpDestinationUnavailable", "A compiler-resolved Visual Basic HTTP call had no compile-time constant destination; no host or route identity was claimed.");
                 }
@@ -2642,46 +2700,8 @@ public static class VisualBasicSemanticExtractor
             properties: properties));
     }
 
-    private static bool TryClassifyHttpOperation(IMethodSymbol method, out string family, out string httpMethod)
-    {
-        family = string.Empty;
-        httpMethod = "UNKNOWN";
-        var type = GetMetadataName(method.ContainingType.OriginalDefinition);
-        if (type == "System.Net.Http.HttpClient"
-            && IsTrustedAssembly(method.ContainingAssembly, "System.Net.Http", "b03f5f7f11d50a3a"))
-        {
-            family = "HttpClient";
-            httpMethod = method.Name.StartsWith("Get", StringComparison.Ordinal) ? "GET"
-                : method.Name.StartsWith("Post", StringComparison.Ordinal) ? "POST"
-                : method.Name.StartsWith("Put", StringComparison.Ordinal) ? "PUT"
-                : method.Name.StartsWith("Delete", StringComparison.Ordinal) ? "DELETE"
-                : method.Name.StartsWith("Patch", StringComparison.Ordinal) ? "PATCH" : "UNKNOWN";
-            return method.Name is "GetAsync" or "GetStringAsync" or "GetByteArrayAsync" or "GetStreamAsync"
-                or "PostAsync" or "PutAsync" or "DeleteAsync" or "PatchAsync" or "SendAsync" or "Send";
-        }
-
-        if (IsTrustedWebRequestType(method.ContainingType)
-            && method.Name is "GetResponse" or "GetResponseAsync")
-        {
-            family = "WebRequest";
-            return true;
-        }
-
-        if (type == "System.Net.WebClient"
-            && IsRecognizedWebClientAssembly(method.ContainingAssembly)
-            && (method.Name.StartsWith("Download", StringComparison.Ordinal)
-                || method.Name.StartsWith("Upload", StringComparison.Ordinal)
-                || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
-                || method.Name.StartsWith("OpenWrite", StringComparison.Ordinal)))
-        {
-            family = "WebClient";
-            httpMethod = method.Name.StartsWith("Download", StringComparison.Ordinal) || method.Name.StartsWith("OpenRead", StringComparison.Ordinal)
-                ? "GET" : "UNKNOWN";
-            return true;
-        }
-
-        return false;
-    }
+    private static bool TryClassifyHttpOperation(IMethodSymbol method, out string family, out string httpMethod) =>
+        OutboundHttpApi.TryClassify(method, out family, out httpMethod);
 
     private static bool TryGetHttpUriArgument(InvocationExpressionSyntax invocation, SemanticModel model, out string value)
     {
@@ -2960,97 +2980,16 @@ public static class VisualBasicSemanticExtractor
     }
 
     private static bool IsPotentialExternalOperationName(string name) =>
-        new[] { "GetAsync", "PostAsync", "PutAsync", "DeleteAsync", "SendAsync", "GetResponse", "GetResponseAsync", "DownloadString", "UploadString" }
-            .Contains(name, StringComparer.OrdinalIgnoreCase);
+        OutboundHttpApi.IsCandidate(name, ignoreCase: true);
 
     private static bool TryClassifyAdoNetOperation(IMethodSymbol method, out string operationKind, out string resultKind)
     {
-        operationKind = string.Empty;
-        resultKind = "none";
-        if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbCommand")
-            && HasCompatibleFrameworkMember(method, "System.Data.Common.DbCommand"))
-        {
-            operationKind = method.Name switch
-            {
-                "ExecuteReader" or "ExecuteReaderAsync" => "select-candidate",
-                "ExecuteScalar" or "ExecuteScalarAsync" => "scalar-candidate",
-                "ExecuteNonQuery" or "ExecuteNonQueryAsync" => "execute-candidate",
-                _ => string.Empty
-            };
-            resultKind = method.Name.StartsWith("ExecuteReader", StringComparison.Ordinal)
-                ? "data-reader"
-                : method.Name.StartsWith("ExecuteScalar", StringComparison.Ordinal)
-                    ? "scalar"
-                    : "row-count-or-none";
-        }
-        else if (IsAdoNetType(method.ContainingType, "System.Data.Common.DbDataAdapter")
-            && HasCompatibleFrameworkMember(method, "System.Data.Common.DbDataAdapter")
-            && method.Name == "Fill")
-        {
-            operationKind = "data-adapter-fill";
+        if (!DatabaseOperationApi.TryClassify(method, out operationKind, out resultKind)) return false;
+        if (operationKind == "data-adapter-fill")
             resultKind = method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataTable")
-                    || parameter.Type is IArrayTypeSymbol array && IsAdoNetType(array.ElementType, "System.Data.DataTable"))
-                ? "data-table"
-                : method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataSet"))
-                    ? "data-set"
-                    : "data-container-unknown";
-        }
-
-        return operationKind.Length > 0;
-    }
-
-    private static bool HasCompatibleFrameworkMember(IMethodSymbol method, string frameworkType)
-    {
-        for (var current = method.ContainingType; current is not null; current = current.BaseType)
-        {
-            if (GetMetadataName(current.OriginalDefinition) != frameworkType)
-            {
-                continue;
-            }
-            return current.GetMembers(method.Name)
-                .OfType<IMethodSymbol>()
-                .Any(candidate => candidate.Parameters.Length == method.Parameters.Length
-                    && ReturnTypesAlign(candidate.ReturnType, method.ReturnType)
-                    && candidate.Parameters.Zip(method.Parameters).All(pair =>
-                        pair.First.RefKind == pair.Second.RefKind
-                        && ParameterTypesAlign(pair.First.Type, pair.Second.Type)));
-        }
-        return false;
-    }
-
-    private static bool ParameterTypesAlign(ITypeSymbol expected, ITypeSymbol actual)
-    {
-        if (SymbolEqualityComparer.Default.Equals(expected, actual))
-        {
-            return true;
-        }
-        if (expected is not INamedTypeSymbol namedExpected || actual is not INamedTypeSymbol namedActual)
-        {
-            return false;
-        }
-        return GetMetadataName(namedExpected.OriginalDefinition) == GetMetadataName(namedActual.OriginalDefinition)
-            || IsAdoNetType(namedActual, GetMetadataName(namedExpected.OriginalDefinition));
-    }
-
-    private static bool ReturnTypesAlign(ITypeSymbol expected, ITypeSymbol actual)
-    {
-        if (SymbolEqualityComparer.Default.Equals(expected, actual))
-        {
-            return true;
-        }
-        if (expected is not INamedTypeSymbol namedExpected || actual is not INamedTypeSymbol namedActual)
-        {
-            return false;
-        }
-        if (IsAdoNetType(namedActual, GetMetadataName(namedExpected.OriginalDefinition)))
-        {
-            return true;
-        }
-        return GetMetadataName(namedExpected.OriginalDefinition) == "System.Threading.Tasks.Task`1"
-            && GetMetadataName(namedActual.OriginalDefinition) == "System.Threading.Tasks.Task`1"
-            && namedExpected.TypeArguments.Length == 1
-            && namedActual.TypeArguments.Length == 1
-            && ReturnTypesAlign(namedExpected.TypeArguments[0], namedActual.TypeArguments[0]);
+                    || parameter.Type is IArrayTypeSymbol array && IsAdoNetType(array.ElementType, "System.Data.DataTable")) ? "data-table"
+                : method.Parameters.Any(parameter => IsAdoNetType(parameter.Type, "System.Data.DataSet")) ? "data-set" : "data-container-unknown";
+        return true;
     }
 
     private static bool IsParameterCollectionMutation(IMethodSymbol method) =>
@@ -3112,8 +3051,7 @@ public static class VisualBasicSemanticExtractor
     }
 
     private static bool IsPotentialAdoNetOperationName(string name) =>
-        new[] { "Fill", "ExecuteReader", "ExecuteReaderAsync", "ExecuteScalar", "ExecuteScalarAsync", "ExecuteNonQuery", "ExecuteNonQueryAsync" }
-            .Contains(name, StringComparer.OrdinalIgnoreCase);
+        DatabaseOperationApi.Kind(name).Length > 0;
 
     private static bool IsAdoNetType(ITypeSymbol? type, string metadataName)
     {
@@ -3637,7 +3575,8 @@ public static class VisualBasicSemanticExtractor
 
     private static bool IsWorkspaceFailure(Exception ex)
     {
-        return ex is not OperationCanceledException
+        return ex is not SourceSnapshotException
+            and not OperationCanceledException
             and not OutOfMemoryException
             and not StackOverflowException;
     }

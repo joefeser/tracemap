@@ -12,6 +12,17 @@ public sealed class WebFormsReviewInputValidationTests
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     [Fact]
+    public void Fixture_cleanup_removes_readonly_git_files()
+    {
+        using var fixture = new Fixture();
+        var file = Path.Combine(fixture.Source, ".git", "cleanup-probe");
+        File.WriteAllText(file, "public synthetic read-only file");
+        File.SetAttributes(file, File.GetAttributes(file) | FileAttributes.ReadOnly);
+        fixture.Dispose();
+        Assert.False(Directory.Exists(fixture.Root));
+    }
+
+    [Fact]
     public void Inspection_facade_preserves_the_exact_scanner_policy_and_global_gaps()
     {
         using var fixture = new Fixture();
@@ -217,12 +228,14 @@ public sealed class WebFormsReviewInputValidationTests
         await fixture.CreateParent();
         var before = fixture.ParentHashes();
         var path = Path.Combine(fixture.Source, "Lookup.aspx.vb");
+        using var sourceLink = OperatingSystem.IsWindows() && mutation == "link"
+            ? CreateWindowsSourceLink(path, fixture.Root) : null;
         switch (mutation)
         {
             case "same-size": File.WriteAllText(path, File.ReadAllText(path).Replace("Load", "Save", StringComparison.Ordinal)); break;
             case "size-change": File.AppendAllText(path, "\n' changed source\n"); break;
             case "missing": File.Delete(path); break;
-            case "link":
+            case "link" when !OperatingSystem.IsWindows():
                 var destination = Path.Combine(fixture.Root, "other.vb");
                 File.Move(path, destination);
                 File.CreateSymbolicLink(path, destination);
@@ -234,6 +247,16 @@ public sealed class WebFormsReviewInputValidationTests
         Assert.Equal("WEBFORMS_REVIEW_" + code, error.Message);
         Assert.Equal(before.OrderBy(pair => pair.Key), fixture.ParentHashes().OrderBy(pair => pair.Key));
         Assert.False(Directory.Exists(fixture.Output));
+
+        static DirectoryLinkFixture CreateWindowsSourceLink(string path, string root)
+        {
+            // A junction exercises the same reject-before-reading boundary
+            // without requiring Windows symlink privileges.
+            var destination = Path.Combine(root, "linked-source-target");
+            Directory.CreateDirectory(destination);
+            File.Move(path, Path.Combine(destination, Path.GetFileName(path)));
+            return DirectoryLinkFixture.Create(path, destination);
+        }
     }
 
     [Fact]
@@ -465,6 +488,17 @@ public sealed class WebFormsReviewInputValidationTests
                     return directory.FullName;
             throw new InvalidOperationException("Public test repository unavailable");
         }
-        public void Dispose() { if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true); }
+        public void Dispose()
+        {
+            if (!Directory.Exists(Root)) return;
+            // Git loose objects are read-only on Windows. Clear only attributes
+            // in this fixture's temporary Git directory; never traverse links.
+            var git = Path.Combine(Source, ".git");
+            if (Directory.Exists(git))
+                foreach (var file in Directory.EnumerateFiles(git, "*", new EnumerationOptions
+                { RecurseSubdirectories = true, AttributesToSkip = FileAttributes.ReparsePoint, IgnoreInaccessible = false }))
+                    File.SetAttributes(file, File.GetAttributes(file) & ~FileAttributes.ReadOnly);
+            Directory.Delete(Root, recursive: true);
+        }
     }
 }

@@ -155,7 +155,10 @@ public static class TraceMapCommand
         catch (Exception ex)
         {
             commandOperation.Complete(TraceMapDiagnosticOutcome.Failed);
-            await error.WriteLineAsync($"error: {ex.Message}");
+            var snapshotDetail = SourceSnapshotException.Describe(ex);
+            await error.WriteLineAsync(snapshotDetail is null
+                ? $"error: {ex.Message}"
+                : $"error: {ex.Message} ({snapshotDetail})");
             return 1;
         }
     }
@@ -432,7 +435,13 @@ public static class TraceMapCommand
             ExactSourceMaxFiles: ParsePositiveInt(values, "--exact-source-max-files", 256),
             ExactSourceMaxBytes: ParsePositiveLong(values, "--exact-source-max-bytes", 67_108_864),
             WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"),
-            WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"));
+            WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"))
+        {
+            IndexDepsJson = values.HasFlag("--index-deps-json"),
+            IndexCiProducers = values.HasFlag("--index-ci-producers"),
+            WebFormsVbImportContextPath = values.GetValueOrDefault("--webforms-vb-import-context"),
+            VisualBasicCompilationContextPath = values.GetValueOrDefault("--vb-compilation-context")
+        };
         var receiptRecorder = new ScanReceiptRecorder(
             scanOptions,
             sqlValidationSummaryPaths.Append(sqlValidationAsOf?.ToString("O") ?? string.Empty));
@@ -476,7 +485,7 @@ public static class TraceMapCommand
             }
             if (ex is OperationCanceledException && cancellationToken.IsCancellationRequested)
                 throw;
-            await error.WriteLineAsync($"error: {SafeScanError(ex)}");
+            await error.WriteLineAsync(FormatScanError(ex));
             return 1;
         }
         try
@@ -651,6 +660,17 @@ public static class TraceMapCommand
                     or "ExactSourceScopeEnumerationLimitExceeded"
                     ? scopeError.Message
                     : ScanReceiptRecorder.ClassifyFailure(exception);
+
+    // categorical error line for the scan command; appends up to three differing
+    // input paths when the snapshot guard knows them (Data["details"], relative paths only)
+    internal static string FormatScanError(Exception exception)
+    {
+        var categorical = SafeScanError(exception);
+        var snapshotDetail = SourceSnapshotException.Describe(exception);
+        return snapshotDetail is null
+            ? $"error: {categorical}"
+            : $"error: {categorical} ({snapshotDetail})";
+    }
 
     private static async Task RunReceiptStageAsync(ScanReceiptOperation operation, Func<Task> action)
     {
@@ -2432,7 +2452,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
+            if (arg is "--restore" or "--index-deps-json" or "--index-ci-producers" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
@@ -2859,6 +2879,7 @@ public static class TraceMapCommand
               --include <glob>         Repeatable inventory inclusion.
               --exclude <glob>         Repeatable inventory exclusion.
               --target-framework <tfm> Semantic target-framework selection.
+              --vb-compilation-context <json> Explicit hash-bound projectless VB inputs; no reference discovery.
 
             Diagnostic options:
               --diagnostic-progress <file>
@@ -2910,6 +2931,8 @@ public static class TraceMapCommand
               --source-snapshot-max-roster-bytes <count>
                                        Retention admission limits (defaults: 1000000 files, 64 GiB raw source, 64 MiB streamed roster); requires --retain-source-snapshot.
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
+              --index-deps-json        Read existing bin/**/*.deps.json as stale-qualified build-output evidence; does not build.
+              --index-ci-producers     Read .github/workflows/*.yml|*.yaml dotnet pack definitions as ci-defined producer evidence.
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
               --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.
               --binlog-commit-sha <sha>
@@ -2921,6 +2944,9 @@ public static class TraceMapCommand
                                        Optional compiled-input-binding-set.v1 receipt. Repeatable.
               --webforms-publish-receipt <path>
                                        Explicit local-only webforms-publish-binding.v1 receipt. Never discovered.
+              --webforms-vb-import-context <path>
+                Local Windows effective VB imports capture; source/config/provider hashes are rechecked.
+                Current environment evidence only, not historical build proof. Requires re-extraction.
               --webforms-published-root <absolute-path>
                                        Optional explicit published-file root, independent of receipt location. Hash checked, never written.
               --webforms-publish-source-base <repo-relative-folder>
@@ -2986,6 +3012,7 @@ public static class TraceMapCommand
             Truthfulness failures (exit code 1; normal scan artifacts are not written):
               SourceInventoryIncomplete          An in-scope inventory entry could not be read.
               SourceSnapshotChangedDuringScan    Protected input bytes changed or disappeared during analysis.
+                                                  When the differing input is known, the error names up to three paths.
               A commit-bound failure may write only scan-receipt.json with categorical diagnostics.
             """;
     }
@@ -3092,7 +3119,8 @@ public static class TraceMapCommand
               --exact-from-symbol       Require exact symbol identity for --from-symbol.
               --from-webforms-event <id>  Start from a WebForms event/root fact or selector.
               --from-source <label>      Constrain start evidence to a source label.
-              --to-surface <kind>        database-api, sql-query, sql-persistence, http-route, http-client,
+              --to-surface <kind>        database-operations (source SQL + compiled database API),
+                                          database-api, sql-query, sql-persistence, http-route, http-client,
                                           package-config, wcf-operation, asmx-service,
                                           asmx-operation, asmx-client, asmx-config,
                                           asmx-metadata, legacy-data, dependency-surface,

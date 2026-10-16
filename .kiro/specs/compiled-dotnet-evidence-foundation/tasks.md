@@ -60,3 +60,177 @@ slices and require an implementation-state update before work begins.
   - [x] First bounded #768 runner, synthetic fail-closed guards, independent
     public ILAsm smoke, and C++/CLI feasibility inventory. Private corpus
     execution and #769 remain open.
+
+- [x] 12. Bounded #767 continuation: add matched public C#/VB/F# CLR method
+  signatures for overloads, ref/ByRef, generic arity and array rank, exact
+  golden assertions with distinct endpoints/provenance, duplicate/malformed/
+  bounded rejection and deterministic repeat coverage. See
+  `docs/validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md`; this does not close
+  the broader language matrix or Tasks 10/11.
+
+- [x] 13. Bounded #767 optional-parameter continuation: cross-check existing
+  method/property optional ordinals independently, fix numeric ordering and
+  sparse setter-only parameter selection, and pin C#/VB/F# marker evidence
+  with positive, negative and reader-disagreement regressions. Default-value
+  semantics, F# source extraction and broad #767 acceptance remain open.
+
+- [x] 14. Bounded #767 source optional-marker continuation: prove numeric wide
+  C#/VB source-to-bound-metadata joins with both endpoint evidence envelopes;
+  reject noncanonical/mismatched markers and missing/ambiguous candidates,
+  retain summary omission commitments, and include source reconciliation in
+  portable cross-platform CI. No production sorting change was necessary.
+
+- [x] 15. Bounded #767 nullable/option continuation: matched public C#/VB/F#
+  Nullable<Int32> signature goldens, distinct F# option/voption and ?arg
+  metadata, duplicate/malformed/member-limit/determinism tests, and explicit
+  F# source-unsupported coverage. Pin the option dependency scope; runtime,
+  default-value semantics and broader language/epic acceptance remain open.
+
+- [x] 16. Bounded #767 property/event continuation: matched public C#/VB/F#
+  property/event signatures and independent metadata-handle accessor oracles,
+  getter-looking decoy, VB raiser distinction, duplicate/malformed/member-limit
+  and repeatability regressions; preserve the F# source-unsupported gap.
+  These tests do not introduce a production accessor association rule.
+
+- [x] 17. Bounded #767 generic-constraint continuation: public C#/VB/F# free,
+  reference, value, constructor and interface constraints; independent raw
+  metadata oracles and exact single/combined-input method-token joins; preserve F# struct encoding
+  differences, rejection/determinism coverage and unsupported-source boundary.
+  Production constraint facts and full constraint equivalence remain open.
+
+- [x] 18. Bounded #767 default-value continuation: public C#/VB/F# required,
+  integer/string/null Constant-table defaults and decimal attribute defaults;
+  independent raw/decoded oracles, exact token/provenance assertions, negative,
+  ambiguous, malformed, bounded and repeat cases; F# source remains unsupported.
+  Production default-value facts and complete default semantics remain open.
+
+- [x] 19. Bounded #767 explicit-interface continuation: matched C#/VB/F#
+  declarations/explicit implementations with an ordinary same-signature decoy;
+  independent MethodImpl/override token oracles, single/combined fact assertions,
+  language flag differences, duplicate/malformed/limit/repeat coverage, and
+  retained F# unsupported-source boundary. Per-input hashes are checked against
+  fixture bytes/outcomes, with cross-assembly corruption regressions and shared
+  accessor/constraint/default coverage. Production dispatch edges remain open.
+
+- [x] 20. Bounded #767 operator/conversion continuation: public C#/VB/F#
+  addition, implicit/explicit conversions and ordinary op_-prefixed decoy;
+  independent raw signature/token/flag oracles, assembly-scoped goldens,
+  single/combined per-input provenance, rejection/repeat cases, bound C#/VB
+  source joins and retained F# unsupported-source gap. F# decoy SpecialName
+  distinction is explicit; runtime resolution/conversion behavior remains open.
+
+- [x] 21. Bounded #767 module/currying continuation: public C# static class,
+  VB Module and F# module, exact method identities/signatures and independent
+  container/attribute oracles; F# argument groups and consumed compiled-name
+  attributes remain distinct from CLR signature equality. Include single/
+  combined provenance, rejection/repeat tests, bound C#/VB joins and explicit
+  F# source gap. Pin retained CompilationSourceName aliases independently,
+  exact source declaration/span oracles and active build configuration fixtures.
+  Production module/currying relationships remain open.
+
+- [x] 22. Bounded #767 record-generated-member continuation: selected C#/F#
+  synthesized object overrides versus ordinary VB lookalikes, raw SRM/Cecil
+  MethodDef/attribute oracles, exact single/combined identities and provenance,
+  ambiguity/malformed/limit/repeat cases and explicit F# source-unsupported gap.
+  Runtime record equality, full helper coverage and broader acceptance remain open.
+
+- [x] 23. Bounded #767 union-factory continuation: F# type/case mappings and
+  exact factory signatures versus ordinary C#/VB lookalikes, independent raw
+  SRM and Cecil oracles with a pinned test-only enum dependency, single/combined
+  provenance, negative/ambiguous/malformed/bounded/repeat coverage and F# source gap.
+  Full union layout/helpers, runtime and quotation coverage remain open.
+
+- [x] 24. Bounded #767 quotation/expression-tree continuation: public C#/VB
+  expression trees, F# typed quotations and shared Func delegates; independent
+  raw SRM/Cecil nested signature/scope/token oracles, exact single/combined
+  provenance, duplicate/malformed/member-limit/repeat cases and F# source gap.
+  Quotation contents/conversion/runtime and broader language acceptance remain open.
+
+- [x] 25. Bounded #767 C#/VB receiver continuation: base/virtual and
+  Me/MyBase/MyClass encoded targets, independent raw SRM/Cecil token/opcode
+  oracles, exact metadata/body/call links and provenance, same-opcode/different-
+  operand identity regression, per-input ambiguity, malformed-token/work-limit
+  refusal and repeats. Runtime dispatch and broader source/PDB acceptance remain open.
+
+- [x] 26. Bounded #767 C#/VB nested generic continuation: exact outer/inner/
+  method generic ownership and positions, constructed argument order, nested
+  total arity, independent raw SRM/Cecil oracles, single/combined provenance,
+  per-input ambiguity, malformed/member-limit refusal and deterministic repeats.
+  Source/PDB/IL/runtime and broader language/epic acceptance remain open.
+
+- [x] 27. Bounded #767 C#/VB async/iterator PDB continuation: independent
+  kickoff/attribute/token oracles, exact generated metadata/PDB/document/sequence
+  identities and provenance, ordinary-name counterexample, missing/ambiguous
+  method candidates, malformed/sequence-limit refusal and repeated scans.
+  Runtime/rewrite, F# state machines and broad source acceptance remain open.
+
+- [x] 28. Bounded #767 VB WithEvents/Handles versus explicit C# wiring:
+  independent accessor/signature/flag and original-IL token oracles, exact
+  metadata/body/call and ldftn identities/provenance, per-input ambiguity,
+  wrong-table operand/work-limit gaps and repeatability. Runtime subscription,
+  source/PDB/rewrite and broader language acceptance remain open.
+
+- [x] 29. Bounded #767 F# cached event-wiring continuation: shared exact
+  metadata/accessor/body/call checks, independent constructor/helper/OnTick
+  identities selected by encoded tokens (including renamed generated members),
+  cached-field operand assertions, duplicate/malformed/limit gaps
+  and deterministic repeats. No F# source/PDB/runtime/rewrite equivalence claim.
+
+- [x] 30. Bounded #767 C#/VB/F# collection continuation: ArrayList versus
+  List<Object> indexer MethodDef/MemberRef signatures and scopes, generic !0
+  return, unbox.any versus VB conversion-helper original IL; independent raw
+  SRM/opcode/Cecil oracles, exact endpoint/provenance checks, same-opcode/different-
+  operand hashes, duplicate/malformed/work-limit gaps and deterministic repeats.
+  Source/PDB/rewrite/runtime, late binding and broader language acceptance remain open.
+
+- [x] 31. Bounded #767 VB late-binding continuation: exact LateGet helper
+  MemberRef versus typed MethodDef, independent raw SRM/opcode/Cecil signatures,
+  scopes and string operands; source-gap spans/tiers, full compiled provenance,
+  string-only mutation, duplicate/malformed/work-limit gaps and repeats.
+  Runtime receiver/overload resolution, other helpers, source-binding/PDB/rewrite
+  joins and broader language acceptance remain open.
+
+- [x] 32. Bounded #767 C# ref-like signature continuation: Span/ReadOnlySpan
+  constructions, mutable/readonly by-reference return/parameter signatures,
+  independent SRM/Cecil flags/attribute/modifier checks, exact single/combined
+  provenance, modreq/modopt/absent counterexamples, duplicate/malformed/member-limit
+  gaps and deterministic repeats. Lifetime/runtime, external type classification,
+  source/PDB/IL/rewrite and broader language acceptance remain open.
+
+
+- [x] 33. Bounded #767 VB imports continuation: project namespace, file alias
+  and SDK default imports; independent SRM/Cecil signatures/scopes/tokens,
+  hand-authored source declarations, exact joins/spans/provenance, same-name
+  substitution rejection, unbound/duplicate/malformed/member-limit gaps and
+  deterministic repeats. Compiler import conflicts/configuration variants,
+  PDB/IL/rewrite/runtime and broader language acceptance remain open.
+
+
+- [x] 34. Bounded #767 VB import-conflict refusal: conflicting/missing project
+  imports and malformed aliases; independent compiler diagnostics/error types,
+  raw SRM compiled identities, failed source coverage, exact incomplete identity/
+  span/provenance and no affected join. Qualified/unaffected controls, member-limit
+  refusal and deterministic repeats retain separate source/compiled evidence.
+  Overload/configuration interactions and broad language acceptance remain open.
+
+
+- [x] 35. Bounded #767 VB overload ambiguity/strictness: exact String/Uri
+  selection versus ambiguous Nothing under Option Strict On/Off; independent
+  compiler diagnostics/candidates and SRM/opcode/Cecil signatures/tokens, exact
+  source/metadata/body/call provenance, same-opcode/different-operand body hashes,
+  wrong-table/work-limit gaps and repeats. Narrowing/configuration interactions,
+  source/PDB/IL/rewrite/runtime relationships and broad acceptance remain open.
+
+- [x] 36. Bounded #767 VB narrowing/strictness: implicit versus explicit
+  Long-to-Integer conversion under Option Strict On/Off; independent compiler
+  classification/emit and BC30512 refusal, exact source calls or syntax/gap
+  fallback, SRM/Cecil signatures/tokens and checked conversion IL. Integer
+  control, duplicate/malformed/work-limit gaps, applicable provenance and
+  deterministic repeats. Late-bound configuration, runtime overflow behavior,
+  source/PDB/rewrite joins and broad acceptance remain open.
+
+- [x] 37. Bounded #767 duplicate narrowing retention repair after #844:
+  independently checked per-input member/body/call identities and provenance for
+  both narrowing and Integer controls; sixteen missing/wrong-locator evidence
+  counterexamples, exact per-input ambiguity gaps and reverse-order determinism.
+  Compiler refusal/malformed/limit cases retained; no engine/schema change.

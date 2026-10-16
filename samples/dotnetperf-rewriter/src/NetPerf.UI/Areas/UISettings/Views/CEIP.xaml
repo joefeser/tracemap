@@ -1,0 +1,54 @@
+﻿<infra:NPUserControl
+	x:Class="MetadataDashboard.NetperfUI.Areas.UISettings.Views.CEIP"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:cal="http://www.caliburnproject.org"
+	xmlns:infra="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure">
+	<infra:NPUserControl.Resources>
+		<Style
+			TargetType="{x:Type TextBlock}">
+			<Setter
+				Property="Margin"
+				Value="0,4" />
+		</Style>
+	</infra:NPUserControl.Resources>
+	<AdornerDecorator>
+		<StackPanel>
+			<TextBlock>Help us make Netperf better!</TextBlock>
+			<GroupBox
+				Header="What we will do">
+				<StackPanel>
+					<TextBlock>
+				Collect anonymous information on your software and hardware configuration.
+					</TextBlock>
+					<TextBlock>
+				Collect anonymous usage information.
+					</TextBlock>
+				</StackPanel>
+			</GroupBox>
+			<GroupBox
+				Header="What we will NOT do">
+				<StackPanel>
+					<TextBlock>
+				Collect any non-anonymous information.
+					</TextBlock>
+					<TextBlock>Collect your source code.</TextBlock>
+					<TextBlock>Harass you with marketing, extra emails,surveys, or in-app popups.</TextBlock>
+				</StackPanel>
+			</GroupBox>
+
+			<TextBlock><Hyperlink
+					Command="{Binding OpenCEIPWebsite}">Read more about the Customer Experience Improvement Program</Hyperlink></TextBlock>
+
+			<RadioButton
+				Content="The app sucks; sure, I'd like to make it better."
+				IsChecked="{Binding ParticipateInCEIP}" />
+			<RadioButton
+				Content="No, I would not like to participate."
+				IsChecked="{Binding ParticipateInCEIP, Converter={StaticResource InvertBoolean}}" />
+
+		</StackPanel>
+	</AdornerDecorator>
+</infra:NPUserControl>

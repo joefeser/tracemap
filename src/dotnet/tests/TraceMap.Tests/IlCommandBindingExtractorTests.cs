@@ -23,7 +23,11 @@ public sealed class IlCommandBindingExtractorTests
     [InlineData(true, 24, true, true)]
     [InlineData(true, 24, false, true)]
     [InlineData(false, 24, true, false)]
-    [InlineData(true, 8, true, false)]
+    // Depth 8 + compiled-only used to pin the containment-era gap: the prewalk had no
+    // compiled-baseline scope, so compiled-only queries kept the depth gap instead of
+    // admitting an unrestricted witness. The scope-aware prewalk now recovers the same
+    // scope-legal 12-layer witness the depth-24 case asserts.
+    [InlineData(true, 8, true, true)]
     public async Task Deep_projectless_handler_crosses_provider_dll_and_binds_command_through_twelve_layers(
         bool includeProvider, int depth, bool compiledOnly, bool expectedPath)
     {
@@ -32,7 +36,6 @@ public sealed class IlCommandBindingExtractorTests
         {
             Assert.Empty(report.Paths);
             Assert.NotEmpty(report.Gaps);
-            if (depth == 8) Assert.Contains(report.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "depth");
             return;
         }
         var path = Assert.Single(report.Paths);
@@ -373,6 +376,7 @@ public sealed class IlCommandBindingExtractorTests
     [InlineData("none", true, false)]
     [InlineData("collection-escape", false, true)]
     [InlineData("collection-escape", false, false)]
+    [InlineData("collection-alternatives", false, true)]
     [InlineData("command-escape", false, true)]
     [InlineData("conditional-text", false, true)]
     [InlineData("wrong-signature", false, true)]
@@ -380,6 +384,8 @@ public sealed class IlCommandBindingExtractorTests
     public void Parameter_loop_preserves_only_unexposed_agreed_configuration(string effect, bool expected, bool loop)
     {
         var (body, _) = Fixture(parameterLoop: loop, parameterOnly: !loop, loopEffect: effect);
+        if (effect == "collection-alternatives") Assert.Contains(body.ValueFlow!.Calls,
+            call => call.Arguments.Any(origin => origin.Kind == "argument-alternatives"));
         if (loop) Assert.NotNull(body.ValueFlow!.ControlFlow);
         else Assert.Null(body.ValueFlow!.ControlFlow);
         var result = IlCommandBindingExtractor.Extract(body);
@@ -710,8 +716,14 @@ public sealed class IlCommandBindingExtractorTests
                 il.Emit(OpCodes.Callvirt, Method(collection, "AddRange", module.TypeSystem.Void,
                     new ArrayType(loopEffect == "wrong-signature" ? command : parameter)));
             }
-            else if (loopEffect == "collection-escape")
+            else if (loopEffect is "collection-escape" or "collection-alternatives")
             {
+                if (loopEffect == "collection-alternatives")
+                {
+                    var useCollection = Instruction.Create(OpCodes.Nop);
+                    il.Emit(OpCodes.Ldloc_2); il.Emit(OpCodes.Brfalse_S, useCollection);
+                    il.Emit(OpCodes.Pop); il.Emit(OpCodes.Ldnull); il.Append(useCollection);
+                }
                 var mutateCollection = new MethodReference("MutateCollection", module.TypeSystem.Void, type);
                 mutateCollection.Parameters.Add(new ParameterDefinition(collection)); il.Emit(OpCodes.Call, mutateCollection);
             }

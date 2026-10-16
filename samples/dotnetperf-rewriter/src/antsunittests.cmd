@@ -1,0 +1,1 @@
+"C:\Program Files\Red Gate\ANTS Performance Profiler 6\Profile.exe" /project:unittests.app6 /data:unittests.app6results

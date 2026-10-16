@@ -30,7 +30,7 @@ Positive layouts also retain `all/`, `fill/`, `capped/`, and `repeat/` path JSON
 They additionally render `cap-comparison.local.html` and
 `unresolved-command.local.html` through the same diagnostic helpers used by
 operators. The runner asserts one shared/two omitted exact sequences and one
-unresolved command group, and runs all three saved-report helper test suites.
+unresolved command group, and runs all five saved-report helper test suites.
 Assertions inspect actual method order, command type/text state, Fill-only
 exclusion, a one-path cap with its gap, repeated paths/gaps, and unchanged index
 bytes. `tests/deep-corpus.trx` records pass/fail. `validation.local.json` binds
@@ -50,6 +50,32 @@ dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter Fully
 ```
 
 ## Fixture structure
+
+### Command-return acceptance matrix
+
+`LazyConstructorLoggingTests` exercises actual compiled VB provider methods through
+both indexed and in-memory reporting. The local replay above includes these tests.
+
+| Shape | Required outcome |
+| --- | --- |
+| Direct literal and literal-return producer | Same constant hash; return witness only for the producer case |
+| Returned argument wrapper | Two retained return steps |
+| Literal producer through two executor argument hops | Constant hash and two argument steps |
+| `String.Concat` result through two executor argument hops | Unresolved call result; missing admitted target edge; no invented return step |
+| Profile/getter/constructor lookup with dynamic concatenation | Scalar route retained; exact Concat producer asserted; unresolved return target distinguished from audit/Fill |
+| Producer method declaration removed | Target-edge-missing gap, not a constant |
+| Duplicate producer declaration | Upstream `CompiledIlTargetAmbiguous`; no target edge admitted to return projection, no arbitrary selection |
+| Missing/duplicate return summary | Missing/ambiguous return-evidence gap |
+| Changed provenance, malformed summary, excessive count/work | Typed refusal |
+| Conflicting returned values, recursive producer, virtual producer | Unresolved with the corresponding disagreement/cycle/dispatch gap |
+
+The legacy `IlCommandReturnTargetMissingOrAmbiguous` gap remains for compatibility.
+Additional gaps distinguish `IlCommandReturnTargetEdgeMissing`,
+`IlCommandReturnTargetEdgesAmbiguous`, `IlCommandReturnTargetMethodMissing`, and
+`IlCommandReturnTargetMethodsAmbiguous`. Missing edges mean no admitted target in
+this graph, not that the method does not exist. This corpus does not prove which
+producer caused a private application's gap, and does not execute customer SQL
+or claim to reconstruct dynamically composed SQL from hashes.
 
 Public synthetic VB .NET Framework 4.8 source, compiled as two real DLLs. The
 website and provider source directories contain no project files. These external
@@ -88,15 +114,21 @@ not a claim about production execution or an exploitable trust boundary.
   across the DLL boundary, including nested field initialization and logging.
 - Same-name unrelated declarations are not joined.
 - The logging endpoint retains command type Text (`1`), one caller substitution,
-  a `call-result` origin, `unresolved-operand`, and explicit operand/virtual
-  dispatch gaps. A literal supplied to the same ExecuteText method resolves.
+  a returned symbolic Concat, and an explicit unresolved operand for the external
+  Replace call, plus the virtual-dispatch gap. A literal supplied to the same
+  ExecuteText method resolves.
 - The identical literal returned by `LiteralText` resolves through separately
   retained producer-return evidence, including a returned-argument wrapper.
   The regression checks its actual compiled instruction shape and literal
   equality, distinguishing constant return-value tracing from `BuildText`'s
-  runtime string composition, which remains unresolved. Missing, ambiguous,
+  runtime string composition, which remains symbolic rather than materialized. Missing, ambiguous,
   malformed or changed return facts, conflicting values, recursive producers
   and virtual return targets must remain explicit gaps.
+- The getter batch covers two-getter literal and field-backed chains, returned
+  argument wrappers, nested Concat, branch alternatives and a 16-frame limit.
+  A separate cross-DLL handler feeds two getters through conditional argument
+  normalization, Using/finally and the SQL wrapper. Field-backed instance/static
+  returns stay unknown with the exact stopping method; no heap value is guessed.
 - An independent business lookup reaches Fill with method-local constant text.
   Filtering to Fill excludes the ExecuteScalar routes; a zero unresolved count
   in that subset is not resolution of the logging command text.

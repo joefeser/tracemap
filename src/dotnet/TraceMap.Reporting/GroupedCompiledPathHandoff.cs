@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace TraceMap.Reporting;
 
@@ -37,10 +38,20 @@ public sealed record GroupedCompiledPathHandoff(
     IReadOnlyList<string> InventoryEdgeReferences,
     IReadOnlyList<GroupedCompiledPathVariant> Variants,
     IReadOnlyList<CompiledMethodChainGroup> Chains,
-    string Limitation);
+    string Limitation)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public BackendExtractionInventory? BackendExtraction { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? HttpCoverageLimitations { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? DatabaseCoverageLimitations { get; init; }
+}
 
 public static class GroupedCompiledPathHandoffBuilder
 {
+    public const string HttpCoverageLimitations = "Rule http.client.invocation.v1: bounded C#/VB signed-framework semantic calls; C# unresolved name-only fallback candidates may include same-named fakes. Rule vb.syntax.http-candidate.v1: projectless VB explicit-receiver syntax candidates, not framework or overload proof; inferred receivers, late binding and cross-file imports may be omitted. Compiled-only IL observations do not classify HTTP operations. Content-only JSON reads are not outbound calls. Dynamic destinations, mutable request verbs, wrapper specialization, missing references and framework availability require review. WebClient addresses do not prove HTTP protocol. Absence never means unused; static evidence never proves runtime execution.";
+    public const string DatabaseCoverageLimitations = "SQL source semantic API calls, explicit syntax candidates and compiled-only original IL API candidates remain separate. Command, adapter and bulk boundaries have bounded provider coverage; mutable state, late binding, factory concrete targets, ORM/provider parity and runtime use remain unproven. No connection never means unused. Readable SQL/procedures require separately authorized private opt-in inputs.";
     public const string Schema = "webforms-compiled-grouped-handoff.v1";
     public const string Rule = "workflow.webforms.compiled-grouped-handoff.v1";
     private const string Limitation = "Local review-only static evidence. Exact method/source identities are grouped, not execution routes; every evidence variant remains indexed. No runtime SQL, page activation, source-line identity or complete-site claim. Input index admission belongs to the caller. Bounds apply to this projection, not upstream graph memory.";
@@ -106,6 +117,8 @@ public static class GroupedCompiledPathHandoffBuilder
             InputHash(inputIndexSha256, reportHash, generatorHash, limits, cancellationToken),
             inputIndexSha256, reportHash, limits, header, nodes, edges, inventoryNodes, inventoryEdges,
             variants, groups.Select(group => new CompiledMethodChainGroup(group.Key, group.Value)).ToArray(), Limitation);
+        result = result with { HttpCoverageLimitations = HttpCoverageLimitations, DatabaseCoverageLimitations = DatabaseCoverageLimitations };
+        result = result with { BackendExtraction = BackendExtractionInventoryBuilder.Create(result) };
         _ = HashJson(result, limits.MaxOutputBytes, cancellationToken);
         return result;
     }
@@ -153,7 +166,13 @@ public static class GroupedCompiledPathHandoffBuilder
             used.Add(reference);
             return value;
         }
-        CombinedPathNode Node(string reference) => Resolve(reference, handoff.Nodes, usedNodes, "node");
+        CombinedPathNode Node(string reference)
+        {
+            var node = Resolve(reference, handoff.Nodes, usedNodes, "node");
+            if (node.DatabaseCallEvidence is { } evidence && !evidence.IsWellFormed()) throw Invalid("DATABASE_CALL_EVIDENCE");
+            if (node.DatabaseCallEvidence is not null && !HasDatabaseProvenance(node)) throw Invalid("DATABASE_NODE_PROVENANCE");
+            return node;
+        }
         CombinedPathEdge Edge(string reference) => Resolve(reference, handoff.Edges, usedEdges, "edge");
         var paths = handoff.Variants.Select(variant => variant.Path with
         {
@@ -177,6 +196,17 @@ public static class GroupedCompiledPathHandoffBuilder
             .Select(group => new CompiledMethodChainGroup(group.Key, group.Select(item => item.Index).ToArray())).ToArray();
         if (HashJson(expectedGroups, handoff.Limits.MaxOutputBytes, cancellationToken) !=
             HashJson(handoff.Chains, handoff.Limits.MaxOutputBytes, cancellationToken)) throw Invalid("CHAIN_INDEX");
+        if (handoff.HttpCoverageLimitations is not null && handoff.HttpCoverageLimitations != HttpCoverageLimitations)
+            throw Invalid("HTTP_COVERAGE_LIMITATIONS");
+        if (handoff.DatabaseCoverageLimitations is not null && handoff.DatabaseCoverageLimitations != DatabaseCoverageLimitations) throw Invalid("DATABASE_COVERAGE_LIMITATIONS");
+        if (handoff.BackendExtraction is not null &&
+            HashJson(handoff.BackendExtraction, handoff.Limits.MaxOutputBytes, cancellationToken) !=
+            HashJson(BackendExtractionInventoryBuilder.Create(handoff), handoff.Limits.MaxOutputBytes, cancellationToken)
+            // Earlier v1 producers used the narrower presentation strings. Accept
+            // only that complete canonical projection, never arbitrary metadata.
+            && HashJson(handoff.BackendExtraction, handoff.Limits.MaxOutputBytes, cancellationToken) !=
+            HashJson(BackendExtractionInventoryBuilder.Create(handoff, legacyPresentation: true), handoff.Limits.MaxOutputBytes, cancellationToken))
+            throw Invalid("BACKEND_EXTRACTION");
         return report;
     }
 
@@ -206,6 +236,16 @@ public static class GroupedCompiledPathHandoffBuilder
             limits.MaxRecords <= 0 || limits.MaxReferences <= 0) throw Invalid("LIMITS");
     }
     private static InvalidDataException Invalid(string category) => new("WEBFORMS_GROUPED_HANDOFF_" + category);
+
+    private static bool HasDatabaseProvenance(CombinedPathNode node) =>
+        !string.IsNullOrWhiteSpace(node.RuleId)
+        && !string.IsNullOrWhiteSpace(node.SourceIndexId)
+        && !string.IsNullOrWhiteSpace(node.ScanId)
+        && !string.IsNullOrWhiteSpace(node.FilePath)
+        && node.EvidenceTier is "Tier1Semantic" or "Tier2Structural" or "Tier3SyntaxOrTextual" or "Tier4Unknown"
+        && node.CommitSha is { Length: 40 or 64 } sha && sha.All(char.IsAsciiHexDigit)
+        && (node.StartLine is > 0 && node.EndLine >= node.StartLine
+            || node.StartLine == -1 && node.EndLine == -1);
 
     private sealed class HashLimitStream(long maximumBytes, CancellationToken cancellationToken) : Stream
     {

@@ -1,0 +1,30 @@
+﻿<infra:NPUserControl
+	x:Class="MetadataDashboard.NetperfUI.Areas.UISettings.Views.StartupHandleNewerUIConfig"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:infra="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure"
+	mc:Ignorable="d"
+	d:DesignHeight="300"
+	d:DesignWidth="300">
+	<AdornerDecorator>
+		<StackPanel>
+			<TextBlock
+				TextWrapping="WrapWithOverflow">
+			The user interface configuration file is from a newer version of Netperf and cannot be used.
+			Would you like to downgrade the user interface configuration file to the currently running version?
+			</TextBlock>
+			<TextBlock />
+			<RadioButton
+				GroupName="downgradeConfig"
+				Content="No, use a temporary UI configuration for this session only."
+				IsChecked="{Binding DowngradeUIConfig, Converter={StaticResource InvertBoolean}}" />
+
+			<RadioButton
+				GroupName="downgradeConfig"
+				Content="Yes, downgrade the UI configuration to this version of Netperf."
+				IsChecked="{Binding DowngradeUIConfig}" />
+		</StackPanel>
+	</AdornerDecorator>
+</infra:NPUserControl>

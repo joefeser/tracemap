@@ -68,7 +68,9 @@ public sealed record WebFormsReviewConfig(
     string[]? PublishSourceRelativePaths = null,
     WebFormsReviewConfigProvenance? PreparationProvenance = null,
     string? PublishSourceRelativeBase = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WebFormsReviewConfigProvenance? WizardProvenance = null);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WebFormsReviewConfigProvenance? WizardProvenance = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? VbImportContextRelativePath = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? VbCompilationContextRelativePath = null);
 
 public sealed record WebFormsReviewConfigProvenance(string RuleId, string GeneratorSha256, string BoundedInputSha256);
 
@@ -119,7 +121,10 @@ public static partial class WebFormsReviewPreflightCommand
         node-limit report outputs without scanning or changing the original run.
         query-recovery --bundle <bundle> accepts the same bounded query options.
         query-recovery --bundle <bundle> --handler <method-name> counts retained handler paths only.
-        requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il]
+        requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il] [--max-depth <1..64>]
+        Substitute --compiled-root <local-root.json> for --handler to select one exact retained compiled method
+        by sourceIndexId, scanId, commitSha and symbolId, even when absent from the original report roots.
+        Compiled-root path queries use compiled-il traversal; original inputs are not rescanned.
           builds a separate single-root report from the verified retained combined index; no scan or combine.
         migration-review --config <native-config> --handler <method-name> --out <new-handoff-root> [--attest-exact-source-commit <sha>]
         migration-review --config <migration-draft> --handler <method-name> --out <new-handoff-root> --proof-root <retained-proof> --published-root <original-publish> --source-base <repo-relative-website-folder>
@@ -187,7 +192,7 @@ public static partial class WebFormsReviewPreflightCommand
             return 0;
         }
         catch (PreflightException exception) { await error.WriteLineAsync($"error: {exception.Code}"); return 1; }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or ArgumentException or BadImageFormatException or OverflowException or KeyNotFoundException or InvalidOperationException)
+        catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or ArgumentException or BadImageFormatException or OverflowException or KeyNotFoundException or InvalidOperationException)
         { await error.WriteLineAsync("error: WEBFORMS_PREFLIGHT_INPUT_OR_OUTPUT_UNREADABLE"); return 1; }
     }
 
@@ -265,6 +270,37 @@ public static partial class WebFormsReviewPreflightCommand
             }
         }
         var receiptHashes = new List<string>();
+        if (config.VbCompilationContextRelativePath is not null)
+        {
+            var contextInput = await Add("vb-compilation-context", Child(receiptRoot, config.VbCompilationContextRelativePath), 1_048_576);
+            var bytes = await ReadSmallAsync(contextInput.Path, 1_048_576, cancellationToken);
+            if (Digest(bytes) != contextInput.Sha256) throw Fail("INPUT_CHANGED");
+            using var document = JsonDocument.Parse(VisualBasicSemanticExtractor.DecodeExplicitContext(bytes));
+            var context = document.RootElement;
+            if (context.GetProperty("schemaVersion").GetString() != "vb-compilation-context.v1"
+                || context.GetProperty("commitSha").GetString() != config.SourceCommitSha) throw Fail("VB_CONTEXT_IDENTITY_MISMATCH");
+            foreach (var role in new[] { "sources", "references" })
+            {
+                var entries = context.GetProperty(role).EnumerateArray().ToArray();
+                if (entries.Length is < 1 || entries.Length > (role == "sources" ? 512 : 256)) throw Fail("INPUT_COUNT_LIMIT");
+                foreach (var entry in entries)
+                {
+                    var locator = entry.GetProperty("path").GetString()!;
+                    var path = role == "sources" ? Child(config.SourceRoot, locator) : locator;
+                    if (!Path.IsPathFullyQualified(path)) throw Fail("VB_CONTEXT_PATH_INVALID");
+                    path = PhysicalPath(path);
+                    var item = inputs.SingleOrDefault(input => PathComparer.Equals(input.Path, path))
+                        ?? await Add("vb-compilation-" + role, path, role == "sources" ? 8_388_608 : 67_108_864);
+                    if (item.Sha256 != entry.GetProperty("sha256").GetString()) throw Fail("INPUT_CHANGED");
+                }
+            }
+            gaps.Add("ExplicitVbContextOriginalBuildCorrespondenceNotEstablished");
+        }
+        if (config.VbImportContextRelativePath is not null)
+        {
+            await Add("vb-import-context", Child(receiptRoot, config.VbImportContextRelativePath), 1_048_576);
+            gaps.Add("EffectiveVbImportContextValidationDeferred");
+        }
         foreach (var receiptPath in config.BindingReceipts.Order(StringComparer.Ordinal))
         {
             var input = await Add("binding-receipt", Child(receiptRoot, receiptPath), 1_048_576);
@@ -344,6 +380,11 @@ public static partial class WebFormsReviewPreflightCommand
 
     internal static void ValidateConfig(WebFormsReviewConfig config)
     {
+        if (config.VbCompilationContextRelativePath is not null
+            && (config.Operation != "fresh" || config.ProjectMode != "projectless"))
+            throw Fail("VB_COMPILATION_CONTEXT_REQUIRES_PROJECTLESS_FRESH_SCAN");
+        if (config.VbImportContextRelativePath is not null && config.Operation != "fresh")
+            throw Fail("VB_IMPORT_CONTEXT_REQUIRES_SOURCE_EXTRACTION");
         if (config.WizardProvenance is { } wizard && (wizard.RuleId != "workflow.webforms.wizard-native-config.v1"
             || !IsHex(wizard.GeneratorSha256, 64) || !IsHex(wizard.BoundedInputSha256, 64))) throw Fail("CONFIG_INVALID");
         if (config.SchemaVersion != ConfigSchema || config.Operation is not ("fresh" or "attach") ||

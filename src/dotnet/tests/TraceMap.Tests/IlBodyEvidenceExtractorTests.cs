@@ -13,7 +13,7 @@ using TraceMap.Core;
 
 namespace TraceMap.Tests;
 
-public sealed class IlBodyEvidenceExtractorTests
+public sealed partial class IlBodyEvidenceExtractorTests
 {
     [Fact]
     public void Cecil_opcode_name_uses_raw_name_only_for_matching_numeric_opcode()
@@ -210,7 +210,17 @@ public sealed class IlBodyEvidenceExtractorTests
         var interfaceCall = calls.Single(call => call.Properties.GetValueOrDefault("opcode") == "callvirt"
             && call.Properties["targetIdentity"].Contains("names:10:ICallShape", StringComparison.Ordinal));
         Assert.Contains("method:5:Apply|", interfaceCall.Properties["targetIdentity"], StringComparison.Ordinal);
-        var constrainedCall = calls.Single(call => call.Properties.GetValueOrDefault("opcode") == "constrained.");
+        using var stream = File.OpenRead(fixture.Assembly);
+        using var pe = new PEReader(stream);
+        var reader = pe.GetMetadataReader();
+        var owner = reader.TypeDefinitions.Single(handle =>
+            reader.GetString(reader.GetTypeDefinition(handle).Namespace) == "TraceMap.CompiledFixtures.CSharp.Il"
+            && reader.GetString(reader.GetTypeDefinition(handle).Name) == "GenericCallShapes");
+        var constrainedMethod = reader.GetTypeDefinition(owner).GetMethods().Single(handle =>
+            reader.GetString(reader.GetMethodDefinition(handle).Name) == "RenderConstrained");
+        var constrainedToken = "0x" + System.Reflection.Metadata.Ecma335.MetadataTokens.GetToken(constrainedMethod).ToString("x8", CultureInfo.InvariantCulture);
+        var constrainedCall = calls.Single(call => call.Properties.GetValueOrDefault("opcode") == "constrained."
+            && call.Properties["metadataToken"] == constrainedToken);
         Assert.Equal("constrainedtype", constrainedCall.Properties["referenceKind"]);
         Assert.Equal("-", constrainedCall.Properties["referenceToken"]);
         Assert.False(string.IsNullOrWhiteSpace(constrainedCall.Properties["targetIdentity"]));
@@ -611,6 +621,15 @@ public sealed class IlBodyEvidenceExtractorTests
         Assert.All(provenance.Outcomes, outcome => Assert.Equal("unbound", outcome.ProvenanceState));
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
             && fact.Properties.GetValueOrDefault("provenanceState") == "unbound");
+        // Value/command uncertainty does not erase the separately observed IL
+        // calls. Compiled calls are not represented by the source CallEdge type.
+        var uncertainBodies = result.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap
+                && fact.RuleId is RuleIds.DotNetIlValues or RuleIds.DotNetIlCommandBinding)
+            .Select(fact => fact.Properties.GetValueOrDefault("ilBodyFactId"))
+            .Where(id => id is not null).ToHashSet(StringComparer.Ordinal);
+        Assert.NotEmpty(uncertainBodies);
+        Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && uncertainBodies.Contains(fact.Properties.GetValueOrDefault("ilBodyFactId")));
     }
 
     [Fact]

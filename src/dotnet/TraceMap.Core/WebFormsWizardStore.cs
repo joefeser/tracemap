@@ -324,14 +324,17 @@ public sealed class WebFormsWizardStore : IDisposable
     // A create interrupted after writing project.config.json but before the root
     // registration leaves only that file (and Atomic temp files). It carries no
     // registered state, so it may be replaced; anything else stays fail-closed.
-    private static bool IsAbandonedRegistration(string folder) =>
-        Directory.EnumerateDirectories(folder).FirstOrDefault() is null
-        && Directory.EnumerateFiles(folder).All(file =>
+    private static bool IsAbandonedRegistration(string folder)
+    {
+        var files = Directory.EnumerateFiles(folder).ToArray();
+        return Directory.EnumerateDirectories(folder).FirstOrDefault() is null
+        && files.Length > 0 && files.All(file =>
         {
             var name = Path.GetFileName(file);
             return (name == "project.config.json" || name.StartsWith("project.config.json.", StringComparison.Ordinal) && name.EndsWith(".tmp", StringComparison.Ordinal))
                 && new FileInfo(file).LinkTarget is null;
         });
+    }
 
     private static void RejectLink(string path)
     {

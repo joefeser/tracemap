@@ -12,6 +12,77 @@ namespace TraceMap.Tests;
 
 public sealed class VaultExportTests
 {
+    [Theory]
+    [InlineData("combined", "hidden", false)]
+    [InlineData("paths", "hidden", false)]
+    [InlineData("reverse", "hidden", false)]
+    [InlineData("combined", "public-safe", false)]
+    [InlineData("paths", "public-safe", false)]
+    [InlineData("reverse", "public-safe", false)]
+    [InlineData("combined", "hidden", true)]
+    [InlineData("paths", "hidden", true)]
+    [InlineData("reverse", "hidden", true)]
+    [InlineData("combined", "public-safe", true)]
+    [InlineData("paths", "public-safe", true)]
+    [InlineData("reverse", "public-safe", true)]
+    public async Task Redacted_report_locations_are_opaque_gaps_not_navigation(string kind, string claim, bool nativeAbsolute)
+    {
+        using var temp = new TempDirectory();
+        const string marker = "absolute-path-hash:0123456789abcdef";
+        var location = nativeAbsolute ? Path.Combine(Path.GetTempPath(), "vault-public-input", "Public.cs") : marker;
+        var combined = await CreateCombinedIndexAsync(temp.Path, routeFile: location, callFile: location, queryFile: location);
+        var sourceIds = await ReadSourceIdsAsync(combined);
+        var catalog = WriteClaimCatalog(temp.Path, sourceIds.Values, claim);
+        var paths = Path.Combine(temp.Path, "paths");
+        var reverse = Path.Combine(temp.Path, "reverse");
+        if (kind == "paths") await CombinedDependencyPathReporter.WriteAsync(new(combined, paths,
+            FromEndpoint: "GET /api/orders/{}", FromSource: "client", ToSurface: "sql-query"));
+        if (kind == "reverse") await CombinedReverseReporter.WriteAsync(new(combined, reverse,
+            Format: "json", Surface: "sql-query", SurfaceName: "orders", To: "sources"));
+        static bool Redacted(string? path) => path?.StartsWith("absolute-path-hash:", StringComparison.Ordinal) == true;
+        IEnumerable<string?> expectedFacts;
+        if (kind == "combined")
+        {
+            var inventory = await CombinedDependencyPathReporter.BuildGraphInventoryAsync(combined);
+            expectedFacts = inventory.Nodes.Where(node => Redacted(node.FilePath)).Select(node => node.CombinedFactId)
+                .Concat(inventory.Edges.Where(edge => Redacted(edge.FilePath)).SelectMany(edge => edge.SupportingFactIds));
+        }
+        else if (kind == "paths")
+        {
+            var report = JsonSerializer.Deserialize<CombinedDependencyPathReport>(
+                await File.ReadAllTextAsync(Path.Combine(paths, "paths-report.json")), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+            expectedFacts = report.Paths.Where(row => row.Nodes.Any(node => Redacted(node.FilePath))
+                || row.Edges.Any(edge => Redacted(edge.FilePath))).SelectMany(row => row.SupportingFactIds);
+        }
+        else
+        {
+            var report = JsonSerializer.Deserialize<CombinedReverseReport>(
+                await File.ReadAllTextAsync(Path.Combine(reverse, "reverse-report.json")), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+            expectedFacts = report.SelectedSurfaces.Where(surface => Redacted(surface.FilePath)).SelectMany(surface => surface.SupportingFactIds)
+                .Concat(report.Paths.SelectMany(row => row.Nodes.Where(node => Redacted(node.FilePath)).Select(node => node.CombinedFactId)
+                    .Concat(row.Edges.Where(edge => Redacted(edge.FilePath)).SelectMany(edge => edge.SupportingFactIds))));
+        }
+        var expected = expectedFacts.OfType<string>().Distinct(StringComparer.Ordinal).OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        Assert.NotEmpty(expected);
+        var output = Path.Combine(temp.Path, "vault");
+        var result = await VaultExporter.ExportAsync(new(kind == "combined" ? combined : null, output,
+            PathsReportPaths: kind == "paths" ? [Path.Combine(paths, "paths-report.json")] : null,
+            ReverseReportPaths: kind == "reverse" ? [Path.Combine(reverse, "reverse-report.json")] : null,
+            SourceClaimCatalogPath: catalog, MinimumClaimLevel: claim, Date: "2026-06"));
+        Assert.True(result.Graph.Settings.Partial);
+        var redactedGap = Assert.Single(result.Graph.Gaps, gap => gap.Classification == "RedactedEvidenceLocation");
+        Assert.Equal(EvidenceTiers.Tier4Unknown, redactedGap.EvidenceTier);
+        Assert.Equal(expected, redactedGap.SupportingFactIds);
+        Assert.DoesNotContain(result.Graph.Nodes.SelectMany(node => node.EvidenceLocations ?? [])
+            .Concat(result.Graph.Edges.SelectMany(edge => edge.EvidenceLocations ?? [])), row => row.FilePath.StartsWith("absolute-path-hash:", StringComparison.Ordinal));
+        foreach (var file in new[] { "graph.json", "Start Here.md" })
+        {
+            var text = await File.ReadAllTextAsync(Path.Combine(output, file));
+            Assert.DoesNotContain("absolute-path-hash:", text);
+            Assert.DoesNotContain(location, text);
+        }
+    }
+
     [Fact]
     public async Task Vault_export_preserves_static_dispatch_candidate_identity_and_provenance()
     {
@@ -89,6 +160,10 @@ public sealed class VaultExportTests
         Assert.Contains(first.Graph.Edges, edge => edge.EvidenceLocations is { Count: > 0 });
         Assert.True(VaultExporter.IsSelfConsistentGraphJson(await File.ReadAllTextAsync(Path.Combine(firstOut, "graph.json"))));
         Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "Start Here.md"))));
+        var markdown = await File.ReadAllTextAsync(Path.Combine(firstOut, "Start Here.md"));
+        Assert.DoesNotContain("\r", markdown);
+        Assert.True(VaultExporter.IsSelfConsistentMarkdown(markdown.ReplaceLineEndings("\r\n")));
+        Assert.False(VaultExporter.IsSelfConsistentMarkdown(markdown + "tampered\n"));
         Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "index.md"))));
         Assert.True(VaultExporter.IsSelfConsistentMarkdown(await File.ReadAllTextAsync(Path.Combine(firstOut, "endpoints", "index.md"))));
         Assert.Equal(
@@ -588,6 +663,10 @@ public sealed class VaultExportTests
     [Theory]
     [InlineData("Controllers/../TokenReviewController.cs", "local-path")]
     [InlineData("C:\\Temp\\TokenReviewController.cs", "local-path")]
+    [InlineData("absolute-path-hash:0123456789abcdeg", "local-path")]
+    [InlineData("absolute-path-hash:0123456789abcdef/extra", "local-path")]
+    [InlineData("absolute-path-hash:0123456789abcde", "local-path")]
+    [InlineData("absolute-path-hash:0123456789abcdef0", "local-path")]
     [InlineData("\\\\server\\share\\TokenReviewController.cs", "local-path")]
     [InlineData("~/TokenReviewController.cs", "local-path")]
     [InlineData("$HOME/TokenReviewController.cs", "local-path")]
@@ -599,13 +678,21 @@ public sealed class VaultExportTests
     public async Task Vault_export_hidden_rejects_raw_unsafe_evidence_locations_without_echoing_values(string filePath, string category)
     {
         using var temp = new TempDirectory();
-        var combinedPath = await CreateCombinedIndexAsync(
-            temp.Path,
-            routeKey: "/api/orders/{}",
-            routeFile: filePath);
+        var combinedPath = await CreateCombinedIndexAsync(temp.Path, routeKey: "/api/orders/{}");
+        var reportRoot = Path.Combine(temp.Path, "paths");
+        await CombinedDependencyPathReporter.WriteAsync(new(combinedPath, reportRoot,
+            FromEndpoint: "GET /api/orders/{}", ToSurface: "sql-query"));
+        var reportPath = Path.Combine(reportRoot, "paths-report.json");
+        var document = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(reportPath))!;
+        var locations = document["paths"]!.AsArray().SelectMany(row => row!["nodes"]!.AsArray());
+        // Insert an unprojected value after the report writer. Valid canonical
+        // redactions are covered above; this tests genuine unsafe artifact input.
+        var evidenceNode = locations.First(row => row?["filePath"] is not null)!;
+        evidenceNode["filePath"] = filePath;
+        await File.WriteAllTextAsync(reportPath, document.ToJsonString());
 
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            VaultExporter.ExportAsync(new VaultExportOptions(combinedPath, Path.Combine(temp.Path, "vault"))));
+            VaultExporter.ExportAsync(new VaultExportOptions(null, Path.Combine(temp.Path, "vault"), PathsReportPaths: [reportPath])));
 
         Assert.Contains("UnsafeValueRejected", failure.Message);
         Assert.Contains(category, failure.Message);

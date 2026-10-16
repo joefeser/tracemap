@@ -148,7 +148,7 @@ internal static partial class IlCommandBindingExtractor
                 // An unknown heap value cannot name an unexposed allocation.
                 // Every heap store/address exposure is processed separately;
                 // external/argument-derived objects remain conservatively aliased.
-                var passed = origins.Select(IlValueAddresses.Target).ToHashSet();
+                var passed = origins.Select(IlValueAddresses.Target).SelectMany(IlArgumentAlternatives.Members).ToHashSet();
                 if (passed.Any(value => value.Kind == "address-unavailable"))
                 { state.Clear(); gaps.Add("IlCommandUnknownCallEffects"); return; }
                 foreach (var pair in state.Collections) if (passed.Contains(pair.Key) || state.Escaped.Contains(pair.Key)) state.Escaped.Add(pair.Value);

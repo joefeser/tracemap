@@ -1,5 +1,41 @@
 # Private exchange prompts
 
+For the next gap-planning step, use
+[Inventory retained analysis gaps](inventory-retained-analysis-gaps.md).
+It reads the existing scan once with a bounded Python utility—no build, scan or
+full test suite—and keeps unresolved calls separate from AnalysisGap facts.
+
+For public-only validation of database evidence admission, use
+[Verify evidence-admission hardening](verify-evidence-admission-hardening.md).
+It pins the implementation revision and synthetic acceptance checks; no private
+application rescan is required. Previously accepted results carry forward across
+prompt/CI-only edits. Do not rerun the full solution on the work machine; the
+Windows test-host baseline comparison workflow isolates the reported failures
+against the pinned base without claiming that unchanged files prove causality.
+
+For automatic projectless constructor evidence, use
+[Inspect projectless SQL parameter candidates](inspect-projectless-sql-parameter-candidates.md).
+This does not replace schema verification or establish wrapper argument mapping.
+
+After consolidation, use [Verify one local SQL contract](verify-one-local-sql-contract.md)
+to prepare one evidence-backed contract review or precise owner questions, without
+another scan or automatic API mapping.
+
+To connect page/event evidence to retained SQL roots, use
+[Reconcile WebForms SQL entry wiring](reconcile-webforms-sql-entry-wiring.md).
+It reuses existing evidence first and keeps unresolved source-to-compiled bridges explicit.
+
+After recovery, use [Consolidate local SQL inventory](consolidate-local-sql-inventory.md)
+to combine the existing native root reports into one private evidence inventory.
+
+After compiled SQL route reconciliation, use
+[Recover local SQL command literals](recover-local-sql-command-literals.md) for
+explicit local-only literal recovery and native truncation diagnostics.
+
+For a source-only SQL result that conflicts with an earlier reported compiled
+route, use [Reconcile existing compiled SQL evidence](reconcile-existing-compiled-sql-evidence.md)
+first. It explicitly forbids another source-only assessment or application build.
+
 These prompts produce small, aggregate-only maintainer handoffs. They must be
 run locally in the private environment. Never commit source labels, repository
 identities, private commit SHAs, run IDs, paths, values, indexes, reports, SQL,
@@ -21,6 +57,7 @@ published from the normal development environment first.
 - `run-focused-webforms-monorepo-scan.md`
 - `run-focused-webforms-one-repo-windows.md`
 - `guided-corporate-claude-launcher-setup.md`
+- `produce-sql-wrapper-inventory.md` — SQL-only selected-caller report using existing admitted evidence; local output, no private contribution.
 
 ## Authorized agent-review prompt
 
@@ -39,3 +76,13 @@ argument-forwarding contract. It does not ask for launcher source, corporate
 configuration, or secrets. Use its result before adding a launcher override to
 the TraceMap PowerShell handoff. A verified launcher can then be supplied with
 `Start-FocusedWebFormsClaudeReview.ps1 -ClaudeLauncherPath`.
+
+
+## SQL report comparison
+
+[`assess-sql-migration-report-improvement.md`](assess-sql-migration-report-improvement.md)
+is an application-neutral local comparison of the pinned HTTP baseline and SQL
+implementation. Supply the authorized application separately. It uses independently
+named controls, separates evidence from planning judgments, and requests only
+workplace-approved manually sanitized feedback. It does not authorize private
+artifact/code transfer, database execution or application changes.

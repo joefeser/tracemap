@@ -1340,10 +1340,13 @@ public static class LegacyBaselineArtifacts
 
     private static bool IsUnderRepoRelative(string path, string repoRoot, string relativeRoot)
     {
-        var relative = Path.GetRelativePath(repoRoot, Path.GetFullPath(path));
+        // Only native separators are structural. A backslash is a literal
+        // filename character on Unix and must not manufacture an allowed root.
+        var relative = Path.GetRelativePath(repoRoot, Path.GetFullPath(path)).Replace(Path.DirectorySeparatorChar, '/');
+        relativeRoot = relativeRoot.TrimEnd('/');
         return !relative.StartsWith("..", StringComparison.Ordinal)
             && !Path.IsPathRooted(relative)
-            && (relative == relativeRoot || relative.StartsWith(relativeRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal) || relative.StartsWith(relativeRoot + Path.AltDirectorySeparatorChar, StringComparison.Ordinal));
+            && (relative == relativeRoot || relative.StartsWith(relativeRoot + "/", StringComparison.Ordinal));
     }
 
     private static bool GitCheckIgnore(string path, string repoRoot)

@@ -13,11 +13,27 @@ public sealed class SourceInventoryException : Exception
 public sealed class SourceSnapshotException : Exception
 {
     public const string ErrorCode = "SourceSnapshotChangedDuringScan";
+    public const string DetailsKey = "details";
 
-    public SourceSnapshotException(Exception? innerException = null)
+    public SourceSnapshotException(Exception innerException) : this(innerException, null) { }
+
+    public SourceSnapshotException(Exception? innerException = null, IReadOnlyList<string>? details = null)
         : base(ErrorCode, innerException)
     {
+        if (details is { Count: > 0 })
+            Data[DetailsKey] = details;
     }
+
+    // CLI-facing: up to three differing paths joined for one line, or null when unknown
+    public static string? Describe(Exception ex) =>
+        ex.Data[DetailsKey] is IReadOnlyList<string> { Count: > 0 } details
+            ? string.Join("; ", details.Take(3).Select(EscapeDetail))
+            : null;
+
+    private static string EscapeDetail(string value) => string.Concat(value.Select(character =>
+        char.IsControl(character) || character is '\u2028' or '\u2029'
+            ? "\\u" + ((int)character).ToString("x4", System.Globalization.CultureInfo.InvariantCulture)
+            : character.ToString()));
 }
 
 public static class FileInventory
