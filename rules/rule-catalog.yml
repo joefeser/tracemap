@@ -253,6 +253,18 @@ rules:
       - Abstract, external, PInvoke, runtime-implemented, and bodyless methods emit no body fact; this is a structural observation about the method row, not a claim that no code exists.
       - Paired before/after identities and retargets use the separate dotnet.compiled.il-rewrite.v1 rule. Netmodules, multi-module manifests, and type forwarders are explicitly unsupported by the current assembly-scoped admission contract; duplicate identities require exact one-candidate joins. ILAsm/ILDAsm parity is proven only for the public fixture matrix by the pinned Windows extended-lane gate (Microsoft .NET Framework 4.8 ILAsm with Windows SDK NETFX ILDAsm); no parity claim extends beyond those fixtures or that pinned toolchain.
 
+  - id: dotnet.il.late-binding-census.v1
+    name: Per-assembly IL late-binding census
+    description: Emits one census fact per admitted/partial compiled input counting observed IL call sites whose target encodes Microsoft.VisualBasic.CompilerServices LateBinding/NewLateBinding helper members versus all observed calls, with a deterministic density bucket (none/low/moderate/high at 0/<=%10/%50).
+    evidenceTier: Tier2Structural
+    emits:
+      - ManagedLateBindingCensus
+    limitations:
+      - The census covers observed IL call sites in admitted or partially admitted bodies only; density is the late-bound share of observed calls, not of all code, and body admission gaps make counts partial. A partial input is marked censusScope=partial-bodies.
+      - Late-bound means the encoded call target names the Visual Basic CompilerServices late-binding helpers (LateBinding for pre-2.0 toolchains, NewLateBinding for 2.0+); Reflection, DLR, delegate and interface dispatch are NOT counted and remain separately evidenced.
+      - Density buckets are deterministic thresholds over observed calls (none = zero late-bound; low <= 10%; moderate <= 50%; high > 50%) and consumers may recompute from the raw counts. High density downgrades source-lane call-graph weight for affected members; it proves compilation-time late binding, never runtime behavior, dispatch outcomes, or Option Strict project settings by itself.
+      - The census counts helper call sites, not distinct late-bound members: one member reached late-bound from many sites counts many times, and string member names ride the individual call facts, not this census.
+
   - id: dotnet.compiled.il-call.v1
     status: active
     name: Direct IL call-site evidence

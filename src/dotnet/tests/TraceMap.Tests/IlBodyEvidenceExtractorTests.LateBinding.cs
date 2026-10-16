@@ -278,4 +278,39 @@ public sealed partial class IlBodyEvidenceExtractorTests
         CheckEventGap(scan, Assert.Single(scan.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == kind), input, il: true);
         Assert.DoesNotContain(scan.Facts, fact => fact.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
     }
+    [Fact]
+    public void Late_binding_census_counts_match_the_observed_call_facts()
+    {
+        // The census must be exactly derivable from the emitted call facts for the
+        // same admitted assembly: lateBound = calls whose target encodes the VB
+        // CompilerServices late-binding helpers, observed = all ManagedIlCallObserved.
+        var fixture = Fixture("vb", LateAssembly);
+        var scan = Scan(new ScanOptions(fixture.Source, TempOutput(), CompiledInputPaths: [fixture.Assembly], IlBodyEvidence: true));
+        var census = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedLateBindingCensus);
+        var calls = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved
+            && fact.Evidence.FilePath == census.Evidence.FilePath).ToArray();
+        var expectedLate = calls.Count(fact => fact.Properties["targetIdentity"].Contains("Microsoft.VisualBasic.CompilerServices", StringComparison.Ordinal)
+            && fact.Properties["targetIdentity"].Contains("LateBinding", StringComparison.Ordinal));
+        Assert.Equal(calls.Length.ToString(), census.Properties["observedIlCallCount"]);
+        Assert.Equal(expectedLate.ToString(), census.Properties["lateBoundCallCount"]);
+        Assert.Equal("admitted-bodies", census.Properties["censusScope"]);
+        Assert.True(expectedLate > 0, "fixture must contain late-bound calls");
+        var ratio = (double)expectedLate / calls.Length;
+        var expectedBucket = ratio <= 0.10 ? "low" : ratio <= 0.50 ? "moderate" : "high";
+        Assert.Equal(expectedBucket, census.Properties["lateBindingDensity"]);
+        Assert.Equal(RuleIds.DotNetIlLateBindingCensus, census.RuleId);
+        Assert.Equal(EvidenceTiers.Tier2Structural, census.EvidenceTier);
+    }
+
+    [Fact]
+    public void Late_binding_census_is_none_for_a_late_binding_free_assembly()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var scan = Scan(new ScanOptions(fixture.Source, TempOutput(), CompiledInputPaths: [fixture.Assembly], IlBodyEvidence: true));
+        var census = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedLateBindingCensus);
+        Assert.Equal("0", census.Properties["lateBoundCallCount"]);
+        Assert.Equal("none", census.Properties["lateBindingDensity"]);
+        Assert.NotEqual("0", census.Properties["observedIlCallCount"]);
+    }
+
 }
