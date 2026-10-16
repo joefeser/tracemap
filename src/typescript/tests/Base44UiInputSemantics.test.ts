@@ -7,7 +7,7 @@ import { buildBase44Evidence, diffBase44Evidence } from "../src/base44/Base44Evi
 import { FactTypes } from "../src/facts/Models";
 
 describe("Base44 React UI input semantics", () => {
-  it.each(["0.15.0", "0.16.0", "0.17.0", "0.18.0", "0.18.1", "0.18.2"])("validates retained UI producer %s", async version => {
+  it.each(["0.15.0", "0.16.0", "0.17.0", "0.18.0", "0.18.1", "0.18.2", "0.18.3"])("validates retained UI producer %s", async version => {
     const repo = await fixtureRepo();
     const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-retained-"));
     const {packet} = await buildBase44Evidence(options(repo, out));

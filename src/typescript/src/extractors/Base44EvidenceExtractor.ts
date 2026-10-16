@@ -4099,8 +4099,10 @@ function resolveSingleAssignedRuntimeAlias(
       scanWrites(current.statement, assignments.length === 1 ? assignments[0] : undefined);
     }
     if (ts.isCaseBlock(current)) {
+      // Selecting default can evaluate case expressions on either side of it.
+      // Keep label evaluation separate from preceding-body fallthrough writes.
+      for (const clause of current.clauses) if (ts.isCaseClause(clause)) scanWrites(clause.expression);
       for (const clause of current.clauses) {
-        if (ts.isCaseClause(clause)) scanWrites(clause.expression);
         if (clause === child) break;
         scanWrites(clause);
       }
