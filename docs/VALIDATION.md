@@ -4867,10 +4867,11 @@ patterns (license strings, invoice-URL passwords, storage-account keys —
 `Documentation/azure.txt` caught by GitHub push protection — or the
 PostSharp license key in `src/PostSharp.Custom.targets`, caught by review)
 survive in the committed tree. Committed corpus size (self-verifying):
-`git ls-tree -r --name-only HEAD -- samples/dotnetperf-rewriter | wc -l` = 407
-= 405 vendored + `PROVENANCE.md` + `CORPUS-SHA256.txt`, which pins every
-committed byte (verify: `cd samples/dotnetperf-rewriter && shasum -a 256 -c
-CORPUS-SHA256.txt`). Excluded as outside the co-author authorization: the
+`git ls-tree -r --name-only HEAD -- samples/dotnetperf-rewriter | wc -l` = 408
+= 405 vendored + `PROVENANCE.md` + `CORPUS-SHA256.txt` + `verify_corpus.py`.
+The manifest pins exactly the vendored bytes (metadata sits outside the pin);
+`python3 samples/dotnetperf-rewriter/verify_corpus.py` verifies from committed
+git objects (line-ending-proof) or `--worktree` from tracked files. Excluded as outside the co-author authorization: the
 third-party ECMA-335.pdf, the `src/.nuget/` bootstrap binary, and the
 FED-derived `Reflector.cs` (a header-attribution sweep found no other
 foreign-origin source); the Errata recordings are owner-confirmed
