@@ -244,3 +244,14 @@ conservative: every directly resolved callsite for that parameter must supply
 the same SDK-derived alias. Parameter names, JSDoc, type annotations, and prose
 never create client authority. See
 [Base44 injected-client dataflow](BASE44_INJECTED_CLIENT_DATAFLOW.md).
+
+### Promotion repair producer 0.18.1
+
+`base44-evidence/0.18.1` retains prior packet schemas and admits historical UI
+facts from 0.15.0 through 0.18.0. It rejects possible nested writes when resolving
+single-assignment client aliases and supports dominating module assignments.
+Helper-return unions retain conditional finally paths and suppress try/catch
+values only for an unconditionally terminating finally. Truthiness lookup guards
+close a computed-key domain only for a read-only null-prototype object literal
+(`__proto__: null`); ordinary objects may inherit truthy keys. Exact SDK identity
+requires canonical numeric SemVer components without leading zeroes.

@@ -79,3 +79,6 @@ that loses or duplicates a syntactic occurrence. Shape v2 remains readable but
 cannot authorize semantic type promotion. `Object(...)` coercion and numeric
 operators with unproven JSON-number operands remain `unknown`; BigInt must never
 be promoted as a JSON number.
+
+Promotion repair 0.18.1 limitations and preserved versions are recorded in
+[the adapter contract](BASE44_STATIC_EVIDENCE_ADAPTER.md#promotion-repair-producer-0181).

@@ -512,12 +512,12 @@ function directlyAwaitedCall(call: ts.CallExpression, context: ShapeContext): bo
 }
 
 function collectHelperReturnStatements(declaration: ts.FunctionDeclaration): ts.ReturnStatement[] {
-  // A return inside a finally block overrides every return the try or catch
-  // blocks could have taken; those inner returns can never become the value.
+  // Only an unconditionally abrupt finally (return or throw) suppresses
+  // try/catch returns. Conditional completion retains all possible values.
   const overridingTries = new Set<ts.TryStatement>();
   const scanOverriding = (node: ts.Node): void => {
     if (node !== declaration.body && ts.isFunctionLike(node)) return;
-    if (ts.isTryStatement(node) && node.finallyBlock && containsFunctionExternalReturn(node.finallyBlock, declaration)) {
+    if (ts.isTryStatement(node) && node.finallyBlock && statementTerminatesExecution(node.finallyBlock)) {
       overridingTries.add(node);
     }
     ts.forEachChild(node, scanOverriding);
@@ -542,21 +542,6 @@ function collectHelperReturnStatements(declaration: ts.FunctionDeclaration): ts.
     }
     return true;
   });
-}
-
-function containsFunctionExternalReturn(root: ts.Node, declaration: ts.FunctionDeclaration): boolean {
-  let found = false;
-  const visit = (node: ts.Node): void => {
-    if (found) return;
-    if (node !== declaration.body && node !== root && ts.isFunctionLike(node)) return;
-    if (ts.isReturnStatement(node)) {
-      found = true;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(root);
-  return found;
 }
 
 function analyzeObjectLiteral(node: ts.ObjectLiteralExpression, context: ShapeContext, visitedBindings: Set<string>, inheritedPresence: Presence): ShapeAnalysis {
@@ -1851,8 +1836,7 @@ function isStaticallyUnreachable(node: ts.Node, boundary: ts.Node): boolean {
 function statementTerminatesExecution(statement: ts.Statement): boolean {
   if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) return true;
   if (ts.isBlock(statement)) {
-    const last = statement.statements.at(-1);
-    return Boolean(last && statementTerminatesExecution(last));
+    return statement.statements.some(statementTerminatesExecution);
   }
   return ts.isIfStatement(statement) && Boolean(statement.elseStatement
     && statementTerminatesExecution(statement.thenStatement)
@@ -1941,6 +1925,7 @@ function resolveFiniteStringExpression(expression: ts.Expression, context: Shape
 interface ClosedStringPropertyMap {
   stringValues: Map<string, string[]>;
   truthyKeys: string[];
+  nullPrototype: boolean;
 }
 
 function resolveClosedStringPropertyMap(expression: ts.Expression, context: ShapeContext, visited: Set<string>): ClosedStringPropertyMap | null {
@@ -1957,18 +1942,24 @@ function resolveClosedStringPropertyMap(expression: ts.Expression, context: Shap
   if (!ts.isObjectLiteralExpression(unwrapped)) return null;
   const stringValues = new Map<string, string[]>();
   const truthyKeys: string[] = [];
+  let nullPrototype = false;
   for (const property of unwrapped.properties) {
     if (!ts.isPropertyAssignment(property)) return null;
     const name = staticPropertyName(property.name);
     // An object-literal `__proto__` property sets the prototype instead of
     // defining an own enumerable string property; the map is not closed.
+    if (name === "__proto__" && !ts.isComputedPropertyName(property.name)
+      && property.initializer.kind === ts.SyntaxKind.NullKeyword && !nullPrototype) {
+      nullPrototype = true;
+      continue;
+    }
     if (!name || name === "__proto__" || !isSafeFieldName(name) || stringValues.has(name)) return null;
     const value = unwrapExpression(property.initializer);
     if (!ts.isStringLiteralLike(value)) return null;
     stringValues.set(name, [value.text]);
     if (value.text.length > 0) truthyKeys.push(name);
   }
-  return { stringValues, truthyKeys: unique(truthyKeys) };
+  return { stringValues, truthyKeys: unique(truthyKeys), nullPrototype };
 }
 
 function closedMapBindingIsReadOnly(bindingName: string, declaration: ts.VariableDeclaration, context: ShapeContext): boolean {
@@ -2076,7 +2067,9 @@ function truthyMapKeysFromNegatedTerm(
   if (!ts.isIdentifier(argument) || argument.text !== bindingName
     || resolveDeclarationAt(bindingName, argument, context) !== binding) return null;
   const owner = resolveClosedStringPropertyMap(operand.expression, context, new Set(visited));
-  return owner && owner.truthyKeys.length > 0 ? owner.truthyKeys : null;
+  // Plain objects also accept inherited truthy keys; only a null-prototype
+  // literal closes the lookup domain to the recorded own properties.
+  return owner?.nullPrototype && owner.truthyKeys.length > 0 ? owner.truthyKeys : null;
 }
 
 function resolvePlainIdentifierParameterAt(bindingName: string, useNode: ts.Node): ts.ParameterDeclaration | null {

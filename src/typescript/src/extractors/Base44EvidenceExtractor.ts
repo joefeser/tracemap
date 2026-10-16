@@ -3605,13 +3605,13 @@ function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackage
       authoritySha256: root.authoritySha256,
       kind: "source-import"
     };
-    const functionRuntimeVersion = /^npm:@base44\/sdk@(\d+\.\d+\.\d+)$/u.exec(root.rawSpecifier)?.[1];
+    const functionRuntimeVersion = /^npm:@base44\/sdk@((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/u.exec(root.rawSpecifier)?.[1];
     if (functionRuntimeVersion) {
       return { identity: sdkIdentity(functionRuntimeVersion, "function-runtime", root.rawSpecifier, [sourceEvidence]) };
     }
     if (root.rawSpecifier === "@base44/sdk") {
       if (frontend.gap || !frontend.identityEvidence || !frontend.version) return { gap: frontend.gap ?? "sdk-identity-package-authority-invalid" };
-      if (!/^\d+\.\d+\.\d+$/u.test(frontend.version)) return { gap: "sdk-identity-version-unsupported" };
+      if (!/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u.test(frontend.version)) return { gap: "sdk-identity-version-unsupported" };
       return { identity: sdkIdentity(frontend.version, "frontend-package", root.rawSpecifier, [sourceEvidence, ...frontend.identityEvidence]) };
     }
     return { gap: "sdk-identity-specifier-unsupported" };
@@ -4029,9 +4029,31 @@ function resolveSingleAssignedRuntimeAlias(
     // Only an assignment that IS the scanned statement dominates the use;
     // an assignment wrapped in a conditional, try, loop, or call argument
     // does not prove the alias value on every path.
-    if (!ts.isExpressionStatement(statement)) return;
-    const node = unwrapAliasExpression(statement.expression);
-    if (!ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return;
+    const direct = ts.isExpressionStatement(statement) ? unwrapAliasExpression(statement.expression) : undefined;
+    // Count only a direct assignment as dominating, but every possible write
+    // to this lexical binding invalidates that proof (including captured writes).
+    const scanWrites = (node: ts.Node): void => {
+      if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+        && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+        const target = unwrapAliasExpression(node.left);
+        if ((ts.isIdentifier(target) && target.text === bindingName
+          && resolveLexicalBinding(target.text, target, source)?.node === declaration)
+          || patternBinds(target)) {
+          if (node !== direct || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) destructuringOverwrite = true;
+        }
+      }
+      if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+        && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
+        && ts.isIdentifier(node.operand) && node.operand.text === bindingName
+        && resolveLexicalBinding(bindingName, node.operand, source)?.node === declaration) destructuringOverwrite = true;
+      if ((ts.isForOfStatement(node) || ts.isForInStatement(node)) && ts.isIdentifier(node.initializer)
+        && node.initializer.text === bindingName
+        && resolveLexicalBinding(bindingName, node.initializer, source)?.node === declaration) destructuringOverwrite = true;
+      ts.forEachChild(node, scanWrites);
+    };
+    scanWrites(statement);
+    const node = direct;
+    if (!node || !ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return;
     const target = unwrapAliasExpression(node.left);
     if (patternBinds(target)) {
       // A destructuring write to the alias invalidates the sole-assignment
@@ -4048,7 +4070,8 @@ function resolveSingleAssignedRuntimeAlias(
   // enclosing block level; walk the enclosing block chain so a nested use (for
   // example inside a try body) still finds its dominating assignment.
   let statement: ts.Statement | undefined = findAncestor(use, ts.isStatement) ?? undefined;
-  while (statement?.parent && ts.isBlock(statement.parent)) {
+  if (statement) collectStatement(statement);
+  while (statement?.parent && (ts.isBlock(statement.parent) || ts.isSourceFile(statement.parent))) {
     const block = statement.parent;
     const useIndex = block.statements.indexOf(statement);
     for (let index = 0; index < useIndex; index += 1) collectStatement(block.statements[index]);

@@ -22,6 +22,15 @@ function extractProgram(code: string, entity = "Widget") {
 }
 
 describe("normalized Base44 query syntax", () => {
+  it("does not infer a built-in method or string result from admitted call spelling", () => {
+    const result = extractProgram(`const custom = { trim() { return { nested: 1 }; } };
+      base44.entities.Widget.filter({ value: custom.trim() });`);
+    const operand = (result.arguments[0].value as any).entries[0].operand;
+    expect(operand.kind).toBe("reference");
+    expect(operand.type).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain("nested");
+    expect(JSON.stringify(result)).not.toContain("string");
+  });
   it("captures the full literal query and excludes runtime operands", () => {
     const result = extract("filter", `{tenant_id: {$eq: user.id}, state: 'SECRET_OPERAND', cost: {$gte: 12.5, $in: [1, 2]}}, '-created_date,name', 25, 0, ['id','name']`);
     expect(result.completeness).toBe("complete");

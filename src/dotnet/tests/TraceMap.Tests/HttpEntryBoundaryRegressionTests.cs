@@ -275,6 +275,7 @@ public sealed class HttpEntryBoundaryRegressionTests
             ("ambiguous-member", original, false),
             ("inaccessible-type", original, false),
             ("parameterized", original, false),
+            ("static-property", original, false),
             ("wrong-project", original, false),
             ("two-controls", original.Replace("<%#", "<demo:ProfileWidget ID=\"other\" runat=\"server\" />\n<%#"), true),
             ("duplicate-id", original.Replace("<%#", "<demo:LifecycleWidget ID=\"profileWidget\" runat=\"server\" />\n<%#"), false),
@@ -302,7 +303,21 @@ public sealed class HttpEntryBoundaryRegressionTests
             if (name is "inaccessible-type" or "parameterized") inputs = sourceFacts.Select(f => f.FactType == FactTypes.PropertyDeclared
                 ? f with { Properties = new Dictionary<string, string>(f.Properties)
                     { [name == "inaccessible-type" ? "getterPubliclyAccessible" : "parameterCount"] = name == "inaccessible-type" ? "False" : "1" } } : f).ToArray();
+            if (name == "static-property") inputs = sourceFacts.Select(f => f.FactType == FactTypes.PropertyDeclared
+                ? f with { Properties = new Dictionary<string, string>(f.Properties) { ["isStatic"] = "True" } } : f).ToArray();
             var facts = LegacyWebFormsExtractor.Extract(repo, scan.Manifest, inventory, inputs);
+            if (name == "ambiguous-registration")
+            {
+                var gaps = facts.Where(f => f.RuleId == RuleIds.WebFormsEntryContainment && f.Evidence.FilePath == "Host.aspx" && f.Properties.GetValueOrDefault("gapKind") == "MissingOrAmbiguousRegistration").ToArray();
+                Assert.NotEmpty(gaps);
+                foreach (var gap in gaps)
+                    Assert.True(gap.Properties["supportingFactIds"].Split(',').Count(id => facts.Any(f => f.FactId == id && f.FactType == FactTypes.WebFormsUserControlRegistered)) >= 2);
+                File.WriteAllText(markupPath, markup.Replace("Namespace=\"Other\"", "Namespace=\"Changed\"", StringComparison.Ordinal));
+                var changed = LegacyWebFormsExtractor.Extract(repo, scan.Manifest, FileInventory.Collect(repo), inputs);
+                var changedHashes = changed.Where(f => f.RuleId == RuleIds.WebFormsEntryContainment && f.Evidence.FilePath == "Host.aspx" && f.Properties.GetValueOrDefault("gapKind") == "MissingOrAmbiguousRegistration").Select(f => f.Properties["boundedInputSha256"]).ToHashSet();
+                Assert.DoesNotContain(gaps, f => changedHashes.Contains(f.Properties["boundedInputSha256"]));
+                File.WriteAllText(markupPath, markup);
+            }
             var references = facts.Where(f => f.RuleId == RuleIds.WebFormsEntryProperty && f.FactType == FactTypes.WebFormsEntryRelationship && f.Evidence.FilePath == "Host.aspx").ToArray();
             Assert.True(expected == (references.Length == 1), name + ": " + JsonSerializer.Serialize(references));
             if (!expected) Assert.Contains(facts, f => f.RuleId == RuleIds.WebFormsEntryProperty && f.FactType == FactTypes.AnalysisGap);

@@ -113,3 +113,34 @@ extractor expectation from ScannerVersions in the selected tool revision rather
 than pinning 0.13.12. Verified all three references resolve to the current 0.14.2
 constant; historical receipts and the prompts' bounded private-validation scope
 are unchanged. This is a documentation-only correction; no private scan was run.
+
+## Main promotion PR #877 — 2026-10-16
+
+Integration branch `codex/integration-dev-main-20261016` starts at merged dev
+`ef5c2b1c524d9a361c1b31f8049710fe5e128886`; target main baseline
+`e189513360a2daf1aee572949b2f12a13c76db69`. ACK 0.5.6 release installed and
+verified; round 1 authorized the settled 12-thread repair batch.
+
+WebForms fixes retain all competing registrations in ambiguous-gap provenance
+and refuse Shared/static getters (new semantic staticness evidence). The missing
+source-field suggestion is dispositioned against the documented Tier3 markup
+candidate contract: runtime receiver binding remains explicitly unproven.
+
+Base44 companion repairs cover possible nested alias overwrites, module-level
+assignments, finally completion paths, null-prototype guarded key domains,
+canonical numeric SDK versions, and historical UI producer validation. Query
+method spellings remain opaque redacted references; documentation and a custom
+method regression prohibit built-in/string-result inference. Prior positive
+map-guard fixtures now explicitly use null prototypes; ordinary inherited-key
+negative fixtures pin the refusal rather than silently narrowing their domain.
+
+Validation before publication: TypeScript build + 299 tests passed; .NET focused
+87 tests passed with warnings as errors. Final registration-digest mutation
+assertion passed in the 19-test HTTP regression rerun. Current-head hosted CI and
+ACK remain the promotion gates. Full .NET historical counts above are not a new
+promotion-head full-suite receipt. Existing npm dependency advisories (vitest,
+@vitest/mocker, source-map-js) are unchanged by this promotion.
+
+Any review-fix commits on this branch require a separate explicit reconciliation
+PR back to dev; do not merge unrelated main-only work into dev. No main merge
+authorized.

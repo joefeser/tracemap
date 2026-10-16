@@ -7,6 +7,17 @@ import { buildBase44Evidence, diffBase44Evidence } from "../src/base44/Base44Evi
 import { FactTypes } from "../src/facts/Models";
 
 describe("Base44 React UI input semantics", () => {
+  it.each(["0.15.0", "0.16.0", "0.17.0", "0.18.0"])("validates retained UI producer %s", async version => {
+    const repo = await fixtureRepo();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-retained-"));
+    const {packet} = await buildBase44Evidence(options(repo, out));
+    expect(packet.facts.some(f => f.factType === FactTypes.Base44UiInputSemantics)).toBe(true);
+    const retained = structuredClone(packet);
+    for (const fact of retained.facts) if (fact.factType === FactTypes.Base44UiInputSemantics) fact.evidence.extractorVersion = `base44-evidence/${version}`;
+    const retainedPath = path.join(out, "retained.json");
+    await fs.writeFile(retainedPath, JSON.stringify(retained));
+    await expect(diffBase44Evidence(retainedPath, retainedPath, path.join(out, "diff.json"))).resolves.toBeDefined();
+  });
   it("keeps reason evidence spans valid for incomplete source instead of rejecting the packet", async () => {
     const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-semantics-incomplete-"));
     await fs.mkdir(path.join(repo, "src"), { recursive: true });

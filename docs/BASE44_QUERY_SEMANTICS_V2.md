@@ -18,7 +18,11 @@ roots, `this`, property chains, and element chains whose indexes are literals or
 admitted references are accepted. Bounded zero-argument string-normalization
 chains over an admitted reference, such as `code.trim().toUpperCase()`, are also
 accepted as redacted runtime-deferred operands because the static query
-semantics remain the same field/operator with a runtime string value. Arbitrary
+semantics retain the same field/operator with an opaque runtime-deferred value.
+These are admitted method-name spellings, not proof of a built-in string method,
+a string receiver, purity, or a string result. A custom `trim()` returning an
+object is still a redacted `reference`; consumers must not narrow its runtime
+contract. Arbitrary
 calls, construction, assignment, or other unsupported expression at any receiver
 or index depth make the whole operand unresolved with
 `query:operand_expression_unsupported`; an outer member-access node cannot hide
