@@ -90,10 +90,21 @@ public sealed record CombinedSurfaceProjectionRow(
     bool LegacyDataDisplayClearance = false,
     string? LegacyDataClaimLevelContextId = null,
     string? LegacyDataExtractorVersion = null,
-    string? SurfaceSubtype = null);
+    string? SurfaceSubtype = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    OutboundHttpCallEvidence? HttpCallEvidence = null)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public DatabaseCallEvidence? DatabaseCallEvidence { get; init; }
+}
 
 public static class CombinedSurfaceProjection
 {
+    private static readonly Regex SafeIdentifier = new("^[A-Za-z0-9_.-]+$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
+    private static readonly Regex SafeIdentifierWithSpaces = new("^[A-Za-z0-9_. -]+$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
+
     public static IReadOnlyList<CombinedSurfaceProjectionRow> BuildSurfaces(IReadOnlyList<CombinedSurfaceFactInput> facts)
     {
         var legacyDataFactIds = facts
@@ -253,7 +264,10 @@ public static class CombinedSurfaceProjection
             publisherSymbolId,
             safeMetadataHash,
             stableMessageSurfaceKey,
-            SurfaceSubtype: isFrameworkDataAdapterFill ? "data-adapter-fill" : null);
+            SurfaceSubtype: isFrameworkDataAdapterFill ? "data-adapter-fill" : null,
+            HttpCallEvidence: fact.FactType == FactTypes.HttpCallDetected && fact.RuleId is RuleIds.HttpClientInvocation or RuleIds.VisualBasicSyntaxHttpCandidate
+                ? OutboundHttpCallEvidence.FromProperties(fact.Properties) : null)
+        { DatabaseCallEvidence = fact.FactType == FactTypes.DatabaseOperationCandidate ? DatabaseCallEvidence.FromProperties(fact.Properties) : null };
     }
 
     private static CombinedSurfaceProjectionRow ToLegacyDataSurface(LegacyDataModelDescriptorProjectionRow descriptor)
@@ -629,10 +643,11 @@ public static class CombinedSurfaceProjection
             return false;
         }
 
-        var pattern = allowSpaces
-            ? "^[A-Za-z0-9_. -]+$"
-            : "^[A-Za-z0-9_.-]+$";
-        if (!Regex.IsMatch(value, pattern, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
+        // Both patterns are linear character classes; NonBacktracking cannot explode and
+        // the generous timeout is a safety bound that wall-clock thread starvation under
+        // parallel load must not trip (#857: a 100 ms timeout failed full-suite runs
+        // while every case passed in isolation).
+        if (!(allowSpaces ? SafeIdentifierWithSpaces.IsMatch(value) : SafeIdentifier.IsMatch(value)))
         {
             return false;
         }

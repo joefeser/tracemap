@@ -461,7 +461,7 @@ public sealed class WebFormsProofImportTests
         }
         public static string FindRepo() { for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
             if (File.Exists(Path.Combine(directory.FullName, "AGENTS.md"))) return directory.FullName; throw new InvalidOperationException("Public fixture unavailable"); }
-        public void Dispose() { Output.Dispose(); Error.Dispose(); if (Directory.Exists(Root)) Directory.Delete(Root, true); }
+        public void Dispose() { Output.Dispose(); Error.Dispose(); TempDirectory.DeleteTree(Root); }
     }
     private static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA256.HashData(bytes));
     private static string HashText(string text) => Hash(Encoding.UTF8.GetBytes(text));

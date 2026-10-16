@@ -1,0 +1,14 @@
+{
+  "schema": "sql-contract-catalog.v1",
+  "procedures": [
+    {
+      "commandLiteral": "PublicCatalog_Save",
+      "databaseLabel": "SyntheticDatabase",
+      "procedure": "dbo.PublicCatalog_Save",
+      "sourceReference": "synthetic demonstration only; not a deployed schema",
+      "parameters": [
+        { "name": "@ItemId", "type": "int", "direction": "Input" }
+      ]
+    }
+  ]
+}

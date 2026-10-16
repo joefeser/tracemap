@@ -29,6 +29,40 @@
 
   <ItemGroup>
     <ProjectReference Include="../../../../samples/fixture-build/deep-projectless/DeepWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/compiled-dotnet-evidence/constructed-generics/caller/ConstructedGenerics.Caller.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/backend-extraction/BackendExtraction.Sample.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net20/csharp/SqlMatrix.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net20/vb/SqlMatrix.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net35/csharp/SqlMatrix.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net35/vb/SqlMatrix.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net40/csharp/SqlMatrix.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net40/vb/SqlMatrix.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net45/csharp/SqlMatrix.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net45/vb/SqlMatrix.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net452/csharp/SqlMatrix.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net452/vb/SqlMatrix.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net472/csharp/SqlMatrix.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net472/vb/SqlMatrix.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net48/csharp/SqlMatrix.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net48/vb/SqlMatrix.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net10.0/csharp/SqlMatrix.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/net10.0/vb/SqlMatrix.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/csharp/HttpMatrix.CSharp.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net20/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net20/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net35/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net35/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net40/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net40/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net45/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net45/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net452/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net452/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net472/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net472/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net48/csharp/HttpLegacy.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/legacy/net48/vb/HttpLegacy.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/outbound-http-coverage/vb/HttpMatrix.VB.vbproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/fixture-build/lazy-constructor/LazyWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
   </ItemGroup>
 
@@ -61,4 +95,9 @@
     <ProjectReference Include="..\..\..\..\samples\messy-dotnet-workspace\root-crosslanguage\csharp\CrossLanguageEntry.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../../../samples/sql-database-matrix/wrapper-library/SyntheticStore.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-database-matrix/wrapper-build/SyntheticWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/http-entry-boundaries/HttpEntryBoundaries.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+  </ItemGroup>
 </Project>

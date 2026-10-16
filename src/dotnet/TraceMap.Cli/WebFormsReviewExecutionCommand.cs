@@ -108,7 +108,7 @@ public static partial class WebFormsReviewExecutionCommand
                 {
                     phase = "reports-resume";
                     return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
-                        reportRunner, output, cancellationToken);
+                        reportRunner, output, cancellationToken, sourceExtractedThisInvocation: false);
                 }
                 await output.WriteLineAsync($"webFormsExecution={Completed};retainedSnapshot=true;sourceRescanned=false");
                 await output.WriteLineAsync($"webFormsScan={OwnedPath(root, history.ScanCheckpoint.Attempt + "/scan")}");
@@ -175,7 +175,7 @@ public static partial class WebFormsReviewExecutionCommand
                 {
                     phase = "reports";
                     return await ExecuteReportsAsync(root, plan, preflightSha, runtimeRoot, runtimeSha, history,
-                        reportRunner, output, cancellationToken);
+                        reportRunner, output, cancellationToken, sourceExtractedThisInvocation: !attach);
                 }
                 await output.WriteLineAsync($"webFormsExecution={Completed};facts={checkedScan.Facts};reviewOnly=true");
                 await output.WriteLineAsync($"webFormsScan={scanPath}");
@@ -253,6 +253,10 @@ public static partial class WebFormsReviewExecutionCommand
             ("binding-receipt", "--compiled-binding-receipt"), ("pdb", "--pdb-input") })
             foreach (var input in plan.Inputs.Where(input => input.Role == role).OrderBy(input => input.Path, StringComparer.Ordinal)) Add(option, input.Path);
         var publishReceipt = plan.Inputs.SingleOrDefault(input => input.Role == "publish-receipt");
+        var importContext = plan.Inputs.SingleOrDefault(input => input.Role == "vb-import-context");
+        if (importContext is not null) Add("--webforms-vb-import-context", importContext.Path);
+        var compilationContext = plan.Inputs.SingleOrDefault(input => input.Role == "vb-compilation-context");
+        if (compilationContext is not null) Add("--vb-compilation-context", compilationContext.Path);
         if (publishReceipt is not null)
         { Add("--webforms-publish-receipt", publishReceipt.Path); Add("--webforms-published-root", config.PublishedRoot); }
         if (config.PublishSourceRelativeBase is not null) Add("--webforms-publish-source-base", config.PublishSourceRelativeBase);
@@ -461,6 +465,11 @@ public static partial class WebFormsReviewExecutionCommand
         Digest(JsonSerializer.SerializeToUtf8Bytes(new
         { runtimeVersion = Environment.Version.ToString(), files }, JsonOptions));
 
+    // All runtime files (including satellites and nested build hosts) participate.
+    // The traversal cap bounds both candidates and ignored files/directories;
+    // a second smaller candidate cap rejected otherwise bounded distributions.
+    internal const int MaxRuntimeInventoryEntries = 4096;
+
     private static async Task<IReadOnlyList<WebFormsReviewArtifact>> RuntimeInventoryAsync(string directory, CancellationToken token)
     {
         var root = WebFormsReviewPreflightCommand.PhysicalPath(directory);
@@ -473,12 +482,11 @@ public static partial class WebFormsReviewExecutionCommand
             foreach (var entry in Directory.EnumerateFileSystemEntries(folder))
             {
                 token.ThrowIfCancellationRequested();
-                if (++entries > 4096 || (File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) throw Fail("RUNTIME_INVENTORY_INVALID");
+                if (++entries > MaxRuntimeInventoryEntries || (File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0) throw Fail("RUNTIME_INVENTORY_INVALID");
                 if (Directory.Exists(entry)) { pending.Push(entry); continue; }
                 var extension = Path.GetExtension(entry).ToLowerInvariant();
                 if (extension is not (".dll" or ".exe" or ".so" or ".dylib") &&
                     !entry.EndsWith(".deps.json", StringComparison.OrdinalIgnoreCase) && !entry.EndsWith(".runtimeconfig.json", StringComparison.OrdinalIgnoreCase)) continue;
-                if (files.Count >= 512) throw Fail("RUNTIME_FILE_COUNT_LIMIT");
                 var input = await WebFormsReviewPreflightCommand.HashAsync("runtime", entry, 268_435_456, token);
                 total = checked(total + input.Bytes);
                 if (total > 2_147_483_648) throw Fail("RUNTIME_HASH_BYTES_LIMIT");

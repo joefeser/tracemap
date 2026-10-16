@@ -12,6 +12,28 @@ namespace TraceMap.Tests;
 
 public sealed class ScanEngineTests
 {
+    [Theory]
+    [InlineData("obj/Debug/a:b.cs", "obj/Debug/a:b.cs")]
+    [InlineData("C:/private/input.cs", "(invalid relative path)")]
+    [InlineData("../outside.cs", "(invalid relative path)")]
+    public void Compiler_input_conflict_diagnostics_preserve_safe_relative_paths(string path, string expected)
+    {
+        var first = new CompilationInputSet();
+        var second = new CompilationInputSet();
+        first.Record(path, Microsoft.CodeAnalysis.Text.SourceText.From("class Alpha {}"));
+        second.Record(path, Microsoft.CodeAnalysis.Text.SourceText.From("class Bravo {}"));
+        var error = Assert.Throws<SourceSnapshotException>(() => SemanticExtractionResultMerge.Merge(
+            new SemanticExtractionResult([], [], true, false, CompilationInputFiles: first),
+            new SemanticExtractionResult([], [], true, false, CompilationInputFiles: second)));
+        Assert.Contains(expected, SourceSnapshotException.Describe(error)!);
+        foreach (var (type, name) in new[] { (typeof(CSharpSemanticExtractor), "IsWorkspaceException"), (typeof(VisualBasicSemanticExtractor), "IsWorkspaceFailure") })
+        {
+            var filter = type.GetMethod(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+            Assert.False((bool)filter.Invoke(null, [error])!);
+            Assert.True((bool)filter.Invoke(null, [new IOException("workspace unavailable")])!);
+        }
+    }
+
     [Fact]
     public void Missing_project_compilation_input_is_a_reduced_coverage_gap_not_a_snapshot_change()
     {
@@ -332,6 +354,9 @@ public sealed class ScanEngineTests
             ScanEngine.CreateSourceSnapshotDigest(temp.Path, staleInventory));
 
         Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+        var digestDetails = SourceSnapshotException.Describe(exception);
+        Assert.NotNull(digestDetails);
+        Assert.Contains("Sample.cs", digestDetails);
     }
 
     [Fact]
@@ -347,6 +372,172 @@ public sealed class ScanEngineTests
             ScanEngine.VerifySourceSnapshotInventory(initial, observed));
 
         Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+        var details = SourceSnapshotException.Describe(exception);
+        Assert.NotNull(details);
+        Assert.Contains("Added.sql", details);
+        Assert.Contains("(appeared)", details);
+    }
+
+    [Fact]
+    public void Semantic_input_guard_hashes_generated_inputs_and_detects_same_size_mutation()
+    {
+        using var temp = new TempDirectory();
+        const string realPath = "Real.cs";
+        File.WriteAllText(Path.Combine(temp.Path, realPath), "public sealed class Real { }");
+        var inventory = new[] { new FileInventoryItem(realPath, "CSharp", new FileInfo(Path.Combine(temp.Path, realPath)).Length) };
+        var baseline = ScanEngine.CaptureSemanticInputSnapshot(temp.Path, inventory);
+        var semanticResult = new SemanticExtractionResult(
+            [],
+            [],
+            true,
+            false,
+            new HashSet<string>(StringComparer.Ordinal) { realPath },
+            CompilationInputFiles: new HashSet<string>(StringComparer.Ordinal)
+            {
+                realPath,
+                "obj/Debug/net8.0/RazorAssemblyInfo.cs",
+                "Sample.Web.Api/obj/Debug/net10.0/Sample.Web.Api.RazorAssemblyInfo.cs",
+                "Sample.Worker.Tests/obj/Debug/net10.0/SelfRegisteredExtensions.cs",
+                "Sample.Tests/bin/Debug/net10.0/AnythingGenerated.cs",
+                "src/nested/obj/release/Deeply.Nested.Generated.cs",
+                "obj/Debug/net8.0/Sample.Web.GlobalUsings.g.cs",
+                "obj/Release/net48/Sample.Web.AssemblyInfo.cs",
+                "Obj/Debug/OtherGenerated.cs",
+                "BIN/Debug/OtherGenerated.cs"
+            });
+
+        foreach (var path in semanticResult.CompilationInputFiles!.Where(path => path != realPath))
+        {
+            var full = Path.Combine(temp.Path, path);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            File.WriteAllText(full, "public class Alpha { }");
+        }
+        var compilerInputs = new CompilationInputSet();
+        foreach (var path in semanticResult.CompilationInputFiles!)
+        {
+            using var stream = File.OpenRead(Path.Combine(temp.Path, path));
+            compilerInputs.Record(path, Microsoft.CodeAnalysis.Text.SourceText.From(stream));
+        }
+        semanticResult = semanticResult with { CompilationInputFiles = compilerInputs };
+        var generated = ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, inventory, semanticResult);
+        var captured = inventory.Concat(generated).ToArray();
+        var combinedBaseline = baseline.Concat(ScanEngine.CaptureSemanticInputSnapshot(temp.Path, generated))
+            .ToDictionary(pair => pair.Key, pair => pair.Value);
+        ScanEngine.VerifySemanticInputSnapshot(temp.Path, captured, semanticResult, combinedBaseline);
+        var before = ScanEngine.CreateSourceSnapshotDigest(temp.Path, captured);
+        File.WriteAllText(Path.Combine(temp.Path, "obj/Debug/net8.0/RazorAssemblyInfo.cs"), "public class Bravo { }");
+        Assert.NotEqual(before, ScanEngine.CreateSourceSnapshotDigest(temp.Path, captured));
+        Assert.Throws<SourceSnapshotException>(() => ScanEngine.VerifySemanticInputSnapshot(temp.Path, captured, semanticResult, combinedBaseline));
+    }
+
+    [Theory]
+    [InlineData("obj/Debug/Anything.cs")]
+    [InlineData("RazorAssemblyInfo.cs")]
+    [InlineData("New.g.cs")]
+    public void Generated_resemblance_without_compiler_evidence_never_admits_new_source(string relative)
+    {
+        using var temp = new TempDirectory();
+        var full = Path.Combine(temp.Path, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, "class Sample { }");
+        var semantic = new SemanticExtractionResult([], [], true, false, CompilationInputFiles: new HashSet<string> { relative });
+        Assert.Throws<SourceSnapshotException>(() =>
+        {
+            var generated = ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, [], semantic);
+            ScanEngine.VerifySemanticInputSnapshot(temp.Path, generated, semantic, new Dictionary<string, string>());
+        });
+    }
+
+    [Fact]
+    public void Compiler_document_checksum_rejects_rewrite_before_post_extraction_capture()
+    {
+        using var temp = new TempDirectory();
+        const string relative = "obj/Debug/Sample.AssemblyInfo.cs";
+        var full = Path.Combine(temp.Path, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllText(full, "class Alpha { }");
+        var compilerInputs = new CompilationInputSet();
+        using (var stream = File.OpenRead(full))
+            compilerInputs.Record(relative, Microsoft.CodeAnalysis.Text.SourceText.From(stream));
+        File.WriteAllText(full, "class Bravo { }");
+        var semantic = new SemanticExtractionResult([], [], true, false, CompilationInputFiles: compilerInputs);
+        var mismatch = Assert.Throws<SourceSnapshotException>(() => ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, [], semantic));
+        Assert.Contains(relative, SourceSnapshotException.Describe(mismatch)!);
+        Assert.DoesNotContain(temp.Path, SourceSnapshotException.Describe(mismatch)!);
+        Assert.NotNull(typeof(SourceSnapshotException).GetConstructor([typeof(Exception)]));
+    }
+
+    [Fact]
+    public void Snapshot_details_escape_log_control_characters()
+    {
+        var exception = new SourceSnapshotException(details: ["src/line\nbreak\u001b.cs", "src/\u2028separator.cs"]);
+        var details = SourceSnapshotException.Describe(exception)!;
+        Assert.Contains("src/line\\u000abreak\\u001b.cs", details);
+        Assert.Contains("src/\\u2028separator.cs", details);
+        Assert.DoesNotContain('\n', details);
+        Assert.DoesNotContain('\u001b', details);
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("escape")]
+    [InlineData("limit")]
+    [InlineData("link")]
+    public void Generated_capture_fails_closed_without_exposing_private_paths(string kind)
+    {
+        if (kind == "link" && OperatingSystem.IsWindows()) return;
+        using var temp = new TempDirectory();
+        var path = kind == "escape" ? "../obj/Hidden.cs" : "Obj/Debug/Generated.cs";
+        var full = Path.Combine(temp.Path, "Obj/Debug/Generated.cs");
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        if (kind == "limit")
+        {
+            using var stream = File.Create(full);
+            stream.SetLength(67_108_865);
+        }
+        if (kind == "link") File.CreateSymbolicLink(full, Path.Combine(temp.Path, "not-present"));
+        var semantic = new SemanticExtractionResult([], [], true, false, CompilationInputFiles: new HashSet<string> { path });
+        var error = Assert.Throws<SourceSnapshotException>(() => ScanEngine.CaptureGeneratedCompilationInputs(temp.Path, [], semantic));
+        Assert.DoesNotContain(temp.Path, SourceSnapshotException.Describe(error) ?? "");
+    }
+
+    [Fact]
+    public void Semantic_re_read_failure_details_are_categorical()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "Sample.cs");
+        File.WriteAllText(path, "public class Sample { }");
+        var inventory = FileInventory.Collect(temp.Path);
+        var baseline = ScanEngine.CaptureSemanticInputSnapshot(temp.Path, inventory);
+        File.Delete(path);
+        var semantic = new SemanticExtractionResult([], [], true, false, CompilationInputFiles: new HashSet<string> { "Sample.cs" });
+        var error = Assert.Throws<SourceSnapshotException>(() => ScanEngine.VerifySemanticInputSnapshot(temp.Path, inventory, semantic, baseline));
+        Assert.Equal("source input re-read failed", SourceSnapshotException.Describe(error));
+        Assert.DoesNotContain(temp.Path, SourceSnapshotException.Describe(error)!);
+    }
+
+    [Fact]
+    public void Semantic_input_guard_still_refuses_unknown_inputs_without_a_baseline()
+    {
+        using var temp = new TempDirectory();
+        const string realPath = "Real.cs";
+        File.WriteAllText(Path.Combine(temp.Path, realPath), "public sealed class Real { }");
+        var inventory = new[] { new FileInventoryItem(realPath, "CSharp", new FileInfo(Path.Combine(temp.Path, realPath)).Length) };
+        var baseline = ScanEngine.CaptureSemanticInputSnapshot(temp.Path, inventory);
+        var semanticResult = new SemanticExtractionResult(
+            [],
+            [],
+            true,
+            false,
+            new HashSet<string>(StringComparer.Ordinal) { realPath },
+            CompilationInputFiles: new HashSet<string>(StringComparer.Ordinal) { realPath, "HandWritten.cs" });
+
+        var exception = Assert.Throws<SourceSnapshotException>(() =>
+            ScanEngine.VerifySemanticInputSnapshot(temp.Path, inventory, semanticResult, baseline));
+        Assert.Equal(SourceSnapshotException.ErrorCode, exception.Message);
+        var details = SourceSnapshotException.Describe(exception);
+        Assert.NotNull(details);
+        Assert.Contains("HandWritten.cs (no baseline digest captured)", details);
     }
 
     [Fact]

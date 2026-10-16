@@ -178,7 +178,14 @@ public sealed record ScanOptions(
     int ExactSourceMaxFiles = 256,
     long ExactSourceMaxBytes = 67_108_864,
     string? WebFormsPublishedRootPath = null,
-    string? WebFormsPublishSourceRelativeBase = null);
+    string? WebFormsPublishSourceRelativeBase = null)
+{
+    public bool IndexDepsJson { get; init; }
+    public DepsJsonLimits? DepsJsonLimits { get; init; }
+    public string? WebFormsVbImportContextPath { get; init; }
+    public bool IndexCiProducers { get; init; }
+    public string? VisualBasicCompilationContextPath { get; init; }
+}
 
 public sealed record FileInventoryItem(
     string RelativePath,
@@ -224,6 +231,8 @@ public static class FactTypes
     public const string SolutionDeclared = nameof(SolutionDeclared);
     public const string ProjectDeclared = nameof(ProjectDeclared);
     public const string PackageReferenced = nameof(PackageReferenced);
+    public const string CentralPackageVersionDeclared = nameof(CentralPackageVersionDeclared);
+    public const string PackageProduced = nameof(PackageProduced);
     public const string TargetFrameworkDeclared = nameof(TargetFrameworkDeclared);
     public const string ConfigFileDeclared = nameof(ConfigFileDeclared);
     public const string SqlFileDeclared = nameof(SqlFileDeclared);
@@ -305,6 +314,7 @@ public static class FactTypes
     public const string DbSetDeclared = nameof(DbSetDeclared);
     public const string DbChangeSaved = nameof(DbChangeSaved);
     public const string DatabaseOperationCandidate = nameof(DatabaseOperationCandidate);
+    public const string DatabaseParameterCandidate = nameof(DatabaseParameterCandidate);
     public const string DapperCallDetected = nameof(DapperCallDetected);
     public const string SqlCommandDetected = nameof(SqlCommandDetected);
     public const string SqlTextUsed = nameof(SqlTextUsed);
@@ -482,6 +492,7 @@ public static class RuleIds
     public const string VisualBasicSemanticWorkspace = "vb.semantic.workspace.v1";
     public const string VisualBasicSemanticDeclarations = "vb.semantic.declarations.v1";
     public const string VisualBasicSemanticPropertyAccess = "vb.semantic.propertyaccess.v1";
+    public const string VisualBasicSemanticReadOnlyGetterCall = "vb.semantic.readonly-getter-call.v1";
     public const string VisualBasicSemanticMethodInvocation = "vb.semantic.methodinvocation.v1";
     public const string VisualBasicSemanticCallGraph = "vb.semantic.callgraph.v1";
     public const string VisualBasicSemanticObjectCreation = "vb.semantic.objectcreation.v1";
@@ -491,12 +502,15 @@ public static class RuleIds
     public const string VisualBasicSemanticConfigBinding = "vb.semantic.config-binding.v1";
     public const string VisualBasicSemanticExternalBoundary = "vb.semantic.external-boundary.v1";
     public const string VisualBasicSyntaxDeclarations = "vb.syntax.declarations.v1";
+    public const string VisualBasicHttpCoverageGap = "vb.syntax.http-coverage-gap.v1";
+    public const string VisualBasicSyntaxHttpCandidate = "vb.syntax.http-candidate.v1";
     public const string VisualBasicSyntaxMemberAccess = "vb.syntax.memberaccess.v1";
     public const string VisualBasicSyntaxInvocation = "vb.syntax.invocation.v1";
     public const string VisualBasicSyntaxCallGraph = "vb.syntax.callgraph.v1";
     public const string VisualBasicSyntaxObjectCreation = "vb.syntax.objectcreation.v1";
     public const string VisualBasicSyntaxEventWiring = "vb.syntax.event-wiring.v1";
     public const string VisualBasicSyntaxDatabaseOperation = "vb.syntax.database-operation.v1";
+    public const string VisualBasicSyntaxDatabaseParameter = "vb.syntax.database-parameter.v1";
     public const string CSharpRazorSemanticModelBinding = "csharp.razor.semantic-model-binding.v1";
     public const string CSharpRazorSemanticModelBindingGap = "csharp.razor.semantic-model-binding-gap.v1";
     public const string CSharpSemanticPropertyMapping = "csharp.semantic.propertymapping.v1";
@@ -683,23 +697,25 @@ public static class ScannerVersions
     public const string TraceMap = TraceMapDiagnostics.ToolVersion;
     public const string RepoManifestExtractor = "repo-manifest/0.1.0";
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
-    public const string ProjectFileExtractor = "project-file/0.1.0";
+    public const string ProjectFileExtractor = "project-file/0.3.0"; // 0.2.0: CPM pins + versionOverride (#804); 0.3.0: PackageProduced facts (#818)
+    public const string DepsJsonExtractor = "deps-json/0.1.0";
+    public const string CiWorkflowExtractor = "ci-workflow/0.1.0";
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
-    public const string BuildEnvironmentExtractor = "build-environment/0.6.0";
+    public const string BuildEnvironmentExtractor = "build-environment/0.6.1";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
     public const string CSharpSyntaxExtractor = "csharp-syntax/0.5.1";
     public const string CSharpAspNetSyntaxRouteExtractor = "csharp-aspnet-syntax-route/0.1.0";
-    public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.3.0";
-    public const string CSharpSemanticExtractor = "csharp-semantic/0.21.2";
-    public const string VisualBasicSemanticExtractor = "vb-semantic/0.8.7";
-    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.3.23";
+    public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.4.1";
+    public const string CSharpSemanticExtractor = "csharp-semantic/0.22.1";
+    public const string VisualBasicSemanticExtractor = "vb-semantic/0.10.4";
+    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.4.18";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
-    public const string ManagedMetadataExtractor = "managed-metadata/0.1.2+cecil-0.11.6";
+    public const string ManagedMetadataExtractor = "managed-metadata/0.2.0+cecil-0.11.6"; // 0.2.0: ManagedAssemblyDeclared gains runtimeFloor* properties (#853)
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.11+srm-10.0.0+cecil-0.11.6";
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.1.13+srm-10.0.0+cecil-0.11.6";
     public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
     public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
@@ -715,7 +731,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.6";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.13.12";
     public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.3";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";

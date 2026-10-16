@@ -1,0 +1,335 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.VisualBasic;
+using Microsoft.CodeAnalysis.VisualBasic.Syntax;
+
+namespace TraceMap.Core;
+
+public static partial class VisualBasicSyntaxExtractor
+{
+    private static bool AddDatabaseParameterCandidate(ScanManifest manifest, List<CodeFact> facts,
+        string filePath, CompilationUnitSyntax root, ObjectCreationExpressionSyntax creation, FactBudget budget)
+    {
+        var names = ResolveHttpTypeNames(root, creation.Type.ToString()).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (names.Length != 1 || !new[] { "System.Data.SqlClient.SqlParameter", "Microsoft.Data.SqlClient.SqlParameter" }
+            .Contains(names[0], StringComparer.OrdinalIgnoreCase)) return true;
+        return AddParameterEvidence(manifest, facts, filePath, root, creation, creation.ArgumentList, names[0], "syntax-constructor-only", budget);
+    }
+
+    private static bool AddDatabaseParameterAddCandidate(ScanManifest manifest, List<CodeFact> facts,
+        string filePath, CompilationUnitSyntax root, InvocationExpressionSyntax invocation, FactBudget budget)
+    {
+        if (invocation.Expression is not MemberAccessExpressionSyntax add
+            || !add.Name.Identifier.ValueText.Equals("Add", StringComparison.OrdinalIgnoreCase)
+            || add.Expression is not MemberAccessExpressionSyntax collection
+            || !collection.Name.Identifier.ValueText.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
+            || collection.Expression is not IdentifierNameSyntax receiver
+            || !TryResolveExplicitReceiverType(root, invocation, receiver.Identifier.ValueText, _ => true, out var type)) return true;
+        var names = ResolveParameterCommandTypes(root, type);
+        if (names.Length != 1) return true;
+        return AddParameterEvidence(manifest, facts, filePath, root, invocation, invocation.ArgumentList,
+            names[0], "syntax-parameter-collection-add", budget);
+    }
+
+    private static string[] ResolveParameterCommandTypes(CompilationUnitSyntax root, string type)
+    {
+        var resolved = ResolveHttpTypeNames(root, type);
+        var dot = type.IndexOf('.');
+        if (dot > 0 && !type.StartsWith("Global.", StringComparison.OrdinalIgnoreCase))
+            resolved = resolved.Concat(ResolveHttpTypeNames(root, type[..dot]).Select(prefix => prefix + type[dot..]));
+        return resolved
+            .Where(n => new[] { "System.Data.SqlClient.SqlCommand", "Microsoft.Data.SqlClient.SqlCommand" }.Contains(n, StringComparer.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static bool AddParameterEvidence(ScanManifest manifest, List<CodeFact> facts, string filePath,
+        CompilationUnitSyntax root, SyntaxNode site, ArgumentListSyntax? argumentList, string type,
+        string coverage, FactBudget budget)
+    {
+        var arguments = argumentList?.Arguments;
+        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["syntaxOwnerType"] = type,
+            ["parameterNameEvidence"] = "unavailable",
+            ["parameterTypeEvidence"] = "unavailable",
+            ["parameterDirectionEvidence"] = "unknown",
+            ["commandAssociation"] = "unresolved",
+            ["commandTextTraceEvidence"] = "unavailable",
+            ["commandTextTraceReason"] = "constructor-origin-not-established",
+            ["commandReceiverAssociation"] = "unresolved",
+            ["commandExecutionEvidence"] = "unresolved",
+            ["laterExecutionSyntax"] = "not-observed",
+            ["laterExecutionSyntaxReason"] = "local-receiver-not-established",
+            ["commandAssociationReason"] = "constructor-only-no-command-receiver",
+            ["coverageLabel"] = coverage,
+            ["ruleLimitations"] = "Syntax parameter candidate only; no compiler/provider binding, overload resolution, verified command instance identity, procedure association, database declaration, direction default or runtime value is inferred. Optional straight-line local association is syntax evidence only. Names and argument expressions are hashed; source review is required."
+        };
+        if (coverage == "syntax-constructor-only") properties["parameterType"] = type;
+        if (coverage == "syntax-parameter-collection-add" && site is InvocationExpressionSyntax addCall)
+            AddLocalCommandAssociation(root, addCall, properties);
+        if (arguments is { Count: > 0 } args && args.Count <= 16)
+        {
+            properties["argumentCount"] = args.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            for (var index = 0; index < args.Count; index++)
+                properties[$"argument{index}Hash"] = FactFactory.Hash(args[index].ToString(), 64);
+            // Do not resolve named/reordered overload arguments without semantic evidence.
+            if (args.All(a => a is SimpleArgumentSyntax { NameColonEquals: null }))
+            {
+                var first = ((SimpleArgumentSyntax)args[0]).Expression;
+                if (first is LiteralExpressionSyntax literal && literal.Token.Value is string name)
+                {
+                    properties["parameterNameEvidence"] = "hash-only-literal";
+                    properties["parameterNameHash"] = FactFactory.Hash(name, 64);
+                }
+                if (args.Count > 1 && ((SimpleArgumentSyntax)args[1]).Expression is MemberAccessExpressionSyntax member
+                    && member.Expression is not null
+                    && ResolveHttpTypeNames(root, member.Expression.ToString()).Any(n => n.Equals("System.Data.SqlDbType", StringComparison.OrdinalIgnoreCase))
+                    && Enum.TryParse<System.Data.SqlDbType>(member.Name.Identifier.ValueText, true, out var kind)
+                    && Enum.IsDefined(kind))
+                {
+                    properties["parameterTypeEvidence"] = "syntax-enum-candidate";
+                    properties["parameterTypeName"] = "SqlDbType." + kind;
+                }
+            }
+        }
+        return TryAddSyntaxFact(manifest, facts, FactTypes.DatabaseParameterCandidate,
+            RuleIds.VisualBasicSyntaxDatabaseParameter, filePath, site, type, properties,
+            budget, sourceSymbol: GetContainingMemberName(site));
+    }
+
+    private static void AddLocalCommandAssociation(CompilationUnitSyntax root, InvocationExpressionSyntax add,
+        SortedDictionary<string, string> properties)
+    {
+        // Stay within one lexical statement list; never cross branches or exception boundaries.
+        properties["commandAssociationReason"] = "unsupported-add-statement-shape";
+        if (add.Expression is not MemberAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax receiver } }
+            || add.Parent is not ExpressionStatementSyntax statement) return;
+        properties["commandAssociationReason"] = "unsupported-containing-block";
+        SyntaxList<StatementSyntax> statements;
+        switch (statement.Parent)
+        {
+            case MethodBlockSyntax method: statements = method.Statements; break;
+            case TryBlockSyntax block: statements = block.Statements; break;
+            case CatchBlockSyntax block: statements = block.Statements; break;
+            case FinallyBlockSyntax block: statements = block.Statements; break;
+            case UsingBlockSyntax block: statements = block.Statements; break;
+            default: return;
+        }
+        if (statements.Count > 256) { properties["commandAssociationReason"] = "local-statement-limit"; return; }
+        var at = statements.IndexOf(statement);
+        var name = receiver.Identifier.ValueText;
+        bool Same(ExpressionSyntax? expression) => expression is IdentifierNameSyntax id && id.Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase);
+        bool Inert(ExpressionSyntax expression) => expression is LiteralExpressionSyntax
+            || expression is IdentifierNameSyntax && !Same(expression);
+        bool ConstructorArguments(ArgumentListSyntax? arguments) => arguments is null
+            || arguments.Arguments.Count <= 3 && arguments.Arguments.All(a => a is SimpleArgumentSyntax { NameColonEquals: null } simple && Inert(simple.Expression));
+        bool Configuration(StatementSyntax candidate)
+        {
+            if (candidate is not AssignmentStatementSyntax assignment
+                || !assignment.IsKind(Microsoft.CodeAnalysis.VisualBasic.SyntaxKind.SimpleAssignmentStatement)
+                || !Inert(assignment.Right) || assignment.Left is not MemberAccessExpressionSyntax member) return false;
+            if (Same(member.Expression))
+                return new[] { "Transaction", "Connection", "CommandText", "CommandTimeout" }.Contains(member.Name.Identifier.ValueText, StringComparer.OrdinalIgnoreCase);
+            return member.Name.Identifier.ValueText.Equals("Value", StringComparison.OrdinalIgnoreCase)
+                && member.Expression is InvocationExpressionSyntax index
+                && index.Expression is MemberAccessExpressionSyntax collection && Same(collection.Expression)
+                && collection.Name.Identifier.ValueText.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
+                && index.ArgumentList is { Arguments.Count: 1 } arguments
+                && arguments.Arguments[0] is SimpleArgumentSyntax { NameColonEquals: null, Expression: LiteralExpressionSyntax };
+        }
+        bool SafeArguments(InvocationExpressionSyntax call) => call.ArgumentList is { } list && list.Arguments.Count <= 16
+            && list.Arguments.All(a => a is SimpleArgumentSyntax { NameColonEquals: null } simple
+                && (simple.Expression is LiteralExpressionSyntax || simple.Expression is MemberAccessExpressionSyntax member
+                    && member.Expression is not null && ResolveHttpTypeNames(root, member.Expression.ToString())
+                        .Any(n => n.Equals("System.Data.SqlDbType", StringComparison.OrdinalIgnoreCase))));
+        bool ParameterAdd(StatementSyntax candidate) => candidate is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax call }
+            && call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText.Equals("Add", StringComparison.OrdinalIgnoreCase)
+            && member.Expression is MemberAccessExpressionSyntax collection && collection.Name.Identifier.ValueText.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
+            && Same(collection.Expression) && SafeArguments(call);
+        properties["commandAssociationReason"] = "unsupported-parameter-arguments";
+        if (!ParameterAdd(statement)) return;
+        LocalDeclarationStatementSyntax? declaration = null;
+        var work = 0;
+        for (var i = at - 1; i >= 0; i--)
+        {
+            if (++work > 64) { properties["commandAssociationReason"] = "local-window-limit"; return; }
+            if (ParameterAdd(statements[i]) || Configuration(statements[i])) continue;
+            if (statements[i] is LocalDeclarationStatementSyntax local && local.Declarators.Count == 1)
+            {
+                var variable = local.Declarators[0];
+                var creation = variable.AsClause is AsNewClauseSyntax asNew ? asNew.NewExpression as ObjectCreationExpressionSyntax
+                    : variable.Initializer?.Value as ObjectCreationExpressionSyntax;
+                if (variable.Names.Count == 1 && variable.Names[0].Identifier.ValueText.Equals(name, StringComparison.OrdinalIgnoreCase)
+                    && creation is not null && creation.Initializer is null
+                    && ConstructorArguments(creation.ArgumentList)
+                    && ResolveParameterCommandTypes(root, creation.Type.ToString())
+                        .SequenceEqual(new[] { properties["syntaxOwnerType"] }, StringComparer.OrdinalIgnoreCase)) declaration = local;
+            }
+            break;
+        }
+        if (declaration is null) { properties["commandAssociationReason"] = "fresh-local-not-established"; return; }
+        // Establish the receiver at the Add site independently of later evaluation.
+        // Later calls may throw, escape or mutate state; none can erase this syntax witness.
+        properties["commandReceiverAssociation"] = "syntax-local-declaration-candidate";
+        properties["commandDeclarationStartLine"] = (declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        properties["commandDeclarationSpanStart"] = declaration.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var declarator = declaration.Declarators[0];
+        var constructor = declarator.AsClause is AsNewClauseSyntax clause
+            ? clause.NewExpression as ObjectCreationExpressionSyntax : declarator.Initializer?.Value as ObjectCreationExpressionSyntax;
+        properties["commandTextOriginEvidence"] = "unavailable";
+        if (constructor?.ArgumentList is { Arguments.Count: > 0 } constructorArguments
+            && constructorArguments.Arguments[0] is SimpleArgumentSyntax textArgument)
+        {
+            properties["commandTextOriginEvidence"] = "constructor-first-argument-syntax-only";
+            properties["commandTextOriginExpressionHash"] = FactFactory.Hash(textArgument.Expression.ToString(), 64);
+            properties["commandTextOriginExpressionKind"] = textArgument.Expression.Kind().ToString();
+            properties["commandTextOriginStartLine"] = (textArgument.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            TraceLocalCommandText(statements, statements.IndexOf(declaration), textArgument.Expression, properties);
+        }
+        var valueObservations = 0;
+        properties["parameterValueObservationCount"] = "0";
+        // Independent lexical observation only. Do not upgrade the execution/instance
+        // association below when intervening expressions have unknown effects.
+        properties["laterExecutionSyntaxReason"] = "no-call-in-bounded-same-block-window";
+        var uncertain = false;
+        for (var i = at + 1; i < statements.Count; i++)
+        {
+            if (i - at > 64) { properties["laterExecutionSyntaxReason"] = "local-window-limit"; break; }
+            var candidate = statements[i];
+            if (candidate is AssignmentStatementSyntax valueAssignment
+                && valueAssignment.IsKind(Microsoft.CodeAnalysis.VisualBasic.SyntaxKind.SimpleAssignmentStatement)
+                && valueAssignment.Left is MemberAccessExpressionSyntax valueMember
+                && valueMember.Name.Identifier.ValueText.Equals("Value", StringComparison.OrdinalIgnoreCase)
+                && valueMember.Expression is InvocationExpressionSyntax indexedParameter
+                && indexedParameter.Expression is MemberAccessExpressionSyntax parameters
+                && Same(parameters.Expression) && parameters.Name.Identifier.ValueText.Equals("Parameters", StringComparison.OrdinalIgnoreCase)
+                && indexedParameter.ArgumentList is { Arguments.Count: 1 } indexArguments
+                && indexArguments.Arguments[0] is SimpleArgumentSyntax { NameColonEquals: null, Expression: LiteralExpressionSyntax indexLiteral }
+                && indexLiteral.Token.Value is string indexName
+                && add.ArgumentList?.Arguments.FirstOrDefault() is SimpleArgumentSyntax { Expression: LiteralExpressionSyntax nameLiteral }
+                && nameLiteral.Token.Value is string parameterName && indexName.Equals(parameterName, StringComparison.Ordinal))
+            {
+                var prefix = "parameterValueObservation" + valueObservations.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties[prefix + "ExpressionHash"] = FactFactory.Hash(valueAssignment.Right.ToString(), 64);
+                properties[prefix + "ExpressionKind"] = valueAssignment.Right.Kind().ToString();
+                properties[prefix + "StartLine"] = (valueAssignment.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties[prefix + "SpanStart"] = valueAssignment.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["parameterValueObservationCount"] = (++valueObservations).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["parameterValueEvidence"] = "same-receiver-and-exact-literal-index-syntax-only";
+            }
+            if (candidate is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax call }
+                && call.Expression is MemberAccessExpressionSyntax member && Same(member.Expression)
+                && new[] { "ExecuteScalar", "ExecuteNonQuery", "ExecuteReader", "ExecuteXmlReader" }.Contains(member.Name.Identifier.ValueText, StringComparer.OrdinalIgnoreCase)
+                && (call.ArgumentList is null || call.ArgumentList.Arguments.Count == 0))
+            {
+                properties["laterExecutionSyntax"] = "same-receiver-text-call-observed";
+                properties["laterExecutionSyntaxStartLine"] = (call.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["laterExecutionSyntaxSpanStart"] = call.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["laterExecutionSyntaxMethod"] = member.Name.Identifier.ValueText;
+                properties["laterExecutionSyntaxReason"] = uncertain ? "intervening-expression-effects-unresolved" : "same-block-syntax-only";
+                break;
+            }
+            if (candidate is AssignmentStatementSyntax assignment && Same(assignment.Left))
+            { properties["laterExecutionSyntaxReason"] = "receiver-reassigned"; break; }
+            if (candidate is not ExpressionStatementSyntax && candidate is not AssignmentStatementSyntax)
+            { properties["laterExecutionSyntaxReason"] = "unsupported-statement-boundary"; break; }
+            if (!ParameterAdd(candidate) && !Configuration(candidate)) uncertain = true;
+        }
+        for (var i = at + 1; i < statements.Count; i++)
+        {
+            if (++work > 64) { properties["commandAssociationReason"] = "local-window-limit"; return; }
+            if (ParameterAdd(statements[i]) || Configuration(statements[i])) continue;
+            if (statements[i] is ExpressionStatementSyntax { Expression: InvocationExpressionSyntax execute }
+                && execute.Expression is MemberAccessExpressionSyntax member && Same(member.Expression)
+                && new[] { "ExecuteScalar", "ExecuteNonQuery", "ExecuteReader", "ExecuteXmlReader" }.Contains(member.Name.Identifier.ValueText, StringComparer.OrdinalIgnoreCase)
+                && (execute.ArgumentList is null || execute.ArgumentList.Arguments.Count == 0))
+            {
+                properties["commandAssociation"] = "syntax-local-straight-line-candidate";
+                properties["commandExecutionEvidence"] = "syntax-following-execution-candidate";
+                properties["commandDeclarationStartLine"] = (declaration.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["commandExecutionStartLine"] = (execute.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["commandExecutionSpanStart"] = execute.SpanStart.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                properties["commandExecutionMethod"] = member.Name.Identifier.ValueText;
+                properties["commandAssociationReason"] = "fresh-local-supported-configuration-and-execution";
+            }
+            else properties["commandAssociationReason"] = "intervening-statement-or-unsupported-execution";
+            return;
+        }
+        properties["commandAssociationReason"] = "no-following-execution";
+    }
+
+    private static void TraceLocalCommandText(SyntaxList<StatementSyntax> statements, int declarationIndex,
+        ExpressionSyntax expression, SortedDictionary<string, string> properties)
+    {
+        properties["commandTextTraceEvidence"] = "unresolved";
+        properties["commandTextTraceReason"] = "unsupported-origin-expression";
+        var nodes = 0;
+        string? Constant(ExpressionSyntax node)
+        {
+            if (++nodes > 128) return null;
+            if (node is LiteralExpressionSyntax literal && literal.Token.Value is string text)
+                return text.Length <= 16384 ? text : null;
+            // VB's intrinsic String keyword cannot be a local/type alias. Do not
+            // equate arbitrary identifiers named String (including [String]) with it.
+            if (node is MemberAccessExpressionSyntax empty
+                && empty.Name.Identifier.ValueText.Equals("Empty", StringComparison.OrdinalIgnoreCase)
+                && (empty.Expression is PredefinedTypeSyntax predefined && predefined.Keyword.IsKind(SyntaxKind.StringKeyword)
+                    || empty.Expression?.ToString().Equals("Global.System.String", StringComparison.OrdinalIgnoreCase) == true))
+                return string.Empty;
+            if (node is ParenthesizedExpressionSyntax parenthesized) return Constant(parenthesized.Expression);
+            if (node is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.ConcatenateExpression))
+            {
+                var left = Constant(binary.Left);
+                var right = Constant(binary.Right);
+                return left is not null && right is not null && left.Length + right.Length <= 16384 ? left + right : null;
+            }
+            return null;
+        }
+        void Complete(string text, SyntaxNode source, int count)
+        {
+            properties["commandTextTraceEvidence"] = "bounded-local-constant-syntax-candidate";
+            properties["commandTextTraceReason"] = "literal-assignment-and-concatenation-only";
+            properties["commandTextTraceHash"] = FactFactory.Hash(text, 64);
+            properties["commandTextTraceStartLine"] = (source.GetLocation().GetLineSpan().StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            properties["commandTextTraceStatementCount"] = count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+        if (expression is not IdentifierNameSyntax identifier)
+        {
+            var direct = Constant(expression);
+            if (direct is not null) Complete(direct, expression, 0);
+            return;
+        }
+        var pieces = new List<string>();
+        var length = 0;
+        for (var i = declarationIndex - 1; i >= 0; i--)
+        {
+            var count = declarationIndex - i;
+            if (count > 64) { properties["commandTextTraceReason"] = "statement-limit"; return; }
+            ExpressionSyntax? value = null;
+            var append = false;
+            if (statements[i] is AssignmentStatementSyntax assignment
+                && assignment.Left is IdentifierNameSyntax target
+                && target.Identifier.ValueText.Equals(identifier.Identifier.ValueText, StringComparison.OrdinalIgnoreCase))
+            {
+                append = assignment.IsKind(SyntaxKind.ConcatenateAssignmentStatement) || assignment.IsKind(SyntaxKind.AddAssignmentStatement);
+                if (append || assignment.IsKind(SyntaxKind.SimpleAssignmentStatement)) value = assignment.Right;
+            }
+            else if (statements[i] is LocalDeclarationStatementSyntax local && local.Declarators.Count == 1
+                && local.Declarators[0].Names.Count == 1
+                && local.Declarators[0].Names[0].Identifier.ValueText.Equals(identifier.Identifier.ValueText, StringComparison.OrdinalIgnoreCase))
+                value = local.Declarators[0].Initializer?.Value;
+            if (value is null) { properties["commandTextTraceReason"] = "intervening-or-unsupported-statement"; return; }
+            var part = Constant(value);
+            if (part is null) { properties["commandTextTraceReason"] = "nonconstant-or-expression-limit"; return; }
+            length += part.Length;
+            if (length > 16384) { properties["commandTextTraceReason"] = "text-length-limit"; return; }
+            pieces.Add(part);
+            if (!append)
+            {
+                pieces.Reverse();
+                Complete(string.Concat(pieces), statements[i], count);
+                return;
+            }
+        }
+        properties["commandTextTraceReason"] = "initial-assignment-not-found";
+    }
+}

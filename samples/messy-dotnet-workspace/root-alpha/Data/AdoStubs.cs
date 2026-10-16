@@ -1,9 +1,6 @@
-namespace System.Data.Common;
+namespace Alpha.UntrustedLookalikes;
 
-// Synthetic stand-in for the framework command type so the fixture's
-// ExecuteReader call patterns resolve to the known ADO.NET shape without
-// referencing a real database stack. Source-declared types hide the
-// framework metadata type in this compilation.
+// Negative-control lookalike: this type must not shadow the signed framework API.
 public abstract class DbCommand
 {
     public object ExecuteReader() => null!;

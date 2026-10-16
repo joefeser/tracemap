@@ -464,6 +464,6 @@ public sealed class WebFormsReviewPreflightTests
             }
             Config = Config with { SourceCommitSha = GitMetadataProvider.Detect(Source).CommitSha };
         }
-        public void Dispose() => Directory.Delete(Root, recursive: true);
+        public void Dispose() => TempDirectory.DeleteTree(Root);
     }
 }

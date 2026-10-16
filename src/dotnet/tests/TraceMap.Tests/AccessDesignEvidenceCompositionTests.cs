@@ -292,7 +292,7 @@ public sealed class AccessDesignEvidenceCompositionTests
         var alias = Path.Combine(temp.Path, "design-alias");
         try
         {
-            Directory.CreateSymbolicLink(alias, design);
+            using var link = DirectoryLinkFixture.Create(alias, design);
             stderr.GetStringBuilder().Clear();
             var symlinkExit = await AccessCommand.RunAsync(
                 ["enrich-design", "--base-scan", baseScan, "--design-evidence", design, "--out", Path.Combine(alias, "output")],

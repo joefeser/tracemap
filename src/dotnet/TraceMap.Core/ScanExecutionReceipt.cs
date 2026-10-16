@@ -117,7 +117,7 @@ public sealed class ScanReceiptRecorder
 
     public ScanReceiptRecorder(ScanOptions options, IEnumerable<string>? additionalAuthorizedInputs = null)
     {
-        scopeFingerprint = Hash(string.Join('\n',
+        var scope = string.Join('\n',
             Normalize(options.SolutionPaths),
             Normalize(options.ProjectPaths),
             Normalize(options.IncludeGlobs),
@@ -147,7 +147,31 @@ public sealed class ScanReceiptRecorder
             NormalizeOrdered(options.IlRewriteBeforePdbPaths),
             NormalizeOrdered(options.IlRewriteAfterPdbPaths),
             options.IlRewritePdbLimits?.ToString() ?? string.Empty,
-            Normalize(additionalAuthorizedInputs)));
+            Normalize(additionalAuthorizedInputs));
+        // A scan with an opt-in evidence lane enabled must never reuse an authorized scope
+        // fingerprint from a disabled-lane scan (and vice versa); both-off keeps the legacy
+        // v1 hash byte-for-byte.
+        scopeFingerprint = !options.IndexDepsJson && !options.IndexCiProducers
+            ? Hash(scope)
+            : Hash(JsonSerializer.Serialize(new
+            {
+                baseScopeSha256 = Hash(scope),
+                indexDepsJson = options.IndexDepsJson,
+                depsJsonLimits = options.IndexDepsJson ? options.DepsJsonLimits ?? new DepsJsonLimits() : null,
+                indexCiProducers = options.IndexCiProducers
+            }));
+        if (!string.IsNullOrWhiteSpace(options.WebFormsVbImportContextPath))
+            scopeFingerprint = Hash(JsonSerializer.Serialize(new
+            {
+                baseScopeSha256 = scopeFingerprint,
+                webFormsVbImportContextPath = options.WebFormsVbImportContextPath.Trim()
+            }));
+        if (!string.IsNullOrWhiteSpace(options.VisualBasicCompilationContextPath))
+            scopeFingerprint = Hash(JsonSerializer.Serialize(new
+            {
+                baseScopeSha256 = scopeFingerprint,
+                visualBasicCompilationContextPath = options.VisualBasicCompilationContextPath.Trim()
+            }));
     }
 
     public bool CanWriteAuthoritativeReceipt => repositoryIdentityHash is not null && commitSha is not null && runId is not null;

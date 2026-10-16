@@ -160,7 +160,13 @@ public sealed record CombinedDependencySurfaceRow(
     string? LegacyDataClaimLevelContextId = null,
     string? LegacyDataExtractorVersion = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    string? SurfaceSubtype = null);
+    string? SurfaceSubtype = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    OutboundHttpCallEvidence? HttpCallEvidence = null)
+{
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public DatabaseCallEvidence? DatabaseCallEvidence { get; init; }
+}
 
 public sealed record CombinedDependencyEdgeRow(
     string EdgeKind,
@@ -1062,7 +1068,8 @@ public static class CombinedDependencyReporter
             surface.LegacyDataDisplayClearance,
             surface.LegacyDataClaimLevelContextId,
             surface.LegacyDataExtractorVersion,
-            surface.SurfaceSubtype);
+            surface.SurfaceSubtype,
+            surface.HttpCallEvidence) { DatabaseCallEvidence = surface.DatabaseCallEvidence };
     }
 
     private static IReadOnlyList<CombinedNeedsReviewRow> BuildNeedsReview(IReadOnlyList<CombinedEndpointFinding> endpointFindings, IReadOnlyList<CombinedFactRow> facts)

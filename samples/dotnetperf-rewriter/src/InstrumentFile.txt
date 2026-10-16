@@ -1,0 +1,9 @@
+NetPerf.exe instrument NetPerf.Tests.dll keyfile ..\..\NetPerfKey.snk
+
+C:\dev\SampleTestData>
+"C:\dev\NetPerf\bin\Debug\NetPerf.exe" instrument CallGraphTestClasses\bin\debug\CallGraphTestClasses.dll keyfile CallGraphTestClasses\SampleTestDataKey.snk
+"C:\dev\NetPerf\bin\Debug\NetPerf.exe" instrument CallGraphTestClassesDuplicates\bin\debug\CallGraphTestClassesDuplicates.dll keyfile CallGraphTestClasses\SampleTestDataKey.snk
+
+mstest /testcontainer:netperf.tests.dll /testsettings:..\..\local.testsettings
+
+mstest /testcontainer:netperf.tests.dll /test:NetPerf.UnitTests.CILCorrectness.LeaveInstrTest.VerifyLeave_SourceWithinFaultHandler_TargetInSameFaultHandler_IsValid /testsettings:..\..\local.testsettings

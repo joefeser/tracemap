@@ -99,3 +99,101 @@ namespace TraceMap.CompiledFixtures.CSharp.Beta
     {
     }
 }
+
+// Deliberately identical metadata namespace/type names across three assemblies.
+// Equal signatures are shape evidence only, never cross-assembly identity.
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class SharedShape
+    {
+        public static int Select(int value) => value;
+        public static string Select(string value) => value;
+        public static int Reference(ref int value) => value;
+        public static T Echo<T>(T value) => value;
+        public static TLeft Echo<TLeft, TRight>(TLeft value) => value;
+        public static int[] Rank(int[] value) => value;
+        public static int[,] Rank(int[,] value) => value;
+    }
+}
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class AccessorShape
+    {
+        public int Value { get; set; }
+        public int Snapshot => Value;
+        public event System.EventHandler Changed { add { } remove { } }
+        public int get_Unbound() => 0;
+    }
+
+    public sealed class OptionShape
+    {
+        public static int? NullableRoundtrip(int? value) => value;
+    }
+
+    public sealed class OptionalShape
+    {
+        public static int Required(int value) => value;
+        public static int OptionalSeven(int value = 7) => value;
+        public static int OptionalNine(int value = 9) => value;
+        public static int Wide(int p0 = 0, int p1 = 0, int p2 = 0, int p3 = 0,
+            int p4 = 0, int p5 = 0, int p6 = 0, int p7 = 0, int p8 = 0,
+            int p9 = 0, int p10 = 0) => p10;
+    }
+}
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class ConstraintShape
+    {
+        public static T Free<T>(T value) => value;
+        public static T Reference<T>(T value) where T : class => value;
+        public static T Value<T>(T value) where T : struct => value;
+        public static T Construct<T>(T value) where T : new() => value;
+        public static T Disposable<T>(T value) where T : System.IDisposable => value;
+    }
+}
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class DefaultShape
+    {
+        public static int Required(int value) => value;
+        public static int IntSeven(int value = 7) => value;
+        public static int IntNine(int value = 9) => value;
+        public static string Text(string value = "seven") => value;
+        public static string? NullText(string? value = null) => value;
+        public static decimal DecimalSeven(decimal value = 7m) => value;
+    }
+}
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public interface ISharedFormatter { string Format(string value); }
+    public sealed class ExplicitShape : ISharedFormatter
+    {
+        public string Format(string value) => "ordinary:" + value;
+        string ISharedFormatter.Format(string value) => "explicit:" + value;
+    }
+}
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public sealed class OperatorShape
+    {
+        public static OperatorShape operator +(OperatorShape left, OperatorShape right) => left;
+        public static implicit operator OperatorShape(int value) => new();
+        public static explicit operator int(OperatorShape value) => 0;
+        public static OperatorShape op_LooksLikeOperator(OperatorShape left, OperatorShape right) => right;
+    }
+}
+
+namespace TraceMap.CompiledFixtures.Equivalence
+{
+    public static class ModuleShape
+    {
+        public static int Curried(int left, int right) => left + right;
+        public static int Tupled(int left, int right) => left + right;
+        public static int Renamed(int value) => value;
+    }
+}

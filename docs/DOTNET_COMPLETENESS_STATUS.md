@@ -1,5 +1,267 @@
 # .NET Evidence Completeness Status
 
+## Duplicate narrowing IL retention (2026-10-07)
+
+PR #844 merged at `e5de6a4b`; Codex later completed clean, but the reviewed
+per-input IL assertion gap remained in the merged duplicate test. This bounded
+#767 follow-up requires both body and call evidence for each input, rejects
+omitted/misattributed facts, and pins reverse-order determinism. See the
+[retention matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#duplicate-narrowing-input-retention).
+Late-bound configuration and broader private Windows/identity acceptance remain open.
+
+## VB narrowing and Option Strict (2026-10-07)
+
+PR #843 merged at `37552ae3`, delivering overload selection/ambiguity evidence.
+This bounded #767 continuation pins implicit/explicit Long-to-Integer narrowing
+under Strict On/Off, compiler refusal and checked original IL with independent
+oracles. See the [narrowing matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-narrowing-and-option-strict-continuation).
+Late-bound configuration, runtime overflow behavior, source/PDB/rewrite joins
+and private Windows/corpus acceptance remain open. #843's initial Web Forms CI
+failure passed one unchanged-head rerun; its cause remains unestablished.
+
+## VB overload ambiguity and strictness (2026-10-06)
+
+PR #842 merged at `e14d26f1`, delivering import-conflict refusal. This bounded
+#767 continuation proves explicit String/Uri overload selection and ambiguous
+Nothing refusal under Option Strict On/Off. Independent compiler/SRM/Cecil
+oracles pin source calls and original compiled operands without joining invalid
+source to retained binary evidence. See the [overload matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-overload-ambiguity-and-strictness-continuation).
+Narrowing/configuration interactions, source/PDB/IL/rewrite/runtime relationships
+and private Windows/corpus acceptance remain open.
+
+## VB import conflict refusal (2026-10-06)
+
+PR #841 merged at `26154c8a`, delivering exact positive VB import joins. This
+bounded #767 continuation adds conflicting/missing imports and malformed aliases,
+with failed-compilation gaps, independent compiler/SRM oracles, a qualified
+positive control and member-limit refusal. See the [conflict matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-import-conflict-refusal-continuation).
+Valid compiled declarations remain evidence of inspected bytes, not proof that
+invalid source built successfully. Overload/configuration interactions, PDB/IL/
+rewrite/runtime relationships and private Windows/corpus acceptance remain open.
+
+## VB import identity joins (2026-10-06)
+
+PR #840 is merged at `2aee151e`: C# ref-like signature evidence is on dev.
+This bounded #767 continuation covers project imports, file aliases and SDK
+default imports through three exact source-to-metadata joins and six regression
+cases. See the [imports matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-imports-and-source-identity-continuation).
+Same-named types in different namespaces remain distinct. Unbound/duplicate/
+malformed/bounded inputs refuse joins. Compiler import conflicts, configuration
+variants, PDB/IL/rewrite/runtime relationships and private Windows/corpus
+acceptance remain open; test binding receipts do not prove build authenticity.
+
+## C# ref-like signatures (2026-10-06)
+
+PR #839 is merged at `c8bbfcd8`: VB late-bound source gaps and exact IL helper
+identities are on dev. This bounded #767 continuation pins Span/ReadOnlySpan,
+mutable/readonly by-reference signatures and required versus optional modifiers.
+See the [ref-like signature matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#c-ref-like-signature-continuation).
+The existing ref-field fixture did not cover these assertions. Runtime lifetime
+safety, source/PDB/IL/rewrite joins, external IsByRefLike classification and broad
+language/private corpus/Windows acceptance remain open.
+
+## VB late-bound helper evidence (2026-10-06)
+
+PR #838 is merged at `cc15f276`: collection indexer/conversion evidence is on dev.
+This bounded #767 continuation pins VB late-bound helper calls against a typed
+direct call, keeping source gaps, name-string operands and compiled targets
+separate. See the [late-binding matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#vb-late-bound-helper-and-source-gap-continuation).
+Runtime receiver/overload resolution, source-to-binary/PDB/rewrite joins, broader
+language coverage and private Windows/corpus acceptance remain open. #838's
+initial Windows wizard identity failures passed one rerun but their cause remains
+unestablished; this slice does not repair or erase that separate evidence.
+
+## Collection indexers and integer conversions (2026-10-06)
+
+PR #837 is merged at `7fac0ce8`: F# cached event wiring and token-selected
+helper identity tests are on dev. This bounded #767 continuation adds public
+C#/VB/F# ArrayList versus List<Object> signatures, indexer operand identity and
+integer-conversion IL tests. See the [collection matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#collection-indexer-and-conversion-continuation).
+No runtime, source/PDB/rewrite or F# source equivalence is inferred. Broader
+#767/#759 and authorized private corpus/Windows acceptance remain open.
+
+## F# event wiring (2026-10-06)
+
+PR #836 is merged at `9cc14630`; its exact-head Codex comment reports no major
+issues (the earlier ACK stale classification did not reflect that comment).
+This continuation adds F# cached-delegate event wiring, exact accessor/IL
+identities and distinct generated-helper evidence to the C#/VB matrix. See the
+[F# continuation](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#f-cached-event-wiring-continuation).
+No F# source extraction, runtime or rewrite equivalence is inferred. Broad
+#767/#759 and private corpus/Windows acceptance remain open.
+
+## C#/VB event wiring (2026-10-06)
+
+PR #835 is merged at `d4678de1`; its final-head CI and live ACK passed after
+an evidence-backed Qodo false-positive disposition. The next bounded #767 slice
+pins VB WithEvents/Handles against explicit C# remove/add wiring with exact
+metadata accessor handles and original IL call/method-pointer observations.
+See the [event wiring matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#withevents-and-handles-wiring-continuation).
+No runtime subscription, synchronization, source/PDB or rewrite equivalence
+is inferred. Broader language and private corpus/Windows acceptance remain open.
+
+## C#/VB async and iterator PDB coverage (2026-10-06)
+
+PR #834 is merged at `d86f74e7`; its final-head CI and live ACK passed.
+The next bounded #767 slice pins four generated MoveNext endpoints and their
+metadata/PDB/document/sequence links using independent SRM and Cecil oracles.
+Missing or duplicate metadata candidates cannot be repaired by matching names.
+See the [state-machine matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#async-and-iterator-pdb-continuation).
+No generated source ownership, runtime, rewrite or F# state-machine equivalence
+is inferred. Broader language and private corpus/Windows acceptance remain open.
+
+## C#/VB nested generic ownership (2026-10-06)
+
+PR #833 is merged at `2f13e1dc`; its final-head CI and live ACK passed.
+The next bounded #767 slice pins outer/inner/method generic ownership and
+constructed argument order with independent raw SRM/Cecil assertions. Nested
+classes with no new source parameter still retain their outer CLR parameter.
+Self-type signatures remain assembly-scoped. See the [nested matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nested-generic-ownership-continuation).
+Broader language/source/PDB/IL/rewrite and private corpus/Windows acceptance
+remain open; metadata shape does not establish runtime or F# source equivalence.
+
+## C#/VB receiver call-site coverage (2026-10-06)
+
+PR #832 is merged at `d95df3da`; its remaining Windows package CI later passed.
+The next bounded #767 slice pins C# base/virtual and VB Me/MyBase/MyClass calls
+with independent raw SRM/Cecil oracles and exact metadata/original-body/call
+links. Same-opcode bodies with different operands retain distinct hashes.
+See the [receiver matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#receiver-call-site-continuation).
+No runtime dispatch, source/PDB or full language/epic acceptance is inferred.
+Private corpus and isolated Windows acceptance remain open.
+
+## Quotation/expression-tree coverage (2026-10-06)
+
+PR #831 is merged at `eafa68e7`. The next bounded #767 slice distinguishes
+C#/VB Expression<Func<Int32>>, F# FSharpExpr<Int32> and shared Func<Int32>
+signatures with exact independent reader and provenance assertions. This proves
+metadata shape only, not tree contents, runtime equivalence or F# source ownership.
+See the [acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#quotation-and-expression-tree-continuation).
+Private corpus/Windows and broader language/IL/PDB/rewrite acceptance remain open.
+
+## Union-factory coverage (2026-10-06)
+
+PR #830 is merged at `f7777347`. The next bounded #767 slice pins F#
+union-case factories and type/case mapping attributes versus ordinary C#/VB
+lookalikes. Assembly-scoped self-return signatures remain distinct, and mapping
+metadata does not imply runtime union equivalence or F# source ownership.
+See the [acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#union-factory-continuation).
+Broader language/IL/PDB/rewrite and private corpus/Windows acceptance remain open.
+
+## Record-generated member coverage (2026-10-06)
+
+The bounded #767 continuation pins selected C#/F# record-generated object
+overrides versus ordinary VB lookalikes, independently read with SRM and Cecil.
+Equal signatures preserve distinct assembly/member identities and generated
+markers. No runtime record semantics or F# source ownership is inferred.
+See the [record acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#record-generated-member-continuation).
+The broader epic and private corpus/Windows acceptance remain open.
+
+## Module/currying coverage (2026-10-06)
+
+PR #828 is merged at `6f168354`. The next bounded #767 slice compares C#
+static-class, VB Module and F# module methods with exact metadata identities.
+Curried and tupled F# functions share a flat CLR signature but retain distinct
+argument-group metadata. CompiledName is consumed by the compiler, while
+CompilationSourceName retains the source aliases. Those aliases alone do not
+establish physical source declarations or ownership edges. Bound C#/VB source joins and F# unsupported-source gaps
+remain separate. See the [acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#module-and-currying-continuation).
+The broader language matrix and private Windows/corpus acceptance remain open.
+
+## Operator/conversion coverage (2026-10-05)
+
+PR #827 is merged at `c155a35f`. The next bounded #767 slice pins C#/VB/F#
+addition and implicit/explicit conversion MethodDefs, raw signatures and an
+ordinary operator-looking decoy. Assembly scopes stay distinct, including
+self-type signatures. F# marks the decoy SpecialName while C#/VB do not;
+this is not proof of operator semantics. Bound C#/VB source joins and the F#
+unsupported-source gap are tested separately. See the
+[acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#operator-and-conversion-continuation).
+Private corpus/Windows acceptance and broader language coverage remain open.
+
+## Explicit-interface coverage (2026-10-05)
+
+PR #826 is merged at `b40267b1`. The next bounded #767 slice pins explicit
+interface declaration/body associations across C#/VB/F# using independent raw
+metadata tokens, with ordinary same-signature methods as decoys. The matrix
+preserves language-specific names/flags and does not add production dispatch
+edges. See the [acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#explicit-interface-continuation).
+Private/Windows acceptance and broader language coverage remain open.
+
+## Default-value coverage (2026-10-05)
+
+PR #825 is merged at `74364fe5`. The next bounded #767 slice distinguishes
+required, integer, string, null and decimal defaults across C#/VB/F#. Independent
+constant/attribute oracles keep default values separate from method signatures
+and optional markers. Production default-value facts remain a gap. See the
+[acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#default-value-continuation).
+Private/Windows acceptance and the broader epic remain open.
+
+## Generic-constraint coverage (2026-10-05)
+
+PR #824 is merged at `5adfaeb6`. The next bounded #767 matrix pins five
+constraint shapes across C#/VB/F#, including F# struct flag/row differences.
+Independent metadata oracles retain constraints separately from equal method
+signatures. Production constraint evidence remains a gap. See the
+[acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#generic-constraint-continuation).
+Private/Windows acceptance and the broader epic remain open.
+
+## Property/event accessor coverage (2026-10-05)
+
+PR #823 is merged into `dev` at `c389b20d`. The next bounded #767 slice
+pins matched C#/VB/F# property/event signatures and verifies accessor method
+endpoints using independent metadata handles. Getter-looking names cannot
+create associations; VB's explicit event raiser remains a distinct method.
+See the [case and acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#propertyevent-accessor-continuation).
+No runtime equivalence or F# source support is inferred; broader epic and
+private/Windows acceptance remain open.
+
+## Nullable and F# option coverage (2026-10-05)
+
+PR #822 is merged into `dev` at `75636837`. The next bounded #767 slice
+compares C#/VB/F# Nullable<Int32> signatures and preserves distinct F# option,
+value-option and optional-argument method identities. It pins exact metadata
+scopes, provenance, refusal cases and the F# source-unsupported gap. See the
+[case and acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#nullable-and-f-option-continuation).
+No source extraction, runtime equivalence or private/Windows acceptance is
+inferred. All epic issues remain open.
+
+## Bound source optional-marker coverage (2026-10-05)
+
+PR #821 is merged into `dev` at `a0de5398`. The next bounded #767 slice
+pins real C#/VB wide optional-parameter joins, negative/ambiguous comparator
+inputs and bounded summary evidence. Source ordinal sorting was already numeric;
+no production fix or extractor version change is needed. Source reconciliation
+joins the portable metadata CI filter. See the
+[acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#bound-source-optional-marker-continuation).
+Full default semantics, F# source extraction and private/Windows acceptance
+remain open; this does not close any epic issue.
+
+## Optional-parameter continuation (2026-10-05)
+
+PR #820 is merged into `dev` at `e9212c53`. The next bounded #767 slice
+requires Cecil/SRM agreement on optional-parameter markers, corrects numeric
+ordinal ordering and sparse setter-only property selection, and adds matched
+public C#/VB/F# regressions. Marker equality does not establish default-value,
+source, runtime or complete API equivalence. See the
+[optional-parameter matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md#optional-parameter-agreement-continuation).
+The broader issues and Windows/private dependencies below remain open.
+
+## Previous reconciliation (2026-10-05)
+
+The Task 9-only status below is historical. Fetched `origin/dev` at
+`9dde9bb5` and `origin/main` at `7f026f5a` contain the metadata,
+source-reconciliation, PDB, IL/rewrite, public ILAsm parity and bounded Windows
+runner merges (#772–#788). They do not establish full epic acceptance.
+See the [current acceptance matrix](validation/CLR_SIGNATURE_EQUIVALENCE_MATRIX.md)
+for exact base SHAs, implementation/test evidence, outstanding gaps and host
+requirements. The new #767 slice tests matched C#/VB/F# CLR method signatures
+while preserving distinct assembly/member endpoints. F# source extraction,
+independent ILDAsm portable-PDB line parity, and private corpus acceptance are
+still unclaimed. Tasks 10/11 and issues #759/#766/#767/#768/#769 remain open.
+
+## Historical Task 9 delivery record
+
 Status: Task 8 source/metadata reconciliation merged; Task 9 portable PDB identity and sequence-point evidence implemented locally as of 2026-09-20, with native Windows fail-closed CI validation pending
 
 Authority: `codex/pdb-sequence-point-evidence` based on `origin/dev` at `7dc943f2f9d5de82b0963e3e1b8aa9196116b51c`

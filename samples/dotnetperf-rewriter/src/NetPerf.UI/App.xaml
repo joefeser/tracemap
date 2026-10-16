@@ -1,0 +1,159 @@
+﻿<Application
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:infra="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure"
+	xmlns:converter="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure.Converters"
+	x:Class="MetadataDashboard.NetperfUI.App">
+	<Application.Resources>
+		<ResourceDictionary>
+			<ResourceDictionary.MergedDictionaries>
+				<ResourceDictionary>
+					<converter:IntToWindowStateConverter
+						x:Key="IntToWindowState" />
+					<converter:InvertBooleanConverter
+						x:Key="InvertBoolean" />
+					<converter:ValueEqualsParameterConverter
+						x:Key="valEqParam" />
+					<converter:BooleanToCollapsedConverter
+						x:Key="BooleanToCollapsed" />
+					<converter:StringNotEmptyConverter
+						x:Key="StringNotEmpty" />
+					
+					<infra:AppBootstrapper
+						x:Key="bootstrapper" />
+				</ResourceDictionary>
+			</ResourceDictionary.MergedDictionaries>
+
+			<Style
+				x:Key="defaultErrorTemplate"
+				TargetType="{x:Type Control}">
+				<Style.Triggers>
+					<Trigger
+						Property="IsVisible"
+						Value="False">
+						<Setter
+							Property="Validation.ErrorTemplate"
+							Value="{x:Null}" />
+
+					</Trigger>
+					<Trigger
+						Property="Validation.HasError"
+						Value="False">
+						<Setter
+							Property="Validation.ErrorTemplate"
+							Value="{x:Null}" />
+
+					</Trigger>
+
+					<MultiTrigger>
+						<MultiTrigger.Conditions>
+							<Condition
+								Property="IsVisible"
+								Value="True" />
+							<Condition
+								Property="Validation.HasError"
+								Value="True" />
+						</MultiTrigger.Conditions>
+						<MultiTrigger.Setters>
+							<Setter
+								Property="ToolTip"
+								Value="{Binding RelativeSource={RelativeSource Self}, Path=(Validation.Errors)[0].ErrorContent}" />
+
+							<Setter
+								Property="Validation.ErrorTemplate">
+								<Setter.Value>
+									<ControlTemplate>
+										
+										<DockPanel
+											LastChildFill="True">
+											<Ellipse
+												DockPanel.Dock="Right"
+												Margin="-26,0,0,0"
+												Width="18"
+												Height="18"
+												Stroke="Red"
+												Fill="Red"
+												ToolTip="{Binding ElementName=adornDisplayer, Path=AdornedElement.ToolTip}"/>
+											<TextBlock
+												DockPanel.Dock="Right"
+												VerticalAlignment="Center"
+												Margin="-16,0,0,0"
+												Foreground="White"
+												FontWeight="Bold"
+												FontSize="12pt"
+												Text="!"
+												ToolTip="{Binding ElementName=adornDisplayer, Path=AdornedElement.ToolTip}"
+												/>
+
+											<Border
+												BorderBrush="Red"
+												BorderThickness="1">
+												<AdornedElementPlaceholder
+													Name="adornDisplayer" />
+											</Border>
+										</DockPanel>
+
+									</ControlTemplate>
+								</Setter.Value>
+							</Setter>
+						</MultiTrigger.Setters>
+
+					</MultiTrigger>
+
+				</Style.Triggers>
+			</Style>
+
+			<Style
+				TargetType="{x:Type TextBox}"
+				BasedOn="{StaticResource defaultErrorTemplate}">
+			</Style>
+
+			<Style
+				TargetType="{x:Type ListView}"
+				BasedOn="{StaticResource defaultErrorTemplate}">
+			</Style>
+
+			<Style
+				TargetType="Label">
+				<Style.Triggers>
+					<DataTrigger
+						Binding="{Binding RelativeSource={RelativeSource Self}, Path=ToolTip, Converter={StaticResource StringNotEmpty}}"
+						Value="True">
+						<DataTrigger.Setters>
+							<Setter
+								Property="ContentTemplate">
+								<Setter.Value>
+									<DataTemplate>
+										<DockPanel
+											LastChildFill="True">
+											<Ellipse
+												DockPanel.Dock="Left"
+												Width="16"
+												Height="16"
+												VerticalAlignment="Center"
+												Stroke="RoyalBlue"
+												StrokeThickness="1"
+												Fill="RoyalBlue" />
+											<TextBlock
+												DockPanel.Dock="Left"
+												FontWeight="Bold"
+												Foreground="White"
+												FontSize="12pt"
+												VerticalAlignment="Center"
+												Margin="-12,0,0,0"
+												Text="?" />
+											<ContentPresenter VerticalAlignment="Center" Content="{TemplateBinding Content}" ContentStringFormat="{TemplateBinding ContentStringFormat}" />
+										</DockPanel>
+									</DataTemplate>
+								</Setter.Value>
+							</Setter>
+						</DataTrigger.Setters>
+					</DataTrigger>
+				</Style.Triggers>
+				
+				
+			</Style>
+
+		</ResourceDictionary>
+	</Application.Resources>
+</Application>

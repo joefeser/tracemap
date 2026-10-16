@@ -73,6 +73,15 @@ selected path is still revalidated on resume.
 Customer source/publication files are not overwritten. Native assembly admission
 and source-binding checks still run later; metadata inspection alone is not proof.
 
+Directory-shaped `.compiled` preserves such as `/App_Code/` and
+`/App_WebReferences/` remain hashed publication inventory, but are not page
+bindings or application-prefix witnesses. A single trailing slash is accepted;
+empty interior segments, traversal and unsafe virtual-path characters are still
+rejected. Do not edit publication maps to work around validation errors.
+If preparation failed before a native run manifest existed, preserve the failed
+attempt and use explicit `--continue --repair-project <id>` after updating the
+tool; ordinary continuation cannot resume a nonexistent native manifest.
+
 The generated layout is private and may contain paths and copied binaries:
 
 ```text

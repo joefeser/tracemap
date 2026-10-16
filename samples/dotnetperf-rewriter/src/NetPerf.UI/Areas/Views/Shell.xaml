@@ -1,0 +1,89 @@
+﻿<Window
+	x:Class="MetadataDashboard.NetperfUI.Areas.Views.Shell"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:cal="http://www.caliburnproject.org"
+	xmlns:my="clr-namespace:wyDay.Controls;assembly=AutomaticUpdaterWPF"
+	xmlns:conv="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure.Converters"
+	Background="LightGray"
+	MinHeight="{Binding Path=ScreenMinHeight, Mode=OneTime}"
+	MinWidth="{Binding Path=ScreenMinWidth, Mode=OneTime}"
+	Height="{Binding Path=ScreenHeight, Mode=TwoWay}"
+	Width="{Binding Path=ScreenWidth, Mode=TwoWay}"
+	Left="{Binding Path=ScreenLeft, Mode=TwoWay}"
+	Top="{Binding Path=ScreenTop, Mode=TwoWay}"
+	WindowState="{Binding Path=ScreenState}">
+
+	
+	<DockPanel
+		LastChildFill="True">
+
+		<Menu
+			DockPanel.Dock="Top" 
+			FocusManager.IsFocusScope="False"
+			ItemsSource="{Binding MenuItems}">
+			<Menu.ItemContainerStyle>
+				<Style
+					TargetType="MenuItem">
+					<Style.Triggers>
+						<DataTrigger
+							Binding="{Binding IsSeparator}"
+							Value="true">
+							<Setter
+								Property="Template">
+								<Setter.Value>
+									<ControlTemplate>
+										<Separator
+											HorizontalAlignment="Stretch"
+											IsEnabled="false" IsHitTestVisible="False" />
+									</ControlTemplate>
+								</Setter.Value>
+							</Setter>
+						</DataTrigger>
+					</Style.Triggers>
+					<Setter
+						Property="Header"
+						Value="{Binding Text}" />
+
+					<Setter
+						Property="ToolTip"
+						Value="{Binding ToolTipText}" />
+
+					<Setter
+						Property="ItemsSource"
+						Value="{Binding}" />
+
+					<Setter
+						Property="Command"
+						Value="{Binding ClickCommand}" />
+					<Setter
+						Property="CommandParameter"
+						Value="{Binding Tag}" />
+
+				</Style>
+			</Menu.ItemContainerStyle>
+			
+		</Menu>
+
+			<StatusBar
+			DockPanel.Dock="Bottom">
+			<StatusBar.Items>
+				<StatusBarItem
+					DockPanel.Dock="Right">
+					<my:AutomaticUpdater
+						HorizontalAlignment="Right"
+						FlowDirection="LeftToRight"
+						Name="autoUpdate" />
+				</StatusBarItem>
+				<StatusBarItem>
+
+				</StatusBarItem>
+			</StatusBar.Items>
+		</StatusBar>
+
+		<ContentControl
+			x:Name="ActiveItem"
+			Margin="10" />
+
+	</DockPanel>
+</Window>

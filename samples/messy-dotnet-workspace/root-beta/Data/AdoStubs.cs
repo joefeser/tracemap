@@ -1,7 +1,6 @@
-namespace System.Data.Common;
+namespace Beta.UntrustedLookalikes;
 
-// Synthetic stand-in matching root-alpha's stub so both roots classify the
-// same ADO.NET call-pattern shape independently.
+// Untrusted lookalike retained as a negative control, not framework evidence.
 public abstract class DbCommand
 {
     public object ExecuteReader() => null!;

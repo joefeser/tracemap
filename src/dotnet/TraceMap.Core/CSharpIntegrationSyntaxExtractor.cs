@@ -7,23 +7,6 @@ namespace TraceMap.Core;
 
 public static class CSharpIntegrationSyntaxExtractor
 {
-    private static readonly HashSet<string> HttpClientMethods = new(StringComparer.Ordinal)
-    {
-        "GetAsync",
-        "PostAsync",
-        "PutAsync",
-        "DeleteAsync",
-        "SendAsync"
-    };
-
-    private static readonly HashSet<string> JsonHttpMethods = new(StringComparer.Ordinal)
-    {
-        "GetFromJsonAsync",
-        "ReadFromJsonAsync",
-        "PostAsJsonAsync",
-        "PutAsJsonAsync"
-    };
-
     private static readonly HashSet<string> DbSaveMethods = new(StringComparer.Ordinal)
     {
         "SaveChanges",
@@ -249,6 +232,20 @@ public static class CSharpIntegrationSyntaxExtractor
             }
             var invocationName = GetInvocationName(invocation.Expression);
             var receiverName = GetReceiver(invocation.Expression);
+            if (!semanticAnalysisAvailable && DatabaseOperationApi.Kind(invocationName).Length > 0
+                && CSharpDatabaseSyntax.ReceiverType(root, invocation) is { } databaseType)
+                facts.Add(FactFactory.Create(manifest, FactTypes.DatabaseOperationCandidate,
+                    RuleIds.DatabaseOperationCallPattern, EvidenceTiers.Tier3SyntaxOrTextual,
+                    ToEvidenceSpan(filePath, invocation),
+                    sourceSymbol: invocation.Ancestors().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault() is MethodDeclarationSyntax caller
+                        ? string.Join(".", caller.Ancestors().OfType<TypeDeclarationSyntax>().Reverse().Select(t => t.Identifier.ValueText).Append(caller.Identifier.ValueText)) : null,
+                    targetSymbol: databaseType + "." + invocationName, contractElement: DatabaseOperationApi.Kind(invocationName),
+                    properties: new SortedDictionary<string,string>(StringComparer.Ordinal)
+                    {
+                        ["methodName"] = invocationName, ["operationKind"] = DatabaseOperationApi.Kind(invocationName),
+                        ["receiverType"] = databaseType, ["coverageLabel"] = "reduced",
+                        ["commandTextAvailability"] = "unavailable", ["limitations"] = DatabaseOperationApi.Limitations
+                    }));
             if (!semanticAnalysisAvailable
                 && DatabaseOperationFallbackKinds.TryGetValue(invocationName, out var operationKind))
             {
@@ -271,7 +268,7 @@ public static class CSharpIntegrationSyntaxExtractor
                         ["operationKind"] = operationKind
                     }));
             }
-            if (HttpClientMethods.Contains(invocationName) || JsonHttpMethods.Contains(invocationName))
+            if (OutboundHttpApi.IsCandidate(invocationName))
             {
                 facts.Add(FactFactory.Create(
                     manifest,
@@ -285,7 +282,12 @@ public static class CSharpIntegrationSyntaxExtractor
                     properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
                     {
                         ["methodName"] = invocationName,
-                        ["methodFamily"] = HttpClientMethods.Contains(invocationName) ? "HttpClient" : "JsonHttpExtension",
+                        ["methodFamily"] = "unresolved",
+                        ["classification"] = "SyntaxFallbackHttpCandidate",
+                        ["coverageLabel"] = "reduced-name-only-candidate",
+                        ["httpMethod"] = "UNKNOWN",
+                        ["urlKind"] = "unavailable",
+                        ["limitations"] = "Name-only candidate; framework identity, signature and outbound behavior are unproven. Same-named fakes and content-only JSON reads may be included. " + OutboundHttpApi.Limitations,
                         ["receiverName"] = receiverName ?? string.Empty
                     }));
             }

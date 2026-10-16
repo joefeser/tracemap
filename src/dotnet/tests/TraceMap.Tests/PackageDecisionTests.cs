@@ -379,7 +379,7 @@ public sealed class PackageDecisionTests
         var decisionPath = Path.Combine(temp.Path, "decision.json");
         var manifest = Manifest("fixture", "legacy-scanner");
         SqliteIndexWriter.Write(indexPath, manifest, [PackageFact(manifest, "example", "npm", "package.json", "dependencies", "1.0.0")]);
-        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = indexPath }.ToString()))
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = indexPath, Pooling = false }.ToString()))
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();

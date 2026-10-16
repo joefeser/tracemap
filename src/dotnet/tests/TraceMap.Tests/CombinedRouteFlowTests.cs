@@ -3623,7 +3623,7 @@ public sealed class CombinedRouteFlowTests
             combinedPath,
             outputPath,
             Format: "json",
-            Route: "GET /api/orders/%7Bid%7D",
+            Route: "GET /api/not-retained-orders/%7Bid%7D",
             ToSurface: "sql-query",
             Classification: RouteFlowClassifications.NoRouteFlowEvidence));
 

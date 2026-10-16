@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<netperfsettings version="1">
+ <application>C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug\NetPerf.Tests.Bootstrapper.exe</application>
+ <assembliesToInstrument>
+  <assembly>C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug\NetPerf.Tests.dll</assembly>
+  <assembly>C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug\NetPerf.Tests.Bootstrapper.exe</assembly>
+  <assembly>C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug\NetPerf.Core.dll</assembly>
+ </assembliesToInstrument>
+ <extractReport active="True" outputFile="C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug\bootstrapper-results.xml" />
+ <keyfile>C:\dev\NetPerf\NetPerfKey.snk</keyfile>
+ <summaryReport active="True" outputFile="C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug\bootstrapper-results.html" />
+ <workingFolder>C:\dev\NetPerf\Netperf.Tests.Bootstrapper\bin\Debug</workingFolder>
+</netperfsettings>

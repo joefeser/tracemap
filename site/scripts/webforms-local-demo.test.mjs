@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -128,14 +129,40 @@ test("Web Forms local demo rejects public private material and affirmative runti
   assert.ok(errors.filter((error) => String(error).includes("forbidden public material or claim")).length >= 2);
 });
 
-test("Web Forms local demo treats unavailable shallow history as unverifiable, not disproven", async (t) => {
+test("Web Forms local demo rejects unavailable history with an explicit unverifiable gap", async (t) => {
   const root = await fixture(t);
   await buildSite({ root, log() {} });
   const errors = [];
   await validateFixture(root, errors, { repositoryRoot: root });
   assert.doesNotMatch(errors.join("\n"), /implementation base .*not an ancestor/);
-  assert.deepEqual(errors, []);
+  assert.match(errors.join("\n"), /implementation base cannot be resolved as a commit/);
 });
+
+
+for (const exists of [false, true]) {
+  test(`Web Forms local demo rejects ${exists ? "non-ancestor" : "missing"} matching page/spec base`, async (t) => {
+    const root = await fixture(t);
+    const git = (...args) => execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+    git("init", "--quiet");
+    const tree = execFileSync("git", ["hash-object", "-t", "tree", "--stdin", "-w"], { cwd: root, input: "", encoding: "utf8" }).trim();
+    const commit = (message) => git("-c", "user.name=TraceMap", "-c", "user.email=fixture@example.invalid", "commit-tree", tree, "-m", message);
+    const head = commit("fixture head");
+    git("update-ref", "refs/heads/fixture", head);
+    git("symbolic-ref", "HEAD", "refs/heads/fixture");
+    const base = exists ? commit("unrelated implementation") : "0".repeat(40);
+    const pagePath = join(root, "src", "webforms", "local-demo", "index.html");
+    const page = await readFile(pagePath, "utf8");
+    await writeFile(pagePath, page.replace(/data-main-boundary="[0-9a-f]{40}"/, `data-main-boundary="${base}"`));
+    const statePath = join(root, "implementation-state.md");
+    const state = await readFile(implementationStatePath, "utf8");
+    await writeFile(statePath, state.replace(/^Exact base:.*$/m, `Exact base: \`${base}\``));
+    await buildSite({ root, log() {} });
+    const errors = [];
+    await validateFixture(root, errors, { repositoryRoot: root, implementationStatePath: statePath });
+    assert.match(errors.join("\n"), exists ? /implementation base exists locally but is not an ancestor/ : /implementation base cannot be resolved as a commit/);
+    assert.doesNotMatch(errors.join("\n"), /page boundary does not match/);
+  });
+}
 
 test("Web Forms local demo rejects discovery and branch-boundary drift", async (t) => {
   const root = await fixture(t);

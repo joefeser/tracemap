@@ -1,0 +1,2 @@
+# Provenance binds the exact generator bytes, including line endings.
+site/scripts/generate-webforms-source-compiled-proof.mjs text eol=lf
