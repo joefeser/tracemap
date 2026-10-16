@@ -58,24 +58,43 @@ def committed_hashes() -> dict[str, str]:
 
 
 def worktree_hashes() -> dict[str, str]:
-    # Tracked files only: untracked junk (Finder droppings, gitignored
-    # SourceSafe bindings) must not fail a worktree verification.
-    out = subprocess.run(
-        ["git", "ls-files", PREFIX],
-        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
-    ).stdout
+    # Tracked files only when git is available: untracked junk (Finder
+    # droppings, gitignored SourceSafe bindings) must not fail a verification
+    # inside a live checkout. Without a git repository (an exported archive
+    # of the corpus), every file present is corpus content by construction.
     hashes: dict[str, str] = {}
-    for path in out.splitlines():
-        name = path[len(PREFIX):]
-        if name in UNPINNED:
-            continue
-        hashes[name] = hashlib.sha256((REPO_ROOT / path).read_bytes()).hexdigest()
-    return hashes
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", PREFIX],
+            cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+        ).stdout
+        for path in out.splitlines():
+            name = path[len(PREFIX):]
+            if name in UNPINNED:
+                continue
+            hashes[name] = hashlib.sha256((REPO_ROOT / path).read_bytes()).hexdigest()
+        return hashes
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        for path in CORPUS_DIR.rglob("*"):
+            if not path.is_file() or path.name in UNPINNED:
+                continue
+            hashes[path.relative_to(CORPUS_DIR).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+        return hashes
 
 
 def main() -> int:
+    if "--worktree" not in sys.argv:
+        try:
+            actual = committed_hashes()
+            mode = "committed objects"
+        except (subprocess.CalledProcessError, FileNotFoundError) as error:
+            print(f"cannot read committed objects ({error}); "
+                  "use --worktree for archive/standalone verification", file=sys.stderr)
+            return 2
+    else:
+        actual = worktree_hashes()
+        mode = "worktree"
     manifest = pinned_hashes()
-    actual = worktree_hashes() if "--worktree" in sys.argv else committed_hashes()
     problems: list[str] = []
     for name in sorted(set(manifest) | set(actual)):
         if name not in manifest:
@@ -89,8 +108,7 @@ def main() -> int:
             print(problem, file=sys.stderr)
         print(f"FAIL: {len(problems)} problem(s)", file=sys.stderr)
         return 1
-    print(f"OK: {len(manifest)} vendored files match the pin "
-          f"({'worktree' if '--worktree' in sys.argv else 'committed objects'} mode)")
+    print(f"OK: {len(manifest)} vendored files match the pin ({mode} mode)")
     return 0
 
 
