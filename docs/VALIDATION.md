@@ -4910,3 +4910,17 @@ assembly's Option Strict settings (those come from web.config, per-file
 Option statements, or both alongside this evidence). No current consumer
 reads the census; per-page projection over source-mapped sites is a
 follow-up consumer.
+
+## dotnetperf oracle corpus lane — stage 2a (#856)
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~OracleCorpusLaneTests'`
+in standard Debug configuration, followed by the full Debug suite. The lane
+scans the corpus's own committed VS-era test fixtures with the compiled/IL
+lanes and pins: deterministic admission across repeated scans (identical
+fact IDs), runtime-floor facts on era-real binaries (these fixtures were
+rebuilt with 4.x tooling, so the attribute basis fires with a
+basis-consistent floor; the mscorlib path is pinned by the net20-net48
+matrix elsewhere), late-binding census and IL call observations present,
+and the two typed input boundaries — bare netmodules and the MultiModule
+assembly manifest — rejected with their named gaps. No dotnetperf code
+executes; the corpus bytes do the work.
