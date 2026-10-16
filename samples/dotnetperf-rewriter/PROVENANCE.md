@@ -99,7 +99,9 @@ python3 samples/dotnetperf-rewriter/verify_corpus.py --worktree   # working tree
 
 The committed-objects mode reads blobs via `git cat-file` and is immune to
 `core.autocrlf` checkout transforms; the worktree mode hashes tracked files
-as they sit on disk (untracked junk never fails it).
+as they sit on disk (untracked junk never fails it) and falls back to plain
+directory enumeration when no git repository is present — so an exported
+archive of this directory verifies standalone with `--worktree`.
 
 ## Pin deviations via this repository's ignore rules
 
