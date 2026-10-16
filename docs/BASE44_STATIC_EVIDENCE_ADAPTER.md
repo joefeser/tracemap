@@ -263,3 +263,14 @@ from property keys, computed-key/default reads, and separate lexical bindings.
 This changes the admitted operation set from 0.18.1 and therefore has a distinct
 producer identity. Packet validators preserve 0.18.1 alongside earlier versions;
 rescan to obtain the new alias admission behavior. Schemas are unchanged.
+
+### Enclosing-flow and iterator producer 0.18.3
+
+`base44-evidence/0.18.3` inspects enclosing conditions, loop initializers and
+updates, iterator targets, switch cases, and earlier try/catch branches for
+possible client-alias writes. Unbraced control bodies use the same dominance
+walk; subsequent loop-body writes also invalidate repeated-iteration proof.
+Generator and async-generator helper calls stay unresolved even when awaited:
+await does not unwrap an iterator into its declared return value. Existing
+awaited ordinary/async helper positives remain covered. Prior producer versions
+remain validatable; rescan for this corrected operation/payload evidence.

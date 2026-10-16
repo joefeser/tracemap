@@ -452,8 +452,10 @@ function analyzeBoundedHelperReturn(
   if (!declaration?.body) return null;
   // An async or generator call yields a Promise or iterator, not the declared
   // return shape; only a directly awaited async call resolves to it.
-  const asynchronous = Boolean(declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword))
-    || Boolean(declaration.asteriskToken);
+  if (declaration.asteriskToken) {
+    return unresolvedAnalysis("helper-return", "helper-return-generator-unresolved", `call:${helperName}`);
+  }
+  const asynchronous = Boolean(declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword));
   if (asynchronous && !directlyAwaitedCall(call, context)) {
     return unresolvedAnalysis("helper-return", "helper-return-async-unresolved", `call:${helperName}`);
   }
