@@ -17,3 +17,18 @@ method do not reach HTTP. Framework dispatch timing and runtime use are unproven
 This fixture is not a copied application, generated designer replacement,
 complete WebForms hosting model, or proof that missing private property callers
 are markup expressions. See the evidence-admission debugging ledger.
+
+Issue #873 adds `Profile.ascx` and `EntryVariants.aspx`: two source-registered
+instances reference the same exact property, while missing receivers/members,
+Eval and chained expressions remain gaps. The regression mutation matrix adds
+duplicate IDs, conflicting registrations, wrong assemblies and template scope.
+See `docs/validation/WEBFORMS_HTTP_ENTRY_RELATIONSHIPS.md` for the supported grammar.
+
+`MatchingHost` retains a reference with an explicit field of the registered type.
+`ShadowedHost` inherits an unrelated same-name field; that binding produces a
+conflicting-receiver gap instead of a property relationship.
+
+Write-only, private and private-getter properties in EntryVariants remain gaps.
+Review regressions also cover mixed target-language casing, explicit receiver
+assembly tokens, retained markup snapshots, bounded selected-input labels and
+Markdown gap/encoding/truncation behavior.

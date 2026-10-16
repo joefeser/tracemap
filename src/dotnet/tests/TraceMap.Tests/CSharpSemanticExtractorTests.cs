@@ -102,6 +102,7 @@ public sealed class CSharpSemanticExtractorTests
             && fact.RuleId == RuleIds.CSharpSemanticDeclarations
             && fact.EvidenceTier == EvidenceTiers.Tier1Semantic
             && fact.ContractElement == "seed"
+            && fact.Properties.TryGetValue("calleeAssemblyPublicKeyToken", out var fieldToken) && fieldToken == ""
             && fact.TargetSymbol is not null
             && fact.TargetSymbol.Contains("ProfileReporter.seed", StringComparison.Ordinal));
         Assert.Contains(result.Facts, fact =>

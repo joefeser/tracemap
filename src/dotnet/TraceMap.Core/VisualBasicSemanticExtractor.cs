@@ -914,6 +914,13 @@ public static partial class VisualBasicSemanticExtractor
         SemanticModel model,
         List<SemanticFactCandidate> facts)
     {
+        static bool PublicTypeChain(INamedTypeSymbol? type)
+        {
+            for (; type is not null; type = type.ContainingType)
+                if (type.DeclaredAccessibility != Accessibility.Public) return false;
+            return true;
+        }
+
         foreach (var statement in root.DescendantNodes().OfType<PropertyStatementSyntax>())
         {
             if (model.GetDeclaredSymbol(statement) is not IPropertySymbol property
@@ -931,7 +938,11 @@ public static partial class VisualBasicSemanticExtractor
                         ["propertyType"] = property.Type.ToDisplayString(SymbolFormat),
                         ["isDefault"] = property.IsDefault() ? "True" : "False",
                         ["isReadOnly"] = property.IsReadOnly ? "True" : "False",
-                        ["isWriteOnly"] = property.IsWriteOnly ? "True" : "False"
+                        ["isWriteOnly"] = property.IsWriteOnly ? "True" : "False",
+                        ["isStatic"] = property.IsStatic.ToString(),
+                        ["getterAccessibility"] = property.GetMethod?.DeclaredAccessibility.ToString() ?? "Unavailable",
+                        ["getterPubliclyAccessible"] = PublicTypeChain(property.ContainingType).ToString(),
+                        ["parameterCount"] = property.Parameters.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
                     },
                     "target",
                     property),
@@ -982,6 +993,8 @@ public static partial class VisualBasicSemanticExtractor
                     {
                         ["fieldName"] = declared.Name,
                         ["fieldType"] = fieldType.ToDisplayString(SymbolFormat),
+                        ["calleeAssemblyPublicKeyToken"] = fieldType.ContainingAssembly is { } fieldAssembly
+                            ? Convert.ToHexStringLower(fieldAssembly.Identity.PublicKeyToken.ToArray()) : string.Empty,
                         ["containingType"] = containingType.ToDisplayString(SymbolFormat),
                         ["declaredAccessibility"] = declared.DeclaredAccessibility.ToString(),
                         ["isShared"] = declared.IsStatic.ToString(),
@@ -3214,6 +3227,8 @@ public static partial class VisualBasicSemanticExtractor
             model.GetEnclosingSymbol(evidenceNode.SpanStart)?.ContainingAssembly ?? sourceSymbol.ContainingAssembly,
             targetSymbol.ContainingAssembly);
 
+        WebFormsFrameworkEntry.AddWitness(properties, model, targetSymbol, relationshipKind);
+
         return CreateSemanticFact(
             FactTypes.SymbolRelationship,
             RuleIds.VisualBasicSemanticSymbolRelationship,
@@ -3243,6 +3258,8 @@ public static partial class VisualBasicSemanticExtractor
         properties[$"{prefix}SymbolDisplayName"] = identity.DisplayName;
         properties[$"{prefix}SymbolAssemblyName"] = identity.AssemblyName ?? string.Empty;
         properties[$"{prefix}SymbolAssemblyVersion"] = identity.AssemblyVersion ?? string.Empty;
+        properties[$"{prefix}SymbolAssemblyPublicKeyToken"] = symbol?.ContainingAssembly is { } assembly
+            ? Convert.ToHexStringLower(assembly.Identity.PublicKeyToken.ToArray()) : string.Empty;
         properties[$"{prefix}ContainingSymbolId"] = identity.ContainingSymbolId ?? string.Empty;
         return properties;
     }
