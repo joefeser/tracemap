@@ -66,8 +66,12 @@ public static partial class LegacyWebFormsExtractor
         IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<CodeFact> existingFacts)
     {
+        // One retained snapshot also serves entry projections; preserve the bounded
+        // external evidence-enumeration contract as new relationship families grow.
+        existingFacts = existingFacts as CodeFact[] ?? existingFacts.ToArray();
         var context = BuildContext(repoPath, inventory, existingFacts);
         var evidenceIndex = WebFormsEvidenceIndex.Create(existingFacts);
+        var entryEvidence = new EntryEvidenceIndex(existingFacts);
         var facts = new List<CodeFact>();
         var designerFactsByPageAndField = new Dictionary<string, CodeFact>(StringComparer.Ordinal);
 
@@ -116,6 +120,7 @@ public static partial class LegacyWebFormsExtractor
 
             AddInlineClientBehaviorFacts(repoPath, manifest, inventory, page, pageFact, controlFacts, facts);
             AddInlineServerExpressionFacts(repoPath, manifest, page, pageFact, existingFacts, facts);
+            AddEntryRelationships(repoPath, manifest, page, pageFact, controlFacts, context, entryEvidence, facts);
 
             foreach (var gap in page.Gaps)
             {
@@ -125,6 +130,7 @@ public static partial class LegacyWebFormsExtractor
             AddAutoWireupFacts(manifest, page, context, evidenceIndex, facts);
         }
 
+        AddLifecycleEntryRelationships(manifest, entryEvidence, facts);
         AddClientHttpHandlerResolutionFacts(repoPath, manifest, inventory, context, existingFacts, facts);
 
         var allFacts = existingFacts.Concat(facts).ToArray();
@@ -312,7 +318,7 @@ public static partial class LegacyWebFormsExtractor
                 [],
                 [],
                 [],
-                initialGaps);
+                initialGaps) { MarkupSnapshot = text };
 
             var controls = new List<WebFormsControl>();
             var bindings = new List<WebFormsBinding>();
@@ -4542,6 +4548,7 @@ public static partial class LegacyWebFormsExtractor
         }
 
         var directory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(markupPath) ?? ".");
+        if (string.IsNullOrEmpty(directory)) directory = ".";
         var combined = directory is "." ? safePath : $"{directory}/{safePath}";
         return FileInventory.NormalizeRelativePath(combined);
     }
@@ -4851,7 +4858,10 @@ public static partial class LegacyWebFormsExtractor
         IReadOnlyList<WebFormsBinding> Bindings,
         IReadOnlyList<WebFormsDataBinding> DataBindings,
         IReadOnlyList<WebFormsPostBackTarget> PostBackTargets,
-        IReadOnlyList<WebFormsGap> Gaps);
+        IReadOnlyList<WebFormsGap> Gaps)
+    {
+        internal string? MarkupSnapshot { get; init; }
+    }
 
     private sealed record WebFormsControl(
         string ControlPrefix,
@@ -4934,7 +4944,7 @@ public static partial class LegacyWebFormsExtractor
             IReadOnlyList<CodeFact> existingFacts)
         {
             var projects = inventory
-                .Where(item => item.Kind == "Project")
+                .Where(item => item.Kind is "Project" or "VisualBasicProject")
                 .Select(item => ReadProject(repoPath, item.RelativePath))
                 .Where(item => item is not null)
                 .Select(item => item!)
@@ -4946,18 +4956,24 @@ public static partial class LegacyWebFormsExtractor
             var candidates = declaredTypes
                 .Select(fact =>
                 {
-                    var qualifiedName = fact.Properties.GetValueOrDefault("qualifiedName");
+                    var qualifiedName = fact.EvidenceTier == EvidenceTiers.Tier1Semantic
+                        ? WebFormsDeclarationQualifiedName(fact) : fact.Properties.GetValueOrDefault("qualifiedName");
                     if (string.IsNullOrWhiteSpace(qualifiedName))
                     {
                         var namespaceName = fact.Properties.GetValueOrDefault("namespace");
                         var name = fact.Properties.GetValueOrDefault("name");
                         qualifiedName = string.IsNullOrWhiteSpace(namespaceName) ? name : $"{namespaceName}.{name}";
                     }
-                    var project = projects
-                        .Where(item => item.OwnsSource(fact.Evidence.FilePath))
-                        .OrderByDescending(item => item.ProjectDirectory.Length)
-                        .ThenBy(item => item.ProjectPath, StringComparer.Ordinal)
-                        .FirstOrDefault();
+                    var owningProjects = projects
+                        .Where(item => item.OwnsSource(fact.Evidence.FilePath)
+                            && (item.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase)
+                                == fact.Evidence.FilePath.EndsWith(".vb", StringComparison.OrdinalIgnoreCase))
+                            && (fact.EvidenceTier != EvidenceTiers.Tier1Semantic
+                                || item.ProjectPath == fact.ProjectPath
+                                    && item.AssemblyName == fact.Properties.GetValueOrDefault("targetSymbolAssemblyName")))
+                        .OrderByDescending(item => item.ProjectDirectory.Length).ToArray();
+                    var nearest = owningProjects.Where(item => item.ProjectDirectory.Length == owningProjects[0].ProjectDirectory.Length).ToArray();
+                    var project = nearest.Length == 1 ? nearest[0] : null;
                     return string.IsNullOrWhiteSpace(qualifiedName) || project is null
                         ? null
                         : new WebFormsAssemblyTypeCandidate(qualifiedName, project.AssemblyName, fact.FactId, fact.Evidence.FilePath);

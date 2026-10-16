@@ -68,6 +68,8 @@ public sealed record CombinedDependencyPathReport(
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public CombinedPathRootTraversal? RootTraversal { get; init; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WebFormsEntryInventory? WebFormsEntries { get; init; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public IReadOnlyList<CompiledAttachmentIndexLink>? CompiledAttachmentLinks { get; init; }
 }
 
@@ -894,6 +896,7 @@ public static partial class CombinedDependencyPathReporter
                 .Concat(read.CompiledAttachmentLinks.Count == 0 ? [] : new[]
                 { "Compiled attachment joins use an explicitly validated local parent/index link and preserve original fact namespaces. They remain static review evidence, not runtime execution, source-line identity, build authenticity or full-site coverage." }).ToArray())
         {
+            WebFormsEntries = legacyMode ? null : BuildWebFormsEntryInventory(read, options.StartingFactIds is not null),
             CompiledAttachmentLinks = read.CompiledAttachmentLinks.Count == 0 ? null : read.CompiledAttachmentLinks,
             RootTraversal = rootTraversal is null ? null : new CombinedPathRootTraversal(
                 rootTraversal.ReachedNodeCount,
@@ -1100,6 +1103,11 @@ public static partial class CombinedDependencyPathReporter
         var factsById = CombinedFactsById(read.Facts);
         foreach (var fact in IdentityOrderedFacts(read.Facts))
         {
+            // Entry inventories and their gaps never seed call graph nodes,
+            // representative facts, attachments or selector roots.
+            if (fact.FactType == FactTypes.WebFormsEntryRelationship
+                || fact.RuleId is RuleIds.WebFormsEntryContainment or RuleIds.WebFormsEntryProperty or RuleIds.WebFormsEntryLifecycle)
+                continue;
             // Operand/configuration rows are supporting evidence for exact
             // IL call sites, not independent symbols or traversal roots.
             if (fact.FactType is FactTypes.ManagedIlCallValuesObserved or FactTypes.ManagedIlDatabaseCommandCandidate)
@@ -6442,6 +6450,7 @@ public static partial class CombinedDependencyPathReporter
         AppendRows(builder, report.Sources, "| Label | Language | Repo | Commit | Analysis | Build |", "| --- | --- | --- | --- | --- | --- |",
             source => $"| {Cell(source.Label)} | {Cell(source.Language ?? "unknown")} | {Cell(source.RepoName)} | {Cell(source.CommitSha)} | {Cell(source.AnalysisLevel)} | {Cell(source.BuildStatus)} |");
 
+        AppendWebFormsEntryInventory(builder, report.WebFormsEntries);
         builder.AppendLine(legacyMode ? "## Representative Static Paths" : "## Paths");
         builder.AppendLine();
         if (report.Paths.Count == 0)

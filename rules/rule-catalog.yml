@@ -7832,3 +7832,40 @@ rules:
       - QuerySurface preserves the supplied terminal filter. Native database-api queries do not assess HTTP coverage; HTTP-only handlers may be excluded upstream even if incidental HTTP records remain.
       - Human decisions default undecided. SQL text, procedure bodies, HTTP payloads, credentials and API proposals are not inferred.
       - Generator and bounded-input hashes belong to the containing grouped handoff. They bind the projection input, not original build authenticity or runtime behavior.
+
+  - id: legacy.webforms.entry-containment.v1
+    name: WebForms page control containment
+    description: Projects one selected static registration and markup control into a page-surface to control-instance relationship with supporting fact IDs and derivation hashes.
+    evidenceTier: Tier2Structural, Tier3SyntaxOrTextual, or Tier4Unknown
+    emits:
+      - WebFormsEntryRelationship
+      - AnalysisGap
+    limitations:
+      - Containment is not control construction, event firing, method invocation or runtime execution. Relationships never enter call traversal.
+      - Requires one registration for the prefix and tag and one composition witness. Duplicate control IDs and competing registrations are refused even when only one target is currently available.
+      - Source registrations retain a surface target when a semantic class is unavailable. Assembly registrations require scoped source project evidence; VB semantic names preserve root namespace and exact project and assembly identity. External DLL-only control resolution is unavailable.
+      - Facts and ordinary reports are local evidence with source-index-local supporting IDs. The privacy-projected legacy flow report omits this inventory and its local input hashes.
+
+  - id: legacy.webforms.entry-property.v1
+    name: WebForms declarative instance property reference
+    description: Resolves a bounded data-binding expression to an exact control instance and one directly declared semantic property with a public parameterless getter on a public containing-type chain, without emitting a getter call.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsEntryRelationship
+      - AnalysisGap
+    limitations:
+      - Only data-binding marker hash with one ASCII identifier, dot, and one ASCII property identifier is supported, allowing whitespace. Render expressions, Eval, Bind, calls, chains, indexers, escaping and dynamic expressions are gaps.
+      - Templates make instance scope unavailable. Duplicate IDs, missing or ambiguous types and members, inherited properties and same-name unrelated members do not join. No general expression or naming-container evaluator is implemented.
+      - A unique linked page type is required. Known conflicting page/base members and mismatched assembly public-key tokens refuse binding; base traversal is capped at 16 types and external metadata members are not inventoried.
+      - The property reference is textual even when the declaration is compiler-resolved. Runtime receiver identity is unproven; it is not unconditional getter invocation, framework binding or HTTP reachability.
+
+  - id: legacy.webforms.entry-lifecycle.v1
+    name: WebForms framework lifecycle entry candidate
+    description: Projects a semantic override witness and exact method declaration into a separately typed framework-entry candidate.
+    evidenceTier: Tier2Structural
+    emits:
+      - WebFormsEntryRelationship
+    limitations:
+      - Requires a direct metadata-backed System.Web.UI.Control/TemplateControl/UserControl/Page override from System.Web with public key token b03f5f7f11d50a3a. Supported void instance methods are CreateChildControls without parameters, or OnInit, OnLoad and OnPreRender with one by-value System.EventArgs parameter.
+      - Same-name methods, fake unsigned framework types and overrides of source intermediates are excluded. Signed assembly identity is compiler evidence, not a cryptographic authenticity or original-build assertion.
+      - Framework dispatch timing, construction and execution remain unresolved. No Page_Load-to-override CallEdge is fabricated; source call paths retain their original tiers and dispatch exclusions.

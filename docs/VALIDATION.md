@@ -1,5 +1,17 @@
 # TraceMap Validation Guide
 
+## WebForms entry relationship gate (#873)
+
+Run `HttpEntryBoundaryRegressionTests` with the focused HTTP/VB/WebForms,
+explicit-reference, grouped-handoff and path suites, then Python diagnostics,
+the full .NET suite and public CLI smoke on frozen code/binaries. The new
+[coverage matrix](validation/WEBFORMS_HTTP_ENTRY_RELATIONSHIPS.md) and
+[pinned static corpus](validation/WEBFORMS_HTTP_ENTRY_PUBLIC_CORPUS.md) distinguish
+containment, declarative references and framework candidates from calls. All
+existing getter, MyBase/MyClass, provenance and bounded-reader controls remain.
+Fresh scans need legacy-webforms 0.14.2, vb-semantic 0.10.6 and csharp-semantic
+0.22.4 for the new witnesses. Windows/pinned adapter/private gates remain separate.
+
 PR #872 review correction: legacy-webforms/0.13.12 retains the exact selected
 registration hash when declarations share one line; App_Code candidates remain
 Tier3 and assembly registrations remain structurally scoped. This extractor fix
