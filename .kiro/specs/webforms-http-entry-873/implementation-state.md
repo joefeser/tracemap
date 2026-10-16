@@ -158,3 +158,12 @@ hosted fix cycles. Producer 0.18.2 preserves prior 0.18.1 packet acceptance.
 No lane policy changed and main merge remains unapproved.
 TypeScript build and all 311 tests pass after the version bump, including exact
 0.18.2 operation identities and historical 0.18.1 UI packet acceptance.
+
+Round 5 fresh Codex found enclosing-header writes and awaited generator return
+shape confusion. Both repaired with producer 0.18.3 and retained older allowlists.
+The control-flow matrix covers braced/unbraced if, while/do/for headers, iterator
+targets, switch discriminants, try/catch/finally, and repeated loop writes; safe
+branch/try/loop positives remain. Sync/async generators both refuse awaited and
+unawaited result-shape inference; ordinary awaited helpers retain their tests.
+TypeScript build and 333 tests passed. The final sixth review round follows
+publication and exact-thread disposition; no additional merge authority granted.

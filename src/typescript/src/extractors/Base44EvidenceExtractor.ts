@@ -4030,6 +4030,24 @@ function resolveSingleAssignedRuntimeAlias(
     return ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken
       && patternBinds(target.left);
   };
+  const scanWrites = (node: ts.Node, direct?: ts.Node): void => {
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+      && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+      const target = unwrapAliasExpression(node.left);
+      if ((ts.isIdentifier(target) && target.text === bindingName
+        && resolveLexicalBinding(target.text, target, source)?.node === declaration)
+        || patternBinds(target)) {
+        if (node !== direct || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) destructuringOverwrite = true;
+      }
+    }
+    if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+      && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
+      && ts.isIdentifier(node.operand) && node.operand.text === bindingName
+      && resolveLexicalBinding(bindingName, node.operand, source)?.node === declaration) destructuringOverwrite = true;
+    if ((ts.isForOfStatement(node) || ts.isForInStatement(node)) && !ts.isVariableDeclarationList(node.initializer)
+      && patternBinds(node.initializer)) destructuringOverwrite = true;
+    ts.forEachChild(node, child => scanWrites(child, direct));
+  };
   const collectStatement = (statement: ts.Statement): void => {
     // Only an assignment that IS the scanned statement dominates the use;
     // an assignment wrapped in a conditional, try, loop, or call argument
@@ -4037,25 +4055,7 @@ function resolveSingleAssignedRuntimeAlias(
     const direct = ts.isExpressionStatement(statement) ? unwrapAliasExpression(statement.expression) : undefined;
     // Count only a direct assignment as dominating, but every possible write
     // to this lexical binding invalidates that proof (including captured writes).
-    const scanWrites = (node: ts.Node): void => {
-      if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
-        && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
-        const target = unwrapAliasExpression(node.left);
-        if ((ts.isIdentifier(target) && target.text === bindingName
-          && resolveLexicalBinding(target.text, target, source)?.node === declaration)
-          || patternBinds(target)) {
-          if (node !== direct || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) destructuringOverwrite = true;
-        }
-      }
-      if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
-        && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
-        && ts.isIdentifier(node.operand) && node.operand.text === bindingName
-        && resolveLexicalBinding(bindingName, node.operand, source)?.node === declaration) destructuringOverwrite = true;
-      if ((ts.isForOfStatement(node) || ts.isForInStatement(node)) && !ts.isVariableDeclarationList(node.initializer)
-        && patternBinds(node.initializer)) destructuringOverwrite = true;
-      ts.forEachChild(node, scanWrites);
-    };
-    scanWrites(statement);
+    scanWrites(statement, direct);
     const node = direct;
     if (!node || !ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return;
     const target = unwrapAliasExpression(node.left);
@@ -4070,21 +4070,45 @@ function resolveSingleAssignedRuntimeAlias(
       assignments.push(node);
     }
   };
-  // An assignment dominates the use only when it precedes it at the same or an
-  // enclosing block level; walk the enclosing block chain so a nested use (for
-  // example inside a try body) still finds its dominating assignment.
-  let statement: ts.Statement | undefined = findAncestor(use, ts.isStatement) ?? undefined;
-  if (statement) collectStatement(statement);
-  while (statement?.parent && (ts.isBlock(statement.parent) || ts.isSourceFile(statement.parent))) {
-    const block = statement.parent;
-    const useIndex = block.statements.indexOf(statement);
-    for (let index = 0; index < useIndex; index += 1) collectStatement(block.statements[index]);
-    let next: ts.Statement | undefined;
-    for (let current: ts.Node | undefined = block.parent; current; current = current.parent) {
-      if (ts.isFunctionLike(current)) break;
-      if (ts.isStatement(current)) { next = current; break; }
+  // Walk every ancestor, including unbraced control bodies. Only preceding
+  // straight-line sibling assignments dominate; header/branch writes merely
+  // invalidate the proof. Never cross the enclosing function boundary.
+  let child: ts.Node = findAncestor(use, ts.isStatement) ?? use;
+  scanWrites(child);
+  for (let current = child.parent; current && !ts.isFunctionLike(current); child = current, current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current) || ts.isCaseClause(current) || ts.isDefaultClause(current)) {
+      const index = current.statements.indexOf(child as ts.Statement);
+      for (let i = 0; i < index; i += 1) collectStatement(current.statements[i]);
     }
-    statement = next;
+    if (ts.isIfStatement(current) || ts.isWhileStatement(current) || ts.isDoStatement(current)
+      || ts.isSwitchStatement(current) || ts.isWithStatement(current)) scanWrites(current.expression);
+    if (ts.isForStatement(current)) {
+      if (current.initializer) scanWrites(current.initializer);
+      if (current.condition) scanWrites(current.condition);
+      if (current.incrementor) scanWrites(current.incrementor);
+    }
+    if (ts.isForOfStatement(current) || ts.isForInStatement(current)) {
+      scanWrites(current.expression);
+      scanWrites(current.initializer);
+      if (!ts.isVariableDeclarationList(current.initializer) && patternBinds(current.initializer)) destructuringOverwrite = true;
+    }
+    if (ts.isWhileStatement(current) || ts.isDoStatement(current) || ts.isForStatement(current)
+      || ts.isForOfStatement(current) || ts.isForInStatement(current)) {
+      // Later body writes may reach this use on the next iteration. Preserve
+      // only the one already observed dominating assignment within that body.
+      scanWrites(current.statement, assignments.length === 1 ? assignments[0] : undefined);
+    }
+    if (ts.isCaseBlock(current)) {
+      for (const clause of current.clauses) {
+        if (ts.isCaseClause(clause)) scanWrites(clause.expression);
+        if (clause === child) break;
+        scanWrites(clause);
+      }
+    }
+    if (ts.isTryStatement(current) && child !== current.tryBlock) {
+      scanWrites(current.tryBlock);
+      if (child === current.finallyBlock && current.catchClause) scanWrites(current.catchClause);
+    }
   }
   if (destructuringOverwrite || assignments.length !== 1) return null;
   const assignedFactory = factoryAlias(assignments[0].right, source, aliases, factoryAliases);

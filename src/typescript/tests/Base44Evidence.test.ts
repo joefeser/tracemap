@@ -14,6 +14,49 @@ const shaB = "b".repeat(64);
 
 describe("Base44 source-bound static evidence", () => {
   it.each([
+    ["if ((client = fake)) { CALL }", false],
+    ["if ((client = fake)) CALL", false],
+    ["while ((client = fake)) { CALL break; }", false],
+    ["do { CALL } while ((client = fake));", false],
+    ["for (client = fake; flag;) { CALL break; }", false],
+    ["for (; (client = fake);) { CALL break; }", false],
+    ["for (; flag; client = fake) { CALL }", false],
+    ["for (client of values) { CALL }", false],
+    ["for ([client] of values) { CALL }", false],
+    ["switch ((client = fake)) { case 1: CALL }", false],
+    ["try { client = fake; risky(); } catch { CALL }", false],
+    ["try { client = fake; } finally { CALL }", false],
+    ["while (flag) { CALL client = fake; }", false],
+    ["if (flag) { CALL }", true],
+    ["if (flag) CALL", true],
+    ["try { CALL } catch {}", true],
+    ["for (const value of values) { CALL }", true],
+  ])("checks enclosing evaluation flow without requiring braced bodies: %s", async (wrapper, admitted) => {
+    const {packet} = await mutationHookFixture(`
+export function run(fake, flag, values) {
+  let client = null;
+  client = base44;
+  ${wrapper.replace("CALL", "client.entities.EnclosingFlow.list();")}
+}`);
+    expect(packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "EnclosingFlow"))
+      .toHaveLength(admitted ? 1 : 0);
+  });
+
+  it.each([
+    ["function*", ""], ["function*", "await "],
+    ["async function*", ""], ["async function*", "await "],
+  ])("keeps iterator return shapes unresolved: %s / %s", async (declaration, awaiting) => {
+    const {packet} = await mutationHookFixture(`
+${declaration} makePayload() { return { impossible: 1 }; }
+export async function run() { return base44.entities.GeneratorItem.create(${awaiting}makePayload()); }
+`);
+    const payload = packet.facts.find(f => f.factType === FactTypes.Base44EntityPayload && f.targetSymbol === "GeneratorItem")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("helper-return-generator-unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson).some((f: {name:string}) => f.name === "impossible")).toBe(false);
+  });
+
+  it.each([
     ["({ client: other } = source);", true],
     ["({ [client]: other } = source);", true],
     ["[other = client] = source;", true],
@@ -36,7 +79,7 @@ export function run(source, fallback) {
 }`);
     const operations = packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "DestructuringClient");
     expect(operations).toHaveLength(admitted ? 1 : 0);
-    for (const operation of operations) expect(operation.evidence.extractorVersion).toBe("base44-evidence/0.18.2");
+    for (const operation of operations) expect(operation.evidence.extractorVersion).toBe("base44-evidence/0.18.3");
   });
 
   it.each([
