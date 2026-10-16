@@ -4904,6 +4904,9 @@ emitted ManagedIlCallObserved facts for the same assembly (lateBound = calls
 whose target identity encodes Microsoft.VisualBasic.CompilerServices
 LateBinding/NewLateBinding; observed = all call facts) — plus the
 zero-late-binding case (density none) and the deterministic bucket
-thresholds. The census answers "how Option Strict Off is this assembly" in
-one fact ahead of the 2004 projectless VB corpus readback; per-page
-projection over source-mapped sites is a follow-up consumer.
+thresholds. The census is a late-bound call-site density indicator for triage ahead
+of the 2004 projectless VB corpus readback; it does NOT establish the
+assembly's Option Strict settings (those come from web.config, per-file
+Option statements, or both alongside this evidence). No current consumer
+reads the census; per-page projection over source-mapped sites is a
+follow-up consumer.

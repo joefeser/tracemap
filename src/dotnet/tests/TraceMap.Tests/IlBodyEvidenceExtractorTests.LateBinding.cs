@@ -289,8 +289,7 @@ public sealed partial class IlBodyEvidenceExtractorTests
         var census = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedLateBindingCensus);
         var calls = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved
             && fact.Evidence.FilePath == census.Evidence.FilePath).ToArray();
-        var expectedLate = calls.Count(fact => fact.Properties["targetIdentity"].Contains("Microsoft.VisualBasic.CompilerServices", StringComparison.Ordinal)
-            && fact.Properties["targetIdentity"].Contains("LateBinding", StringComparison.Ordinal));
+        var expectedLate = calls.Count(fact => IlBodyEvidenceExtractor.IsLateBoundHelperTarget(fact.Properties["targetIdentity"]));
         Assert.Equal(calls.Length.ToString(), census.Properties["observedIlCallCount"]);
         Assert.Equal(expectedLate.ToString(), census.Properties["lateBoundCallCount"]);
         Assert.Equal("admitted-bodies", census.Properties["censusScope"]);
@@ -311,6 +310,23 @@ public sealed partial class IlBodyEvidenceExtractorTests
         Assert.Equal("0", census.Properties["lateBoundCallCount"]);
         Assert.Equal("none", census.Properties["lateBindingDensity"]);
         Assert.NotEqual("0", census.Properties["observedIlCallCount"]);
+    }
+
+    [Fact]
+    public void Late_binding_detection_is_an_exact_declaring_type_match()
+    {
+        // Real framing from the fixture's encoded identities.
+        const string real = "memberref|type:scope(assembly:name:28:Microsoft.VisualBasic|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:37:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding)|member:8:LateCall|signature:y";
+        Assert.True(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(real));
+        // Same-namespace helper-shaped declaring type: NOT late binding.
+        const string helperNamed = "memberref|type:scope(assembly:name:28:Microsoft.VisualBasic|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:37:Microsoft.VisualBasic.CompilerServices|names:20:MyLateBindingHelper)|member:6:Helper|signature:y";
+        Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(helperNamed));
+        // LateBinding-named type in a DIFFERENT namespace: NOT late binding.
+        const string wrongNamespace = "memberref|type:scope(assembly:name:11:Contoso.Lib|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:11:Contoto.Core|names:11:LateBinding)|member:4:Fill|signature:y";
+        Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(wrongNamespace));
+        // The legacy pre-2.0 helper class still counts.
+        const string legacy = "memberref|type:scope(assembly:name:20:Microsoft.VisualBasic|version:7:8.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:37:Microsoft.VisualBasic.CompilerServices|names:11:LateBinding)|member:7:LateGet|signature:y";
+        Assert.True(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(legacy));
     }
 
 }

@@ -217,10 +217,23 @@ internal static class IlBodyEvidenceExtractor
             .OrderBy(value => value, StringComparer.Ordinal);
 
     internal const string CensusLimitation =
-        "Observed IL call sites in admitted/partial bodies only; density is the late-bound share of observed calls, not of all code. "
+        "A late-bound call-site density indicator, not the assembly Option Strict setting; observed IL call sites in admitted/partial bodies only; density is the late-bound share of observed calls, not of all code. "
         + "Late-bound means the call target encodes Microsoft.VisualBasic.CompilerServices LateBinding/NewLateBinding helper members; "
-        + "other dynamic mechanisms (Reflection, DLR, delegates) are not counted. High density downgrades source-lane call-graph weight "
+        + "other dynamic mechanisms (Reflection, DLR, delegates) are not counted. No current reducer or report consumes this census; high density is documented consumer guidance for downweighting source-lane call-graph claims, not implemented behavior. "
         + "for the affected members; it proves compilation-time late binding, not runtime behavior.";
+
+    // Exact declaring-type match: the encoded target identity frames the declaring
+    // type as type(namespace:<n>:<ns>|names:<m>:<name>); only LateBinding/NewLateBinding
+    // declared in Microsoft.VisualBasic.CompilerServices counts. Substring matching
+    // would false-positive on same-namespace helper-shaped names (MyLateBindingHelper)
+    // and on identities whose signature merely mentions such a type.
+    private static readonly System.Text.RegularExpressions.Regex LateBindingHelperType = new(
+        @"type\(namespace:[0-9]+:Microsoft\.VisualBasic\.CompilerServices\|names:[0-9]+:(?:New)?LateBinding\)",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(500));
+
+    internal static bool IsLateBoundHelperTarget(string targetIdentity) =>
+        LateBindingHelperType.IsMatch(targetIdentity);
 
     private static string CensusBucket(int lateBound, int observed) => lateBound == 0 ? "none"
         : observed == 0 ? "unknown"
@@ -276,8 +289,7 @@ internal static class IlBodyEvidenceExtractor
                 foreach (var call in body.Calls)
                 {
                     observedCalls++;
-                    if (call.TargetIdentity.Contains("Microsoft.VisualBasic.CompilerServices", StringComparison.Ordinal)
-                        && call.TargetIdentity.Contains("LateBinding", StringComparison.Ordinal))
+                    if (IsLateBoundHelperTarget(call.TargetIdentity))
                         lateBoundCalls++;
                 }
             }
