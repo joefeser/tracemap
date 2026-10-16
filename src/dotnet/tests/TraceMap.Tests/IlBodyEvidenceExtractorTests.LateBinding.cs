@@ -279,22 +279,26 @@ public sealed partial class IlBodyEvidenceExtractorTests
         Assert.DoesNotContain(scan.Facts, fact => fact.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
     }
     [Fact]
-    public void Late_binding_census_counts_match_the_observed_call_facts()
+    public void Late_binding_census_counts_match_hand_derived_fixture_ground_truth()
     {
-        // The census must be exactly derivable from the emitted call facts for the
-        // same admitted assembly: lateBound = calls whose target encodes the VB
-        // CompilerServices late-binding helpers, observed = all ManagedIlCallObserved.
+        // Ground truth derived from LateBindingMatrix.vb source, NOT from the
+        // production classifier: ReadFirst and ReadSecond each perform one
+        // Object-receiver member access under Option Strict Off (one LateGet
+        // helper call site each => lateBound = 2); ReadDirect uses a strongly
+        // typed receiver and never late-binds; the target class bodies make no
+        // calls. observed total is checked against the emitted call facts
+        // (counting all facts needs no classifier).
+        const int expectedLateBound = 2;
         var fixture = Fixture("vb", LateAssembly);
         var scan = Scan(new ScanOptions(fixture.Source, TempOutput(), CompiledInputPaths: [fixture.Assembly], IlBodyEvidence: true));
         var census = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedLateBindingCensus);
         var calls = scan.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlCallObserved
             && fact.Evidence.FilePath == census.Evidence.FilePath).ToArray();
-        var expectedLate = calls.Count(fact => IlBodyEvidenceExtractor.IsLateBoundHelperTarget(fact.Properties["targetIdentity"]));
+        Assert.True(calls.Length >= expectedLateBound);
         Assert.Equal(calls.Length.ToString(), census.Properties["observedIlCallCount"]);
-        Assert.Equal(expectedLate.ToString(), census.Properties["lateBoundCallCount"]);
+        Assert.Equal(expectedLateBound.ToString(), census.Properties["lateBoundCallCount"]);
         Assert.Equal("admitted-bodies", census.Properties["censusScope"]);
-        Assert.True(expectedLate > 0, "fixture must contain late-bound calls");
-        var ratio = (double)expectedLate / calls.Length;
+        var ratio = (double)expectedLateBound / calls.Length;
         var expectedBucket = ratio <= 0.10 ? "low" : ratio <= 0.50 ? "moderate" : "high";
         Assert.Equal(expectedBucket, census.Properties["lateBindingDensity"]);
         Assert.Equal(RuleIds.DotNetIlLateBindingCensus, census.RuleId);
@@ -327,6 +331,10 @@ public sealed partial class IlBodyEvidenceExtractorTests
         // The legacy pre-2.0 helper class still counts.
         const string legacy = "memberref|type:scope(assembly:name:20:Microsoft.VisualBasic|version:7:8.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:37:Microsoft.VisualBasic.CompilerServices|names:11:LateBinding)|member:7:LateGet|signature:y";
         Assert.True(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(legacy));
+        // A signature that MENTIONS the helper type must not count: the helper
+        // framing appears after the member component, never anchored before |member:.
+        const string signatureMention = "memberref|type:scope(assembly:name:11:Contoso.Lib|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:11:Contoso.Core|names:6:Worker)|member:4:Take|signature:ns(37:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding)";
+        Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(signatureMention));
     }
 
 }
