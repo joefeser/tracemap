@@ -78,7 +78,6 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
       }, EvidenceTiers.Tier2Structural));
     }
   }
-  ensureSelectorEvidenceAuthorityFacts(manifest, facts, aliasDiscovery.contexts);
   const hasBase44Signal = facts.some((candidate) => candidate.factType === FactTypes.Base44SdkImport
     || candidate.factType === FactTypes.Base44FunctionSurface
     || candidate.factType === FactTypes.Base44CustomerBoundary);
@@ -90,6 +89,7 @@ export async function extractBase44Facts(manifest: ScanManifest, inventory: read
       facts.push(...extractBase44UiInputFacts(manifest, context.source, item.relativePath, context.source.getFullText(), facts));
     }
   }
+  ensureSelectorEvidenceAuthorityFacts(manifest, facts, aliasDiscovery.contexts);
   return facts;
 }
 
@@ -3099,6 +3099,17 @@ function ensureSelectorEvidenceAuthorityFacts(
       continue;
     }
   }
+  // UI input semantics facts bind their exact source bytes the same way
+  // selector evidence does; without a matching authority fact a consumer
+  // cannot place the widening evidence inside packet source authority.
+  // Unlike selector evidence, a UI fact's own sourceFileSha256 does not
+  // self-authorize: only a Base44SourceAuthority fact vouches for it.
+  for (const candidate of facts) {
+    if (candidate.factType !== FactTypes.Base44UiInputSemantics
+      || typeof candidate.properties.sourceFileSha256 !== "string") continue;
+    required.set(`${candidate.evidence.filePath}\0${candidate.properties.sourceFileSha256}`,
+      { filePath: candidate.evidence.filePath, sourceFileSha256: candidate.properties.sourceFileSha256 });
+  }
   for (const authority of [...required.values()].sort((left, right) =>
     left.filePath.localeCompare(right.filePath) || left.sourceFileSha256.localeCompare(right.sourceFileSha256))) {
     const context = contexts.get(authority.filePath);
@@ -3380,7 +3391,7 @@ interface SdkIdentityEvidence {
 interface SdkIdentity {
   schemaVersion: "88mph.base44-sdk-callsite-identity.v1";
   packageName: "@base44/sdk";
-  version: "0.8.4" | "0.8.5";
+  version: string;
   scope: "function-runtime" | "frontend-package";
   rawSpecifier: string;
   evidence: SdkIdentityEvidence[];
@@ -3594,13 +3605,14 @@ function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackage
       authoritySha256: root.authoritySha256,
       kind: "source-import"
     };
-    if (root.rawSpecifier === "npm:@base44/sdk@0.8.4") {
-      return { identity: sdkIdentity("0.8.4", "function-runtime", root.rawSpecifier, [sourceEvidence]) };
+    const functionRuntimeVersion = /^npm:@base44\/sdk@((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$/u.exec(root.rawSpecifier)?.[1];
+    if (functionRuntimeVersion) {
+      return { identity: sdkIdentity(functionRuntimeVersion, "function-runtime", root.rawSpecifier, [sourceEvidence]) };
     }
     if (root.rawSpecifier === "@base44/sdk") {
       if (frontend.gap || !frontend.identityEvidence || !frontend.version) return { gap: frontend.gap ?? "sdk-identity-package-authority-invalid" };
-      if (frontend.version !== "0.8.5") return { gap: "sdk-identity-version-unsupported" };
-      return { identity: sdkIdentity("0.8.5", "frontend-package", root.rawSpecifier, [sourceEvidence, ...frontend.identityEvidence]) };
+      if (!/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/u.test(frontend.version)) return { gap: "sdk-identity-version-unsupported" };
+      return { identity: sdkIdentity(frontend.version, "frontend-package", root.rawSpecifier, [sourceEvidence, ...frontend.identityEvidence]) };
     }
     return { gap: "sdk-identity-specifier-unsupported" };
   });
@@ -3613,7 +3625,7 @@ function resolveSdkIdentity(roots: SdkAuthorityRoot[], frontend: FrontendPackage
 }
 
 function sdkIdentity(
-  version: "0.8.4" | "0.8.5",
+  version: string,
   scope: "function-runtime" | "frontend-package",
   rawSpecifier: string,
   evidence: SdkIdentityEvidence[]
@@ -3965,6 +3977,8 @@ function resolveRuntimeAlias(name: string, use: ts.Node, source: ts.SourceFile, 
       ? { prefix, kind: "callsite-proven-parameter" } : null;
   }
   if (binding.kind === "variable") {
+    const assigned = resolveSingleAssignedRuntimeAlias(binding.node, use, source, aliases, factoryAliases, injected, next);
+    if (assigned) return assigned;
     if (!isImmutableVariable(binding.node, use) || !binding.node.initializer) return null;
     if (!ts.isIdentifier(binding.node.name)) {
       const prefix = aliases.get(name);
@@ -3983,6 +3997,133 @@ function resolveRuntimeAlias(name: string, use: ts.Node, source: ts.SourceFile, 
     return prefix ? { prefix, kind: "source-import-or-derived" } : null;
   }
   return null;
+}
+
+function resolveSingleAssignedRuntimeAlias(
+  declaration: ts.VariableDeclaration,
+  use: ts.Node,
+  source: ts.SourceFile,
+  aliases: Map<string, string[]>,
+  factoryAliases: Set<string>,
+  injected: Map<number, string[]>,
+  visited: Set<ts.Node>
+): RuntimeAlias | null {
+  if (!ts.isIdentifier(declaration.name) || !declaration.initializer) return null;
+  const initializer = unwrapAliasExpression(declaration.initializer);
+  if (!initializerIsNullish(initializer)) return null;
+  const bindingName = declaration.name.getText(source);
+  const assignments: ts.BinaryExpression[] = [];
+  let destructuringOverwrite = false;
+  const patternBinds = (pattern: ts.Expression): boolean => {
+    const target = unwrapAliasExpression(pattern);
+    if (ts.isIdentifier(target)) return target.text === bindingName
+      && resolveLexicalBinding(target.text, target, source)?.node === declaration;
+    if (ts.isArrayLiteralExpression(target)) return target.elements.some(element =>
+      !ts.isOmittedExpression(element) && patternBinds(ts.isSpreadElement(element) ? element.expression : element));
+    if (ts.isObjectLiteralExpression(target)) return target.properties.some(property => {
+      if (ts.isPropertyAssignment(property)) return patternBinds(property.initializer);
+      if (ts.isShorthandPropertyAssignment(property)) return patternBinds(property.name);
+      if (ts.isSpreadAssignment(property)) return patternBinds(property.expression);
+      return false;
+    });
+    // Defaults read their RHS; only the LHS is an assignment target.
+    return ts.isBinaryExpression(target) && target.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && patternBinds(target.left);
+  };
+  const scanWrites = (node: ts.Node, direct?: ts.Node): void => {
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+      && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) {
+      const target = unwrapAliasExpression(node.left);
+      if ((ts.isIdentifier(target) && target.text === bindingName
+        && resolveLexicalBinding(target.text, target, source)?.node === declaration)
+        || patternBinds(target)) {
+        if (node !== direct || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) destructuringOverwrite = true;
+      }
+    }
+    if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+      && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
+      && ts.isIdentifier(node.operand) && node.operand.text === bindingName
+      && resolveLexicalBinding(bindingName, node.operand, source)?.node === declaration) destructuringOverwrite = true;
+    if ((ts.isForOfStatement(node) || ts.isForInStatement(node)) && !ts.isVariableDeclarationList(node.initializer)
+      && patternBinds(node.initializer)) destructuringOverwrite = true;
+    ts.forEachChild(node, child => scanWrites(child, direct));
+  };
+  const collectStatement = (statement: ts.Statement): void => {
+    // Only an assignment that IS the scanned statement dominates the use;
+    // an assignment wrapped in a conditional, try, loop, or call argument
+    // does not prove the alias value on every path.
+    const direct = ts.isExpressionStatement(statement) ? unwrapAliasExpression(statement.expression) : undefined;
+    // Count only a direct assignment as dominating, but every possible write
+    // to this lexical binding invalidates that proof (including captured writes).
+    scanWrites(statement, direct);
+    const node = direct;
+    if (!node || !ts.isBinaryExpression(node) || node.operatorToken.kind !== ts.SyntaxKind.EqualsToken) return;
+    const target = unwrapAliasExpression(node.left);
+    if ((ts.isArrayLiteralExpression(target) || ts.isObjectLiteralExpression(target)) && patternBinds(target)) {
+      // A destructuring write to the alias invalidates the sole-assignment
+      // proof; the alias value is not statically known after it.
+      destructuringOverwrite = true;
+      return;
+    }
+    if (ts.isIdentifier(target) && target.text === bindingName
+      && resolveLexicalBinding(target.text, target, source)?.node === declaration) {
+      assignments.push(node);
+    }
+  };
+  // Walk every ancestor, including unbraced control bodies. Only preceding
+  // straight-line sibling assignments dominate; header/branch writes merely
+  // invalidate the proof. Never cross the enclosing function boundary.
+  let child: ts.Node = findAncestor(use, ts.isStatement) ?? use;
+  scanWrites(child);
+  for (let current = child.parent; current && !ts.isFunctionLike(current); child = current, current = current.parent) {
+    if (ts.isBlock(current) || ts.isSourceFile(current) || ts.isCaseClause(current) || ts.isDefaultClause(current)) {
+      const index = current.statements.indexOf(child as ts.Statement);
+      for (let i = 0; i < index; i += 1) collectStatement(current.statements[i]);
+    }
+    if (ts.isIfStatement(current) || ts.isWhileStatement(current) || ts.isDoStatement(current)
+      || ts.isSwitchStatement(current) || ts.isWithStatement(current)) scanWrites(current.expression);
+    if (ts.isForStatement(current)) {
+      if (current.initializer) scanWrites(current.initializer);
+      if (current.condition) scanWrites(current.condition);
+      if (current.incrementor) scanWrites(current.incrementor);
+    }
+    if (ts.isForOfStatement(current) || ts.isForInStatement(current)) {
+      scanWrites(current.expression);
+      scanWrites(current.initializer);
+      if (!ts.isVariableDeclarationList(current.initializer) && patternBinds(current.initializer)) destructuringOverwrite = true;
+    }
+    if (ts.isWhileStatement(current) || ts.isDoStatement(current) || ts.isForStatement(current)
+      || ts.isForOfStatement(current) || ts.isForInStatement(current)) {
+      // Later body writes may reach this use on the next iteration. Preserve
+      // only the one already observed dominating assignment within that body.
+      scanWrites(current.statement, assignments.length === 1 ? assignments[0] : undefined);
+    }
+    if (ts.isCaseBlock(current)) {
+      // Selecting default can evaluate case expressions on either side of it.
+      // Keep label evaluation separate from preceding-body fallthrough writes.
+      for (const clause of current.clauses) if (ts.isCaseClause(clause)) scanWrites(clause.expression);
+      for (const clause of current.clauses) {
+        if (clause === child) break;
+        scanWrites(clause);
+      }
+    }
+    if (ts.isTryStatement(current) && child !== current.tryBlock) {
+      scanWrites(current.tryBlock);
+      if (child === current.finallyBlock && current.catchClause) scanWrites(current.catchClause);
+    }
+  }
+  if (destructuringOverwrite || assignments.length !== 1) return null;
+  const assignedFactory = factoryAlias(assignments[0].right, source, aliases, factoryAliases);
+  if (assignedFactory) return { prefix: assignedFactory, kind: "source-import-or-derived" };
+  const chain = expressionChain(unwrapAliasExpression(assignments[0].right));
+  if (!chain) return null;
+  const parent = resolveRuntimeAlias(chain[0], assignments[0], source, aliases, factoryAliases, injected, visited);
+  return parent ? { prefix: [...parent.prefix, ...chain.slice(1)], kind: parent.kind } : null;
+}
+
+function initializerIsNullish(expression: ts.Expression): boolean {
+  return expression.kind === ts.SyntaxKind.NullKeyword
+    || (ts.isIdentifier(expression) && expression.text === "undefined");
 }
 
 function parameterSourceFromExpression(input: ts.Expression, use: ts.Node, context: SourceContext, visited: Set<ts.Node>): ParameterSource {

@@ -13,6 +13,147 @@ const shaA = "a".repeat(64);
 const shaB = "b".repeat(64);
 
 describe("Base44 source-bound static evidence", () => {
+  it.each([
+    ["if ((client = fake)) { CALL }", false],
+    ["if ((client = fake)) CALL", false],
+    ["while ((client = fake)) { CALL break; }", false],
+    ["do { CALL } while ((client = fake));", false],
+    ["for (client = fake; flag;) { CALL break; }", false],
+    ["for (; (client = fake);) { CALL break; }", false],
+    ["for (; flag; client = fake) { CALL }", false],
+    ["for (client of values) { CALL }", false],
+    ["for ([client] of values) { CALL }", false],
+    ["switch ((client = fake)) { case 1: CALL }", false],
+    ["switch (flag) { default: CALL break; case (client = fake): }", false],
+    ["switch (flag) { case 1: break; default: CALL break; case (client = fake): }", false],
+    ["switch (flag) { case (client = fake): break; default: CALL }", false],
+    ["switch (flag) { default: CALL break; case ([client] = values): }", false],
+    ["switch (flag) { default: CALL break; case client: break; }", true],
+    ["switch (flag) { case 1: break; default: CALL break; case 2: }", true],
+    ["try { client = fake; risky(); } catch { CALL }", false],
+    ["try { client = fake; } finally { CALL }", false],
+    ["while (flag) { CALL client = fake; }", false],
+    ["if (flag) { CALL }", true],
+    ["if (flag) CALL", true],
+    ["try { CALL } catch {}", true],
+    ["for (const value of values) { CALL }", true],
+  ])("checks enclosing evaluation flow without requiring braced bodies: %s", async (wrapper, admitted) => {
+    const {packet} = await mutationHookFixture(`
+export function run(fake, flag, values) {
+  let client = null;
+  client = base44;
+  ${wrapper.replace("CALL", "client.entities.EnclosingFlow.list();")}
+}`);
+    expect(packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "EnclosingFlow"))
+      .toHaveLength(admitted ? 1 : 0);
+  });
+
+  it.each([
+    ["function*", ""], ["function*", "await "],
+    ["async function*", ""], ["async function*", "await "],
+  ])("keeps iterator return shapes unresolved: %s / %s", async (declaration, awaiting) => {
+    const {packet} = await mutationHookFixture(`
+${declaration} makePayload() { return { impossible: 1 }; }
+export async function run() { return base44.entities.GeneratorItem.create(${awaiting}makePayload()); }
+`);
+    const payload = packet.facts.find(f => f.factType === FactTypes.Base44EntityPayload && f.targetSymbol === "GeneratorItem")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("helper-return-generator-unresolved");
+    expect(JSON.parse(payload.properties.fieldsJson).some((f: {name:string}) => f.name === "impossible")).toBe(false);
+  });
+
+  it.each([
+    ["({ client: other } = source);", true],
+    ["({ [client]: other } = source);", true],
+    ["[other = client] = source;", true],
+    ["({ other = client } = source);", true],
+    ["{ let client; ({ client } = source); }", true],
+    ["({ other: client } = source);", false],
+    ["({ client } = source);", false],
+    ["({ other: [client = fallback] } = source);", false],
+    ["[...client] = source;", false],
+    ["({ ...client } = source);", false],
+    ["for ([client] of source) {}", false],
+  ])("distinguishes destructuring writes from reads and property keys: %s", async (statement, admitted) => {
+    const {packet} = await mutationHookFixture(`
+export function run(source, fallback) {
+  let client = null;
+  client = base44;
+  let other;
+  ${statement}
+  client.entities.DestructuringClient.list();
+}`);
+    const operations = packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "DestructuringClient");
+    expect(operations).toHaveLength(admitted ? 1 : 0);
+    for (const operation of operations) expect(operation.evidence.extractorVersion).toBe("base44-evidence/0.18.4");
+  });
+
+  it.each([
+    "if (flag) client = fake;", "while (flag) { client = fake; break; }",
+    "try { client = fake; } catch {}", "flag && (client = fake);",
+    "consume(client = fake);", "if (flag) [client] = [fake];", "client ||= fake;",
+    "(() => { client = fake; })();", "for (client of candidates) {}"
+  ])("refuses a null-initialized client overwritten through nested flow: %s", async (overwrite) => {
+    const {packet} = await mutationHookFixture(`
+export function run(flag, fake, candidates) {
+  let client = null;
+  client = base44;
+  ${overwrite}
+  client.entities.ReplacedClient.list();
+}`);
+    expect(packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "ReplacedClient")).toEqual([]);
+  });
+
+  it("admits a single dominating module assignment and preserves nested shadowing", async () => {
+    const {packet} = await mutationHookFixture(`
+let client = null;
+client = base44;
+{ let client = {}; client = unrelated; }
+client.entities.ModuleClient.list();
+`);
+    expect(packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "ModuleClient")).toHaveLength(1);
+  });
+
+  it.each([
+    ["if (flag) return { alternate: 1 };", ["alternate", "original"]],
+    ["if (flag) throw new Error();", ["original"]],
+    ["throw new Error();", []],
+    ["return { alternate: 1 }; unreachable();", ["alternate"]],
+    ["if (flag) return { alternate: 1 }; else throw new Error();", ["alternate"]],
+  ])("retains only possible helper values across finally completion: %s", async (completion, names) => {
+    const {packet} = await mutationHookFixture(`
+function payload(flag) { try { return { original: 1 }; } finally { ${completion} } }
+export function run(flag) { return base44.entities.FinallyPaths.create(payload(flag)); }
+`);
+    const payload = packet.facts.find(f => f.factType === FactTypes.Base44EntityPayload && f.targetSymbol === "FinallyPaths")!;
+    expect(JSON.parse(payload.properties.fieldsJson).map((f: {name:string}) => f.name).filter((n:string) => n !== "<dynamic>").sort()).toEqual(names);
+    if (!names.length) expect(payload.properties.completeness).not.toBe("complete");
+  });
+
+  it.each(["toString", "constructor", "__proto__"])("does not treat a plain-object truthiness guard as an own-key domain: %s", async (key) => {
+    const {packet} = await mutationHookFixture(`
+export function run(input) {
+  const fields = { known: "safe" };
+  const key = input || "${key}";
+  if (!fields[key]) return;
+  return base44.entities.InheritedKey.create({ [key]: 1 });
+}`);
+    const payload = packet.facts.find(f => f.factType === FactTypes.Base44EntityPayload && f.targetSymbol === "InheritedKey")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("dynamic-computed-property");
+  });
+
+  it.each(["01.2.3", "1.02.3", "1.2.03"])("refuses noncanonical SDK numeric versions: %s", async (version) => {
+    const {packet} = await mutationHookFixture(`
+import { createClient } from "npm:@base44/sdk@${version}";
+const client = createClient();
+client.entities.BadVersion.list();
+`);
+    const operation = packet.facts.find(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "BadVersion")!;
+    expect(operation.properties.sdkIdentityJson).toBeFalsy();
+    expect(operation.properties.sdkIdentityGap).toBeTruthy();
+  });
+
   it("expands finite source-derived entity selectors without erasing the source call identity", async () => {
     const repo = await fixtureRepo();
     await fs.writeFile(path.join(repo, "src/dynamic-entities.ts"), `import { base44 } from "@base44/sdk";
@@ -1563,9 +1704,19 @@ export async function run(runtimeFlags) {
       const operations = packet.facts.filter((fact) => fact.factType === FactTypes.Base44EntityOperation);
       const frontend = operations.find((fact) => fact.targetSymbol === "FrontendItem")!;
       const functionRuntime = operations.find((fact) => fact.targetSymbol === "FunctionItem")!;
+      const mutableFunctionRuntime = operations.find((fact) => fact.targetSymbol === "Story"
+        && fact.evidence.filePath === "base44/functions/serveSharedStoryOG/entry.ts")!;
       const ambiguous = operations.find((fact) => fact.targetSymbol === "AmbiguousItem")!;
-      expect(JSON.parse(frontend.properties.sdkIdentityJson)).toMatchObject({version: "0.8.5", scope: "frontend-package"});
-      expect(JSON.parse(functionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.4", scope: "function-runtime"});
+      expect(JSON.parse(frontend.properties.sdkIdentityJson)).toMatchObject({version: "0.8.43", scope: "frontend-package"});
+      expect(JSON.parse(functionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.23", scope: "function-runtime"});
+      expect(JSON.parse(mutableFunctionRuntime.properties.sdkIdentityJson)).toMatchObject({version: "0.8.25", scope: "function-runtime"});
+      expect(mutableFunctionRuntime).toMatchObject({
+        evidenceTier: "Tier3SyntaxOrTextual",
+        properties: expect.objectContaining({
+          operationName: "filter",
+          sdkIdentityGap: ""
+        })
+      });
       expect(ambiguous.properties).toMatchObject({
         sdkIdentityGap: "sdk-identity-source-root-ambiguous",
         sdkIdentityJson: ""
@@ -2096,6 +2247,169 @@ export function Screen() {
       .rejects.toThrow("orphaned runtime obligation");
   });
 
+  it("classifies finite conditional payload spreads as runtime-deferred proof obligations", async () => {
+    const { packet } = await mutationHookFixture(`
+export async function submit(message, specialContext, getPayload) {
+  await base44.entities.Feedback.create({
+    owner_email: "user@example.invalid",
+    feedback_type: "story_rating",
+    rating: 5,
+    ...(message.trim() && { message: message.trim() })
+  });
+  await base44.entities.StoryRequest.create({
+    request_type: "special",
+    ...(specialContext.special_story_type && { special_story_type: specialContext.special_story_type }),
+    ...(specialContext.event && { event: specialContext.event }),
+    ...(specialContext.memory_focus && { memory_focus: specialContext.memory_focus }),
+    ...(specialContext.dog_moment_states && Object.keys(specialContext.dog_moment_states).length > 0 && {
+      dog_moment_states: JSON.stringify(specialContext.dog_moment_states)
+    }),
+    ...(specialContext.special_note && { special_note: specialContext.special_note })
+  });
+  await base44.entities.UnsafeSpread.create({
+    known: true,
+    ...getPayload()
+  });
+  await base44.entities.ConditionalUnsafeSpread.create({
+    known: true,
+    ...(specialContext.enabled && getPayload())
+  });
+}
+`);
+    const feedback = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Feedback")!;
+    expect(feedback).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      properties: {
+        ...feedback.properties,
+        completeness: "partial",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: '["entity-execution:docker-workflow-readback-cleanup"]',
+        shapeVersion: "3"
+      }
+    });
+    expect(JSON.parse(feedback.properties.analysisGapsJson)).toEqual([
+      "runtime-deferred-callsite-execution"
+    ]);
+    expect(JSON.parse(feedback.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "owner_email", presence: "unconditional" }),
+      expect.objectContaining({ name: "feedback_type", presence: "unconditional" }),
+      expect.objectContaining({ name: "rating", presence: "unconditional" }),
+      expect.objectContaining({ name: "message", presence: "conditional" })
+    ]));
+
+    const storyRequest = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "StoryRequest")!;
+    expect(storyRequest).toMatchObject({
+      evidenceTier: "Tier4Unknown",
+      properties: {
+        ...storyRequest.properties,
+        completeness: "partial",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: '["entity-execution:docker-workflow-readback-cleanup"]',
+        shapeVersion: "3"
+      }
+    });
+    expect(JSON.parse(storyRequest.properties.analysisGapsJson)).toEqual([
+      "runtime-deferred-callsite-execution"
+    ]);
+    expect(JSON.parse(storyRequest.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "request_type", presence: "unconditional" }),
+      expect.objectContaining({ name: "special_story_type", presence: "conditional" }),
+      expect.objectContaining({ name: "event", presence: "conditional" }),
+      expect.objectContaining({ name: "memory_focus", presence: "conditional" }),
+      expect.objectContaining({ name: "dog_moment_states", presence: "conditional" }),
+      expect.objectContaining({ name: "special_note", presence: "conditional" })
+    ]));
+
+    for (const targetSymbol of ["UnsafeSpread", "ConditionalUnsafeSpread"]) {
+      const unsafePayload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+        && fact.targetSymbol === targetSymbol)!;
+      expect(unsafePayload).toMatchObject({
+        evidenceTier: "Tier4Unknown",
+        properties: expect.objectContaining({
+          completeness: "partial",
+          outerKind: "object",
+          referenceAccounting: "unresolved"
+        })
+      });
+      expect(JSON.parse(unsafePayload.properties.analysisGapsJson)).not.toEqual([
+        "runtime-deferred-callsite-execution"
+      ]);
+      expect(JSON.parse(unsafePayload.properties.runtimeObligationsJson)).toEqual([]);
+    }
+  });
+
+  it("resolves guarded finite computed payload fields from closed source maps", async () => {
+    const { packet } = await mutationHookFixture(`
+export async function submit(req, runtimeKey, value) {
+  const { voice_choice } = await req.json();
+  const VOICE_MAP = {
+    __proto__: null,
+    male: "onyx",
+    female: "nova"
+  };
+  const FIELD_MAP = {
+    male: "narration_url_male",
+    female: "narration_url_female"
+  };
+  if (!voice_choice || !VOICE_MAP[voice_choice]) return;
+  const field = FIELD_MAP[voice_choice];
+  await base44.entities.Story.update("story-id", { [field]: value });
+
+  const UNGUARDED_FIELD_MAP = {
+    known: "safe_field"
+  };
+  const unguarded = UNGUARDED_FIELD_MAP[runtimeKey];
+  await base44.entities.UnguardedStory.update("story-id", { [unguarded]: value });
+
+  const MUTATED_FIELD_MAP = {
+    known: "safe_field"
+  };
+  mutate(MUTATED_FIELD_MAP);
+  if (!runtimeKey || !MUTATED_FIELD_MAP[runtimeKey]) return;
+  const mutated = MUTATED_FIELD_MAP[runtimeKey];
+  await base44.entities.MutatedStory.update("story-id", { [mutated]: value });
+}
+`);
+    const story = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Story")!;
+    expect(story).toMatchObject({
+      evidenceTier: "Tier3SyntaxOrTextual",
+      properties: expect.objectContaining({
+        completeness: "complete",
+        outerKind: "object",
+        referenceAccounting: "source-bounded",
+        runtimeObligationsJson: "[]",
+        analysisGapsJson: "[]",
+        shapeVersion: "3"
+      })
+    });
+    expect(JSON.parse(story.properties.fieldsJson)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "narration_url_female", presence: "conditional", origin: "computed:binding:field" }),
+      expect.objectContaining({ name: "narration_url_male", presence: "conditional", origin: "computed:binding:field" })
+    ]));
+
+    for (const targetSymbol of ["UnguardedStory", "MutatedStory"]) {
+      const unsafePayload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+        && fact.targetSymbol === targetSymbol)!;
+      expect(unsafePayload).toMatchObject({
+        evidenceTier: "Tier4Unknown",
+        properties: expect.objectContaining({
+          completeness: "partial",
+          referenceAccounting: "unresolved"
+        })
+      });
+      expect(JSON.parse(unsafePayload.properties.fieldsJson)).toContainEqual(expect.objectContaining({
+        name: "<dynamic>",
+        presence: "dynamic-computed"
+      }));
+      expect(JSON.parse(unsafePayload.properties.analysisGapsJson)).toContain("dynamic-computed-property");
+    }
+  });
+
   it("follows a finite mutation-array push and map-element path", async () => {
     const { packet } = await mutationHookFixture(`
 export function Screen(enabled) {
@@ -2318,6 +2632,229 @@ export function Screen(runtimeField) {
       expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("dynamic-computed-property");
       expect(JSON.parse(payload.properties.fieldsJson)).toContainEqual(expect.objectContaining({name: "<dynamic>"}));
     }
+  });
+
+  it("resolves a module-local helper return into a complete source-bounded payload shape", async () => {
+    const {packet} = await mutationHookFixture(`
+function subscriptionData(subscription, household) {
+  const price = subscription.items?.data?.[0]?.price;
+  return {
+    household_id: household.id,
+    status: subscription.status,
+    plan: price?.recurring?.interval === "year" ? "annual" : "monthly",
+    stripe_price_id: price?.id || "",
+    canceled_at: subscription.canceled_at ?? null
+  };
+}
+export function Screen(subscription, household) {
+  const data = subscriptionData(subscription, household);
+  return base44.entities.Subscription.update(subscription.id, data);
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "Subscription")!;
+    expect(payload.properties).toMatchObject({
+      completeness: "complete",
+      outerKind: "object",
+      referenceAccounting: "source-bounded",
+      constructionKind: "identifier:helper-return:object"
+    });
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual([]);
+    expect(JSON.parse(payload.properties.fieldsJson).map((field: {name: string}) => field.name).sort()).toEqual([
+      "canceled_at", "household_id", "plan", "status", "stripe_price_id"
+    ]);
+    expect(JSON.parse(payload.properties.fieldsJson).every((field: {presence: string}) => field.presence === "unconditional")).toBe(true);
+  });
+
+  it("keeps helper-return field presence conditional across multiple return paths", async () => {
+    const {packet} = await mutationHookFixture(`
+function tierData(active) {
+  if (active) return { tier: "gold", note: "vip" };
+  return { tier: "basic" };
+}
+export function Screen(active) {
+  return base44.entities.TierItem.create(tierData(active));
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "TierItem")!;
+    expect(payload.properties).toMatchObject({ completeness: "complete", outerKind: "object" });
+    const fields = JSON.parse(payload.properties.fieldsJson);
+    expect(fields.map((field: {name: string}) => field.name).sort()).toEqual(["note", "tier", "tier"]);
+    expect(fields.every((field: {presence: string}) => field.presence === "conditional")).toBe(true);
+  });
+
+  it("fails closed when a helper return path cannot be statically resolved", async () => {
+    const {packet} = await mutationHookFixture(`
+function buildData(options) {
+  if (options.skip) return options.fallback;
+  return { known: 1 };
+}
+export function Screen(options) {
+  return base44.entities.ClosedFailItem.create(buildData(options));
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ClosedFailItem")!;
+    expect(payload.properties.completeness).toBe("partial");
+    expect(payload.properties.referenceAccounting).toBe("unresolved");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-expression-unresolved:property-access");
+    expect(JSON.parse(payload.properties.fieldsJson).map((field: {name: string}) => field.name)).toEqual(["known"]);
+  });
+
+  it("rejects helper-return recursion and shadowed helper names with typed gaps", async () => {
+    const {packet} = await mutationHookFixture(`
+function recursiveData(depth) {
+  if (depth > 0) return recursiveData(depth - 1);
+  return { deep: true };
+}
+function shadowedHelper() {
+  return { fromHelper: 1 };
+}
+export function Screen(depth) {
+  const first = base44.entities.RecursionItem.create(recursiveData(depth));
+  const shadow = () => ({ fromLambda: 1 });
+  const shadowedHelper = shadow;
+  const second = base44.entities.ShadowItem.create(shadowedHelper());
+  return [first, second];
+}
+`);
+    const recursion = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "RecursionItem")!;
+    expect(JSON.parse(recursion.properties.analysisGapsJson)).toContain("helper-return-recursion-unresolved");
+    expect(recursion.properties.completeness).not.toBe("complete");
+    const shadow = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "ShadowItem")!;
+    expect(JSON.parse(shadow.properties.analysisGapsJson)).toContain("payload-expression-unresolved:call-expression");
+    expect(shadow.properties.completeness).not.toBe("complete");
+  });
+
+  it("does not claim a single outer kind when helper returns disagree", async () => {
+    const {packet} = await mutationHookFixture(`
+function mixedData(asArray) {
+  if (asArray) return [{ item: 1 }];
+  return { item: 1 };
+}
+export function Screen(asArray) {
+  return base44.entities.MixedKindItem.create(mixedData(asArray));
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "MixedKindItem")!;
+    expect(payload.properties.outerKind).toBe("unknown");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-outer-kind-unresolved");
+  });
+
+  it("projects helper-built filter fields with filter-prefixed origins", async () => {
+    const {packet} = await mutationHookFixture(`
+function ownerFilter(user) {
+  return { owner_email: user.email, archived: false };
+}
+export function Screen(user) {
+  return base44.entities.HelperFilterItem.filter(ownerFilter(user));
+}
+`);
+    const query = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityQuery
+      && fact.targetSymbol === "HelperFilterItem")!;
+    const fields = JSON.parse(query.properties.fieldsJson);
+    expect(fields.map((field: {name: string}) => field.name).sort()).toEqual(["archived", "owner_email"]);
+    expect(fields.every((field: {origin: string}) => field.origin.startsWith("filter:"))).toBe(true);
+  });
+
+  it("fails closed on helper fallthrough, finally-override, and async return paths", async () => {
+    const {packet} = await mutationHookFixture(`
+function fallthrough(active) {
+  if (active) return { present: 1 };
+}
+function overridden() {
+  try {
+    return { try_only: 1 };
+  } finally {
+    return { finally_wins: 1 };
+  }
+}
+async function asyncData() {
+  return { async_field: 1 };
+}
+export function Screen(active) {
+  const a = base44.entities.FallthroughItem.create(fallthrough(active));
+  const b = base44.entities.FinallyItem.create(overridden());
+  const c = base44.entities.AsyncItem.create(asyncData());
+  return [a, b, c];
+}
+`);
+    const fallthrough = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "FallthroughItem")!;
+    expect(JSON.parse(fallthrough.properties.analysisGapsJson)).toContain("helper-return-fallthrough-unresolved");
+    expect(fallthrough.properties.completeness).not.toBe("complete");
+    const overriddenFact = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "FinallyItem")!;
+    const overriddenFields = JSON.parse(overriddenFact.properties.fieldsJson).map((field: {name: string}) => field.name);
+    expect(overriddenFields).toEqual(["finally_wins"]);
+    expect(JSON.parse(overriddenFact.properties.analysisGapsJson)).toEqual([]);
+    const asyncFact = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "AsyncItem")!;
+    expect(JSON.parse(asyncFact.properties.analysisGapsJson)).toContain("helper-return-async-unresolved");
+  });
+
+  it("resolves awaited async and awaited sync helper payloads", async () => {
+    const {packet} = await mutationHookFixture(`
+async function asyncData() {
+  return { async_field: 1 };
+}
+function syncData() {
+  return { sync_field: 1 };
+}
+export async function Screen() {
+  const a = await asyncData();
+  const first = base44.entities.AwaitedAsyncItem.create(a);
+  const second = base44.entities.AwaitedSyncItem.create(await syncData());
+  return [first, second];
+}
+`);
+    for (const [entity, field] of [["AwaitedAsyncItem", "async_field"], ["AwaitedSyncItem", "sync_field"]] as const) {
+      const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+        && fact.targetSymbol === entity)!;
+      expect(payload.properties).toMatchObject({ completeness: "complete", outerKind: "object" });
+      expect(JSON.parse(payload.properties.fieldsJson).map((item: {name: string}) => item.name)).toEqual([field]);
+    }
+  });
+
+  it("rejects a catch parameter that shadows a module-local helper name", async () => {
+    const {packet} = await mutationHookFixture(`
+function payloadData() {
+  return { from_helper: 1 };
+}
+export function Screen(producer) {
+  try {
+    return producer();
+  } catch (payloadData) {
+    return base44.entities.CatchShadowItem.create(payloadData());
+  }
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "CatchShadowItem")!;
+    expect(payload.properties.completeness).not.toBe("complete");
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toContain("payload-expression-unresolved:call-expression");
+  });
+
+  it("intersects dominating guard maps instead of unioning their key domains", async () => {
+    const {packet} = await mutationHookFixture(`
+const PRIMARY = { __proto__: null, a: "primary_a", b: "primary_b" };
+const SHARED = { __proto__: null, a: "shared_a" };
+export function Screen(props) {
+  const kind = props.field;
+  if (!PRIMARY[kind]) return;
+  if (!SHARED[kind]) return;
+  return base44.entities.GuardIntersectItem.create({ [PRIMARY[kind]]: 1 });
+}
+`);
+    const payload = packet.facts.find((fact) => fact.factType === FactTypes.Base44EntityPayload
+      && fact.targetSymbol === "GuardIntersectItem")!;
+    const fields = JSON.parse(payload.properties.fieldsJson).map((field: {name: string}) => field.name);
+    expect(fields).toEqual(["primary_a"]);
+    expect(JSON.parse(payload.properties.analysisGapsJson)).toEqual([]);
   });
 
   it("models closed React object state and mutually exclusive mutation branches without erasing unsafe state flow", async () => {
@@ -3024,7 +3561,8 @@ async function mixedSdkIdentityFixtureRepo(): Promise<string> {
   const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-base44-mixed-sdk-identity-fixture-"));
   await fs.mkdir(path.join(repo, "src"), {recursive: true});
   await fs.mkdir(path.join(repo, "functions/task"), {recursive: true});
-  await writeFrontendSdkAuthority(repo);
+  await fs.mkdir(path.join(repo, "base44/functions/serveSharedStoryOG"), {recursive: true});
+  await writeFrontendSdkAuthority(repo, "0.8.43", "^0.8.43");
   await fs.writeFile(path.join(repo, "src/helper.ts"), `
 export function writeAmbiguous(client, payload) {
   return client.entities.AmbiguousItem.create(payload);
@@ -3037,12 +3575,27 @@ export function run(payload) {
   return writeAmbiguous(base44, payload);
 }
 `);
-  await fs.writeFile(path.join(repo, "functions/task/index.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.4";
+  await fs.writeFile(path.join(repo, "functions/task/index.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.23";
 import {writeAmbiguous} from "../../src/helper";
 const base44 = createClientFromRequest(new Request("https://example.invalid"));
 export function run(payload) {
   base44.entities.FunctionItem.create(payload);
   return writeAmbiguous(base44, payload);
+}
+`);
+  await fs.writeFile(path.join(repo, "base44/functions/serveSharedStoryOG/entry.ts"), `import {createClientFromRequest} from "npm:@base44/sdk@0.8.25";
+export default async function handler(req: Request) {
+  let base44 = null;
+  try {
+    base44 = createClientFromRequest(req);
+    const stories = await base44.asServiceRole.entities.Story.filter({
+      share_token: "token",
+      is_shared: true
+    });
+    return Response.json(stories);
+  } catch (error) {
+    return Response.json({error: "not-found"}, {status: 404});
+  }
 }
 `);
   execFileSync("git", ["init", "-q"], {cwd: repo});
@@ -3261,8 +3814,7 @@ ${body}
   }
 }
 
-async function writeFrontendSdkAuthority(repo: string): Promise<void> {
-  const requested = "^0.8.3";
+async function writeFrontendSdkAuthority(repo: string, version = "0.8.5", requested = "^0.8.3"): Promise<void> {
   await fs.writeFile(path.join(repo, "package.json"), `${JSON.stringify({ dependencies: { "@base44/sdk": requested } }, null, 2)}\n`);
   await fs.writeFile(path.join(repo, "package-lock.json"), `${JSON.stringify({
     name: "base44-fixture",
@@ -3270,7 +3822,7 @@ async function writeFrontendSdkAuthority(repo: string): Promise<void> {
     requires: true,
     packages: {
       "": { dependencies: { "@base44/sdk": requested } },
-      "node_modules/@base44/sdk": { version: "0.8.5" }
+      "node_modules/@base44/sdk": { version }
     }
   }, null, 2)}\n`);
 }

@@ -212,9 +212,72 @@ widening-only: it may improve smoke values or prevent unsafe storage narrowing,
 but it cannot create database constraints. See
 [Base44 UI input semantics v1](BASE44_UI_INPUT_SEMANTICS_V1.md).
 
+Extractor `base44-evidence/0.16.0` and `base44-evidence/0.17.0` existed only on
+the never-merged 88mph evidence-authority branches and are superseded: their
+behavior folds into `0.18.0` below. Packets carrying those versions remain
+validatable.
+
+Extractor `base44-evidence/0.18.0` preserves payload shape v3, entity-selector
+v1, and query descriptor v2/v3, and admits bounded zero-argument
+string-normalization chains such as `code.trim().toUpperCase()` as redacted
+runtime-deferred query operands plus reference-typed `limit`/`skip` pagination
+controls. Conditional object spreads classify as runtime proof with typed
+execution gaps, and guarded computed payload fields resolve through closed
+const string-property maps. A payload identifier whose initializer calls a
+module-local named function declaration resolves through that helper's live
+return statements: every return path must analyze to a closed shape, the body
+must provably terminate, `try`/`finally` interactions and async or generator
+callees fail closed, helper parameters stay opaque (field values record as
+terminal evidence), and any unresolvable return path, cross-kind disagreement,
+recursion, or shadowed callee name fails closed to a typed `helper-return-*`
+gap. Guarded computed-field map lookups intersect the truthy-key domains of
+every dominating guard and reject `__proto__` properties; truthiness guards
+over plain object literals still inherit `Object.prototype` keys, so a runtime
+key equal to an inherited property name remains outside the emitted finite
+domain (a reviewed residual of the guarded-field dialect both producers share).
+Arbitrary helper calls, cross-file callees, and computed callees remain
+unresolved.
+
 Extractor `base44-evidence/0.4.1` also follows an SDK client through a local
 helper parameter when executable callsites prove the binding. The proof is
 conservative: every directly resolved callsite for that parameter must supply
 the same SDK-derived alias. Parameter names, JSDoc, type annotations, and prose
 never create client authority. See
 [Base44 injected-client dataflow](BASE44_INJECTED_CLIENT_DATAFLOW.md).
+
+### Promotion repair producer 0.18.1
+
+`base44-evidence/0.18.1` retains prior packet schemas and admits historical UI
+facts from 0.15.0 through 0.18.0. It rejects possible nested writes when resolving
+single-assignment client aliases and supports dominating module assignments.
+Helper-return unions retain conditional finally paths and suppress try/catch
+values only for an unconditionally terminating finally. Truthiness lookup guards
+close a computed-key domain only for a read-only null-prototype object literal
+(`__proto__: null`); ordinary objects may inherit truthy keys. Exact SDK identity
+requires canonical numeric SemVer components without leading zeroes.
+
+### Destructuring admission producer 0.18.2
+
+`base44-evidence/0.18.2` distinguishes actual destructuring assignment targets
+from property keys, computed-key/default reads, and separate lexical bindings.
+This changes the admitted operation set from 0.18.1 and therefore has a distinct
+producer identity. Packet validators preserve 0.18.1 alongside earlier versions;
+rescan to obtain the new alias admission behavior. Schemas are unchanged.
+
+### Enclosing-flow and iterator producer 0.18.3
+
+`base44-evidence/0.18.3` inspects enclosing conditions, loop initializers and
+updates, iterator targets, switch cases, and earlier try/catch branches for
+possible client-alias writes. Unbraced control bodies use the same dominance
+walk; subsequent loop-body writes also invalidate repeated-iteration proof.
+Generator and async-generator helper calls stay unresolved even when awaited:
+await does not unwrap an iterator into its declared return value. Existing
+awaited ordinary/async helper positives remain covered. Prior producer versions
+remain validatable; rescan for this corrected operation/payload evidence.
+
+### Switch label producer 0.18.4
+
+`base44-evidence/0.18.4` conservatively scans all switch case-label expressions
+for alias writes, including labels after a default clause; those expressions can
+run while selecting default. Preceding clause-body fallthrough writes remain a
+separate check. Existing producer versions remain validatable.

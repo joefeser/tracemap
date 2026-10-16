@@ -1121,6 +1121,8 @@ public static class CSharpSemanticExtractor
                 {
                     ["fieldName"] = field.Name,
                     ["fieldType"] = field.Type.ToDisplayString(SymbolFormat),
+                    ["calleeAssemblyPublicKeyToken"] = field.Type.ContainingAssembly is { } fieldAssembly
+                        ? Convert.ToHexStringLower(fieldAssembly.Identity.PublicKeyToken.ToArray()) : string.Empty,
                     ["containingType"] = field.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
                     ["declaredAccessibility"] = field.DeclaredAccessibility.ToString(),
                     ["isStatic"] = field.IsStatic.ToString()
@@ -1345,6 +1347,8 @@ public static class CSharpSemanticExtractor
                 ["fieldSymbol"] = field.ToDisplayString(SymbolFormat),
                 ["fieldSymbolKind"] = field.Kind.ToString(),
                 ["fieldType"] = field.Type.ToDisplayString(SymbolFormat),
+                    ["calleeAssemblyPublicKeyToken"] = field.Type.ContainingAssembly is { } fieldAssembly
+                        ? Convert.ToHexStringLower(fieldAssembly.Identity.PublicKeyToken.ToArray()) : string.Empty,
                 ["fieldSourceFile"] = fieldSourceLocation.FilePath ?? string.Empty,
                 ["fieldSourceStartLine"] = fieldSourceLocation.StartLine?.ToString() ?? string.Empty,
                 ["fieldSourceEndLine"] = fieldSourceLocation.EndLine?.ToString() ?? string.Empty,
@@ -4381,6 +4385,8 @@ public static class CSharpSemanticExtractor
         AddSymbolProperties(properties, "target", targetSymbol);
         AddAssemblyProperties(properties, model.GetEnclosingSymbol(evidenceNode.SpanStart)?.ContainingAssembly ?? sourceSymbol.ContainingAssembly, targetSymbol.ContainingAssembly);
 
+        WebFormsFrameworkEntry.AddWitness(properties, model, targetSymbol, relationshipKind);
+
         return CreateSemanticFact(
             FactTypes.SymbolRelationship,
             RuleIds.CSharpSemanticSymbolRelationship,
@@ -4410,6 +4416,8 @@ public static class CSharpSemanticExtractor
         properties[$"{prefix}SymbolDisplayName"] = identity.DisplayName;
         properties[$"{prefix}SymbolAssemblyName"] = identity.AssemblyName ?? string.Empty;
         properties[$"{prefix}SymbolAssemblyVersion"] = identity.AssemblyVersion ?? string.Empty;
+        properties[$"{prefix}SymbolAssemblyPublicKeyToken"] = symbol?.ContainingAssembly is { } assembly
+            ? Convert.ToHexStringLower(assembly.Identity.PublicKeyToken.ToArray()) : string.Empty;
         properties[$"{prefix}ContainingSymbolId"] = identity.ContainingSymbolId ?? string.Empty;
         return properties;
     }

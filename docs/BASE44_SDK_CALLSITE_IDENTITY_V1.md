@@ -28,7 +28,10 @@ closed contract:
 The closed values are:
 
 - `packageName`: `@base44/sdk`
-- `version`: `0.8.4` or `0.8.5`
+- `version`: an exact `MAJOR.MINOR.PATCH` semver resolved by the callsite's
+  own authority (the `npm:@base44/sdk@<version>` import for `function-runtime`;
+  the root `package-lock.json` resolution for `frontend-package`, which packet
+  validation cross-checks against the lock's extracted admission fact)
 - `scope`: `function-runtime` or `frontend-package`
 - evidence `kind`: `source-import`, `package-manifest`, or
   `package-lock-resolution`
@@ -37,13 +40,14 @@ Evidence entries are sorted by kind, path, and hash and contain no intermediary
 traversal files. The operation fact independently identifies the callsite.
 
 `function-runtime` requires an exact runtime import of
-`npm:@base44/sdk@0.8.4` in the operation source file. Its sole evidence entry is
+`npm:@base44/sdk@<version>` in the operation source file. Its sole evidence entry is
 that source file and its digest must equal the operation's `sourceFileSha256`.
 
 `frontend-package` requires an exact runtime import of `@base44/sdk`, the root
 `package.json` request, and the root `package-lock.json` resolution. The
 manifest request must equal the lock root request and the lock must resolve
-`node_modules/@base44/sdk` to `0.8.5`. The evidence array contains exactly the
+`node_modules/@base44/sdk` to a single exact version; that version is the
+identity's `version`. The evidence array contains exactly the
 lock, manifest, and direct SDK-import source file. An indirect helper call
 retains the direct import root; helper/intermediary files are not identity
 authority.
@@ -76,3 +80,6 @@ repository-wide default.
 This contract proves only static package identity at an extracted callsite. It
 does not prove bundling, runtime reachability, backend compatibility, or that a
 declared operation succeeds.
+
+Promotion repair 0.18.1 limitations and preserved versions are recorded in
+[the adapter contract](BASE44_STATIC_EVIDENCE_ADAPTER.md#promotion-repair-producer-0181).

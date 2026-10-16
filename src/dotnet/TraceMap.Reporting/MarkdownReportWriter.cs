@@ -319,6 +319,8 @@ public static class MarkdownReportWriter
             result.Facts.Where(fact => fact.FactType == FactTypes.SymbolRelationship),
             fact => $"- `{DisplaySource(fact)}` `{fact.Properties.GetValueOrDefault("relationshipKind") ?? DisplayFactName(fact)}` `{DisplayFactName(fact)}` ({fact.EvidenceTier}) at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}`");
 
+        AddWebFormsEntrySection(lines, result.Facts);
+
         AddFactSection(
             lines,
             "WebForms Events",
@@ -700,6 +702,28 @@ public static class MarkdownReportWriter
         if (pdbEdgeOmitted > 0)
             lines.Add($"- {pdbEdgeOmitted} additional rewrite PDB relationship rows omitted from this report display; exhaustive rows remain in `facts.ndjson` and `index.sqlite`.");
     }
+
+    private static void AddWebFormsEntrySection(List<string> lines, IReadOnlyList<CodeFact> facts)
+    {
+        var entries = facts.Where(f => f.FactType == FactTypes.WebFormsEntryRelationship
+            || f.FactType == FactTypes.AnalysisGap && f.RuleId is RuleIds.WebFormsEntryContainment
+                or RuleIds.WebFormsEntryProperty or RuleIds.WebFormsEntryLifecycle)
+            .OrderBy(f => f.Evidence.FilePath, StringComparer.Ordinal).ThenBy(f => f.Evidence.StartLine)
+            .ThenBy(f => f.FactId, StringComparer.Ordinal).ToArray();
+        lines.Add("");
+        lines.Add("## WebForms Entry Relationships (not calls)");
+        lines.Add("");
+        lines.Add($"Partial static evidence: showing {Math.Min(50, entries.Length)} of {entries.Length} retained entry/gap rows. Complete rows are in facts.ndjson and index.sqlite; containment is not execution.");
+        if (entries.Length > 50) lines.Add("Entry section truncated at 50 rows.");
+        if (entries.Length == 0) lines.Add("- None found; absence is not proof of no entry.");
+        foreach (var fact in entries.Take(50))
+            lines.Add($"- {EntryText(fact.ContractElement)} ({EntryText(fact.EvidenceTier)}) {EntryText(fact.SourceSymbol)} → {EntryText(fact.TargetSymbol)} at {EntryText(fact.Evidence.FilePath)}:{fact.Evidence.StartLine}; rule {EntryText(fact.RuleId)}; first unresolved boundary: {EntryText(fact.Properties.GetValueOrDefault("firstUnresolvedBoundary"))}");
+    }
+
+    // Encode repository text as literal HTML entities, including Markdown delimiters
+    // and line controls. No repository value can terminate or create a report block.
+    private static string EntryText(string? value) => string.Concat((value ?? "").Select(c =>
+        char.IsAsciiLetterOrDigit(c) || c == ' ' ? c.ToString() : $"&#{(int)c};"));
 
     private static void AddFactSection(List<string> lines, string title, IEnumerable<CodeFact> facts, Func<CodeFact, string> format)
     {

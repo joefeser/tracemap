@@ -12,6 +12,25 @@ Public Class ProfileWidget
         Dim profile As New ProfileRecord()
     End Sub
 
+    Public WriteOnly Property WriteOnlyValue As String
+        Set(value As String)
+        End Set
+    End Property
+
+    Private ReadOnly Property HiddenValue As String
+        Get
+            Return "hidden"
+        End Get
+    End Property
+
+    Public Property RestrictedValue As String
+        Private Get
+            Return "restricted"
+        End Get
+        Set(value As String)
+        End Set
+    End Property
+
     Public ReadOnly Property Profile As ProfileRecord
         Get
             Return New ProfileRecord()

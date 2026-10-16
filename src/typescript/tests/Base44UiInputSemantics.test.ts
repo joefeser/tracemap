@@ -7,6 +7,17 @@ import { buildBase44Evidence, diffBase44Evidence } from "../src/base44/Base44Evi
 import { FactTypes } from "../src/facts/Models";
 
 describe("Base44 React UI input semantics", () => {
+  it.each(["0.15.0", "0.16.0", "0.17.0", "0.18.0", "0.18.1", "0.18.2", "0.18.3"])("validates retained UI producer %s", async version => {
+    const repo = await fixtureRepo();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-retained-"));
+    const {packet} = await buildBase44Evidence(options(repo, out));
+    expect(packet.facts.some(f => f.factType === FactTypes.Base44UiInputSemantics)).toBe(true);
+    const retained = structuredClone(packet);
+    for (const fact of retained.facts) if (fact.factType === FactTypes.Base44UiInputSemantics) fact.evidence.extractorVersion = `base44-evidence/${version}`;
+    const retainedPath = path.join(out, "retained.json");
+    await fs.writeFile(retainedPath, JSON.stringify(retained));
+    await expect(diffBase44Evidence(retainedPath, retainedPath, path.join(out, "diff.json"))).resolves.toBeDefined();
+  });
   it("keeps reason evidence spans valid for incomplete source instead of rejecting the packet", async () => {
     const repo = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-semantics-incomplete-"));
     await fs.mkdir(path.join(repo, "src"), { recursive: true });
@@ -340,6 +351,24 @@ export async function save() {
     await fs.writeFile(readPath, `${JSON.stringify(readForged, null, 2)}\n`);
     await expect(diffBase44Evidence(path.join(out, "base44-evidence.json"), readPath,
       path.join(out, "forged-read-operation-diff.json"))).rejects.toThrow(/unsupported entity operation|invalid exact operation identity/u);
+  });
+
+  it("binds every UI input semantics fact inside selector-evidence source authority", async () => {
+    const repo = await fixtureRepo();
+    const out = await fs.mkdtemp(path.join(os.tmpdir(), "tracemap-ui-semantics-authority-out-"));
+    const { packet } = await buildBase44Evidence(options(repo, out));
+    const semantics = packet.facts.filter((fact) => fact.factType === FactTypes.Base44UiInputSemantics);
+    expect(semantics.length).toBeGreaterThan(0);
+    const authority = new Set(packet.facts
+      .filter((fact) => fact.factType === FactTypes.Base44SourceAuthority
+        && fact.properties.authorityKind === "selector-evidence-source")
+      .map((fact) => `${fact.evidence.filePath}\0${fact.properties.sourceFileSha256}`));
+    for (const fact of semantics) {
+      expect(authority.has(`${fact.evidence.filePath}\0${fact.properties.sourceFileSha256}`)).toBe(true);
+      for (const reason of JSON.parse(fact.properties.uiSemanticsJson).reasons) {
+        expect(authority.has(`${reason.filePath}\0${fact.properties.sourceFileSha256}`)).toBe(true);
+      }
+    }
   });
 });
 
