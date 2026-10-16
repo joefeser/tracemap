@@ -64,5 +64,5 @@ export const ScannerVersions = {
   TypeScriptIntegrationExtractor: "typescript-integration/0.1.0",
   TypeScriptAngularHttpClientExtractor: "typescript-angular-httpclient/0.1.0",
   TypeScriptAngularTemplateExtractor: "typescript-angular-template/0.1.0",
-  Base44EvidenceExtractor: "base44-evidence/0.18.1"
+  Base44EvidenceExtractor: "base44-evidence/0.18.2"
 } as const;

@@ -150,3 +150,11 @@ The target walker now ignores property keys and default-value reads, follows
 actual object/array/rest/default assignment targets, and checks lexical identity.
 The sibling for-in/of destructuring surface uses the same target walker.
 TypeScript build and all 310 tests passed, including 11 target/read/shadow cases.
+
+Round 3: hosted CI was clean, but Baz requested distinct producer identity for
+the destructuring operation-set change. The owner authorized up to six rounds;
+this bounded follow-up uses that authorization after the lane's default two
+hosted fix cycles. Producer 0.18.2 preserves prior 0.18.1 packet acceptance.
+No lane policy changed and main merge remains unapproved.
+TypeScript build and all 311 tests pass after the version bump, including exact
+0.18.2 operation identities and historical 0.18.1 UI packet acceptance.
