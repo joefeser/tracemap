@@ -255,3 +255,11 @@ values only for an unconditionally terminating finally. Truthiness lookup guards
 close a computed-key domain only for a read-only null-prototype object literal
 (`__proto__: null`); ordinary objects may inherit truthy keys. Exact SDK identity
 requires canonical numeric SemVer components without leading zeroes.
+
+### Destructuring admission producer 0.18.2
+
+`base44-evidence/0.18.2` distinguishes actual destructuring assignment targets
+from property keys, computed-key/default reads, and separate lexical bindings.
+This changes the admitted operation set from 0.18.1 and therefore has a distinct
+producer identity. Packet validators preserve 0.18.1 alongside earlier versions;
+rescan to obtain the new alias admission behavior. Schemas are unchanged.

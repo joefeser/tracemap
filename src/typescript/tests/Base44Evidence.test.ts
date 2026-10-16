@@ -34,8 +34,9 @@ export function run(source, fallback) {
   ${statement}
   client.entities.DestructuringClient.list();
 }`);
-    expect(packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "DestructuringClient"))
-      .toHaveLength(admitted ? 1 : 0);
+    const operations = packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "DestructuringClient");
+    expect(operations).toHaveLength(admitted ? 1 : 0);
+    for (const operation of operations) expect(operation.evidence.extractorVersion).toBe("base44-evidence/0.18.2");
   });
 
   it.each([
