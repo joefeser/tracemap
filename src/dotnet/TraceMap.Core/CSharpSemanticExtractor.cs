@@ -1121,6 +1121,8 @@ public static class CSharpSemanticExtractor
                 {
                     ["fieldName"] = field.Name,
                     ["fieldType"] = field.Type.ToDisplayString(SymbolFormat),
+                    ["calleeAssemblyPublicKeyToken"] = field.Type.ContainingAssembly is { } fieldAssembly
+                        ? Convert.ToHexStringLower(fieldAssembly.Identity.PublicKeyToken.ToArray()) : string.Empty,
                     ["containingType"] = field.ContainingType?.ToDisplayString(SymbolFormat) ?? string.Empty,
                     ["declaredAccessibility"] = field.DeclaredAccessibility.ToString(),
                     ["isStatic"] = field.IsStatic.ToString()
@@ -1345,6 +1347,8 @@ public static class CSharpSemanticExtractor
                 ["fieldSymbol"] = field.ToDisplayString(SymbolFormat),
                 ["fieldSymbolKind"] = field.Kind.ToString(),
                 ["fieldType"] = field.Type.ToDisplayString(SymbolFormat),
+                    ["calleeAssemblyPublicKeyToken"] = field.Type.ContainingAssembly is { } fieldAssembly
+                        ? Convert.ToHexStringLower(fieldAssembly.Identity.PublicKeyToken.ToArray()) : string.Empty,
                 ["fieldSourceFile"] = fieldSourceLocation.FilePath ?? string.Empty,
                 ["fieldSourceStartLine"] = fieldSourceLocation.StartLine?.ToString() ?? string.Empty,
                 ["fieldSourceEndLine"] = fieldSourceLocation.EndLine?.ToString() ?? string.Empty,

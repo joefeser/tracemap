@@ -97,3 +97,13 @@ Full-suite evidence above belongs to the prior implementation head; new-head
 hosted validation and ACK readback will be recorded on PR #876.
 All 11 original findings have code/test evidence prepared for exact-thread
 disposition after push. No lane policy, ACK source or call traversal was changed.
+
+Round 2 follow-up: the owner-authorized repair also covers the two current-head
+Baz findings: C# field declarations now emit the receiver assembly token (signed
+and unsigned compiler-backed regression coverage), and refused known getters keep
+the exact member target and ID through reports. Missing ordinary C# property
+witnesses remain unavailable; this does not broaden C# property extraction.
+
+Follow-up validation: HTTP-entry, C# semantic, legacy WebForms and current-version
+regressions passed 87/87 with warnings as errors. Prior repair head c2dc16d7
+passed the frozen 598-test suite and its hosted .NET adapter check.

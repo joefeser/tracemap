@@ -162,8 +162,13 @@ public static partial class LegacyWebFormsExtractor
                 || member.Properties.GetValueOrDefault("parameterCount") != "0"
                 || member.Properties.GetValueOrDefault("isDefault") != "False")
             {
-                EntryGap(manifest, evidence, RuleIds.WebFormsEntryProperty, "UnavailablePublicGetter",
-                    [pageFact, candidate.Relation, candidate.Type, member], facts);
+                facts.Add(EntryFact(manifest, RuleIds.WebFormsEntryProperty, EvidenceTiers.Tier4Unknown,
+                    evidence, "unresolved-entry", candidate.Relation.TargetSymbol!, member.TargetSymbol!,
+                    "UnavailablePublicGetter", [pageFact, candidate.Relation, candidate.Type, member],
+                    new Dictionary<string, string> { ["gapKind"] = "UnavailablePublicGetter",
+                        ["message"] = "WebForms entry relationship unavailable: UnavailablePublicGetter",
+                        ["targetSymbolId"] = member.Properties["targetSymbolId"],
+                        ["surfaceIdentity"] = SurfaceIdentity(page.FilePath), ["controlId"] = parsed.Groups["control"].Value }, true));
                 continue;
             }
             facts.Add(EntryFact(manifest, RuleIds.WebFormsEntryProperty, EvidenceTiers.Tier3SyntaxOrTextual,

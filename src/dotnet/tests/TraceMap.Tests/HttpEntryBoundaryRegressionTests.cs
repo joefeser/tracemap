@@ -28,6 +28,7 @@ public sealed class HttpEntryBoundaryRegressionTests
             .Single(Directory.Exists);
         var tree = CSharpSyntaxTree.ParseText("""
             public class Widget : System.Web.UI.UserControl {
+                public System.Web.UI.UserControl control;
                 protected override void CreateChildControls() { }
                 protected override void OnInit(System.EventArgs e) { }
                 protected override void OnLoad(System.EventArgs e) { }
@@ -41,6 +42,11 @@ public sealed class HttpEntryBoundaryRegressionTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         Assert.DoesNotContain(compilation.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
         var model = compilation.GetSemanticModel(tree);
+        var fieldFacts = new List<SemanticFactCandidate>();
+        typeof(CSharpSemanticExtractor).GetMethod("AddFieldDeclarationFacts",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
+            .Invoke(null, ["Witness.csproj", "Widget.cs", tree.GetRoot(), model, fieldFacts]);
+        Assert.Equal("b03f5f7f11d50a3a", Assert.Single(fieldFacts).Properties!["calleeAssemblyPublicKeyToken"]);
         foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             var symbol = (IMethodSymbol)model.GetDeclaredSymbol(method)!;
@@ -90,6 +96,8 @@ public sealed class HttpEntryBoundaryRegressionTests
         });
         Assert.Equal(3, scan.Facts.Count(f => f.RuleId == RuleIds.WebFormsEntryProperty
             && f.Evidence.FilePath == "EntryVariants.aspx" && f.Properties.GetValueOrDefault("gapKind") == "UnavailablePublicGetter"));
+        Assert.All(scan.Facts.Where(f => f.Properties.GetValueOrDefault("gapKind") == "UnavailablePublicGetter"),
+            f => { Assert.False(string.IsNullOrEmpty(f.TargetSymbol)); Assert.False(string.IsNullOrEmpty(f.Properties["targetSymbolId"])); });
         await VerifyEntryRefusals(root.FullName, scan, temp.Path);
         VerifyReviewIdentityAndSnapshotCases(root.FullName, scan, temp.Path);
         var unsafeEntry = propertyEntry with { Evidence = propertyEntry.Evidence with { FilePath = "bad`\n[forged](https://example.invalid).aspx" } };
@@ -157,6 +165,8 @@ public sealed class HttpEntryBoundaryRegressionTests
                 new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
             Assert.Equal(expected, bounded.Report.Paths.Count > 0);
             Assert.NotNull(result.WebFormsEntries);
+            Assert.All(result.WebFormsEntries.Relationships.Where(r => r.FirstUnresolvedBoundary == "UnavailablePublicGetter"),
+                r => { Assert.False(string.IsNullOrEmpty(r.Target)); Assert.False(string.IsNullOrEmpty(r.TargetSymbolId)); });
             Assert.All(result.WebFormsEntries.Relationships.Where(r => r.EdgeKind == "control-containment"),
                 row => Assert.False(string.IsNullOrEmpty(row.TargetSymbolId)));
             Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(typeof(CombinedDependencyPathReporter).Assembly.Location))), result.WebFormsEntries.GeneratorSha256);
