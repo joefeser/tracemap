@@ -1,0 +1,1881 @@
+﻿.assembly extern mscorlib 
+{
+    .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+    .ver 2:0:0:0
+}
+.assembly leave_instr
+{
+    .hash algorithm 0x00008004
+    .ver 1:0:0:0
+}
+
+.module leave_instr.exe
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+
+.class private auto ansi beforefieldinit leave_instr.main
+    extends [mscorlib]System.Object
+{
+    .method private hidebysig static void Main(string[] args) cil managed
+    {
+        .entrypoint
+        .maxstack 8
+
+        ret
+    }
+
+    //1.  If the source is within a filter, fault handler, or finally handler, the target shall be within the same 
+    //filter, fault handler, or finally handler. 
+
+    //pass
+    .method private hidebysig static void SourceWithinFilter_TargetInSameFilter() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } filter {
+            leave in_filter
+            nop
+            nop
+            in_filter: nop
+            nop
+            endfilter
+         } {
+            nop
+         }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinFilter_TargetNotInSameFilter() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } filter {
+            leave in_filter
+            nop
+            nop
+            endfilter
+         } {
+            nop
+         }
+
+         .try {
+            nop
+         } filter {
+            in_filter: nop
+            endfilter
+         } {
+            nop
+         }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinFaultHandler_TargetInSameFaultHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } fault {
+            leave in_fault
+            nop
+            in_fault: nop
+            nop
+         }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinFaultHandler_TargetNotInSameFaultHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } fault {
+            nop
+            leave in_fault
+            nop
+         }
+
+         .try {
+            nop
+         } fault {
+            in_fault: nop
+         }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceInFinallyHandler_TargetInSameFinallyHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } finally {
+            nop
+            leave in_finally
+            nop
+            in_finally: nop
+            nop
+         }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceInFinallyHandler_TargetNotInSameFinallyHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } finally {
+            nop
+            leave in_finally
+            nop
+         }
+
+         .try {
+            nop
+         } finally {
+            in_finally: nop
+         }
+
+        method_end: ret
+    }
+
+    //2.  If the source is within a protected block, the target shall be within the same protected block (but not in a nested block), 
+    //within an enclosing protected block (but not a block nested within that one), 
+    //the first instruction of a disjoint protected block, or not within any protected block. 
+
+    //pass
+    .method private hidebysig static void SourceWithinTry_TargetWithinSameTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            leave in_try
+            nop
+            in_try: nop
+            nop
+         } finally {
+            nop
+         }
+
+        method_end: ret
+    }
+
+    //pass CLR doesn't care whether the target is the first instruction in the try or not
+    .method private hidebysig static void SourceWithinTry_TargetIsFirstInstructionWithinNestedTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            leave in_try
+            nop
+            .try {
+                in_try: nop
+                nop
+                nop
+            } finally {
+                nop
+            }
+            nop
+         } finally {
+            nop
+         }
+
+        method_end: ret
+    }
+
+    //pass CLR doesn't care whether the target is the first instruction in the try or not
+    .method private hidebysig static void SourceWithinTry_TargetIsNotFirstInstructionWithinNestedTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            leave in_try
+            nop
+            .try {
+                in_try: nop
+                nop
+                nop
+            } finally {
+                nop
+            }
+            nop
+         } finally {
+            nop
+         }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinTry_TargetWithinCatchHandlerOfNestedTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            leave in_catch
+            nop
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                in_catch: nop
+            }
+            nop
+         } finally {
+            nop
+         }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinTry_TargetWithinFaultHandlerOfNestedTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            leave my_target
+            nop
+            .try {
+                nop
+            } fault {
+                my_target: nop
+                endfault
+            }
+            nop
+         } finally {
+            nop
+            endfinally
+         }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinTry_TargetWithinEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+                leave my_target
+                nop
+            } finally {
+                nop
+            }
+            nop
+            my_target: nop
+            nop
+         } finally {
+            nop
+         }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinTry_TargetWithinCatchHandlerOfSiblingProtectedBlock() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+                leave my_target
+                nop
+            } finally {
+                nop
+            }
+            nop
+            nop
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                my_target: nop
+            }
+            nop
+         } finally {
+            nop
+         }
+
+        end_method: ret
+    }
+
+    // throws AccessViolationException but not InvalidCILProgram
+    .method private hidebysig static void SourceWithinTry_TargetWithinCatchHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave in_catch
+         } catch [mscorlib]System.Object {
+            nop
+            in_catch: nop
+            nop
+         }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException but not InvalidCILProgram
+    .method private hidebysig static void SourceWithinTry_TargetWithinFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave in_filter
+         } filter {
+            nop
+            endfilter
+         } {
+            nop
+            in_filter: nop
+            nop
+         }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinTry_TargetWithinFinallyHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            leave in_finally
+            nop
+        } finally {
+            in_finally: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException but not InvalidCIL
+    .method private hidebysig static void SourceWithinTry_TargetWithinFaultHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            leave in_fault
+            nop
+        } fault {
+            in_fault: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException but not InvalidCIL
+    .method private hidebysig static void SourceWithinTry_TargetWithinCatchHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                leave in_catch
+            } catch [mscorlib]System.Object {
+                nop
+            }
+            nop
+        } catch [mscorlib]System.Object {
+            in_catch: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException but not InvalidCIL
+    .method private hidebysig static void SourceWithinTry_TargetWithinHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                leave my_target
+            } catch [mscorlib]System.Object {
+                nop
+            }
+            nop
+        } filter {
+            my_target: nop
+            endfilter
+        } {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException but not InvalidCIL
+    .method private hidebysig static void SourceWithinTry_TargetWithinFilterHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                leave in_filter
+            } catch [mscorlib]System.Object {
+                nop
+            }
+            nop
+        } filter {
+            nop
+            endfilter
+        } {
+            in_filter: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException but not InvalidCIL
+    .method private hidebysig static void SourceWithinTry_TargetWithinFinallyHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                leave in_finally
+            } catch [mscorlib]System.Object {
+                nop
+            }
+            nop
+        } finally {
+            in_finally: nop
+        }
+
+        method_end: ret
+    }
+    
+    // throws AccessViolationException but not InvalidCIL
+    .method private hidebysig static void SourceWithinTry_TargetWithinFaulthandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                leave in_fault
+            } catch [mscorlib]System.Object {
+                nop
+            }
+            nop
+        } fault {
+            in_fault: nop
+        }
+
+        method_end: ret
+    }
+    
+    // pass
+    .method private hidebysig static void SourceWithinTry_TargetIsFirstInstrOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave in_try
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        .try {
+            in_try: nop
+            nop
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinTry_TargetIsNotFirstInstrOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave in_try
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        .try {
+            nop
+            in_try: nop
+            nop
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException but not InvalidCIL
+    .method private hidebysig static void SourceWithinTry_TargetWithinCatchHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave in_catch
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            in_catch: nop
+        }
+
+        method_end: ret
+    }
+    
+    .method private hidebysig static void SourceWithinTry_TargetWithinFilterHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave in_filter
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        .try {
+            nop
+        } filter {
+            nop
+            endfilter
+        } {
+            in_filter: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinTry_TargetWithinFinallyHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave in_finally
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        .try {
+            nop
+        } finally {
+            in_finally: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinTry_TargetWithinFaultHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave in_fault
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        .try {
+            nop
+        } fault {
+            in_fault: nop
+        }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinTry_TargetWithinUnprotectedCode() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave in_unprotected
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        in_unprotected: nop
+        method_end: ret
+    }
+
+
+
+    //3.  If the source is within a catch handler or filtered handler, the target shall be within the same catch 
+    //handler or filtered handler, within the associated protected block, within a protected block that 
+    //encloses the catch handler or filtered handler, the first instruction of a disjoint protected block, or 
+    //not within any protected block. 
+
+    //pass
+    .method private hidebysig static void SourceWithinCatchHandler_TargetWithinSameCatchHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } catch [mscorlib]System.Object {
+            leave in_catch
+            nop
+            in_catch: nop
+         }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinCatchHandler_TargetNotInSameCatchHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } catch [mscorlib]System.Object {
+            leave in_catch
+            nop
+         }
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            in_catch: nop
+        }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinCatchHandler_TargetInAssociatedTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            in_assocTry: nop
+        } catch [mscorlib]System.Object {
+            leave in_assocTry
+        }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinCatchHandler_TargetInTryNestedInAssociatedTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                in_nestedTry: nop
+            } catch [mscorlib]System.Object {
+                nop
+            }
+        } catch [mscorlib]System.Object {
+            leave in_nestedTry
+        }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinCatchHandler_TargetInEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                leave in_enclosing
+            }
+            nop
+            in_enclosing: nop
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // pass
+    .method private hidebysig static void SourceWithinCatchHandler_TargetInTryThatEnclosesTheEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+                .try {
+                    nop
+                } catch [mscorlib]System.Object {
+                    leave in_parent
+                }
+                nop
+            } catch [mscorlib]System.Object {
+                nop
+            }
+            nop
+            in_parent: nop
+            nop
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinCatchHandler_TargetInCatchHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                leave in_catch
+            }
+        } catch [mscorlib]System.Object {
+            in_catch: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinCatchHandler_TargetInFilterForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                leave in_filter
+            }
+        } filter {
+            in_filter: nop
+            endfilter
+        } {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinCatchHandler_TargetInFilterHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                leave in_handler
+            }
+        } filter {
+            nop
+            endfilter
+        } {
+            in_handler: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinCatchHandler_TargetInFinallyHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                leave in_finally
+            }
+        } finally {
+            in_finally: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinCatchHandler_TargetInFaultHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                leave in_fault
+            }
+        } fault {
+            in_fault: nop
+        }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinCatchHandler_TargetIsFirstInstrOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave disjoint_try
+        }
+
+        .try {
+            disjoint_try: nop
+            nop
+        } finally {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinCatchHandler_TargetIsNotFirstInstrOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave disjoint_try
+        }
+
+        .try {
+            nop
+            disjoint_try: nop
+            nop
+        } finally {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinCatchHandler_TargetIsInCatchHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave disjoint_catch
+        }
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            disjoint_catch: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinCatchHandler_TargetIsInFilterOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave disjoint_filter
+        }
+
+        .try {
+            nop
+        } filter {
+            disjoint_filter: nop
+            endfilter
+        } {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinCatchHandler_TargetIsInFilterHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave disjoint_handler
+        }
+
+        .try {
+            nop
+        } filter {
+            nop
+            endfilter
+        } {
+            disjoint_handler: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinCatchHandler_TargetIsInFinallyHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave disjoint_finally
+        }
+
+        .try {
+            nop
+        } finally {
+            disjoint_finally: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinCatchHandler_TargetIsInFaultHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave disjoint_fault
+        }
+
+        .try {
+            nop
+        } fault {
+            disjoint_fault: nop
+        }
+
+        method_end: ret
+    }
+
+    // pass
+    .method private hidebysig static void SourceWithinCatchHandler_TargetIsInUnprotectedCode() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave in_unprotected
+        }
+
+        in_unprotected: nop
+        method_end: ret
+    }
+
+    //
+    // and now for the tests in .3 for source instructions for filtered handlers
+    //
+
+    //pass
+    .method private hidebysig static void SourceWithinFilterHandler_TargetWithinSameFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+            my_target: nop
+         }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinFilterHandler_TargetNotInSameFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+         } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+nop
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            nop
+            my_target: nop
+         }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinFilterHandler_TargetInAssociatedTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            my_target: nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinFilterHandler_TargetInTryNestedInAssociatedTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                my_target: nop
+            } catch [mscorlib]System.Object {
+                nop
+            }
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinFilterHandler_TargetInEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+            nop
+            my_target: nop
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // pass
+    .method private hidebysig static void SourceWithinFilterHandler_TargetInTryThatEnclosesTheEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+                .try {
+                    nop
+                } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+                nop
+            } catch [mscorlib]System.Object {
+                nop
+            }
+            nop
+            my_target: nop
+            nop
+        } catch [mscorlib]System.Object {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinFilterHandler_TargetInCatchHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+        } catch [mscorlib]System.Object {
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinFilterHandler_TargetInFilterForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+        } filter {
+            my_target: nop
+            endfilter
+        } {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinFilterHandler_TargetInFilterHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+        } filter {
+            nop
+            endfilter
+        } {
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinFilterHandler_TargetInFinallyHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+        } finally {
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinFilterHandler_TargetInFaultHandlerForEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            .try {
+                nop
+            } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+        } fault {
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void SourceWithinFilterHandler_TargetIsFirstInstrOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        .try {
+            my_target: nop
+            nop
+        } finally {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void SourceWithinFilterHandler_TargetIsNotFirstInstrOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        .try {
+            nop
+            my_target: nop
+            nop
+        } finally {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinFilterHandler_TargetIsInCatchHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinFilterHandler_TargetIsInFilterOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        .try {
+            nop
+        } filter {
+            my_target: nop
+            endfilter
+        } {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinFilterHandler_TargetIsInFilterHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        .try {
+            nop
+        } filter {
+            nop
+            endfilter
+        } {
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinFilterHandler_TargetIsInFinallyHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        .try {
+            nop
+        } finally {
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    // throws AccessViolationException not InvalidCIL
+    .method private hidebysig static void SourceWithinFilterHandler_TargetIsInFaultHandlerOfDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        .try {
+            nop
+        } fault {
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    // pass
+    .method private hidebysig static void SourceWithinFilterHandler_TargetIsInUnprotectedCode() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+         } {
+            leave my_target
+            nop
+         }
+
+        my_target: nop
+        method_end: ret
+    }
+
+
+    //
+    // 1.  If the target is within a filter or handler, the source shall be within the same filter or handler. 
+    //
+
+    //pass
+    .method private hidebysig static void TargetWithinCatchHandler_SourceInSameCatchHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave my_target
+            nop
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetWithinCatchHandler_SourceNotInSameCatchHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            leave my_target
+            nop
+        }
+
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            nop
+            my_target: nop
+        }
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void TargetWithinFilter_SourceInSameFilter() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            nop
+            leave my_target
+            nop
+            my_target: ldc.i4.1
+            endfilter
+        } {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetWithinFilter_SourceNotInSameFilter() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            nop
+            leave my_target
+            ldc.i4.1
+            endfilter
+        } {
+            nop
+        }
+
+
+        .try {
+            nop
+        } filter {
+            nop
+            my_target: ldc.i4.1
+            endfilter
+        } {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void TargetInFilterHandler_SourceInSameFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+        } {
+            nop
+            leave my_target
+            nop
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetInFilterHandler_SourceNotInSameFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+        } {
+            nop
+            leave my_target
+            nop
+        }
+
+        .try {
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+        } {
+            my_target: nop
+        }
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void TargetInFinallyHandler_SourceInSameFinallyHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } finally {
+            leave my_target
+            nop
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetInFinallyHandler_SourceNotInSameFinallyHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } finally {
+            leave my_target
+            nop
+        }
+
+
+        .try {
+            nop
+        } finally {
+            nop
+            my_target: nop
+        }
+        
+        ethod_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void TargetInFaultHandler_SourceInSameFaultHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } fault {
+            leave my_target
+            nop
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetInFaultHandler_SourceNotInSameFaultHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+        } fault {
+            leave my_target
+            nop
+        }
+
+        .try {
+            nop
+        } fault {
+            nop
+            my_target: nop
+        }
+
+        method_end: ret
+    }
+
+    //2.  If the target is within a protected block, except the first instruction of that protected block, the 
+    //source shall be within the same protected block, or within the associated catch handler or filtered 
+    //handler.
+
+    //pass
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInSameTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            leave my_target
+            nop
+            my_target: nop
+            nop
+        } finally {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInDisjointTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            leave my_target
+        } finally {
+            nop
+        }
+
+        .try {
+            nop
+            my_target: nop
+            nop
+        } finally {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // pass
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInNestedTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            
+            .try {
+                leave my_target
+            } finally {
+                nop
+            }
+            nop
+            my_target: nop
+            nop
+        } finally {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInEnclosingTry() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            leave my_target
+            .try {
+                nop
+                my_target: nop
+                nop
+            } finally {
+                nop
+            }
+        } finally {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    // pass
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInAssociatedCatchHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            my_target: nop
+            nop
+        } catch [mscorlib]System.Object {
+            leave my_target
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInAssociatedFilter() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            my_target: nop
+            nop
+        } filter {
+            leave my_target
+            ldc.i4.1
+            endfilter
+        } {
+            nop
+        }
+
+        method_end: ret
+    }
+
+    //pass
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInAssociatedFilterHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            my_target: nop
+            nop
+        } filter {
+            ldc.i4.1
+            endfilter
+        } {
+            leave my_target
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInAssociatedFinallyHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            my_target: nop
+            nop
+        } finally {
+            leave my_target
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInAssociatedFaultHandler() cil managed
+    {
+        .maxstack 8
+
+        .try {
+            nop
+            my_target: nop
+            nop
+        } fault {
+            leave my_target
+        }
+
+        method_end: ret
+    }
+
+    .method private hidebysig static void TargetIsNotFirstInstrInTry_SourceInUnprotectedCode() cil managed
+    {
+        .maxstack 8
+
+        nop
+        leave my_target
+        nop
+        .try {
+            nop
+            my_target: nop 
+            nop
+        } finally {
+            nop
+        }
+
+        method_end: ret
+    }
+}

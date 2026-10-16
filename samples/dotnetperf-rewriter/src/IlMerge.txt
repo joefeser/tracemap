@@ -1,0 +1,4 @@
+this did not work, it renames the module and truely does merge
+C:\Program Files (x86)\Microsoft\ILMerge>ILMerge.exe /out:C:\dev\NetPerf\NetPerf.Tests.Integration\TestAssemblies\1\MultiModule.dll C:\dev\NetPerf\NetPerf.Tests.Integration\TestAssemblies\1\MergeAssemblyOne.dll C:\dev\NetPerf\NetPerf.Tests.Integration\TestAssemblies\1\MergeAssemblyTwo.dll
+
+http://msdn.microsoft.com/en-us/library/Aa720306

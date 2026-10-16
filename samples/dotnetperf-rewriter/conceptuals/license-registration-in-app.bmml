@@ -1,0 +1,129 @@
+<mockup version="1.0" skin="sketch" measuredW="1218" measuredH="549" mockupW="1104" mockupH="495">
+  <controls>
+    <control controlID="5" controlTypeID="com.balsamiq.mockups::StickyNote" x="114" y="54" w="218" h="153" measuredW="109" measuredH="123" zOrder="1" locked="false" isInGroup="-1">
+      <controlProperties>
+        <text>the%20first%20screen%20a%20new%20user%20sees%20-%20the%20trial%20option%20will%20not%20be%20available%20until%20a%20later%20version</text>
+      </controlProperties>
+    </control>
+    <control controlID="9" controlTypeID="__group__" x="339" y="54" w="347" h="196" measuredW="347" measuredH="196" zOrder="0" locked="false" isInGroup="-1">
+      <groupChildrenDescriptors>
+        <control controlID="6" controlTypeID="__group__" x="0" y="0" w="347" h="196" measuredW="347" measuredH="196" zOrder="0" locked="false" isInGroup="9">
+          <groupChildrenDescriptors>
+            <control controlID="0" controlTypeID="com.balsamiq.mockups::TitleWindow" x="0" y="0" w="347" h="196" measuredW="450" measuredH="400" zOrder="0" locked="false" isInGroup="6">
+              <controlProperties>
+                <close>true</close>
+                <text>Dot%20Net%20Perf%20-%20new%20user%20screen</text>
+              </controlProperties>
+            </control>
+            <control controlID="1" controlTypeID="com.balsamiq.mockups::Label" x="34" y="41" w="-1" h="-1" measuredW="241" measuredH="25" zOrder="1" locked="false" isInGroup="6">
+              <controlProperties>
+                <text>Dot%20Net%20Perf%20requires%20a%20valid%20license</text>
+              </controlProperties>
+            </control>
+            <control controlID="2" controlTypeID="com.balsamiq.mockups::Link" x="64" y="77" w="-1" h="-1" measuredW="135" measuredH="25" zOrder="2" locked="false" isInGroup="6">
+              <controlProperties>
+                <text>Use%20the%20free%20version</text>
+              </controlProperties>
+            </control>
+            <control controlID="3" controlTypeID="com.balsamiq.mockups::Link" x="64" y="102" w="-1" h="-1" measuredW="135" measuredH="25" zOrder="3" locked="false" isInGroup="6">
+              <controlProperties>
+                <text>Start%20a%2030%20day%20trial</text>
+              </controlProperties>
+            </control>
+            <control controlID="4" controlTypeID="com.balsamiq.mockups::Link" x="64" y="127" w="-1" h="-1" measuredW="152" measuredH="25" zOrder="4" locked="false" isInGroup="6">
+              <controlProperties>
+                <text>Browse%20for%20your%20license</text>
+              </controlProperties>
+            </control>
+          </groupChildrenDescriptors>
+        </control>
+      </groupChildrenDescriptors>
+    </control>
+    <control controlID="26" controlTypeID="__group__" x="306" y="288" w="380" h="261" measuredW="380" measuredH="261" zOrder="2" locked="false" isInGroup="-1">
+      <groupChildrenDescriptors>
+        <control controlID="0" controlTypeID="com.balsamiq.mockups::TitleWindow" x="0" y="0" w="380" h="261" measuredW="450" measuredH="400" zOrder="0" locked="false" isInGroup="26">
+          <controlProperties>
+            <close>true</close>
+            <dragger>false</dragger>
+            <text>Dot%20Net%20Perf%20-%20start%20a%20trial</text>
+          </controlProperties>
+        </control>
+        <control controlID="1" controlTypeID="com.balsamiq.mockups::TextInput" x="104" y="58" w="232" h="-1" measuredW="79" measuredH="29" zOrder="1" locked="false" isInGroup="26">
+          <controlProperties>
+            <text/>
+          </controlProperties>
+        </control>
+        <control controlID="2" controlTypeID="com.balsamiq.mockups::TextInput" x="104" y="126" w="232" h="-1" measuredW="79" measuredH="29" zOrder="2" locked="false" isInGroup="26">
+          <controlProperties>
+            <text/>
+          </controlProperties>
+        </control>
+        <control controlID="3" controlTypeID="com.balsamiq.mockups::TextInput" x="104" y="91" w="232" h="-1" measuredW="79" measuredH="29" zOrder="3" locked="false" isInGroup="26">
+          <controlProperties>
+            <text/>
+          </controlProperties>
+        </control>
+        <control controlID="4" controlTypeID="com.balsamiq.mockups::Label" x="22" y="61" w="-1" h="-1" measuredW="67" measuredH="25" zOrder="4" locked="false" isInGroup="26">
+          <controlProperties>
+            <text>Full%20Name</text>
+          </controlProperties>
+        </control>
+        <control controlID="5" controlTypeID="com.balsamiq.mockups::Label" x="52" y="92" w="-1" h="-1" measuredW="37" measuredH="25" zOrder="5" locked="false" isInGroup="26">
+          <controlProperties>
+            <text>Email</text>
+          </controlProperties>
+        </control>
+        <control controlID="6" controlTypeID="com.balsamiq.mockups::Label" x="33" y="127" w="56" h="25" measuredW="56" measuredH="25" zOrder="6" locked="false" isInGroup="26">
+          <controlProperties>
+            <text>Company</text>
+          </controlProperties>
+        </control>
+        <control controlID="7" controlTypeID="com.balsamiq.mockups::Button" x="22" y="175" w="-1" h="-1" measuredW="95" measuredH="28" zOrder="7" locked="false" isInGroup="26">
+          <controlProperties>
+            <text>Start%20Trial</text>
+          </controlProperties>
+        </control>
+      </groupChildrenDescriptors>
+    </control>
+    <control controlID="38" controlTypeID="__group__" x="768" y="86" w="450" h="362" measuredW="450" measuredH="362" zOrder="3" locked="false" isInGroup="-1">
+      <groupChildrenDescriptors>
+        <control controlID="0" controlTypeID="com.balsamiq.mockups::TitleWindow" x="0" y="0" w="450" h="362" measuredW="450" measuredH="400" zOrder="0" locked="false" isInGroup="38">
+          <controlProperties>
+            <close>true</close>
+            <text>Dot%20Net%20Perf%20-%20browse%20for%20your%20license</text>
+          </controlProperties>
+        </control>
+        <control controlID="1" controlTypeID="com.balsamiq.mockups::Button" x="376" y="65" w="-1" h="-1" measuredW="52" measuredH="28" zOrder="1" locked="false" isInGroup="38">
+          <controlProperties>
+            <text>.%20.%20.</text>
+          </controlProperties>
+        </control>
+        <control controlID="2" controlTypeID="com.balsamiq.mockups::Button" x="15" y="291" w="-1" h="-1" measuredW="124" measuredH="28" zOrder="2" locked="false" isInGroup="38">
+          <controlProperties>
+            <text>register%20license</text>
+          </controlProperties>
+        </control>
+        <control controlID="3" controlTypeID="com.balsamiq.mockups::TextInput" x="35" y="65" w="335" h="-1" measuredW="79" measuredH="29" zOrder="3" locked="false" isInGroup="38">
+          <controlProperties>
+            <text/>
+          </controlProperties>
+        </control>
+        <control controlID="4" controlTypeID="com.balsamiq.mockups::RadioButton" x="15" y="33" w="-1" h="-1" measuredW="149" measuredH="22" zOrder="4" locked="false" isInGroup="38">
+          <controlProperties>
+            <text>Select%20a%20license%20file</text>
+          </controlProperties>
+        </control>
+        <control controlID="5" controlTypeID="com.balsamiq.mockups::RadioButton" x="15" y="114" w="-1" h="-1" measuredW="143" measuredH="22" zOrder="5" locked="false" isInGroup="38">
+          <controlProperties>
+            <text>Enter%20a%20license%20key</text>
+          </controlProperties>
+        </control>
+        <control controlID="6" controlTypeID="com.balsamiq.mockups::TextArea" x="35" y="136" w="335" h="140" measuredW="200" measuredH="140" zOrder="6" locked="false" isInGroup="38">
+          <controlProperties>
+            <text/>
+          </controlProperties>
+        </control>
+      </groupChildrenDescriptors>
+    </control>
+  </controls>
+</mockup>

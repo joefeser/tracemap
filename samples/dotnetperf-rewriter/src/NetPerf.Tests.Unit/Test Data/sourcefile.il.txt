@@ -1,0 +1,45 @@
+﻿
+//  Microsoft (R) .NET Framework IL Disassembler.  Version 4.0.30319.1
+//  Copyright (c) Microsoft Corporation.  All rights reserved.
+
+// Metadata version: v2.0.50727
+.assembly extern mscorlib
+{
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89 )                         // .z\V.4..
+  .ver 2:0:0:0
+}
+.assembly SourceFiles
+{
+  .hash algorithm 0x00008004
+  .ver 1:0:0:0
+}
+.module SourceFiles.exe
+// MVID: {A3453F56-29E1-42B9-9669-9E89FE60EAFA}
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+// Image base: 0x00340000
+
+
+// =============== CLASS MEMBERS DECLARATION ===================
+
+.class private auto ansi beforefieldinit SourceFiles.Program extends [mscorlib]System.Object
+{
+    .method private hidebysig static void Main(int32 recurseDepth, string message) cil managed
+    {
+        ldarg.0
+        ldc.i4.1
+        blt nop_return
+        ldarg.1
+        call void [mscorlib]System.Console::WriteLine(string)
+        ldarg.0
+        ldc.i4.1
+        sub
+        ldarg.1
+        call instance void SourceFiles.Program::Main(int32, string)
+        nop_return: nop
+        ret
+    }
+}

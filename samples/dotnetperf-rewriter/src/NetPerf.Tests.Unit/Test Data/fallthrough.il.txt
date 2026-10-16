@@ -1,0 +1,119 @@
+﻿.assembly extern mscorlib 
+{
+    .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+    .ver 2:0:0:0
+}
+.assembly fallthrough
+{
+    .hash algorithm 0x00008004
+    .ver 1:0:0:0
+}
+
+.module fallthrough.exe
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+
+.class private auto ansi beforefieldinit fallthrough.main
+    extends [mscorlib]System.Object
+{
+
+    .method private hidebysig static void Main(string[] args) cil managed
+    {
+        .entrypoint
+        .maxstack 8
+
+        ret
+    }
+
+    .method public hidebysig void EmptyMethod() cil managed
+    {
+        .maxstack 8
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        nop
+        ret
+    }
+
+    .method public hidebysig void ValidMethod() cil managed
+    {
+        .maxstack 8
+
+        nop
+        .try {
+            nop
+            nop
+            leave after_1
+        } filter {
+            nop
+            nop
+            endfilter
+        } {
+            nop
+            nop
+            leave after_1
+        }
+        after_1: nop
+        .try {
+            nop
+            nop
+            leave after_2
+        } finally {
+            nop
+            nop
+            endfinally
+        }
+        after_2: nop
+        .try {
+            nop
+            nop
+            leave after_3
+        } fault {
+            nop
+            nop
+            endfault
+        }
+        after_3: nop
+        .try {
+            nop
+            nop
+            leave end_method
+        } catch [mscorlib]System.Object {
+            nop
+            nop
+            leave end_method
+        }
+        end_method:nop
+        ret
+    }
+
+}

@@ -1,0 +1,16 @@
+﻿<Window
+	x:Class="MetadataDashboard.NetperfUI.Areas.UISettings.Views.StartupShell"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:cal="http://www.caliburnproject.org"
+	xmlns:local="clr-namespace:MetadataDashboard.NetperfUI.Areas.Views"
+	WindowStartupLocation="CenterScreen"
+	ResizeMode="NoResize"
+	WindowStyle="SingleBorderWindow"
+	Background="LightGray"
+	Width="750"
+	Height="500">
+
+	<local:Wizard />
+
+</Window>

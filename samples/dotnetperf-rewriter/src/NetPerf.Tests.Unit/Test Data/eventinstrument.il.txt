@@ -1,0 +1,61 @@
+﻿// Metadata version: v2.0.50727
+.assembly extern mscorlib
+{
+  .publickeytoken = (B7 7A 5C 56 19 34 E0 89 )                         // .z\V.4..
+  .ver 2:0:0:0
+}
+.assembly EventTest
+{
+  .hash algorithm 0x00008004
+  .ver 1:0:0:0
+}
+.module EventTest.exe
+// MVID: {F0DB5ED5-B283-4FA9-967E-2F34302E0AC6}
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+// Image base: 0x002B0000
+
+
+// =============== CLASS MEMBERS DECLARATION ===================
+
+.class public auto ansi beforefieldinit EventTest.Program extends [mscorlib]System.Object
+{
+    .event [mscorlib]System.EventHandler EventWithMethods
+    {
+        .addon instance int32 EventTest.Program::add_EventWithMethods(class [mscorlib]System.EventHandler)
+        .removeon instance void EventTest.Program::remove_EventWithMethods(class [mscorlib]System.EventHandler)
+        .other instance void EventTest.Program::other_EventWithMethods1()
+        .other instance void EventTest.Program::other_EventWithMethods2()
+    }
+
+    .method public hidebysig specialname instance int32 
+        add_EventWithMethods(class [mscorlib]System.EventHandler 'value') cil managed
+    {
+        .maxstack 8
+        ret
+    }
+
+    .method public hidebysig specialname instance void 
+        remove_EventWithMethods(class [mscorlib]System.EventHandler 'value') cil managed
+    {
+        .maxstack 8
+        ret
+    }
+
+    .method public hidebysig specialname instance void 
+        other_EventWithMethods1() cil managed
+    {
+        .maxstack 8
+        ret
+    }
+
+    .method public hidebysig specialname instance void 
+        other_EventWithMethods2() cil managed
+    {
+        .maxstack 8
+        ret
+    }
+}

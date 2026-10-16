@@ -1,0 +1,18 @@
+How to add new projects to the NetPerf solution.
+
+1) All project names must begin with "NetPerf". Pick a suitable sub-name.
+
+2) The default project output directories are "bin\Debug" and "bin\Release". These should be changed to
+"..\bin\Debug" and "..\bin\Release".
+
+3) The project must be strong-name signed. Go to the "Signing" tab in the project's properties and check
+"Sign the assembly". Make sure to add a NEW keyfile. DO NOT reuse an existing keyfile.
+
+Keyfiles should be named the same as the project name, with the '.' (period) replaced by '_' (underscore)
+and with "Key" appended to the name. For example, the "NetPerf.Common" project should have a keyfile named
+"NetPerf_CommonKey"
+
+4) Add a file link (do NOT copy the file) to the "CommonAssemblyInfo.cs" file in the "NetPerf" project, and
+remove any conflicting attributes in the "AssemblyInfo.cs" file.
+
+5) Finally, compile the project and check in your changes.

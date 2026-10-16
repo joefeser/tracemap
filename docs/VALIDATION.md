@@ -4856,3 +4856,29 @@ net20/net35 assemblies carry no TargetFrameworkAttribute and resolve
 clr-2.x from their mscorlib 2.0.0.0 reference while net40+ resolve the
 attribute basis. Runtime-floor properties ride the existing
 ManagedAssemblyDeclared fact; no new fact type or schema change.
+
+## dotnetperf oracle import (#856 stage 1)
+
+`samples/dotnetperf-rewriter/` is a vendor import at pinned SHA `db8c3359`
+minus the documented exclusions (see its `PROVENANCE.md` for origin, authors,
+superseded EULA, exclusions, and the co-author's written Apache-2.0 release
+authorization). Import-time verification: no `.snk`/`.pfx` files and no secret
+patterns (license strings, invoice-URL passwords, storage-account keys —
+`Documentation/azure.txt` caught by GitHub push protection — or the
+PostSharp license key in `src/PostSharp.Custom.targets`, caught by review)
+survive in the committed tree. Committed corpus size (self-verifying):
+`git ls-tree -r --name-only HEAD -- samples/dotnetperf-rewriter | wc -l` = 408
+= 405 vendored + `PROVENANCE.md` + `CORPUS-SHA256.txt` + `verify_corpus.py`.
+The manifest pins exactly the vendored bytes (metadata sits outside the pin);
+`python3 samples/dotnetperf-rewriter/verify_corpus.py` verifies from committed
+git objects (line-ending-proof) or `--worktree` from tracked files. Excluded as outside the co-author authorization: the
+third-party ECMA-335.pdf, the `src/.nuget/` bootstrap binary, and the
+FED-derived `Reflector.cs` (a header-attribution sweep found no other
+foreign-origin source); the Errata recordings are owner-confirmed
+first-party; in-file author notices are retained per Apache-2.0 §4; 17 junk-class files at the pin —
+SourceSafe bindings and test `.pdb`s — are excluded by this repository's
+ignore rules, as documented in the provenance). The private git
+history stays in the private staging repo — a history scan recorded on the
+issue found keys and license material that make history unpublishable. Wiring
+the instrumenter/validator/goldens into `IlRewriteEvidenceExtractor` coverage
+is the follow-up stage on the issue.

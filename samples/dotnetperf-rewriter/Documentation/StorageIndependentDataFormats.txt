@@ -1,0 +1,129 @@
+-- Definitions (mapping file)
++ assemblies
+    + assembly
+        id
+        identity
+        + modules
+            id (greater than zero)
+            name
+            + source files
+                + source file
+                    id (greater than zero)
+                    uri
+            + types
+                + generic type definition
+                    id (greater than zero)
+                    signature
+                    + methods
+                        (same as for the 'type' data format)
+                    + events
+                        (same as for the 'type' data format)
+                    + properties
+                        (same as for the 'type' data format)
+                    + open generic type params
+                        open generic type param (e.g. 'T', 'K', 'TInput', 'TResult')
+                    + instantiated generic types
+                        + instantiated generic type
+                            + closed generic type params
+                                closed generic type param (e.g. 'System.String', 'System.Int32')
+                + type
+                    id (greater than zero)
+                    signature
+                    + methods
+                        + generic method definition
+                            id (greater than zero)
+                            signature
+                            + internal points
+                                id (zero or greater)
+                                IL offset
+                                previous IP id
+                                type (flag mask)
+                            + open generic type params
+                                open generic type param (e.g. 'T', 'K', 'TInput', 'TResult')
+                            + instantiated methods
+                                + instantiated method
+                                    + closed generic type params
+                                        closed generic type param (e.g. 'System.String', 'System.Int32')
+                        + method
+                            id (greater than zero)
+                            signature
+                            + internal points
+                                + internal point
+                                    id (zero or greater)
+                                    IL offset
+                                    previous IP id
+                                    type (flag mask)
+                    + events
+                        + event
+                            id (greater than zero)
+                            add (methodID)
+                            remove (methodID)
+                            fire (methodID)
+                            others (methodID;methodID;...)
+                            + customAttributes
+                                customAtribute
+                    + properties
+                        + property
+                            id (greater than zero)
+                            get (methodID)
+                            set (methodID)
+                            others (methodID;methodID;...)
+                            + customAttributes
+                                customAtribute
+                           
+
+
+
+-- execution messages
++ messages
+    + new process
+        process id
+        timestamp
+        ticks per millisecond
+        machine name
+    + new thread
+        process id
+        thread name
+        timestamp
+    + new assembly
+        process id
+        identity
+        timestamp
+    + method entered
+        process id
+        thread id
+        method id
+        timestamp
+        + method parameters (optional)
+    + method exited
+        process id
+        thread id
+        method id
+        timestamp
+
+-- final storage and query format
+
++ executions
+    + execution
+        + assemblies
+            + assembly
+                + modules
+                    + module
+                        + source files
+                            + source file
+                        + types
+                            + type (TODO: how to handle generic type instances?)
+                                + methods
+                                    + method
+                                        total inclusive time
+                                        total exclusive time
+                                        + instantiations
+                                            + single instantiation
+                                                id (greater than zero)
+                                                enter timestamp
+                                                exit timestamp
+                                                + parameter values (optional)
+                                                + single method call ids (of instantiations called by this method)
+                                                + executed point Ids (array of int32, bitmasked w/ index value)
+                                                inclusive time (calculated field)
+                                                exclusive time

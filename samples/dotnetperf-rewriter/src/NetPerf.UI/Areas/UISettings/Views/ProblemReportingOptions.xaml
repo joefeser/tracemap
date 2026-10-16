@@ -1,0 +1,57 @@
+﻿<infra:NPUserControl
+	x:Class="MetadataDashboard.NetperfUI.Areas.UISettings.Views.ProblemReportingOptions"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:infra="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure"
+	xmlns:cal="http://www.caliburnproject.org">
+	<AdornerDecorator>
+		<StackPanel>
+			<TextBlock
+				TextWrapping="Wrap">
+			Although we do our best to remove sensitive information, some may still remain.
+			We treat everything in an error report as highly confidential.
+			</TextBlock>
+
+			<GroupBox
+				Header="When an unexpected problem occurs:"
+				Margin="0,10,0,0">
+				<StackPanel>
+					<RadioButton
+						IsChecked="{Binding ContactOption, ConverterParameter='Always', Converter={StaticResource valEqParam}}">
+						Automatically send error reports back to Netperf (recommended)
+					</RadioButton>
+
+					<RadioButton
+						IsChecked="{Binding ContactOption, ConverterParameter='Ask', Converter={StaticResource valEqParam}}">
+						Notify me every time and let me review each error report
+					</RadioButton>
+
+					<RadioButton
+						IsChecked="{Binding ContactOption, ConverterParameter='Never', Converter={StaticResource valEqParam}}">
+						Don't ask me and never send error reports (not recommended)
+					</RadioButton>
+
+				</StackPanel>
+			</GroupBox>
+
+			<CheckBox
+				Name="CanContactForInfo"
+				Margin="0,10,0,0">
+				Allow Netperf to contact me for further information (recommended)
+			</CheckBox>
+			<StackPanel
+				HorizontalAlignment="Stretch">
+				<Label>
+					My email address:
+				</Label>
+				<TextBox
+					Grid.Column="1"
+					Name="UserEmail"
+					HorizontalAlignment="Stretch"
+					IsEnabled="{Binding CanContactForInfo}" />
+			</StackPanel>
+		</StackPanel>
+	</AdornerDecorator>
+</infra:NPUserControl>

@@ -1,0 +1,246 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>8.0.30703</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{F9E2B03A-C51D-4BFC-9278-6E61677115E2}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>MetadataDashboard.NetPerf.Common</RootNamespace>
+    <AssemblyName>NetPerf.Common</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <SccProjectName>
+    </SccProjectName>
+    <SccLocalPath>
+    </SccLocalPath>
+    <SccAuxPath>
+    </SccAuxPath>
+    <SccProvider>
+    </SccProvider>
+    <TargetFrameworkProfile />
+    <CodeContractsAssemblyMode>1</CodeContractsAssemblyMode>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <CodeContractsEnableRuntimeChecking>True</CodeContractsEnableRuntimeChecking>
+    <CodeContractsRuntimeOnlyPublicSurface>False</CodeContractsRuntimeOnlyPublicSurface>
+    <CodeContractsRuntimeThrowOnFailure>True</CodeContractsRuntimeThrowOnFailure>
+    <CodeContractsRuntimeCallSiteRequires>False</CodeContractsRuntimeCallSiteRequires>
+    <CodeContractsRunCodeAnalysis>False</CodeContractsRunCodeAnalysis>
+    <CodeContractsNonNullObligations>False</CodeContractsNonNullObligations>
+    <CodeContractsBoundsObligations>False</CodeContractsBoundsObligations>
+    <CodeContractsArithmeticObligations>False</CodeContractsArithmeticObligations>
+    <CodeContractsRedundantAssumptions>False</CodeContractsRedundantAssumptions>
+    <CodeContractsRunInBackground>True</CodeContractsRunInBackground>
+    <CodeContractsShowSquigglies>False</CodeContractsShowSquigglies>
+    <CodeContractsUseBaseLine>False</CodeContractsUseBaseLine>
+    <CodeContractsEmitXMLDocs>True</CodeContractsEmitXMLDocs>
+    <CodeContractsCustomRewriterAssembly />
+    <CodeContractsCustomRewriterClass />
+    <CodeContractsLibPaths />
+    <CodeContractsPlatformPath />
+    <CodeContractsExtraAnalysisOptions />
+    <CodeContractsBaseLineFile />
+    <CodeContractsRuntimeCheckingLevel>Full</CodeContractsRuntimeCheckingLevel>
+    <CodeContractsReferenceAssembly>Build</CodeContractsReferenceAssembly>
+    <CodeContractsContainerAnalysis>False</CodeContractsContainerAnalysis>
+    <CodeContractsExtraRewriteOptions />
+    <CodeContractsRuntimeSkipQuantifiers>False</CodeContractsRuntimeSkipQuantifiers>
+    <CodeContractsEnumObligations>False</CodeContractsEnumObligations>
+    <CodeContractsMissingPublicRequiresAsWarnings>True</CodeContractsMissingPublicRequiresAsWarnings>
+    <CodeContractsInferRequires>True</CodeContractsInferRequires>
+    <CodeContractsInferEnsures>False</CodeContractsInferEnsures>
+    <CodeContractsInferObjectInvariants>False</CodeContractsInferObjectInvariants>
+    <CodeContractsSuggestAssumptions>False</CodeContractsSuggestAssumptions>
+    <CodeContractsSuggestRequires>True</CodeContractsSuggestRequires>
+    <CodeContractsSuggestObjectInvariants>False</CodeContractsSuggestObjectInvariants>
+    <CodeContractsSQLServerOption />
+    <CodeContractsCacheAnalysisResults>True</CodeContractsCacheAnalysisResults>
+    <CodeContractsFailBuildOnWarnings>False</CodeContractsFailBuildOnWarnings>
+    <CodeContractsAnalysisWarningLevel>0</CodeContractsAnalysisWarningLevel>
+    <CodeAnalysisRuleSet>MinimumRecommendedRules.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>..\bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <CodeContractsEnableRuntimeChecking>True</CodeContractsEnableRuntimeChecking>
+    <CodeContractsRuntimeOnlyPublicSurface>False</CodeContractsRuntimeOnlyPublicSurface>
+    <CodeContractsRuntimeThrowOnFailure>True</CodeContractsRuntimeThrowOnFailure>
+    <CodeContractsRuntimeCallSiteRequires>False</CodeContractsRuntimeCallSiteRequires>
+    <CodeContractsRunCodeAnalysis>False</CodeContractsRunCodeAnalysis>
+    <CodeContractsNonNullObligations>False</CodeContractsNonNullObligations>
+    <CodeContractsBoundsObligations>False</CodeContractsBoundsObligations>
+    <CodeContractsArithmeticObligations>False</CodeContractsArithmeticObligations>
+    <CodeContractsContainerAnalysis>False</CodeContractsContainerAnalysis>
+    <CodeContractsRedundantAssumptions>False</CodeContractsRedundantAssumptions>
+    <CodeContractsRunInBackground>True</CodeContractsRunInBackground>
+    <CodeContractsShowSquigglies>False</CodeContractsShowSquigglies>
+    <CodeContractsUseBaseLine>False</CodeContractsUseBaseLine>
+    <CodeContractsEmitXMLDocs>True</CodeContractsEmitXMLDocs>
+    <CodeContractsCustomRewriterAssembly />
+    <CodeContractsCustomRewriterClass />
+    <CodeContractsLibPaths />
+    <CodeContractsExtraRewriteOptions />
+    <CodeContractsExtraAnalysisOptions />
+    <CodeContractsBaseLineFile />
+    <CodeContractsCacheAnalysisResults>False</CodeContractsCacheAnalysisResults>
+    <CodeContractsRuntimeCheckingLevel>Full</CodeContractsRuntimeCheckingLevel>
+    <CodeContractsReferenceAssembly>Build</CodeContractsReferenceAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyOriginatorKeyFile>..\NetPerfKey.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="FluentValidation, Version=2.0.0.0, Culture=neutral, PublicKeyToken=a82054b837897c66, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Libraries\FluentValidation.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Contracts, Version=1.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\Libraries\Microsoft.Contracts.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Configuration\AppConfig.cs" />
+    <Compile Include="Configuration\AppConfigParser.cs" />
+    <Compile Include="Configuration\ConfigFileVersionTooRecent.cs" />
+    <Compile Include="Configuration\UpdateOption.cs" />
+    <Compile Include="Configuration\IAppConfig.cs" />
+    <Compile Include="Configuration\IConfig.cs" />
+    <Compile Include="Configuration\IInstrumentationSettings.cs" />
+    <Compile Include="Configuration\IProblemReportingOptions.cs" />
+    <Compile Include="Configuration\ProblemReportingOptions.cs" />
+    <Compile Include="Configuration\ReportOnError.cs" />
+    <Compile Include="Instrumentation\HashAlgorithms.cs" />
+    <Compile Include="Instrumentation\IRecord.cs" />
+    <Compile Include="Configuration\InstrumentationSettings.cs" />
+    <Compile Include="Configuration\InstrumentationSettingsParser.cs" />
+    <Compile Include="Configuration\IReportSetting.cs" />
+    <Compile Include="Configuration\IScreenPosition.cs" />
+    <Compile Include="Configuration\NetperfReportType.cs" />
+    <Compile Include="Configuration\PropertyBag.cs" />
+    <Compile Include="Configuration\ReportSetting.cs" />
+    <Compile Include="Configuration\ScreenPosition.cs" />
+    <Compile Include="ErrorTuple.cs" />
+    <Compile Include="ExceptionHelper.cs" />
+    <Compile Include="Extensions\AssemblyExtensions.cs" />
+    <Compile Include="Extensions\DictionaryExtensions.cs" />
+    <Compile Include="Extensions\MiscExtensions.cs" />
+    <Compile Include="Extensions\StringExtensions.cs" />
+    <Compile Include="Extensions\TypeExtensions.cs" />
+    <Compile Include="FilePathList.cs" />
+    <Compile Include="Instrumentation\AChildRecord.cs" />
+    <Compile Include="Instrumentation\AChildRecordWithCustomAttributes.cs" />
+    <Compile Include="Instrumentation\AChildRecordWithGenericArguments.cs" />
+    <Compile Include="Instrumentation\AMethodContainer.cs" />
+    <Compile Include="Instrumentation\ARecord.cs" />
+    <Compile Include="Instrumentation\AssemblyRecord.cs" />
+    <Compile Include="DirectoryPath.cs" />
+    <Compile Include="Extensions\LinqExtensions.cs" />
+    <Compile Include="Extensions\XmlExtensions.cs" />
+    <Compile Include="FilePath.cs" />
+    <Compile Include="ICloneable.cs" />
+    <Compile Include="InstrumentationPlanMapper.cs" />
+    <Compile Include="Instrumentation\EventRecord.cs" />
+    <Compile Include="Instrumentation\IAssemblyRecord.cs" />
+    <Compile Include="Instrumentation\IEventRecord.cs" />
+    <Compile Include="Instrumentation\IInstrumentFactory.cs" />
+    <Compile Include="Instrumentation\IMessagingController.cs" />
+    <Compile Include="Instrumentation\IInstrumentationData.cs" />
+    <Compile Include="Instrumentation\IMethodRecord.cs" />
+    <Compile Include="Instrumentation\IModuleRecord.cs" />
+    <Compile Include="Instrumentation\InstrumentFactory.cs" />
+    <Compile Include="Instrumentation\IPointRecord.cs" />
+    <Compile Include="Instrumentation\IPropertyRecord.cs" />
+    <Compile Include="Instrumentation\ITypeRecord.cs" />
+    <Compile Include="Instrumentation\MessagingController.cs" />
+    <Compile Include="Instrumentation\InstrumentationData.cs" />
+    <Compile Include="Instrumentation\InstrumentationDataSerializer.cs" />
+    <Compile Include="Instrumentation\ISourceFileRecord.cs" />
+    <Compile Include="Instrumentation\MethodRecord.cs" />
+    <Compile Include="Instrumentation\ModuleRecord.cs" />
+    <Compile Include="Instrumentation\PointRecord.cs" />
+    <Compile Include="Instrumentation\PropertyRecord.cs" />
+    <Compile Include="Instrumentation\TypeRecord.cs" />
+    <Compile Include="Instrumentation\UniqueIdGenerator.cs" />
+    <Compile Include="LoggingHelper.cs" />
+    <Compile Include="Properties\CommonAssemblyInfo.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Instrumentation\SourceFileRecord.cs" />
+    <Compile Include="SystemStubs\ConsoleStub.cs" />
+    <Compile Include="SystemStubs\DirectoryStub.cs" />
+    <Compile Include="SystemStubs\EnvironmentStub.cs" />
+    <Compile Include="SystemStubs\FileStub.cs" />
+    <Compile Include="SystemStubs\IConsoleStub.cs" />
+    <Compile Include="SystemStubs\IDirectoryStub.cs" />
+    <Compile Include="SystemStubs\IEnvironmentStub.cs" />
+    <Compile Include="SystemStubs\IFileStub.cs" />
+    <Compile Include="SystemStubs\IPathStub.cs" />
+    <Compile Include="SystemStubs\MockForClass.cs" />
+    <Compile Include="SystemStubs\PathStub.cs" />
+    <Compile Include="Utility.cs" />
+    <Compile Include="Validation\DirectoryExistsValidator.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Validation\DirectoryPathValidator.cs" />
+    <Compile Include="Validation\ValidationExtensions.cs" />
+    <Compile Include="Validation\FileExistsValidator.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Validation\FilePathValidator.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Validation\IReportSettingValidator.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Validation\ISelfValidate.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Validation\SelfValidate.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Wildcard.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\NetPerfKey.snk">
+      <Link>NetPerfKey.snk</Link>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Netperf.Core\Netperf.Core.csproj">
+      <Project>{424472DD-015E-4635-B733-4647D1C3585C}</Project>
+      <Name>Netperf.Core</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>
