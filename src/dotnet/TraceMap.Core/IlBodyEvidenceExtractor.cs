@@ -216,6 +216,33 @@ internal static class IlBodyEvidenceExtractor
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal);
 
+    internal const string CensusLimitation =
+        "Observed helper-call evidence: the IL references the CompilerServices late-binding helpers; it does not prove the compiler generated the call or that the language compiled with late-binding semantics (direct helper calls and rewrite-inserted calls are indistinguishable), and it never establishes the assembly Option Strict setting. Observed IL call sites in admitted/partial bodies only; density is the late-bound share of observed calls, not of all code. "
+        + "Late-bound means the call target encodes Microsoft.VisualBasic.CompilerServices LateBinding/NewLateBinding helper members; "
+        + "other dynamic mechanisms (Reflection, DLR, delegates) are not counted. No current reducer or report consumes this census; high density is documented consumer guidance for downweighting source-lane call-graph claims, not implemented behavior. "
+        + "for the affected members; it proves compilation-time late binding, not runtime behavior.";
+
+    // Exact declaring-type match: the encoded target identity frames the declaring
+    // type as type(namespace:<n>:<ns>|names:<m>:<name>) immediately followed by the
+    // |member: component; that anchor makes a signature type mention (which can
+    // never legally precede the member component) unmatchable, and only
+    // LateBinding/NewLateBinding in Microsoft.VisualBasic.CompilerServices counts.
+    // Substring matching would false-positive on same-namespace helper-shaped names
+    // (MyLateBindingHelper) and on signature-only mentions.
+    private static readonly System.Text.RegularExpressions.Regex LateBindingHelperType = new(
+        @"type\(namespace:[0-9]+:Microsoft\.VisualBasic\.CompilerServices\|names:[0-9]+:(?:New)?LateBinding\)\|member:",
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.Compiled,
+        TimeSpan.FromMilliseconds(500));
+
+    internal static bool IsLateBoundHelperTarget(string targetIdentity) =>
+        LateBindingHelperType.IsMatch(targetIdentity);
+
+    private static string CensusBucket(int lateBound, int observed) => lateBound == 0 ? "none"
+        : observed == 0 ? "unknown"
+        : (double)lateBound / observed <= 0.10 ? "low"
+        : (double)lateBound / observed <= 0.50 ? "moderate"
+        : "high";
+
     internal static IReadOnlyList<CodeFact> MaterializeFacts(
         ScanManifest manifest,
         IlBodyEvaluation evaluation,
@@ -251,6 +278,35 @@ internal static class IlBodyEvidenceExtractor
                 facts.Add(GapFact(manifest, outcome.SafeLocator, gapKind, common));
             if (outcome.Outcome is not ("admitted" or "partial"))
                 continue;
+
+            // Per-assembly late-binding census (#854): observed IL call sites whose
+            // target is the Visual Basic late-binding helper (LateBinding/NewLateBinding
+            // in Microsoft.VisualBasic.CompilerServices) versus all observed calls. The
+            // raw namespace and type names appear verbatim inside the encoded target
+            // identity, so detection does not depend on identity length framing.
+            var observedCalls = 0;
+            var lateBoundCalls = 0;
+            foreach (var body in input.Bodies)
+            {
+                foreach (var call in body.Calls)
+                {
+                    observedCalls++;
+                    if (IsLateBoundHelperTarget(call.TargetIdentity))
+                        lateBoundCalls++;
+                }
+            }
+            facts.Add(FactFactory.Create(manifest,
+                FactTypes.ManagedLateBindingCensus, RuleIds.DotNetIlLateBindingCensus,
+                EvidenceTiers.Tier2Structural, IlEvidence(outcome.SafeLocator),
+                targetSymbol: outcome.SafeLocator, contractElement: "il-late-binding-census",
+                properties: CopyToSorted(common, new (string Key, string Value)[]
+                {
+                    ("observedIlCallCount", observedCalls.ToString(CultureInfo.InvariantCulture)),
+                    ("lateBoundCallCount", lateBoundCalls.ToString(CultureInfo.InvariantCulture)),
+                    ("lateBindingDensity", CensusBucket(lateBoundCalls, observedCalls)),
+                    ("censusScope", outcome.Outcome == "admitted" ? "admitted-bodies" : "partial-bodies"),
+                    ("limitation", CensusLimitation)
+                })));
 
             foreach (var body in input.Bodies.OrderBy(item => item.MetadataToken, StringComparer.Ordinal))
             {

@@ -4894,3 +4894,19 @@ history stays in the private staging repo — a history scan recorded on the
 issue found keys and license material that make history unpublishable. Wiring
 the instrumenter/validator/goldens into `IlRewriteEvidenceExtractor` coverage
 is the follow-up stage on the issue.
+
+## Late-binding density census (#854)
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~Late_binding_census'`
+in standard Debug configuration, followed by the full Debug suite. The lane
+pins the census's defining property — it is exactly derivable from the
+emitted ManagedIlCallObserved facts for the same assembly (lateBound = calls
+whose target identity encodes Microsoft.VisualBasic.CompilerServices
+LateBinding/NewLateBinding; observed = all call facts) — plus the
+zero-late-binding case (density none) and the deterministic bucket
+thresholds. The census is a late-bound call-site density indicator for triage ahead
+of the 2004 projectless VB corpus readback; it does NOT establish the
+assembly's Option Strict settings (those come from web.config, per-file
+Option statements, or both alongside this evidence). No current consumer
+reads the census; per-page projection over source-mapped sites is a
+follow-up consumer.
