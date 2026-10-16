@@ -47,10 +47,23 @@ remains available in the private staging repository for audit.
   third-party copyrighted standard material outside the co-author release
   authorization ("your code and mine"); freely and permanently available from
   ecma-international.org, so exclusion costs nothing
+- `src/.nuget/` — the solution NuGet bootstrap: the third-party `NuGet.exe`
+  binary, stock Microsoft `NuGet.targets` MSBuild integration, and the default
+  template `NuGet.Config` (nothing first-party; flagged independently by the
+  owner and by review)
 - `src/PostSharp.Custom.targets` — contained a plaintext PostSharp license key
   (caught by review after both the import sweep and push protection missed it;
   treat the PostSharp key as burned; the file only wired the already-excluded
   vendored PostSharp binaries)
+
+## Retained first-party material in `Documentation/Errata`
+
+The `Documentation/Errata/` recordings (`.m4a`) and their accompanying notes
+are co-author Stephen Ward's own design-thinking materials, walking through
+the CLI errata problem areas (event support, tail-call handling, property
+support) — owner-confirmed 2026-10-15 and retained under the release
+authorization. Only the third-party `Ecma-335.pdf` is excluded from that
+folder.
 
 ## Pin deviations via this repository's ignore rules
 
