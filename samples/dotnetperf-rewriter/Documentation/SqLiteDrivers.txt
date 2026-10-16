@@ -1,0 +1,5 @@
+Download this for vs.net support
+
+
+http://sqlite.phxsoftware.com/
+http://sourceforge.net/projects/sqlite-dotnet2/

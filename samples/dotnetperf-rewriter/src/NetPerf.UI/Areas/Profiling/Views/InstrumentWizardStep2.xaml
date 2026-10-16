@@ -1,0 +1,104 @@
+﻿<infra:NPUserControl
+	x:Class="MetadataDashboard.NetperfUI.Areas.Profiling.Views.InstrumentWizardStep2"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:cal="http://www.caliburnproject.org"
+	xmlns:infra="clr-namespace:MetadataDashboard.NetperfUI.Infrastructure"
+	mc:Ignorable="d"
+	d:DesignHeight="300"
+	d:DesignWidth="300">
+	<AdornerDecorator>
+		<Grid
+			Margin="10">
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition
+					Width="Auto" />
+				<ColumnDefinition
+					Width="*" />
+				<ColumnDefinition
+					Width="*" />
+				<ColumnDefinition
+					Width="Auto" />
+			</Grid.ColumnDefinitions>
+			<Grid.RowDefinitions>
+				<RowDefinition
+					Height="Auto" />
+				<RowDefinition
+					Height="Auto" />
+				<RowDefinition
+					Height="Auto" />
+				<RowDefinition
+					Height="10" />
+				<RowDefinition
+					Height="Auto" />
+				<RowDefinition
+					Height="Auto" />
+			</Grid.RowDefinitions>
+			
+			<Label
+				Grid.Row="0"
+				Grid.Column="0"
+				Grid.ColumnSpan="4">Reports</Label>
+
+			<TextBlock
+				Grid.Row="1"
+				Grid.Column="0"
+				Grid.ColumnSpan="4"
+				TextWrapping="Wrap"
+				Text="{Binding HelpForHTMLReport, Mode=OneTime}" />
+			
+			<CheckBox
+				Grid.Row="2"
+				Grid.Column="0"
+				Margin="5"
+				Content="HTML Report"
+				Name="SummaryReportIsSelected" />
+			<TextBox
+				Grid.Row="2"
+				Grid.Column="1"
+				Grid.ColumnSpan="2"
+				Name="SummaryReportPath"
+				IsEnabled="{Binding Path=SummaryReportIsSelected}"
+				VerticalAlignment="Center" />
+			<Button
+				Grid.Row="2"
+				Grid.Column="3"
+				Content=" . . . "
+				cal:Message.Attach="PickSummaryReportPath"
+				IsEnabled="{Binding Path=SummaryReportIsSelected}"
+				Margin="4,0,0,0"
+				VerticalAlignment="Center" />
+
+			<TextBlock
+				Grid.Row="4"
+				Grid.Column="0"
+				Grid.ColumnSpan="4"
+				TextWrapping="Wrap"
+				Text="{Binding HelpForXMLReport, Mode=OneTime}" />
+			
+			<CheckBox
+				Grid.Row="5"
+				Grid.Column="0"
+				Margin="5"
+				Content="XML Report"
+				Name="ExtractReportIsSelected" />
+			<TextBox
+				Grid.Row="5"
+				Grid.Column="1"
+				Grid.ColumnSpan="2"
+				Name="ExtractReportPath"
+				IsEnabled="{Binding Path=ExtractReportIsSelected}"
+				VerticalAlignment="Center" />
+			<Button
+				Grid.Row="5"
+				Grid.Column="3"
+				Content=" . . . "
+				IsEnabled="{Binding Path=ExtractReportIsSelected}"
+				cal:Message.Attach="PickExtractReportPath"
+				Margin="4,0,0,0"
+				VerticalAlignment="Center" />
+		</Grid>
+	</AdornerDecorator>
+</infra:NPUserControl>

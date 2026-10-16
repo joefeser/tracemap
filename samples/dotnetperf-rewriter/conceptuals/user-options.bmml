@@ -1,0 +1,292 @@
+<mockup version="1.0" skin="sketch" measuredW="1668" measuredH="773" mockupW="1601" mockupH="756">
+  <controls>
+    <control controlID="75" controlTypeID="__group__" x="560" y="17" w="499" h="756" measuredW="499" measuredH="756" zOrder="0" locked="false" isInGroup="-1">
+      <groupChildrenDescriptors>
+        <control controlID="0" controlTypeID="com.balsamiq.mockups::TabBar" x="0" y="0" w="499" h="756" measuredW="376" measuredH="100" zOrder="0" locked="false" isInGroup="75">
+          <controlProperties>
+            <selectedIndex>1</selectedIndex>
+            <text>Customer%20Experience%20Improvement%2C%20License</text>
+          </controlProperties>
+        </control>
+        <control controlID="1" controlTypeID="__group__" x="19" y="277" w="462" h="145" measuredW="462" measuredH="145" zOrder="1" locked="false" isInGroup="75">
+          <groupChildrenDescriptors>
+            <control controlID="0" controlTypeID="com.balsamiq.mockups::FieldSet" x="0" y="0" w="462" h="145" measuredW="200" measuredH="170" zOrder="0" locked="false" isInGroup="1">
+              <controlProperties>
+                <text>Acquire%20License</text>
+              </controlProperties>
+            </control>
+            <control controlID="1" controlTypeID="com.balsamiq.mockups::RadioButton" x="15" y="53" w="-1" h="-1" measuredW="173" measuredH="22" zOrder="1" locked="false" isInGroup="1">
+              <controlProperties>
+                <text>Community%20edition%20%28free%29</text>
+              </controlProperties>
+            </control>
+            <control controlID="2" controlTypeID="com.balsamiq.mockups::RadioButton" x="15" y="31" w="-1" h="-1" measuredW="124" measuredH="22" zOrder="2" locked="false" isInGroup="1">
+              <controlProperties>
+                <text>Low%20Cost%20edition</text>
+              </controlProperties>
+            </control>
+            <control controlID="3" controlTypeID="com.balsamiq.mockups::Button" x="15" y="96" w="71" h="28" measuredW="71" measuredH="28" zOrder="3" locked="false" isInGroup="1">
+              <controlProperties>
+                <text>Acquire</text>
+              </controlProperties>
+            </control>
+            <control controlID="4" controlTypeID="com.balsamiq.mockups::Link" x="188" y="51" w="-1" h="-1" measuredW="69" measuredH="25" zOrder="4" locked="false" isInGroup="1">
+              <controlProperties>
+                <text>Limitations</text>
+              </controlProperties>
+            </control>
+          </groupChildrenDescriptors>
+        </control>
+        <control controlID="2" controlTypeID="__group__" x="19" y="84" w="462" h="193" measuredW="462" measuredH="193" zOrder="2" locked="false" isInGroup="75">
+          <groupChildrenDescriptors>
+            <control controlID="0" controlTypeID="com.balsamiq.mockups::FieldSet" x="0" y="0" w="462" h="193" measuredW="200" measuredH="170" zOrder="0" locked="false" isInGroup="2">
+              <controlProperties>
+                <text>Current%20License</text>
+              </controlProperties>
+            </control>
+            <control controlID="1" controlTypeID="com.balsamiq.mockups::Link" x="15" y="140" w="-1" h="-1" measuredW="164" measuredH="25" zOrder="1" locked="false" isInGroup="2">
+              <controlProperties>
+                <text>Evaluate%20Low%20Cost%20edition</text>
+              </controlProperties>
+            </control>
+            <control controlID="2" controlTypeID="com.balsamiq.mockups::Label" x="15" y="62" w="-1" h="-1" measuredW="57" measuredH="25" zOrder="2" locked="false" isInGroup="2">
+              <controlProperties>
+                <text>Licensee</text>
+              </controlProperties>
+            </control>
+            <control controlID="3" controlTypeID="com.balsamiq.mockups::Label" x="15" y="29" w="-1" h="-1" measuredW="86" measuredH="25" zOrder="3" locked="false" isInGroup="2">
+              <controlProperties>
+                <text>License%20Type</text>
+              </controlProperties>
+            </control>
+            <control controlID="4" controlTypeID="com.balsamiq.mockups::Label" x="15" y="94" w="-1" h="-1" measuredW="113" measuredH="25" zOrder="4" locked="false" isInGroup="2">
+              <controlProperties>
+                <text>Number%20of%20Users</text>
+              </controlProperties>
+            </control>
+            <control controlID="5" controlTypeID="com.balsamiq.mockups::Label" x="149" y="29" w="-1" h="-1" measuredW="67" measuredH="25" zOrder="5" locked="false" isInGroup="2">
+              <controlProperties>
+                <text>Community</text>
+              </controlProperties>
+            </control>
+            <control controlID="6" controlTypeID="com.balsamiq.mockups::Label" x="149" y="61" w="-1" h="-1" measuredW="97" measuredH="25" zOrder="6" locked="false" isInGroup="2">
+              <controlProperties>
+                <text>Stephen%20Ward</text>
+              </controlProperties>
+            </control>
+            <control controlID="7" controlTypeID="com.balsamiq.mockups::Label" x="149" y="93" w="-1" h="-1" measuredW="14" measuredH="25" zOrder="7" locked="false" isInGroup="2">
+              <controlProperties>
+                <text>1</text>
+              </controlProperties>
+            </control>
+          </groupChildrenDescriptors>
+        </control>
+        <control controlID="3" controlTypeID="com.balsamiq.mockups::FieldSet" x="19" y="422" w="462" h="255" measuredW="200" measuredH="170" zOrder="3" locked="false" isInGroup="75">
+          <controlProperties>
+            <text>Enter%20License</text>
+          </controlProperties>
+        </control>
+        <control controlID="4" controlTypeID="com.balsamiq.mockups::Button" x="405" y="478" w="-1" h="-1" measuredW="52" measuredH="28" zOrder="4" locked="false" isInGroup="75">
+          <controlProperties>
+            <text>.%20.%20.</text>
+          </controlProperties>
+        </control>
+        <control controlID="5" controlTypeID="com.balsamiq.mockups::Button" x="44" y="634" w="-1" h="-1" measuredW="124" measuredH="28" zOrder="5" locked="false" isInGroup="75">
+          <controlProperties>
+            <text>register%20license</text>
+          </controlProperties>
+        </control>
+        <control controlID="6" controlTypeID="com.balsamiq.mockups::TextInput" x="64" y="478" w="335" h="-1" measuredW="79" measuredH="29" zOrder="6" locked="false" isInGroup="75">
+          <controlProperties>
+            <text/>
+          </controlProperties>
+        </control>
+        <control controlID="7" controlTypeID="com.balsamiq.mockups::RadioButton" x="44" y="446" w="-1" h="-1" measuredW="149" measuredH="22" zOrder="7" locked="false" isInGroup="75">
+          <controlProperties>
+            <text>Select%20a%20license%20file</text>
+          </controlProperties>
+        </control>
+        <control controlID="8" controlTypeID="com.balsamiq.mockups::RadioButton" x="44" y="527" w="-1" h="-1" measuredW="143" measuredH="22" zOrder="8" locked="false" isInGroup="75">
+          <controlProperties>
+            <text>Enter%20a%20license%20key</text>
+          </controlProperties>
+        </control>
+        <control controlID="9" controlTypeID="com.balsamiq.mockups::TextArea" x="64" y="549" w="335" h="70" measuredW="200" measuredH="140" zOrder="9" locked="false" isInGroup="75">
+          <controlProperties>
+            <text/>
+          </controlProperties>
+        </control>
+        <control controlID="10" controlTypeID="com.balsamiq.mockups::Label" x="19" y="37" w="456" h="47" measuredW="489" measuredH="25" zOrder="10" locked="false" isInGroup="75">
+          <controlProperties>
+            <text>congrats%21%20you%20have%20a%20commercial%20license%20installed%2C%20you%20can%20upgrade%20to%20low%20cost</text>
+          </controlProperties>
+        </control>
+        <control controlID="11" controlTypeID="com.balsamiq.mockups::CheckBox" x="20" y="719" w="-1" h="-1" measuredW="195" measuredH="22" zOrder="11" locked="false" isInGroup="75">
+          <controlProperties>
+            <text>Turn%20off%20upgrade%20messages</text>
+          </controlProperties>
+        </control>
+        <control controlID="12" controlTypeID="com.balsamiq.mockups::CheckBox" x="20" y="687" w="-1" h="-1" measuredW="257" measuredH="22" zOrder="12" locked="false" isInGroup="75">
+          <controlProperties>
+            <text>Turn%20off%20license%20expiration%20messages</text>
+          </controlProperties>
+        </control>
+      </groupChildrenDescriptors>
+    </control>
+    <control controlID="113" controlTypeID="__group__" x="67" y="18" w="466" h="641" measuredW="466" measuredH="641" zOrder="1" locked="false" isInGroup="-1">
+      <groupChildrenDescriptors>
+        <control controlID="0" controlTypeID="com.balsamiq.mockups::TitleWindow" x="0" y="0" w="466" h="641" measuredW="450" measuredH="400" zOrder="0" locked="false" isInGroup="113">
+          <controlProperties>
+            <close>true</close>
+            <text>Dot%20Net%20Perf%20-%20user%20options</text>
+          </controlProperties>
+        </control>
+        <control controlID="1" controlTypeID="__group__" x="0" y="25" w="466" h="534" measuredW="466" measuredH="534" zOrder="1" locked="false" isInGroup="113">
+          <groupChildrenDescriptors>
+            <control controlID="0" controlTypeID="com.balsamiq.mockups::TabBar" x="0" y="0" w="466" h="534" measuredW="377" measuredH="100" zOrder="0" locked="false" isInGroup="1">
+              <controlProperties>
+                <selectedIndex>0</selectedIndex>
+                <text>Customer%20Experience%20Improvement%2C%20License</text>
+              </controlProperties>
+            </control>
+            <control controlID="1" controlTypeID="com.balsamiq.mockups::Label" x="15" y="50" w="-1" h="-1" measuredW="225" measuredH="25" zOrder="1" locked="false" isInGroup="1">
+              <controlProperties>
+                <text>Help%20us%20make%20Dot%20Net%20Perf%20better%21</text>
+              </controlProperties>
+            </control>
+            <control controlID="2" controlTypeID="com.balsamiq.mockups::RadioButton" x="15" y="429" w="-1" h="-1" measuredW="327" measuredH="22" zOrder="2" locked="false" isInGroup="1">
+              <controlProperties>
+                <state>selected</state>
+                <text>The%20app%20sucks%3B%20sure%2C%20I%27d%20like%20to%20make%20it%20better.</text>
+              </controlProperties>
+            </control>
+            <control controlID="3" controlTypeID="com.balsamiq.mockups::RadioButton" x="15" y="451" w="-1" h="-1" measuredW="239" measuredH="22" zOrder="3" locked="false" isInGroup="1">
+              <controlProperties>
+                <text>No%2C%20I%20would%20not%20like%20to%20participate</text>
+              </controlProperties>
+            </control>
+            <control controlID="4" controlTypeID="__group__" x="15" y="90" w="343" h="125" measuredW="343" measuredH="125" zOrder="4" locked="false" isInGroup="1">
+              <groupChildrenDescriptors>
+                <control controlID="0" controlTypeID="com.balsamiq.mockups::FieldSet" x="0" y="0" w="343" h="125" measuredW="200" measuredH="170" zOrder="0" locked="false" isInGroup="4">
+                  <controlProperties>
+                    <text>What%20we%20will%20do</text>
+                  </controlProperties>
+                </control>
+                <control controlID="1" controlTypeID="com.balsamiq.mockups::Label" x="15" y="34" w="286" h="46" measuredW="431" measuredH="25" zOrder="1" locked="false" isInGroup="4">
+                  <controlProperties>
+                    <text>Collect%20anonymous%20info%20on%20your%20software%20and%20hardware%20configuration</text>
+                  </controlProperties>
+                </control>
+                <control controlID="2" controlTypeID="com.balsamiq.mockups::Label" x="15" y="80" w="228" h="25" measuredW="228" measuredH="25" zOrder="2" locked="false" isInGroup="4">
+                  <controlProperties>
+                    <text>Collect%20anonymous%20usage%20information</text>
+                  </controlProperties>
+                </control>
+              </groupChildrenDescriptors>
+            </control>
+            <control controlID="5" controlTypeID="__group__" x="15" y="221" w="343" h="170" measuredW="343" measuredH="170" zOrder="5" locked="false" isInGroup="1">
+              <groupChildrenDescriptors>
+                <control controlID="0" controlTypeID="com.balsamiq.mockups::FieldSet" x="0" y="0" w="343" h="170" measuredW="200" measuredH="170" zOrder="0" locked="false" isInGroup="5">
+                  <controlProperties>
+                    <text>What%20we%20WILL%20NOT%20do</text>
+                  </controlProperties>
+                </control>
+                <control controlID="1" controlTypeID="com.balsamiq.mockups::Label" x="15" y="28" w="242" h="25" measuredW="242" measuredH="25" zOrder="1" locked="false" isInGroup="5">
+                  <controlProperties>
+                    <text>Collect%20any%20non-anonymous%20information</text>
+                  </controlProperties>
+                </control>
+                <control controlID="2" controlTypeID="com.balsamiq.mockups::Label" x="15" y="53" w="158" h="25" measuredW="158" measuredH="25" zOrder="2" locked="false" isInGroup="5">
+                  <controlProperties>
+                    <text>Collect%20your%20source%20code</text>
+                  </controlProperties>
+                </control>
+                <control controlID="3" controlTypeID="com.balsamiq.mockups::Label" x="15" y="78" w="263" h="56" measuredW="431" measuredH="25" zOrder="3" locked="false" isInGroup="5">
+                  <controlProperties>
+                    <text>Haras%20you%20with%20marketing%2C%20extra%20emails%2C%20surveys%2C%20or%20in-app%20popups.</text>
+                  </controlProperties>
+                </control>
+              </groupChildrenDescriptors>
+            </control>
+            <control controlID="6" controlTypeID="com.balsamiq.mockups::Link" x="15" y="399" w="-1" h="-1" measuredW="408" measuredH="25" zOrder="6" locked="false" isInGroup="1">
+              <controlProperties>
+                <text>Read%20more%20about%20the%20Customer%20Experience%20Improvement%20Program</text>
+              </controlProperties>
+            </control>
+            <control controlID="7" controlTypeID="com.balsamiq.mockups::Link" x="15" y="488" w="-1" h="-1" measuredW="167" measuredH="25" zOrder="7" locked="false" isInGroup="1">
+              <controlProperties>
+                <text>Problem%20Reporting%20Options</text>
+              </controlProperties>
+            </control>
+          </groupChildrenDescriptors>
+        </control>
+        <control controlID="2" controlTypeID="com.balsamiq.mockups::Button" x="15" y="574" w="-1" h="-1" measuredW="121" measuredH="28" zOrder="2" locked="false" isInGroup="113">
+          <controlProperties>
+            <text>Accept%20%26%20Close</text>
+          </controlProperties>
+        </control>
+      </groupChildrenDescriptors>
+    </control>
+    <control controlID="114" controlTypeID="__group__" x="1151" y="68" w="517" h="429" measuredW="517" measuredH="429" zOrder="2" locked="false" isInGroup="-1">
+      <groupChildrenDescriptors>
+        <control controlID="0" controlTypeID="com.balsamiq.mockups::TitleWindow" x="0" y="0" w="517" h="429" measuredW="450" measuredH="400" zOrder="0" locked="false" isInGroup="114">
+          <controlProperties>
+            <close>true</close>
+            <text>Dot%20Net%20Perf%20-%20problem%20reporting%20options</text>
+          </controlProperties>
+        </control>
+        <control controlID="1" controlTypeID="com.balsamiq.mockups::Label" x="15" y="299" w="-1" h="-1" measuredW="121" measuredH="25" zOrder="1" locked="false" isInGroup="114">
+          <controlProperties>
+            <text>My%20email%20address%3A</text>
+          </controlProperties>
+        </control>
+        <control controlID="2" controlTypeID="com.balsamiq.mockups::TextInput" x="136" y="296" w="366" h="-1" measuredW="79" measuredH="29" zOrder="2" locked="false" isInGroup="114">
+          <controlProperties>
+            <text/>
+          </controlProperties>
+        </control>
+        <control controlID="3" controlTypeID="com.balsamiq.mockups::Label" x="15" y="52" w="420" h="70" measuredW="895" measuredH="25" zOrder="3" locked="false" isInGroup="114">
+          <controlProperties>
+            <text>Although%20we%20do%20our%20best%20to%20remove%20sensitive%20information%2C%20some%20may%20still%20remail.%20We%20treat%20everything%20in%20an%20error%20report%20as%20highly%20confidential.</text>
+          </controlProperties>
+        </control>
+        <control controlID="4" controlTypeID="com.balsamiq.mockups::Label" x="15" y="148" w="-1" h="-1" measuredW="241" measuredH="25" zOrder="4" locked="false" isInGroup="114">
+          <controlProperties>
+            <text>When%20an%20unexpected%20problem%20occurs%3A</text>
+          </controlProperties>
+        </control>
+        <control controlID="5" controlTypeID="com.balsamiq.mockups::RadioButton" x="15" y="173" w="-1" h="-1" measuredW="385" measuredH="22" zOrder="5" locked="false" isInGroup="114">
+          <controlProperties>
+            <state>selected</state>
+            <text>Notify%20me%20every%20time%20and%20let%20me%20review%20each%20error%20report</text>
+          </controlProperties>
+        </control>
+        <control controlID="6" controlTypeID="com.balsamiq.mockups::RadioButton" x="15" y="195" w="-1" h="-1" measuredW="369" measuredH="22" zOrder="6" locked="false" isInGroup="114">
+          <controlProperties>
+            <text>Automatically%20send%20error%20reports%20back%20to%20Dot%20Net%20Perf</text>
+          </controlProperties>
+        </control>
+        <control controlID="7" controlTypeID="com.balsamiq.mockups::RadioButton" x="15" y="217" w="409" h="22" measuredW="409" measuredH="22" zOrder="7" locked="false" isInGroup="114">
+          <controlProperties>
+            <text>Don%27t%20ask%20me%20and%20never%20send%20error%20reports%20%28not%20recommented%29</text>
+          </controlProperties>
+        </control>
+        <control controlID="8" controlTypeID="com.balsamiq.mockups::CheckBox" x="15" y="274" w="-1" h="-1" measuredW="487" measuredH="22" zOrder="8" locked="false" isInGroup="114">
+          <controlProperties>
+            <text>Allow%20Dot%20Net%20Perf%20to%20contact%20me%20for%20further%20information%20%28recommended%29</text>
+          </controlProperties>
+        </control>
+        <control controlID="9" controlTypeID="com.balsamiq.mockups::Button" x="303" y="359" w="-1" h="-1" measuredW="121" measuredH="28" zOrder="9" locked="false" isInGroup="114">
+          <controlProperties>
+            <text>Accept%20%26%20Close</text>
+          </controlProperties>
+        </control>
+        <control controlID="10" controlTypeID="com.balsamiq.mockups::Button" x="437" y="359" w="-1" h="-1" measuredW="65" measuredH="28" zOrder="10" locked="false" isInGroup="114">
+          <controlProperties>
+            <text>Cancel</text>
+          </controlProperties>
+        </control>
+      </groupChildrenDescriptors>
+    </control>
+  </controls>
+</mockup>

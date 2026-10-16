@@ -1,0 +1,190 @@
+﻿.assembly extern mscorlib 
+{
+    .publickeytoken = (B7 7A 5C 56 19 34 E0 89)
+    .ver 2:0:0:0
+}
+.assembly rethrow_instr
+{
+    .hash algorithm 0x00008004
+    .ver 1:0:0:0
+}
+
+.module rethrow_instr.exe
+.imagebase 0x00400000
+.file alignment 0x00000200
+.stackreserve 0x00100000
+.subsystem 0x0003       // WINDOWS_CUI
+.corflags 0x00000001    //  ILONLY
+
+.class private auto ansi beforefieldinit rethrow_instr.main
+    extends [mscorlib]System.Object
+{
+    .method private hidebysig static void Main(string[] args) cil managed
+    {
+        .entrypoint
+        .maxstack 8
+
+        call void rethrow_instr.main::ImmediatlyInsideCatchHandler()
+        call void rethrow_instr.main::NestedInsideCatchHandler()
+        call void rethrow_instr.main::InsideNestedCatchHandler()
+        call void rethrow_instr.main::InsideFinallyHandler()
+        call void rethrow_instr.main::InsideFaultHandler()
+        call void rethrow_instr.main::InsideFilterCodeForFilterHandler()
+        call void rethrow_instr.main::InsideFilterHandler()
+        call void rethrow_instr.main::InsideProtectedRegion()
+        call void rethrow_instr.main::NotInsideAnyHandler()
+
+        ret
+    }
+
+    .method public hidebysig static void ImmediatlyInsideCatchHandler() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            nop
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                nop
+                leave method_end
+            }
+
+            rethrow
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    .method public hidebysig static void NestedInsideCatchHandler() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } catch [mscorlib]System.Object {
+            nop
+            .try {
+                nop
+            } finally {
+                rethrow
+            }
+
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    .method public hidebysig static void InsideNestedCatchHandler() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } finally {
+            .try {
+                nop
+            } catch [mscorlib]System.Object {
+                rethrow
+                leave method_end
+            }
+            
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    // test should fail
+    .method public hidebysig static void InsideFinallyHandler() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } finally {
+            rethrow
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    // test should fail
+    .method public hidebysig static void InsideFaultHandler() cil managed
+    {
+        .maxstack 8
+        .try {
+            nop
+        } fault {
+            rethrow
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    // test should fail
+    .method public hidebysig static void InsideFilterCodeForFilterHandler() cil managed
+    {
+        .maxstack 8
+        .try
+        {
+            nop
+        } filter {
+            rethrow
+            pop
+            ldc.i4.1
+            endfilter
+        } {
+            nop
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    // test should fail
+    .method public hidebysig static void InsideFilterHandler() cil managed
+    {
+        .maxstack 8
+        .try
+        {
+            nop
+        } filter {
+            pop
+            ldc.i4.1
+            endfilter
+        } {
+            rethrow
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    // test should fail
+    .method public hidebysig static void InsideProtectedRegion() cil managed
+    {
+        .maxstack 8
+        .try
+        {
+            rethrow
+        } catch [mscorlib]System.Object {
+            leave method_end
+        }
+
+        method_end: ret
+    }
+
+    // test should fail
+    .method public hidebysig static void NotInsideAnyHandler() cil managed
+    {
+        .maxstack 8
+
+        rethrow
+
+        method_end: ret
+    }
+
+}
