@@ -274,3 +274,10 @@ Generator and async-generator helper calls stay unresolved even when awaited:
 await does not unwrap an iterator into its declared return value. Existing
 awaited ordinary/async helper positives remain covered. Prior producer versions
 remain validatable; rescan for this corrected operation/payload evidence.
+
+### Switch label producer 0.18.4
+
+`base44-evidence/0.18.4` conservatively scans all switch case-label expressions
+for alias writes, including labels after a default clause; those expressions can
+run while selecting default. Preceding clause-body fallthrough writes remain a
+separate check. Existing producer versions remain validatable.

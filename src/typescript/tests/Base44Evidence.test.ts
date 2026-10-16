@@ -24,6 +24,12 @@ describe("Base44 source-bound static evidence", () => {
     ["for (client of values) { CALL }", false],
     ["for ([client] of values) { CALL }", false],
     ["switch ((client = fake)) { case 1: CALL }", false],
+    ["switch (flag) { default: CALL break; case (client = fake): }", false],
+    ["switch (flag) { case 1: break; default: CALL break; case (client = fake): }", false],
+    ["switch (flag) { case (client = fake): break; default: CALL }", false],
+    ["switch (flag) { default: CALL break; case ([client] = values): }", false],
+    ["switch (flag) { default: CALL break; case client: break; }", true],
+    ["switch (flag) { case 1: break; default: CALL break; case 2: }", true],
     ["try { client = fake; risky(); } catch { CALL }", false],
     ["try { client = fake; } finally { CALL }", false],
     ["while (flag) { CALL client = fake; }", false],
@@ -79,7 +85,7 @@ export function run(source, fallback) {
 }`);
     const operations = packet.facts.filter(f => f.factType === FactTypes.Base44EntityOperation && f.targetSymbol === "DestructuringClient");
     expect(operations).toHaveLength(admitted ? 1 : 0);
-    for (const operation of operations) expect(operation.evidence.extractorVersion).toBe("base44-evidence/0.18.3");
+    for (const operation of operations) expect(operation.evidence.extractorVersion).toBe("base44-evidence/0.18.4");
   });
 
   it.each([

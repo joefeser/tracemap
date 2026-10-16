@@ -167,3 +167,10 @@ branch/try/loop positives remain. Sync/async generators both refuse awaited and
 unawaited result-shape inference; ordinary awaited helpers retain their tests.
 TypeScript build and 333 tests passed. The final sixth review round follows
 publication and exact-thread disposition; no additional merge authority granted.
+
+Round 6 final Codex finding: switch labels after default can run before default
+selection. Producer 0.18.4 scans all labels separately from preceding clause-body
+fallthrough. Added default-first/middle/last, destructuring-label, and read-only
+label positives. This is the final authorized round's repair; no additional
+Codex request is planned. Final-head freshness and hosted CI need owner handoff.
+Final TypeScript build and 340 tests passed after the switch-label correction.
