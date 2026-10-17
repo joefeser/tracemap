@@ -92,10 +92,10 @@ namespace NetPerf.Client
     // exactly what the rewrite-evidence oracle observes.
     public static class Messaging
     {
-        public static void EnterMethod(int moduleIdentifier, int methodIdentifier) { }
-        public static void ExitMethod(int moduleIdentifier, int methodIdentifier) { }
-        public static void EnterGenericMethod(int moduleIdentifier, int methodIdentifier, string[] genericTypeNames) { }
-        public static void ExitGenericMethod(int moduleIdentifier, int methodIdentifier, string[] genericTypeNames) { }
-        public static void InstrumentationPointHit(int moduleIdentifier, int pointIdentifier) { }
+        public static void EnterMethod(int moduleId, int methodId) { }
+        public static void ExitMethod(int moduleId, int methodId) { }
+        public static void EnterGenericMethod(int moduleId, int methodId, string[] classTypes, string[] methodTypes) { }
+        public static void ExitGenericMethod(int moduleId, int methodId, string[] classTypes, string[] methodTypes) { }
+        public static void InstrumentationPointHit(int moduleId, int pointId) { }
     }
 }
