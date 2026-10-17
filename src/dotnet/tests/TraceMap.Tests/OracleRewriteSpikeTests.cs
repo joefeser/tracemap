@@ -36,65 +36,33 @@ public sealed class OracleRewriteSpikeTests
     {
         private int _next;
         public int Methods { get; private set; }
-        public NetPerf.Client.IMessageController MessageController { get; } = new Controller();
+        public NetPerf.Common.Instrumentation.IMessagingController MessageController { get; } = new Controller();
 
-        private sealed class Controller : NetPerf.Client.IMessageController
+        private sealed class Controller : NetPerf.Common.Instrumentation.IMessagingController
         {
             public bool WantsMethodEnterMessages => true;
             public bool WantsMethodExitMessages => true;
             public bool WantsSeqPointEndMessages => false;
         }
 
-        public int RegisterAssembly(string assemblyName, string hash, NetPerf.Common.HashAlgorithm hashAlgorithm) => ++_next;
-        public int GetMetadataForAssembly(int assemblyId, out NetPerf.Common.ErrorTuple error)
+        public int RegisterAssembly(string assemblyIdentity, string preInstrumentedHash, NetPerf.Common.HashAlgorithm preInstrumentedHashAlgorithm) => ++_next;
+        public string GetMetadataForAssembly(int assemblyId, out NetPerf.Common.ErrorTuple error)
         {
-            error = null!;
-            return ++_next;
+            error = new NetPerf.Common.ErrorTuple();
+            return "netperf-oracle-metadata";
         }
         public int RegisterModule(int assemblyId, string moduleName) => ++_next;
-        public int RegisterType(int moduleId, string fullName, string[] customAttributes, string[] genericParameters) => ++_next;
-        public int RegisterMethod(int typeId, string fullName, byte[] rawMethodBytes, string[] customAttributes, int[] sourceFileIds, string[] genericTypes)
+        public int RegisterType(int moduleId, string signature, string[] customAttributes, string[] genericArguments) => ++_next;
+        public int RegisterMethod(int typeId, string signature, byte[] rawMethodBytes, string[] customAttributes, int[] sourceFileIds, string[] genericArguments)
         {
             Methods++;
             return ++_next;
         }
-        public void RegisterEvent(int typeId, string fullName, int? addMethodId, int? removeMethodId, int? otherMethodId, int[] otherMethodIds, string[] customAttributes) { }
-        public void RegisterProperty(int typeId, string fullName, int? getterId, int? setterId, int[] otherMethodIds, string[] customAttributes) { }
-        public int RegisterSourceFile(int moduleId, string url, byte[] hash, string hashAlgorithm, string language) => ++_next;
-        public int LookupSourceFile(int methodId, string url) => -1;
-        public int RegisterPoint(int methodId) => ++_next;
-        public int RegisterPoint(int methodId, int documentId, int startLine, int startColumn, int endLine, int endColumn) => ++_next;
-    }
-
-    [Fact]
-    public void Temp_diagnostic_read_and_write_roundtrip_without_era_catch()
-    {
-        var source = FreshTargetAssembly();
-        using var temp = new TempDirectory();
-        var after = Path.Combine(temp.Path, "diag.dll");
-        File.Copy(source, after);
-        var readParams = new ReaderParameters(ReadingMode.Deferred) { AssemblyResolver = new DefaultAssemblyResolver() };
-        var assemDef = AssemblyDefinition.ReadAssembly(after, readParams);
-        var modules = assemDef.Modules.Count;
-        assemDef.Write(after);
-        using var reread = ModuleDefinition.ReadModule(after);
-        Assert.Equal(modules, reread.Types.Count >= 0 ? modules : modules);
-    }
-
-    [Fact]
-    public void Temp_diagnostic_validator_chain_bisect()
-    {
-        var source = CorpusTestAssembly();
-        using var module = ModuleDefinition.ReadModule(source);
-        var method = module.Types.First(t => t.Methods.Any(m => m.HasBody)).Methods.First(m => m.HasBody);
-        var validator = typeof(NetPerf.ILValidator);
-        foreach (var name in new[] { "VerifyThrow", "VerifyRethrow", "VerifyRet", "VerifyJmp",
-                     "VerifyEndFilter", "VerifyEndFinally", "VerifyLeave", "VerifyProtectedBlocks", "VerifyFallThrough", "VerifyBranches" })
-        {
-            var helper = validator.GetMethod(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-            var result = (NetPerf.ILValidator.VerifyResult)helper.Invoke(null, [method.Body])!;
-            Assert.True(result.ErrorMessages is not null, $"{name} returned null ErrorMessages");
-        }
+        public int RegisterEvent(int typeId, string signature, int? addMethodId, int? removeMethodId, int? fireMethodId, int[] otherMethodIds, string[] customAttributes) => ++_next;
+        public int RegisterProperty(int typeId, string signature, int? getMethodId, int? setMethodId, int[] otherMethodIds, string[] customAttributes) => ++_next;
+        public int RegisterSourceFile(int moduleId, string uri, byte[] hash, string hashAlgorithm, string sourceLanguage) => ++_next;
+        public int LookupSourceFile(int methodId, string uri) => -1;
+        public int RegisterPoint(int methodId, int? sourceFileId = null, int? startLine = null, int? startColumn = null, int? endLine = null, int? endColumn = null) => ++_next;
     }
 
     [Fact]
