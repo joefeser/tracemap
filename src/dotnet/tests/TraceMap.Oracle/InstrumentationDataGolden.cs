@@ -120,7 +120,7 @@ internal static class EraInstrumentationDecoder
             // the class-generic-arg sequence calls the synthesized
             // <Type>b__GenericArgs() between the marker pair and the call.
             int j = i + 2;
-            MethodReference? callee = null;
+            MethodReference callee = null; // null until the messaging call is found (nullable context is off in this project)
             while (j < body.Instructions.Count)
             {
                 if (body.Instructions[j].OpCode == OpCodes.Ldsfld
