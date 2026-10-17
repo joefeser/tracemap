@@ -121,13 +121,43 @@ public sealed class OracleRewriteSpikeTests
         }
         Assert.True(validated > 0);
 
+        // The instrumenter inserts enter/exit callbacks into every registered
+        // method body (enter+exit are both requested). The generated
+        // NetPerfMetadata marker members, the b__GenericArgs helpers it synthesizes
+        // for generic types, and event accessors (the era event path is never
+        // invoked) are the only instrumented-module bodies without callbacks —
+        // assert per-method coverage so a silent nested-type skip fails here
+        // rather than hiding behind an aggregate count.
+        var eventAccessors = new HashSet<MethodDefinition>();
+        foreach (var type in AllTypes(rewritten))
+            foreach (var @event in type.Events)
+                foreach (var accessor in new[] { @event.AddMethod, @event.RemoveMethod }
+                             .Where(method => method != null).Concat(@event.OtherMethods))
+                    eventAccessors.Add(accessor);
+
         var messagingCalls = 0;
+        var nestedInstrumented = 0;
         foreach (var method in AllMethodsWithBodies(rewritten))
-            foreach (var instruction in method.Body.Instructions)
-                if (instruction.Operand is MethodReference reference
-                    && reference.DeclaringType.FullName == "NetPerf.Client.Messaging")
-                    messagingCalls++;
+        {
+            var hasMessagingCall = method.Body.Instructions
+                .Any(instruction => instruction.Operand is MethodReference reference
+                    && reference.DeclaringType.FullName == "NetPerf.Client.Messaging");
+            if (hasMessagingCall)
+            {
+                messagingCalls++;
+                if (method.DeclaringType.IsNested)
+                    nestedInstrumented++;
+            }
+
+            if (method.DeclaringType.FullName == "NetPerf.NetPerfMetadata"
+                || method.Name.EndsWith("b__GenericArgs", StringComparison.Ordinal)
+                || eventAccessors.Contains(method))
+                continue;
+
+            Assert.True(hasMessagingCall, $"rewritten method carries no messaging call: {method.FullName}");
+        }
         Assert.True(messagingCalls > 0, "no messaging calls inserted");
+        Assert.True(nestedInstrumented > 0, "no nested-type method was instrumented; the fixture no longer exercises nesting");
 
         using var scanTemp = new TempDirectory();
         var scan = ScanEngine.Scan(new ScanOptions(scanTemp.Path, Path.Combine(scanTemp.Path, "out"),

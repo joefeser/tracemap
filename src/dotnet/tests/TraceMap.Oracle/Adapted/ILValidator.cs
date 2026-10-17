@@ -751,7 +751,11 @@ namespace NetPerf {
 			//Rule: Exit from protected blocks, filters, or handlers cannot be accomplished via fall through.
 			//-- interpretation: the last instruction in a protected block, filter, or handler cannot be one that allows fall through
 			var endingInstructions = body.ExceptionHandlers
-				.SelectMany(eh => new[] { eh.TryEnd, eh.HandlerStart, eh.HandlerEnd });
+				// ADAPTATION (#856): era FilterEnd was null for entries without a filter; the
+				// modern filter end is HandlerStart, which is never null, so the has-a-filter
+				// nullability is carried by FilterStart (a non-filter HandlerStart.Previous
+				// would be null when the handler begins the method).
+				.SelectMany(eh => new[] { eh.TryEnd, eh.FilterStart == null ? null : eh.HandlerStart, eh.HandlerEnd });
 
 			// we don't care about trys/filters/handlers that don't exist
 			var lastInstructions = endingInstructions

@@ -197,12 +197,16 @@ public sealed class OracleAdaptationPinTests
                 "695|			// HandlerStart != null would mark every handler as having a filter. Both era",
                 "696|			// arms collapse to FilterStart != null on modern Cecil.",
                 "699|						&& h.FilterStart != null",
-                "754|				.SelectMany(eh => new[] { eh.TryEnd, eh.HandlerStart, eh.HandlerEnd });",
-                "763|				.Where(instr => !InstrsThatDontFallThrough.Any(i => i == instr.OpCode));",
-                "803|					new { instr=i, name=\"filter\", start=eh.FilterStart, end = eh.HandlerStart, targets=getInstrTargets(i)},",
-                "856|					new { instr=i, name=\"filter\", start=eh.FilterStart, end = eh.HandlerStart, targets=getInstrTargets(i)},",
-                "966|				new { isFilter=true, start=nullableOffset(left.FilterStart), end=nullableOffset(left.FilterStart == null ? null : left.HandlerStart)},",
-                "972|				new { isFilter=true, start=nullableOffset(right.FilterStart), end=nullableOffset(right.FilterStart == null ? null : right.HandlerStart)},",
+                "754|				// ADAPTATION (#856): era FilterEnd was null for entries without a filter; the",
+                "755|				// modern filter end is HandlerStart, which is never null, so the has-a-filter",
+                "756|				// nullability is carried by FilterStart (a non-filter HandlerStart.Previous",
+                "757|				// would be null when the handler begins the method).",
+                "758|				.SelectMany(eh => new[] { eh.TryEnd, eh.FilterStart == null ? null : eh.HandlerStart, eh.HandlerEnd });",
+                "767|				.Where(instr => !InstrsThatDontFallThrough.Any(i => i == instr.OpCode));",
+                "807|					new { instr=i, name=\"filter\", start=eh.FilterStart, end = eh.HandlerStart, targets=getInstrTargets(i)},",
+                "860|					new { instr=i, name=\"filter\", start=eh.FilterStart, end = eh.HandlerStart, targets=getInstrTargets(i)},",
+                "970|				new { isFilter=true, start=nullableOffset(left.FilterStart), end=nullableOffset(left.FilterStart == null ? null : left.HandlerStart)},",
+                "976|				new { isFilter=true, start=nullableOffset(right.FilterStart), end=nullableOffset(right.FilterStart == null ? null : right.HandlerStart)},",
             ]
         )
     ];
