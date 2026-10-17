@@ -211,6 +211,160 @@ public sealed class OracleAdaptationPinTests
         )
     ];
 
+
+    // #856 stage 2c extraction pin: GoldenBodyBuilders.cs extracts method bodies
+    // from corpus test sources rather than copying whole files. The pin keeps
+    // extraction drift impossible two ways: every non-empty adapted line
+    // (indentation-insensitive — the corpus nests its methods two classes deep)
+    // must be verbatim corpus content or a pinned adaptation line, and every
+    // line of the pinned corpus regions must still be present in the adapted
+    // file, so a deleted extraction line fails loudly.
+    private sealed record ExtractionSource(string CorpusRelativePath, string CorpusSha256, (int Start, int End)[] Regions);
+
+    private sealed record ExtractionPin(string AdaptedRelativePath, ExtractionSource[] Sources, string[] AdaptedOnlyLines);
+
+    private static readonly ExtractionPin[] ExtractionPins =
+    [
+        new ExtractionPin(
+            "tests/TraceMap.Oracle/Adapted/GoldenBodyBuilders.cs",
+            [
+                new ExtractionSource(
+                    "src/NetPerf.Tests.Unit/BranchesTest.cs",
+                    "b5ac63dc45acaefa79bf017d54ce059d901f28b8d2344129aa4728dd59af594f",
+                    [(34, 74)]),
+                new ExtractionSource(
+                    "src/NetPerf.Tests.Unit/ProtectedBlocksTest.cs",
+                    "7c019a66358cd09d134585373715d1c3c8c788fa3ea60151fe5602e9f4fb8f8d",
+                    [(82, 120)]),
+            ],
+            [
+                "1|// ADAPTED EXTRACTION for #856 stage 2c. The construction helpers below are",
+                "2|// extracted near-verbatim from the byte-pinned corpus sources:",
+                "3|//   samples/dotnetperf-rewriter/src/NetPerf.Tests.Unit/BranchesTest.cs",
+                "4|//     (GetSourceTestMethod, AddTargetAndSource)",
+                "5|//   samples/dotnetperf-rewriter/src/NetPerf.Tests.Unit/ProtectedBlocksTest.cs",
+                "6|//     (GetMethod, AddProtectedBlock)",
+                "7|// OracleAdaptationPinTests pins the extraction: every corpus line of the",
+                "8|// extracted regions must appear here verbatim, and every other line of this",
+                "9|// file is a documented adaptation. The corpus tree itself is never modified.",
+                "11|// Adaptation classes (everything not verbatim from the corpus):",
+                "12|//   - Era prototypes came from ILHelper.GetAssembly(\"branches.il.txt\" /",
+                "13|//     \"protectedblocks.il.txt\"), which ran ilasm.exe at test time; ilasm is not",
+                "14|//     available (and is excluded from the corpus). The grids are rebuilt in",
+                "15|//     pure Cecil mirroring the committed fixtures: SourceTestsBase = 25 nop +",
+                "16|//     ret (branches.il.txt lines 35-64; the three ilasm labels carry no bytes),",
+                "17|//     ProtectedBlocks_Base = 50 nop + ret (protectedblocks.il.txt from line 57).",
+                "18|//   - Offsets are assigned positionally because the validator's region math",
+                "19|//     reads Instruction.Offset and the era values came from the ilasm round",
+                "20|//     trip (one-byte nops: instruction i sits at offset i).",
+                "21|//   - The prototype builders live on this class instead of cached static",
+                "22|//     _prototype fields with ILHelper.CloneMethod; each call builds a fresh",
+                "23|//     body, which is what the era clone achieved.",
+                "24|using Mono.Cecil;",
+                "27|namespace NetPerf.Goldens;",
+                "29|internal static class GoldenBodyBuilders",
+                "31|private const int SourceTestsBaseInstructionCount = 26;",
+                "32|private const int ProtectedBlocksBaseInstructionCount = 51;",
+                "34|internal static MethodBody SourceTestMethod(MethodDefinition host = null) {",
+                "35|return BuildPrototype(SourceTestsBaseInstructionCount, host);",
+                "38|internal static void AddTargetAndSource(MethodBody body, OpCode sourceOp,",
+                "81|internal static MethodBody ProtectedBlocksMethod(MethodDefinition host = null) {",
+                "82|return BuildPrototype(ProtectedBlocksBaseInstructionCount, host);",
+                "85|internal static void AddProtectedBlock(MethodBody body,",
+                "126|// ADAPTATION: replaces the era ILHelper/ilasm prototype path (see header).",
+                "127|// One-byte instructions only, so instruction i sits at offset i — the same",
+                "128|// offsets the era read back from the assembled fixture.",
+                "129|private static MethodBody BuildPrototype(int instructionCount, MethodDefinition host) {",
+                "130|var body = new MethodBody(host ?? new MethodDefinition(\"GoldenPrototype\",",
+                "131|MethodAttributes.Public | MethodAttributes.HideBySig, moduleTypeSystem.Void));",
+                "132|for (var i = 0; i < instructionCount - 1; i++) {",
+                "133|var nop = Instruction.Create(OpCodes.Nop);",
+                "134|nop.Offset = i;",
+                "135|body.Instructions.Add(nop);",
+                "137|var ret = Instruction.Create(OpCodes.Ret);",
+                "138|ret.Offset = instructionCount - 1;",
+                "139|body.Instructions.Add(ret);",
+                "140|return body;",
+                "143|// ADAPTATION: the prototype methods need a type system for void/branch",
+                "144|// construction; a single detached module hosts it (the era bodies hung off",
+                "145|// real assemblies built by ilasm).",
+                "146|private static readonly TypeSystem moduleTypeSystem = CreateTypeSystem();",
+                "148|private static TypeSystem CreateTypeSystem() {",
+                "149|var module = ModuleDefinition.CreateModule(\"GoldenPrototypes\", new ModuleParameters { Kind = ModuleKind.Dll });",
+                "150|return module.TypeSystem;",
+            ]),
+    ];
+
+    [Fact]
+    public void Extracted_golden_builders_match_the_corpus_exactly_outside_the_pinned_adaptations()
+    {
+        foreach (var pin in ExtractionPins)
+        {
+            var adapted = ReadNormalizedLines(Path.Combine(RepoRoot(), pin.AdaptedRelativePath));
+            var corpusLines = pin.Sources
+                .SelectMany(source => ReadNormalizedLines(Path.Combine(CorpusRoot(), source.CorpusRelativePath)))
+                .Select(StripIndentation)
+                .Where(line => line.Length > 0)
+                .ToHashSet();
+
+            var actualAdaptedOnly = adapted
+                .Select((line, index) => (Line: index + 1, Stripped: StripIndentation(line)))
+                .Where(entry => entry.Stripped.Length > 0 && !corpusLines.Contains(entry.Stripped))
+                .Select(entry => $"{entry.Line}|{entry.Stripped}")
+                .ToArray();
+            if (!actualAdaptedOnly.SequenceEqual(pin.AdaptedOnlyLines))
+                throw new XunitException(
+                    $"{pin.AdaptedRelativePath} drifted from the pinned extraction: lines outside the corpus " +
+                    "sources must be exactly the pinned adaptation list:\n" +
+                    $"actual ({actualAdaptedOnly.Length} lines):\n{string.Join("\n", actualAdaptedOnly)}");
+
+            foreach (var source in pin.Sources)
+            {
+                // Each pinned region must appear as an ORDERED CONTIGUOUS run in the
+                // adapted file (indentation-insensitive): set membership alone would
+                // let reordered or duplicated region lines corrupt the oracle while
+                // the pin stays green.
+                var regionLines = ReadNormalizedLines(Path.Combine(CorpusRoot(), source.CorpusRelativePath));
+                var adaptedStripped = adapted.Select(StripIndentation).ToArray();
+                foreach (var (start, end) in source.Regions)
+                {
+                    var expected = Enumerable.Range(start, end - start + 1)
+                        .Select(line => StripIndentation(regionLines[line - 1]))
+                        .ToArray();
+                    var found = false;
+                    for (var offset = 0; offset <= adaptedStripped.Length - expected.Length && !found; offset++)
+                    {
+                        var matches = true;
+                        for (var i = 0; i < expected.Length; i++)
+                            if (adaptedStripped[offset + i] != expected[i])
+                            {
+                                matches = false;
+                                break;
+                            }
+                        found = matches;
+                    }
+                    Assert.True(found,
+                        $"extracted region {source.CorpusRelativePath}:{start}-{end} is not present in order " +
+                        $"in {pin.AdaptedRelativePath}; if the extraction moved, regenerate the pin consciously");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void Pinned_extraction_corpus_sources_match_their_sha256()
+    {
+        foreach (var pin in ExtractionPins)
+            foreach (var source in pin.Sources)
+            {
+                var hash = Convert.ToHexString(
+                    SHA256.HashData(File.ReadAllBytes(Path.Combine(CorpusRoot(), source.CorpusRelativePath)))).ToLowerInvariant();
+                Assert.Equal(source.CorpusSha256, hash);
+            }
+    }
+
+    private static string StripIndentation(string line) => line.TrimStart('\t', ' ');
+
     [Fact]
     public void Adapted_files_differ_from_the_corpus_by_exactly_the_pinned_adaptation_set()
     {
