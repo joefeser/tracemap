@@ -139,10 +139,15 @@ public sealed class OracleRewriteSpikeTests
         var nestedInstrumented = 0;
         foreach (var method in AllMethodsWithBodies(rewritten))
         {
-            var hasMessagingCall = method.Body.Instructions
+            var enterCall = method.Body.Instructions
                 .Any(instruction => instruction.Operand is MethodReference reference
-                    && reference.DeclaringType.FullName == "NetPerf.Client.Messaging");
-            if (hasMessagingCall)
+                    && reference.DeclaringType.FullName == "NetPerf.Client.Messaging"
+                    && reference.Name is "EnterMethod" or "EnterGenericMethod");
+            var exitCall = method.Body.Instructions
+                .Any(instruction => instruction.Operand is MethodReference reference
+                    && reference.DeclaringType.FullName == "NetPerf.Client.Messaging"
+                    && reference.Name is "ExitMethod" or "ExitGenericMethod");
+            if (enterCall || exitCall)
             {
                 messagingCalls++;
                 if (method.DeclaringType.IsNested)
@@ -154,7 +159,14 @@ public sealed class OracleRewriteSpikeTests
                 || eventAccessors.Contains(method))
                 continue;
 
-            Assert.True(hasMessagingCall, $"rewritten method carries no messaging call: {method.FullName}");
+            Assert.True(enterCall, $"rewritten method carries no enter callback: {method.FullName}");
+            // Exit callbacks are inserted before each ret/jmp exit instruction; a body
+            // whose only exit is a throw has none, so the exit family is required only
+            // when exit instructions remain in the rewritten body.
+            var hasExitInstruction = method.Body.Instructions
+                .Any(instruction => instruction.OpCode == OpCodes.Ret || instruction.OpCode == OpCodes.Jmp);
+            if (hasExitInstruction)
+                Assert.True(exitCall, $"rewritten method carries no exit callback: {method.FullName}");
         }
         Assert.True(messagingCalls > 0, "no messaging calls inserted");
         Assert.True(nestedInstrumented > 0, "no nested-type method was instrumented; the fixture no longer exercises nesting");
