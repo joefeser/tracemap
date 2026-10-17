@@ -1,9 +1,10 @@
-// #856 stage 2b: shims for the dotnetperf dependency surface. The corpus sources
-// (ILInstrumenter.cs / ILValidator.cs) are compiled UNMODIFIED from the byte-pinned
-// tree; these types fill the missing NetPerf.Common / NetPerf.Client surface in
-// matching namespaces. Nothing here executes in production scans — it exists so the
-// era rewriter can produce genuine before/after assemblies for the rewrite-evidence
-// oracle. Member shapes follow the instrumenter's call sites exactly.
+// #856 stage 2b: shims for the dotnetperf dependency surface. The era sources
+// (Adapted/ILInstrumenter.cs / Adapted/ILValidator.cs) are compiled from adapted,
+// diff-pinned copies of the byte-pinned tree; these types fill the missing
+// NetPerf.Common / NetPerf.Client surface in matching namespaces, mirroring the
+// corpus member shapes. Nothing here executes in production scans — it exists so
+// the era rewriter can produce genuine before/after assemblies for the
+// rewrite-evidence oracle.
 namespace NetPerf.Common
 {
     public sealed class FilePath
@@ -29,8 +30,9 @@ namespace NetPerf.Common
 
     public sealed class ErrorTuple
     {
-        public ErrorTuple(string message) => Message = message;
-        public string Message { get; }
+        public ErrorTuple() => ErrorMessage = string.Empty;
+        public ErrorTuple(string errorMessage) => ErrorMessage = errorMessage;
+        public string ErrorMessage { get; }
     }
 
     public static class EraCollectionExtensions
@@ -50,35 +52,44 @@ namespace NetPerf.Common
 
 namespace NetPerf.Common.Instrumentation
 {
+    // Mirrors corpus src/NetPerf.Common/Instrumentation/IInstrumentFactory.cs member
+    // for member (the corpus contract-class and Code Contracts attributes are dead
+    // tooling on modern .NET). GetMetadataForAssembly returns the string payload the
+    // instrumenter bakes into the NetPerfMetadata.InstrumentationData literal —
+    // returning anything but a string corrupts the constant table on write.
     public interface IInstrumentFactory
     {
-        NetPerf.Client.IMessageController MessageController { get; }
-        int RegisterAssembly(string assemblyName, string hash, NetPerf.Common.HashAlgorithm hashAlgorithm);
-        int GetMetadataForAssembly(int assemblyId, out NetPerf.Common.ErrorTuple error);
+        IMessagingController MessageController { get; }
+        string GetMetadataForAssembly(int assemblyId, out ErrorTuple error);
+        int LookupSourceFile(int methodId, string uri);
+        int RegisterAssembly(string assemblyIdentity, string preInstrumentedHash, HashAlgorithm preInstrumentedHashAlgorithm);
         int RegisterModule(int assemblyId, string moduleName);
-        int RegisterType(int moduleId, string fullName, string[] customAttributes, string[] genericParameters);
-        int RegisterMethod(int typeId, string fullName, byte[] rawMethodBytes, string[] customAttributes, int[] sourceFileIds, string[] genericTypes);
-        void RegisterEvent(int typeId, string fullName, int? addMethodId, int? removeMethodId, int? otherMethodId, int[] otherMethodIds, string[] customAttributes);
-        void RegisterProperty(int typeId, string fullName, int? getterId, int? setterId, int[] otherMethodIds, string[] customAttributes);
-        int RegisterSourceFile(int moduleId, string url, byte[] hash, string hashAlgorithm, string language);
-        int LookupSourceFile(int methodId, string url);
-        int RegisterPoint(int methodId);
-        int RegisterPoint(int methodId, int documentId, int startLine, int startColumn, int endLine, int endColumn);
+        int RegisterType(int moduleId, string signature, string[] customAttributes = null, string[] genericArguments = null);
+        int RegisterEvent(int typeId, string signature, int? addMethodId, int? removeMethodId,
+                          int? fireMethodId = null, int[] otherMethodIds = null, string[] customAttributes = null);
+        int RegisterMethod(int typeId, string signature, byte[] rawMethodBytes = null, string[] customAttributes = null, int[] sourceFileIds = null, string[] genericArguments = null);
+        int RegisterPoint(int methodId, int? sourceFileId = null, int? startLine = null, int? startColumn = null, int? endLine = null, int? endColumn = null);
+        int RegisterProperty(int typeId, string signature, int? getMethodId, int? setMethodId,
+                             int[] otherMethodIds = null, string[] customAttributes = null);
+        int RegisterSourceFile(int moduleId, string uri, byte[] hash, string hashAlgorithm, string sourceLanguage);
     }
-}
 
-namespace NetPerf.Client
-{
-    public interface IMessageController
+    // Mirrors corpus src/NetPerf.Common/Instrumentation/IMessagingController.cs.
+    public interface IMessagingController
     {
         bool WantsMethodEnterMessages { get; }
         bool WantsMethodExitMessages { get; }
         bool WantsSeqPointEndMessages { get; }
     }
+}
 
-    // The runtime messaging surface the instrumenter rewrites calls toward. These
-    // members never execute here; the instrumented assembly carries memberrefs to
-    // this shape, which is exactly what the rewrite-evidence oracle observes.
+namespace NetPerf.Client
+{
+    // The runtime messaging surface the instrumenter rewrites calls toward (corpus
+    // src/NetPerf.Client/Messaging.cs — parameter signatures only; the era named-
+    // pipe plumbing is not executed in the oracle). These members never execute
+    // here; the instrumented assembly carries memberrefs to this shape, which is
+    // exactly what the rewrite-evidence oracle observes.
     public static class Messaging
     {
         public static void EnterMethod(int moduleIdentifier, int methodIdentifier) { }

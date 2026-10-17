@@ -1,5 +1,7 @@
-// UNMODIFIED COPY of the byte-pinned corpus source (pinned by OracleAdaptationPinTests);
-// the corpus tree itself is never modified.
+// ADAPTED COPY of samples/dotnetperf-rewriter/src/NetPerf/ILValidator.cs at
+// pinned corpus SHA db8c3359 (PROVENANCE.md). Adaptations for modern Mono.Cecil
+// (FilterEnd removal, guard nullability) are enumerated and pinned by
+// OracleAdaptationPinTests; the corpus tree itself is never modified.
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -541,8 +543,12 @@ namespace NetPerf {
 			//      contains all instructions up to (but not including) that specified by handlerstart.
 			//NB: Cecil parses the *End properties as one instruction beyond the end of the block they represent,
 			//    hence the conparison to FilterEnd, and not FilterEnd.Next
+			// ADAPTATION (#856): the era guard FilterEnd != HandlerStart checked that the
+			// parsed filter region ends exactly where the handler begins. Modern Cecil has
+			// no FilterEnd — the filter region is defined as [FilterStart, HandlerStart) —
+			// so the non-adjacency condition is structurally false and this rule cannot fire.
 			invalid = from h in exceptionEntries
-					  where h.HandlerStart != null && h.HandlerStart != h.HandlerStart
+					  where false
 					  select h;
 			foreach (var handler in invalid) {
 				errors.Add(string.Format(
@@ -558,8 +564,13 @@ namespace NetPerf {
 			//Rule: The lexically last instruction in the filter must be endfilter.
 			//NB: Cecil parses the *End properties as one instruction beyond the end of the block they represent,
 			//    hence the opcode check on FilterEnd.Previous instead of FilterEnd
+			// ADAPTATION (#856): the era guard FilterEnd != null meant "this entry has a
+			// filter"; mechanically rewriting it to HandlerStart != null would select
+			// every handler and then dereference a null FilterStart in the error path.
+			// FilterStart != null is the modern-Cecil expression of "has a filter", and
+			// the filter's last instruction is HandlerStart.Previous.
 			invalid = from h in exceptionEntries
-					  where h.HandlerStart != null
+					  where h.FilterStart != null
 						&& h.HandlerStart.Previous?.OpCode != OpCodes.Endfilter
 					  select h;
 			foreach (var handler in invalid) {
@@ -570,14 +581,18 @@ namespace NetPerf {
 			}
 
 			//Rule: No two regions (protected block, filter, handler region) of a single exception entry
-			//may overlap with one another. 
+			//may overlap with one another.
+			// ADAPTATION (#856): era PreviousInstr(FilterEnd) yielded a complete null pair for
+			// entries without a filter (PreviousInstr(null) == null); the modern filter end is
+			// HandlerStart, which is never null, so the has-a-filter nullability must be carried
+			// by FilterStart to keep the "no filter" region a complete null pair.
 			foreach (var entry in exceptionEntries) {
 
 				var arePairwiseDisjoint = AreRegionsPairwiseDisjoint(
 					entry.TryStart,
 					PreviousInstr(entry.TryEnd),
 					entry.FilterStart,
-					PreviousInstr(entry.HandlerStart),
+					PreviousInstr(entry.FilterStart == null ? null : entry.HandlerStart),
 					entry.HandlerStart,
 					PreviousInstr(entry.HandlerEnd));
 
@@ -631,13 +646,13 @@ namespace NetPerf {
 									left.TryStart,
 									PreviousInstr(left.TryEnd),
 									left.FilterStart,
-									PreviousInstr(left.HandlerStart),
+									PreviousInstr(left.FilterStart == null ? null : left.HandlerStart),
 									left.HandlerStart,
 									PreviousInstr(left.HandlerEnd),
 									right.TryStart,
 									PreviousInstr(right.TryEnd),
 									right.FilterStart,
-									PreviousInstr(right.HandlerStart),
+									PreviousInstr(right.FilterStart == null ? null : right.HandlerStart),
 									right.HandlerStart,
 									PreviousInstr(right.HandlerEnd));
 				}
@@ -652,11 +667,11 @@ namespace NetPerf {
 						&& (right.HandlerType == ExceptionHandlerType.Catch || right.HandlerType == ExceptionHandlerType.Filter)
 						&& AreRegionsPairwiseDisjoint(
 								left.FilterStart,
-								PreviousInstr(left.HandlerStart),
+								PreviousInstr(left.FilterStart == null ? null : left.HandlerStart),
 								left.HandlerStart,
 								PreviousInstr(left.HandlerEnd),
 								right.FilterStart,
-								PreviousInstr(right.HandlerStart),
+								PreviousInstr(right.FilterStart == null ? null : right.HandlerStart),
 								right.HandlerStart,
 								PreviousInstr(right.HandlerEnd));
 				}
@@ -675,9 +690,13 @@ namespace NetPerf {
 			}
 
 			//Rule: only a filtered handler (not a catch handler, fault handler or finally handler) can have a filter.
+			// ADAPTATION (#856): the era condition FilterStart != null || FilterEnd != null
+			// meant "has a filter" twice; mechanically rewriting the second arm to
+			// HandlerStart != null would mark every handler as having a filter. Both era
+			// arms collapse to FilterStart != null on modern Cecil.
 			invalid = from h in exceptionEntries
 					  where h.HandlerType != ExceptionHandlerType.Filter
-						&& (h.FilterStart != null || h.HandlerStart != null)
+						&& h.FilterStart != null
 					  select h;
 			foreach (var handler in invalid) {
 				errors.Add(string.Format(
@@ -944,13 +963,13 @@ namespace NetPerf {
 
 			var leftEntries = new[] {
 				new { isFilter=false, start=(int?)left.TryStart.Offset, end=(int?)left.TryEnd.Offset},
-				new { isFilter=true, start=nullableOffset(left.FilterStart), end=nullableOffset(left.HandlerStart)},
+				new { isFilter=true, start=nullableOffset(left.FilterStart), end=nullableOffset(left.FilterStart == null ? null : left.HandlerStart)},
 				new { isFilter=false, start=(int?)left.HandlerStart.Offset, end=(int?)left.HandlerEnd.Offset},
 			};
 
 			var rightEntries = new[] {
 				new { isFilter=false, start=(int?)right.TryStart.Offset, end=(int?)right.TryEnd.Offset},
-				new { isFilter=true, start=nullableOffset(right.FilterStart), end=nullableOffset(right.HandlerStart)},
+				new { isFilter=true, start=nullableOffset(right.FilterStart), end=nullableOffset(right.FilterStart == null ? null : right.HandlerStart)},
 				new { isFilter=false, start=(int?)right.HandlerStart.Offset, end=(int?)right.HandlerEnd.Offset},
 			};
 

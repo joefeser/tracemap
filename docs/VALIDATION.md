@@ -4924,3 +4924,29 @@ matrix elsewhere), late-binding census and IL call observations present,
 and the two typed input boundaries — bare netmodules and the MultiModule
 assembly manifest — rejected with their named gaps. No dotnetperf code
 executes; the corpus bytes do the work.
+
+## dotnetperf era rewriter oracle — stage 2b spike (#856)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~OracleRewriteSpikeTests|FullyQualifiedName~OracleAdaptationPinTests' -warnaserror`
+in standard Debug configuration, followed by the full Debug suite. The 2013
+`ILInstrumenter`+`ILValidator` compile from adapted copies in the
+`TraceMap.Oracle` test-support project (era `NetPerf.Common`/`NetPerf.Client`
+dependency surface mirrored member-for-member by shims) and the pair test pins
+the full oracle loop: the instrumenter rewrites a fresh copy of the committed
+`CompiledEvidence.CSharp.dll` target, every rewritten body passes their own
+validator, memberrefs to `NetPerf.Client.Messaging` are present in the output,
+and a scan with `IlRewriteEvidence: true` plus the before/after paths emits
+`ManagedIlRewriteObserved` facts. A second test certifies the committed corpus
+fixture `CallGraphTestClasses.dll` — real 2013 era-instrumented bytes — under
+the same validator. `OracleAdaptationPinTests` diff-pins each adapted file
+against its corpus source (order-sensitive line diff; corpus sources also
+SHA-256-pinned) so adaptation drift is impossible: the differing lines must be
+exactly the documented adaptation set. New adaptation classes this stage: the
+FilterEnd removal splits into two distinct translations — a filter *region end*
+becomes `HandlerStart` (ECMA-335 adjacency), while an era *has-a-filter* guard
+(`FilterEnd != null`, or a `FilterStart != null || FilterEnd != null` pair)
+collapses to `FilterStart != null`, and `PreviousInstr(FilterEnd)`'s
+null-propagation (complete null pair for filterless entries) is carried as
+`PreviousInstr(FilterStart == null ? null : HandlerStart)`. The
+`NetPerfMetadata.InstrumentationData` literal is string-typed; the shim factory
+interface must return `string` there or Cecil aborts the write mid-stream.
