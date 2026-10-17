@@ -32,6 +32,18 @@ public sealed class OracleRewriteSpikeTests
         throw new DirectoryNotFoundException("compiled evidence fixture unavailable");
     }
 
+    // The instrumenter recurses into NestedTypes, so certification must too —
+    // module.Types alone would silently skip every nested (and compiler-generated
+    // state-machine) type.
+    private static IEnumerable<MethodDefinition> AllMethodsWithBodies(ModuleDefinition module) =>
+        AllTypes(module).SelectMany(type => type.Methods).Where(method => method.HasBody);
+
+    private static IEnumerable<TypeDefinition> AllTypes(ModuleDefinition module) =>
+        module.Types.SelectMany(Flatten);
+
+    private static IEnumerable<TypeDefinition> Flatten(TypeDefinition type) =>
+        new[] { type }.Concat(type.NestedTypes.SelectMany(Flatten));
+
     private sealed class RecordingFactory : NetPerf.Common.Instrumentation.IInstrumentFactory
     {
         private int _next;
@@ -72,15 +84,13 @@ public sealed class OracleRewriteSpikeTests
         Assert.True(NetPerf.DotNetPerfOracle.IsInstrumented(source));
         using var module = ModuleDefinition.ReadModule(source);
         var validated = 0;
-        foreach (var type in module.Types)
-            foreach (var method in type.Methods)
-            {
-                if (!method.HasBody) continue;
-                var result = NetPerf.ILValidator.VerifyMethod(method);
-                Assert.True(result.IsValid,
-                    $"era validator rejected committed instrumented {method.FullName}: {string.Join("; ", result.ErrorMessages)}");
-                validated++;
-            }
+        foreach (var method in AllMethodsWithBodies(module))
+        {
+            var result = NetPerf.ILValidator.VerifyMethod(method);
+            Assert.True(result.IsValid,
+                $"era validator rejected committed instrumented {method.FullName}: {string.Join("; ", result.ErrorMessages)}");
+            validated++;
+        }
         Assert.True(validated > 0);
     }
 
@@ -102,27 +112,21 @@ public sealed class OracleRewriteSpikeTests
 
         using var rewritten = ModuleDefinition.ReadModule(after);
         var validated = 0;
-        foreach (var type in rewritten.Types)
-            foreach (var method in type.Methods)
-            {
-                if (!method.HasBody) continue;
-                var result = NetPerf.ILValidator.VerifyMethod(method);
-                Assert.True(result.IsValid,
-                    $"era validator rejected rewritten {method.FullName}: {string.Join("; ", result.ErrorMessages)}");
-                validated++;
-            }
+        foreach (var method in AllMethodsWithBodies(rewritten))
+        {
+            var result = NetPerf.ILValidator.VerifyMethod(method);
+            Assert.True(result.IsValid,
+                $"era validator rejected rewritten {method.FullName}: {string.Join("; ", result.ErrorMessages)}");
+            validated++;
+        }
         Assert.True(validated > 0);
 
         var messagingCalls = 0;
-        foreach (var type in rewritten.Types)
-            foreach (var method in type.Methods)
-            {
-                if (!method.HasBody) continue;
-                foreach (var instruction in method.Body.Instructions)
-                    if (instruction.Operand is MethodReference reference
-                        && reference.DeclaringType.FullName == "NetPerf.Client.Messaging")
-                        messagingCalls++;
-            }
+        foreach (var method in AllMethodsWithBodies(rewritten))
+            foreach (var instruction in method.Body.Instructions)
+                if (instruction.Operand is MethodReference reference
+                    && reference.DeclaringType.FullName == "NetPerf.Client.Messaging")
+                    messagingCalls++;
         Assert.True(messagingCalls > 0, "no messaging calls inserted");
 
         using var scanTemp = new TempDirectory();
