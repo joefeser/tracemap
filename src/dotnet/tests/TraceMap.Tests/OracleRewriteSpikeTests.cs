@@ -160,13 +160,35 @@ public sealed class OracleRewriteSpikeTests
                 continue;
 
             Assert.True(enterCall, $"rewritten method carries no enter callback: {method.FullName}");
-            // Exit callbacks are inserted before each ret/jmp exit instruction; a body
-            // whose only exit is a throw has none, so the exit family is required only
-            // when exit instructions remain in the rewritten body.
-            var hasExitInstruction = method.Body.Instructions
-                .Any(instruction => instruction.OpCode == OpCodes.Ret || instruction.OpCode == OpCodes.Jmp);
-            if (hasExitInstruction)
-                Assert.True(exitCall, $"rewritten method carries no exit callback: {method.FullName}");
+            // Exit callbacks are inserted before EACH qualifying exit instruction, so
+            // verify per exit site (a body-wide any-check would pass with one exit
+            // instrumented and another dropped). Qualifying exits mirror the era
+            // instrumenter's IsMethodExitInstr: ret/jmp whose two-back instruction is
+            // not the tail prefix; a throw-only body has no exit site at all.
+            var instructions = method.Body.Instructions;
+            for (var i = 0; i < instructions.Count; i++)
+            {
+                var isRetOrJmp = instructions[i].OpCode == OpCodes.Ret || instructions[i].OpCode == OpCodes.Jmp;
+                if (!isRetOrJmp)
+                    continue;
+                var priorIsTailCall = i >= 2 && instructions[i - 2].OpCode == OpCodes.Tail;
+                if (priorIsTailCall)
+                    continue;
+
+                var nearestMessagingCall = -1;
+                for (var j = i - 1; j >= 0; j--)
+                    if (instructions[j].Operand is MethodReference reference
+                        && reference.DeclaringType.FullName == "NetPerf.Client.Messaging")
+                    {
+                        nearestMessagingCall = j;
+                        break;
+                    }
+                Assert.True(nearestMessagingCall >= 0,
+                    $"exit instruction at IL offset {instructions[i].Offset} has no preceding callback: {method.FullName}");
+                var callee = (MethodReference)instructions[nearestMessagingCall].Operand!;
+                Assert.True(callee.Name is "ExitMethod" or "ExitGenericMethod",
+                    $"exit instruction at IL offset {instructions[i].Offset} is preceded by {callee.Name}, not an exit callback: {method.FullName}");
+            }
         }
         Assert.True(messagingCalls > 0, "no messaging calls inserted");
         Assert.True(nestedInstrumented > 0, "no nested-type method was instrumented; the fixture no longer exercises nesting");
