@@ -80,9 +80,9 @@ internal static class EraInstrumentationDecoder
             {
                 if (!method.HasBody)
                     continue;
-                var id = FirstMessagingMethodId(method.Body);
-                if (id.HasValue)
-                    pairs.Add((id.Value, EraSignature(method)));
+                var ids = AllMessagingMethodIds(method.Body);
+                if (ids.Count > 0)
+                    pairs.Add((ids[0], EraSignature(method)));
             }
         return pairs;
     }
@@ -93,12 +93,18 @@ internal static class EraInstrumentationDecoder
     private static IEnumerable<TypeDefinition> Flatten(TypeDefinition type) =>
         new[] { type }.Concat(type.NestedTypes.SelectMany(Flatten));
 
-    private static int? FirstMessagingMethodId(MethodBody body)
+    private static IReadOnlyList<int> AllMessagingMethodIds(MethodBody body)
     {
-        // Canonical callback prefix for every enter/exit variant (generic or not):
-        //   ldsfld NetPerf.NetPerfMetadata::ModuleIdentifier ; ldc.i4 <methodId> ; ... ; call NetPerf.Client.Messaging::Enter|Exit...
-        // The ldc.i4 directly after the marker ldsfld is the method id — in the
-        // generic variants later ldc.i4 pushes are array sizes, not ids.
+        // Canonical callback prefixes, all starting with the marker pair:
+        //   ldsfld NetPerf.NetPerfMetadata::ModuleIdentifier ; ldc.i4 <id> ; ... ; call
+        // The id directly after the marker ldsfld is a METHOD id when the call is
+        // Messaging::Enter|Exit (generic or not), and a POINT id when the call is
+        // Messaging::InstrumentationPointHit — the era run had sequence-point
+        // instrumentation on (878 point records), so both families share the
+        // prefix and only the call target disambiguates. Every enter/exit in a
+        // body must carry the same method id; a disagreement is a defect in the
+        // instrumented output and fails loudly.
+        var ids = new List<int>();
         for (var i = 0; i < body.Instructions.Count; i++)
         {
             if (body.Instructions[i].OpCode != OpCodes.Ldsfld
@@ -106,13 +112,39 @@ internal static class EraInstrumentationDecoder
                 || field.DeclaringType.FullName != "NetPerf.NetPerfMetadata"
                 || field.Name != "ModuleIdentifier")
                 continue;
-            if (i + 1 < body.Instructions.Count
-                && body.Instructions[i + 1].OpCode == OpCodes.Ldc_I4
-                && body.Instructions[i + 1].Operand is int id)
-                return id;
-            throw new InvalidOperationException("marker ldsfld without a following ldc.i4 method id");
+            if (i + 1 >= body.Instructions.Count
+                || body.Instructions[i + 1].OpCode != OpCodes.Ldc_I4
+                || body.Instructions[i + 1].Operand is not int id)
+                throw new InvalidOperationException("marker ldsfld without a following ldc.i4 id");
+            // Walk to the messaging call, stepping over the generic-enter helpers:
+            // the class-generic-arg sequence calls the synthesized
+            // <Type>b__GenericArgs() between the marker pair and the call.
+            int j = i + 2;
+            MethodReference? callee = null;
+            while (j < body.Instructions.Count)
+            {
+                if (body.Instructions[j].OpCode == OpCodes.Ldsfld
+                    && body.Instructions[j].Operand is FieldReference nextField
+                    && nextField.DeclaringType.FullName == "NetPerf.NetPerfMetadata")
+                    break; // a new marker pair started without a messaging call
+                if (body.Instructions[j].OpCode == OpCodes.Call
+                    && body.Instructions[j].Operand is MethodReference candidate
+                    && candidate.DeclaringType.FullName == "NetPerf.Client.Messaging")
+                {
+                    callee = candidate;
+                    break;
+                }
+                j++;
+            }
+            if (callee is null)
+                throw new InvalidOperationException("marker ldsfld/ldc.i4 pair without a following messaging call");
+            if (callee.Name != "InstrumentationPointHit")
+                ids.Add(id);
+            i = j;
         }
-        return null;
+        if (ids.Distinct().Count() > 1)
+            throw new InvalidOperationException($"messaging callbacks carry different method ids: {string.Join(",", ids)}");
+        return ids;
     }
 
     // Era NetPerf signature format (see file header). Generic-instance

@@ -42,28 +42,23 @@ internal sealed record GoldenSuites(
     IReadOnlyList<(string Suite, string TestName, string Reason)> Irregular,
     IReadOnlyList<string> EraNoOpTests)
 {
-    private static volatile GoldenSuites _cached; // null until first parse (nullable context is off in this project)
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, GoldenSuites> _parsed = new();
 
     public static GoldenSuites Parse(string corpusRoot)
     {
-        var cached = _cached;
-        if (cached != null)
-            return cached;
-        lock (typeof(GoldenSuites))
+        return _parsed.GetOrAdd(corpusRoot, static root =>
         {
-            if (_cached != null)
-                return _cached;
             var branches = new List<BranchesGolden>();
             var blocks = new List<ProtectedBlocksGolden>();
             var irregular = new List<(string, string, string)>();
             var noOps = new List<string>();
 
-            ParseBranchesSuite(corpusRoot, "SwitchInstrTest.cs", branches, irregular);
-            ParseBranchesSuite(corpusRoot, "SingleTargetBranchesTest.cs", branches, irregular);
-            ParseProtectedBlocksSuite(corpusRoot, blocks, irregular, noOps);
+            ParseBranchesSuite(root, "SwitchInstrTest.cs", branches, irregular);
+            ParseBranchesSuite(root, "SingleTargetBranchesTest.cs", branches, irregular);
+            ParseProtectedBlocksSuite(root, blocks, irregular, noOps);
 
-            return _cached = new GoldenSuites(branches, blocks, irregular, noOps);
-        }
+            return new GoldenSuites(branches, blocks, irregular, noOps);
+        });
     }
 
     private static void ParseBranchesSuite(string corpusRoot, string suiteFile,
@@ -153,7 +148,9 @@ internal sealed record GoldenSuites(
                 into.Add(new ProtectedBlocksGolden(name, "ProtectedBlocks", expectedValid,
                     expectedValid ? null : "The protected block",
                     expectedValid ? null : "regions are not pairwise disjoint.",
-                    [ParseBlock(single.Groups[2].Value, single.Groups[3].Value)], []));
+                    // The era ProtectedBlockHelper constructs a Filter handler
+                    // regardless of its handlerKind argument; mirror that.
+                    [ParseBlock("Filter", single.Groups[3].Value)], []));
                 continue;
             }
 
@@ -288,6 +285,8 @@ internal static class GoldenReplay
         foreach (var block in golden.Blocks)
             GoldenBodyBuilders.AddProtectedBlock(body, HandlerKinds[block.Kind],
                 block.TryStart, block.TryEnd, block.FilterStart, block.FilterEnd, block.HandlerStart, block.HandlerEnd);
+        foreach (var (index, opcode) in golden.OpcodeWrites)
+            body.Instructions[index].OpCode = Opcodes[opcode];
         return Invoke(golden.Verify, body);
     }
 

@@ -320,15 +320,33 @@ public sealed class OracleAdaptationPinTests
 
             foreach (var source in pin.Sources)
             {
+                // Each pinned region must appear as an ORDERED CONTIGUOUS run in the
+                // adapted file (indentation-insensitive): set membership alone would
+                // let reordered or duplicated region lines corrupt the oracle while
+                // the pin stays green.
                 var regionLines = ReadNormalizedLines(Path.Combine(CorpusRoot(), source.CorpusRelativePath));
-                var adaptedSet = adapted.Select(StripIndentation).ToHashSet();
-                var missing = new List<string>();
+                var adaptedStripped = adapted.Select(StripIndentation).ToArray();
                 foreach (var (start, end) in source.Regions)
-                    for (var line = start; line <= end; line++)
-                        if (!adaptedSet.Contains(StripIndentation(regionLines[line - 1])))
-                            missing.Add($"{source.CorpusRelativePath}:{line} {regionLines[line - 1].Trim()}");
-                Assert.True(missing.Count == 0,
-                    $"extracted region lines no longer present in {pin.AdaptedRelativePath}:\n{string.Join("\n", missing)}");
+                {
+                    var expected = Enumerable.Range(start, end - start + 1)
+                        .Select(line => StripIndentation(regionLines[line - 1]))
+                        .ToArray();
+                    var found = false;
+                    for (var offset = 0; offset <= adaptedStripped.Length - expected.Length && !found; offset++)
+                    {
+                        var matches = true;
+                        for (var i = 0; i < expected.Length; i++)
+                            if (adaptedStripped[offset + i] != expected[i])
+                            {
+                                matches = false;
+                                break;
+                            }
+                        found = matches;
+                    }
+                    Assert.True(found,
+                        $"extracted region {source.CorpusRelativePath}:{start}-{end} is not present in order " +
+                        $"in {pin.AdaptedRelativePath}; if the extraction moved, regenerate the pin consciously");
+                }
             }
         }
     }
