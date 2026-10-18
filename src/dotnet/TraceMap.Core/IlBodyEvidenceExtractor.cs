@@ -220,7 +220,7 @@ internal static class IlBodyEvidenceExtractor
         "Observed helper-call evidence: the IL references the CompilerServices late-binding helpers; it does not prove the compiler generated the call or that the language compiled with late-binding semantics (direct helper calls and rewrite-inserted calls are indistinguishable), and it never establishes the assembly Option Strict setting. Observed IL call sites in admitted/partial bodies only; density is the late-bound share of observed calls, not of all code. "
         + "Late-bound means the call target encodes Microsoft.VisualBasic.CompilerServices LateBinding/NewLateBinding helper members; "
         + "other dynamic mechanisms (Reflection, DLR, delegates) are not counted. No current reducer or report consumes this census; high density is documented consumer guidance for downweighting source-lane call-graph claims, not implemented behavior. "
-        + "for the affected members; it proves compilation-time late binding, not runtime behavior.";
+        + "The census never establishes runtime behavior, dispatch outcomes, or the assembly Option Strict setting.";
 
     // Exact declaring-type match: the encoded target identity frames the declaring
     // type as type(namespace:<n>:<ns>|names:<m>:<name>) immediately followed by the

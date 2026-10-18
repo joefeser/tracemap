@@ -357,9 +357,7 @@ public sealed class OracleAdaptationPinTests
         foreach (var pin in ExtractionPins)
             foreach (var source in pin.Sources)
             {
-                var hash = Convert.ToHexString(
-                    SHA256.HashData(File.ReadAllBytes(Path.Combine(CorpusRoot(), source.CorpusRelativePath)))).ToLowerInvariant();
-                Assert.Equal(source.CorpusSha256, hash);
+                Assert.Equal(source.CorpusSha256, PinnedSourceSha256(Path.Combine(CorpusRoot(), source.CorpusRelativePath)));
             }
     }
 
@@ -389,9 +387,7 @@ public sealed class OracleAdaptationPinTests
     {
         foreach (var pin in Pins)
         {
-            var hash = Convert.ToHexString(
-                SHA256.HashData(File.ReadAllBytes(Path.Combine(CorpusRoot(), pin.CorpusRelativePath)))).ToLowerInvariant();
-            Assert.Equal(pin.CorpusSha256, hash);
+            Assert.Equal(pin.CorpusSha256, PinnedSourceSha256(Path.Combine(CorpusRoot(), pin.CorpusRelativePath)));
         }
     }
 
@@ -413,6 +409,13 @@ public sealed class OracleAdaptationPinTests
 
     private static string[] ReadNormalizedLines(string path) =>
         File.ReadAllLines(path).Select(line => line.Replace("\ufeff", "").TrimEnd()).ToArray();
+
+    // SHA-256 over the raw working-tree bytes, matching the committed manifest
+    // values: the corpus is byte-pinned, and a hash that forgave line-ending
+    // changes would accept byte-level corpus edits. verify_corpus.py remains the
+    // canonical committed-objects verification.
+    private static string PinnedSourceSha256(string path) =>
+        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
     // Order- and position-sensitive line diff: an LCS walk emitting corpus-only
     // lines as Removed and adapted-only lines as Added, each carrying its 1-based

@@ -317,6 +317,19 @@ public sealed partial class IlBodyEvidenceExtractorTests
     }
 
     [Fact]
+    public void Late_binding_census_limitation_claims_structural_evidence_only()
+    {
+        // The limitation must match the rule catalog's contract: structural
+        // helper-call evidence, no proof of compiler generation, language-level
+        // late-binding semantics, runtime behavior, or Option Strict. A previous
+        // orphaned fragment claimed the census "proves compilation-time late
+        // binding" directly after denying it.
+        Assert.DoesNotContain("proves", IlBodyEvidenceExtractor.CensusLimitation, StringComparison.Ordinal);
+        Assert.Contains("does not prove the compiler generated the call", IlBodyEvidenceExtractor.CensusLimitation, StringComparison.Ordinal);
+        Assert.Contains("never establishes runtime behavior, dispatch outcomes, or the assembly Option Strict setting", IlBodyEvidenceExtractor.CensusLimitation, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Late_binding_detection_is_an_exact_declaring_type_match()
     {
         // Real framing from the fixture's encoded identities.
