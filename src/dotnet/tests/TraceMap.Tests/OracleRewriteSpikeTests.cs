@@ -160,13 +160,27 @@ public sealed class OracleRewriteSpikeTests
                 continue;
 
             Assert.True(enterCall, $"rewritten method carries no enter callback: {method.FullName}");
-            // Exit callbacks are inserted before each ret/jmp exit instruction; a body
-            // whose only exit is a throw has none, so the exit family is required only
-            // when exit instructions remain in the rewritten body.
-            var hasExitInstruction = method.Body.Instructions
-                .Any(instruction => instruction.OpCode == OpCodes.Ret || instruction.OpCode == OpCodes.Jmp);
-            if (hasExitInstruction)
-                Assert.True(exitCall, $"rewritten method carries no exit callback: {method.FullName}");
+            // The instrumenter inserts each exit callback IMMEDIATELY before its
+            // qualifying exit instruction (the call is the last piece inserted), so
+            // verify the local predecessor of every exit site: an unbounded reverse
+            // scan could credit a later exit with an earlier exit's callback.
+            // Exit sites mirror the era IsMethodExitInstr: jmp, the tail prefix
+            // itself, and ret whose two-back instruction is not the tail prefix
+            // (the ret after a tail call is not an exit site); a throw-only body
+            // has none.
+            var instructions = method.Body.Instructions;
+            for (var i = 0; i < instructions.Count; i++)
+            {
+                var isExitSite = instructions[i].OpCode == OpCodes.Jmp
+                    || instructions[i].OpCode == OpCodes.Tail
+                    || (instructions[i].OpCode == OpCodes.Ret && (i < 2 || instructions[i - 2].OpCode != OpCodes.Tail));
+                if (!isExitSite)
+                    continue;
+                Assert.True(i > 0 && instructions[i - 1].Operand is MethodReference predecessor
+                        && predecessor.DeclaringType.FullName == "NetPerf.Client.Messaging"
+                        && predecessor.Name is "ExitMethod" or "ExitGenericMethod",
+                    $"exit site {instructions[i].OpCode.Name} at IL offset {instructions[i].Offset} is not immediately preceded by an exit callback: {method.FullName}");
+            }
         }
         Assert.True(messagingCalls > 0, "no messaging calls inserted");
         Assert.True(nestedInstrumented > 0, "no nested-type method was instrumented; the fixture no longer exercises nesting");
