@@ -1033,20 +1033,24 @@ public sealed class EvidenceDocsExportTests
     }
 
     [Fact]
-    public void Docs_export_safety_patterns_are_nonbacktracking_with_load_tolerant_timeouts()
+    public void Bounded_regex_patterns_in_core_and_reporting_are_nonbacktracking_with_load_tolerant_timeouts()
     {
-        // Enumerated by field type on purpose: a pattern added later is covered without
-        // registering it anywhere. #857: a 250 ms budget on these patterns tripped under
-        // parallel load on a 36-character match while every case passed in isolation.
-        var patterns = typeof(EvidenceDocsExporter)
-            .GetFields(BindingFlags.NonPublic | BindingFlags.Static)
-            .Where(field => field.FieldType == typeof(Regex))
-            .Select(field => (field.Name, Pattern: (Regex)field.GetValue(null)!))
+        // Every static Regex field with a finite match timeout, enumerated by field type
+        // across both assemblies on purpose: a pattern added later is covered without being
+        // registered anywhere, and a sibling type cannot hide one (#857: 250 ms budgets in
+        // the docs exporter AND its query-recipes type, plus 100 ms budgets in Core, tripped
+        // under parallel load on tiny inputs while every case passed in isolation).
+        var patterns = new[] { typeof(EvidenceDocsExporter).Assembly, typeof(ScanOptions).Assembly }
+            .SelectMany(assembly => assembly.GetTypes())
+            .SelectMany(type => type.GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Where(field => field.FieldType == typeof(Regex))
+                .Select(field => (Name: type.FullName + "." + field.Name, Pattern: (Regex?)field.GetValue(null))))
+            .Where(item => item.Pattern is not null && item.Pattern.MatchTimeout != Regex.InfiniteMatchTimeout)
             .ToArray();
-        Assert.True(patterns.Length >= 14, "expected the redaction pattern battery");
+        Assert.True(patterns.Length >= 24, $"expected the bounded pattern inventory, found {patterns.Length}");
         Assert.All(patterns, item =>
         {
-            Assert.True(item.Pattern.Options.HasFlag(RegexOptions.NonBacktracking), item.Name);
+            Assert.True(item.Pattern!.Options.HasFlag(RegexOptions.NonBacktracking), item.Name);
             Assert.True(item.Pattern.MatchTimeout >= TimeSpan.FromSeconds(2), item.Name);
         });
     }

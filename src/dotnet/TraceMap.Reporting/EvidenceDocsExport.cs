@@ -303,8 +303,8 @@ public static partial class EvidenceDocsExporter
     // and the generous timeout is a safety bound that wall-clock thread starvation
     // under parallel load must not trip (#857: the 250 ms budget failed a 36-character
     // match in a full-suite run while every case passed in isolation).
-    private static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(2);
-    private const RegexOptions SafetyPatternOptions = RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking;
+    internal static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(2);
+    internal const RegexOptions SafetyPatternOptions = RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking;
     private static readonly Regex YearMonthPattern = new(@"^\d{4}-\d{2}$", SafetyPatternOptions, RegexTimeout);
     private static readonly Regex SafeClosedTextPattern = new(@"^[A-Za-z0-9._:/@,+ \[\]\-]+$", SafetyPatternOptions, RegexTimeout);
     private static readonly Regex SafePathPattern = new(@"^[A-Za-z0-9._/\-]+$", SafetyPatternOptions, RegexTimeout);
