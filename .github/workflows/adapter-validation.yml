@@ -32,10 +32,48 @@ jobs:
       - name: Verify pinned SQL fixture SDK resolves
         working-directory: samples/sql-database-matrix
         run: dotnet --version
-      - name: Build and test
+      # Change-impact v1: pull requests confined to leaf areas run a reduced lane that
+      # excludes the self-contained campaign families (WebFormsReview*, SqlDatabaseMatrix*,
+      # OutboundHttp*); shared-core changes, pushes to dev/main, dispatches, missing change
+      # data and large change sets all run the full suite. The trigger table lives in
+      # scripts/select_dotnet_test_lane.py and a reduced run is labelled partial in the step
+      # name and the job summary. A reduced pass is a partial result: the dev/main push runs
+      # everything, so a regression in an excluded family surfaces there, before promotion.
+      - name: Collect pull-request changed paths
+        if: github.event_name == 'pull_request'
+        env:
+          # Only this step sees the token; the selector and its tests run without it.
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          # Renames contribute both names. A failed or partial lookup leaves no paths at
+          # all, which the selector resolves to the full suite.
+          if ! gh api --paginate "repos/${GITHUB_REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" \
+              --jq '.files[] | .filename, (.previous_filename // empty)' > "$RUNNER_TEMP/changed-paths.txt"; then
+            : > "$RUNNER_TEMP/changed-paths.txt"
+            echo "::warning::changed-path lookup failed; the full suite will run"
+          fi
+      - name: Select test lane from changed paths
+        id: lane
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 scripts/test_select_dotnet_test_lane.py
+          touch "$RUNNER_TEMP/changed-paths.txt"
+          python3 scripts/select_dotnet_test_lane.py --event "$EVENT_NAME" --github-output "$GITHUB_OUTPUT" \
+            < "$RUNNER_TEMP/changed-paths.txt" | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Build and test (${{ steps.lane.outputs.lane }} lane)
+        env:
+          LANE_FILTER: ${{ steps.lane.outputs.filter }}
         run: |
           dotnet build src/dotnet/TraceMap.sln
-          dotnet test src/dotnet/TraceMap.sln --no-build
+          if [ -n "$LANE_FILTER" ]; then
+            echo "partial run: --filter \"$LANE_FILTER\""
+            dotnet test src/dotnet/TraceMap.sln --no-build --filter "$LANE_FILTER"
+          else
+            dotnet test src/dotnet/TraceMap.sln --no-build
+          fi
       - name: Generate and validate artifacts
         run: |
           dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan \
