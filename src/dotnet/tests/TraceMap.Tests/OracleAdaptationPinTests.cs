@@ -39,7 +39,7 @@ public sealed class OracleAdaptationPinTests
         new AdaptedFilePin(
             "src/NetPerf/ILInstrumenter.cs",
             "tests/TraceMap.Oracle/Adapted/ILInstrumenter.cs",
-            "66f63400c2b70293a657c7d13d774f19f24a2e70a4faa9d3d2f0b04cb5418692",
+            "17233629e5de39fb043eb7aed87388df65d8283240df573416d84becc880363e",
             [
                 "32|			Contract.Requires<ArgumentNullException>(assembly != null, \"assembly\");",
                 "33|			Contract.Requires<ArgumentException>(assemblySymbols == null || assemblySymbols.IsAbsolute);",
@@ -116,7 +116,7 @@ public sealed class OracleAdaptationPinTests
         new AdaptedFilePin(
             "src/NetPerf/ILValidator.cs",
             "tests/TraceMap.Oracle/Adapted/ILValidator.cs",
-            "e0b0f209f66f428d4f3b1447f11f3c96324c57f2b938ee6ce70df2227ab3b3dc",
+            "50f83bfa0801161bb50d66630af9f7a6c4fe11c1bae023a80701e0a12b9e4371",
             [
                 "75|			return new VerifyResult();",
                 "135|					if (handler.HandlerType == ExceptionHandlerType.Filter && IsInstructionBetween(instr, handler.FilterStart, handler.FilterEnd.Next)) {",
@@ -230,11 +230,11 @@ public sealed class OracleAdaptationPinTests
             [
                 new ExtractionSource(
                     "src/NetPerf.Tests.Unit/BranchesTest.cs",
-                    "558d8eac6b677260e57bcd4db615fa1285f586a3c8a3f76ab5ad6c318e1a8c90",
+                    "b5ac63dc45acaefa79bf017d54ce059d901f28b8d2344129aa4728dd59af594f",
                     [(34, 74)]),
                 new ExtractionSource(
                     "src/NetPerf.Tests.Unit/ProtectedBlocksTest.cs",
-                    "236fbed13fd1b2b1cbff2ee16f5518cc4375a805ef5c8fcd7b030d96e4cbf26c",
+                    "7c019a66358cd09d134585373715d1c3c8c788fa3ea60151fe5602e9f4fb8f8d",
                     [(82, 120)]),
             ],
             [
@@ -357,7 +357,7 @@ public sealed class OracleAdaptationPinTests
         foreach (var pin in ExtractionPins)
             foreach (var source in pin.Sources)
             {
-                Assert.Equal(source.CorpusSha256, NormalizedContentSha256(Path.Combine(CorpusRoot(), source.CorpusRelativePath)));
+                Assert.Equal(source.CorpusSha256, PinnedSourceSha256(Path.Combine(CorpusRoot(), source.CorpusRelativePath)));
             }
     }
 
@@ -387,7 +387,7 @@ public sealed class OracleAdaptationPinTests
     {
         foreach (var pin in Pins)
         {
-            Assert.Equal(pin.CorpusSha256, NormalizedContentSha256(Path.Combine(CorpusRoot(), pin.CorpusRelativePath)));
+            Assert.Equal(pin.CorpusSha256, PinnedSourceSha256(Path.Combine(CorpusRoot(), pin.CorpusRelativePath)));
         }
     }
 
@@ -410,23 +410,12 @@ public sealed class OracleAdaptationPinTests
     private static string[] ReadNormalizedLines(string path) =>
         File.ReadAllLines(path).Select(line => line.Replace("\ufeff", "").TrimEnd()).ToArray();
 
-    // SHA-256 over CRLF-normalized bytes: the corpus files are committed with
-    // CRLF, and on Windows core.autocrlf checkouts can alter working-tree line
-    // endings, so raw-byte hashes would fail on an unchanged corpus. The pin
-    // covers content, not line-ending representation (verify_corpus.py owns the
-    // byte-exact pin).
-    private static string NormalizedContentSha256(string path)
-    {
-        var bytes = File.ReadAllBytes(path);
-        var normalized = new List<byte>(bytes.Length);
-        for (var i = 0; i < bytes.Length; i++)
-        {
-            if (bytes[i] == (byte)'\r' && i + 1 < bytes.Length && bytes[i + 1] == (byte)'\n')
-                continue;
-            normalized.Add(bytes[i]);
-        }
-        return Convert.ToHexString(SHA256.HashData(normalized.ToArray())).ToLowerInvariant();
-    }
+    // SHA-256 over the raw working-tree bytes, matching the committed manifest
+    // values: the corpus is byte-pinned, and a hash that forgave line-ending
+    // changes would accept byte-level corpus edits. verify_corpus.py remains the
+    // canonical committed-objects verification.
+    private static string PinnedSourceSha256(string path) =>
+        Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
 
     // Order- and position-sensitive line diff: an LCS walk emitting corpus-only
     // lines as Removed and adapted-only lines as Added, each carrying its 1-based
