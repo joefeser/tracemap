@@ -18,8 +18,11 @@ cannot reach). Every ambiguity resolves to the full suite:
 - non-pull-request events, missing change data or very large change sets run
   the full suite.
 
-Pushes to dev/main always run the full suite in CI, so nothing merges on a
-reduced run. Usage (changed paths on stdin, one per line):
+A reduced run is a partial result. Pushes to dev/main always run the full suite
+in CI, so a regression in an excluded family surfaces on the dev push, before
+promotion to main. Renamed files contribute both their old and new paths (the
+workflow passes `previous_filename` too). Usage (changed paths on stdin, one per
+line):
 
     python3 scripts/select_dotnet_test_lane.py --event pull_request \\
         [--github-output "$GITHUB_OUTPUT"] [--json]
@@ -49,13 +52,13 @@ FULL_SUITE_PREFIXES: tuple[str, ...] = (
 )
 
 FULL_SUITE_FILENAMES: frozenset[str] = frozenset({
-    "Directory.Build.props",
-    "Directory.Build.targets",
-    "Directory.Packages.props",
     "global.json",
     "TraceMap.sln",
     "TraceMap.Tests.csproj",
 })
+
+# Any MSBuild directory-level file (props, targets, rsp, ...) shapes every build.
+FULL_SUITE_FILENAME_PREFIXES: tuple[str, ...] = ("Directory.Build.", "Directory.Packages.")
 
 # Family name -> (FullyQualifiedName substring used for exclusion, trigger prefixes).
 FAMILIES: dict[str, tuple[str, tuple[str, ...]]] = {
@@ -101,7 +104,8 @@ class LaneDecision:
 def _is_shared_core(path: str) -> bool:
     if path.startswith(FULL_SUITE_PREFIXES):
         return True
-    if os.path.basename(path) in FULL_SUITE_FILENAMES:
+    name = os.path.basename(path)
+    if name in FULL_SUITE_FILENAMES or name.startswith(FULL_SUITE_FILENAME_PREFIXES):
         return True
     # Shared test helpers and fixtures (anything under the test project that is not a
     # *Tests.cs file) can be used by campaign tests, so they force the full suite.

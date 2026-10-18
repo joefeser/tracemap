@@ -349,11 +349,16 @@ ambiguity resolves to the full suite:
 | `samples/compiled-dotnet-evidence/**`, `samples/fixture-build/**` or `WebFormsReview*Tests.cs` | the WebForms-review family runs |
 | anything else (other test files, docs, site, scripts, workflows, adapters, the Oracle project, the Access / SqlValidation / EndpointAlignment projects, non-campaign samples) | reduced lane: campaign families not triggered are excluded with `FullyQualifiedName!~…`; the step name and job summary say **partial** |
 
-Pushes to `dev`/`main`, `workflow_dispatch`, missing change data and change sets of 250+
-files always run the full suite, so nothing merges on a reduced run. The excluded
-families are the suite's heavy, self-contained lanes (measured 2026-10-18: 21 classes,
-347 of 4,391 tests, 58% of test-minutes); a reduced run is a partial result and is
-labelled as such, never a claim that those lanes passed.
+Pushes to `dev`/`main`, `workflow_dispatch`, missing or failed change-path lookups and
+change sets of 250+ files always run the full suite. Renamed files contribute both their
+old and new paths. The excluded families are the suite's heavy, self-contained lanes
+(measured 2026-10-18: 21 classes, 347 of 4,391 tests, 58% of test-minutes); a reduced
+run is a partial result and is labelled as such, never a claim that those lanes passed.
+The trade-off is deliberate: a pull request can merge on a reduced pass, and a
+regression in an excluded family then surfaces on the `dev` push, before promotion to
+`main`. Known limitation: the family exclusion is by class-name substring, so a
+campaign-named test class added inside a neutrally named file is excluded until that
+push; keep the one-class-per-matching-file convention for campaign families.
 
 The same table is the local gate policy: before pushing a head whose changes are
 confined to leaf areas (review fixes, test-only edits, docs), run the touched lanes;

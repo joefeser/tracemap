@@ -74,15 +74,29 @@ class SelectDotnetTestLaneTests(unittest.TestCase):
         self.assertEqual("reduced", decision.lane)
         self.assertEqual(("SqlDatabaseMatrix",), decision.triggered)
         self.assertEqual(("OutboundHttp", "WebFormsReview"), decision.excluded)
-        self.assertNotIn("SqlDatabaseMatrixTests", decision.filter)
-        self.assertIn("FullyQualifiedName!~WebFormsReview", decision.filter)
+        self.assertEqual("FullyQualifiedName!~OutboundHttp&FullyQualifiedName!~WebFormsReview", decision.filter)
 
     def test_campaign_test_file_triggers_its_family(self) -> None:
         decision = self.select("src/dotnet/tests/TraceMap.Tests/WebFormsReviewExecutionTests.cs")
         self.assertEqual(("WebFormsReview",), decision.triggered)
         self.assertEqual(("OutboundHttp", "SqlDatabaseMatrix"), decision.excluded)
+        self.assertEqual("FullyQualifiedName!~OutboundHttp&FullyQualifiedName!~SqlDatabaseMatrixTests", decision.filter)
         decision = self.select("src/dotnet/tests/TraceMap.Tests/OutboundHttpLegacyCoverageTests.cs")
         self.assertEqual(("OutboundHttp",), decision.triggered)
+        self.assertEqual("FullyQualifiedName!~SqlDatabaseMatrixTests&FullyQualifiedName!~WebFormsReview", decision.filter)
+
+    def test_every_directory_level_msbuild_file_forces_full_suite(self) -> None:
+        for name in ("Directory.Build.props", "Directory.Build.targets", "Directory.Build.rsp",
+                     "Directory.Build.custom.props", "Directory.Packages.props"):
+            decision = self.select("docs/README.md", "src/dotnet/" + name)
+            self.assertEqual("full", decision.lane, name)
+
+    def test_rename_out_of_a_trigger_area_still_counts_the_old_path(self) -> None:
+        # The workflow passes both names of a rename; the old path keeps its classification.
+        decision = self.select("docs/moved/ScanEngine.cs", "src/dotnet/TraceMap.Core/ScanEngine.cs")
+        self.assertEqual("full", decision.lane)
+        decision = self.select("docs/moved/Sql.cs", "samples/sql-database-matrix/net48/Sql.cs")
+        self.assertEqual(("SqlDatabaseMatrix",), decision.triggered)
 
     def test_every_family_triggered_is_the_full_suite(self) -> None:
         decision = self.select(
@@ -123,7 +137,9 @@ class SelectDotnetTestLaneTests(unittest.TestCase):
             written = output.read_text(encoding="utf-8").splitlines()
             self.assertIn("lane=reduced", written)
             self.assertIn("partial=true", written)
-            self.assertTrue(any(line.startswith("filter=FullyQualifiedName!~") for line in written))
+            self.assertIn(
+                "filter=FullyQualifiedName!~OutboundHttp&FullyQualifiedName!~SqlDatabaseMatrixTests&FullyQualifiedName!~WebFormsReview",
+                written)
             self.assertIn("reduced (partial)", stdout.getvalue())
             self.assertIn("excluded families: OutboundHttp, SqlDatabaseMatrix, WebFormsReview", stdout.getvalue())
 
