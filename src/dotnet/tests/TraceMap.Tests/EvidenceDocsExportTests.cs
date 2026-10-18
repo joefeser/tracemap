@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
@@ -1030,23 +1032,99 @@ public sealed class EvidenceDocsExportTests
         Assert.Equal("11:chunkFamily=8:endpoint\n7:missing=0:\n", record);
     }
 
+    // The complete inventory of bounded (finite-timeout) static Regex fields in Core and
+    // Reporting. Exact on purpose: a pattern that regresses to an infinite timeout drops
+    // out of the bounded set and fails here, and a new bounded pattern must be added here
+    // (and therefore reviewed for NonBacktracking + a load-tolerant bound).
+    private static readonly string[] BoundedRegexFieldInventory =
+    [
+        "TraceMap.Core.CiWorkflowProducerExtractor.EnvExpression",
+        "TraceMap.Core.CiWorkflowProducerExtractor.KeyPattern",
+        "TraceMap.Core.CombinedSurfaceProjection.SafeIdentifier",
+        "TraceMap.Core.CombinedSurfaceProjection.SafeIdentifierWithSpaces",
+        "TraceMap.Core.DepsJsonExtractor.Name",
+        "TraceMap.Core.DepsJsonExtractor.Target",
+        "TraceMap.Core.DepsJsonExtractor.Version",
+        "TraceMap.Core.ProjectFileReader.SafeLockfileTargetFrameworkPattern",
+        "TraceMap.Core.ProjectFileReader.SafeNuGetPackageIdPattern",
+        "TraceMap.Core.ProjectFileReader.SafeNuGetResolvedVersionPattern",
+        "TraceMap.Core.WebFormsWizardTarget.SolutionEntry",
+        "TraceMap.Reporting.EvidenceDocsExporter.CommitIdentityPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.ConfigSecretPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.ContentHashLinePattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.CredentialPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.RawHostPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.RawSqlPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.RepeatedDashPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.SafeClosedTextPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.SafeMetadataKeyPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.SafePathPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.StackTracePattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.UnixLocalPathPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.WindowsPathPattern",
+        "TraceMap.Reporting.EvidenceDocsExporter.YearMonthPattern",
+        "TraceMap.Reporting.EvidenceDocsQueryRecipes.MutationPattern",
+        "TraceMap.Reporting.EvidenceDocsQueryRecipes.TablePattern",
+    ];
+
     [Fact]
-    public void Docs_export_safety_patterns_are_nonbacktracking_with_load_tolerant_timeouts()
+    public void Bounded_regex_fields_in_core_and_reporting_match_the_inventory_and_are_load_tolerant()
     {
-        // Enumerated by field type on purpose: a pattern added later is covered without
-        // registering it anywhere. #857: a 250 ms budget on these patterns tripped under
-        // parallel load on a 36-character match while every case passed in isolation.
-        var patterns = typeof(EvidenceDocsExporter)
-            .GetFields(BindingFlags.NonPublic | BindingFlags.Static)
-            .Where(field => field.FieldType == typeof(Regex))
-            .Select(field => (field.Name, Pattern: (Regex)field.GetValue(null)!))
+        // Enumerated by field type across both assemblies so a sibling type cannot hide a
+        // pattern (#857: 250 ms budgets in the docs exporter AND its query-recipes type, plus
+        // 100 ms budgets in Core, tripped under parallel load on tiny inputs while every case
+        // passed in isolation).
+        var fields = new[] { typeof(EvidenceDocsExporter).Assembly, typeof(ScanOptions).Assembly }
+            .SelectMany(assembly => assembly.GetTypes())
+            .SelectMany(type => type.GetFields(BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Where(field => field.FieldType == typeof(Regex))
+                .Select(field => (Name: type.FullName + "." + field.Name, Pattern: (Regex?)field.GetValue(null))))
+            .Where(item => item.Pattern is not null)
             .ToArray();
-        Assert.True(patterns.Length >= 14, "expected the redaction pattern battery");
-        Assert.All(patterns, item =>
+        var bounded = fields.Where(item => item.Pattern!.MatchTimeout != Regex.InfiniteMatchTimeout).ToArray();
+        Assert.Equal(BoundedRegexFieldInventory.Order(StringComparer.Ordinal), bounded.Select(item => item.Name).Order(StringComparer.Ordinal));
+        Assert.All(bounded, item =>
         {
-            Assert.True(item.Pattern.Options.HasFlag(RegexOptions.NonBacktracking), item.Name);
+            Assert.True(item.Pattern!.Options.HasFlag(RegexOptions.NonBacktracking), item.Name);
             Assert.True(item.Pattern.MatchTimeout >= TimeSpan.FromSeconds(2), item.Name);
         });
+    }
+
+    [Fact]
+    public void Bounded_regex_calls_through_the_static_api_use_the_shared_load_tolerant_budget()
+    {
+        // Reflection cannot see Regex.IsMatch/Match/Matches/Replace/Split calls that pass a
+        // timeout, so this pins them at the source level: every such call in Core and
+        // Reporting must use RegexBudget.LoadTolerant rather than a literal budget, and no
+        // regex statement may carry a sub-2-second literal bound (#857).
+        var repo = SqlDatabaseMatrixCells.Repo();
+        var offenders = new List<string>();
+        foreach (var project in new[] { "TraceMap.Core", "TraceMap.Reporting" })
+        {
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(repo, "src", "dotnet", project), "*.cs", SearchOption.AllDirectories))
+            {
+                if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var text = File.ReadAllText(file);
+                foreach (Match statement in Regex.Matches(text, @"[^;]*Regex[^;]*TimeSpan\.From(?<unit>Milliseconds|Seconds)\((?<amount>\d+)\)[^;]*;", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(10)))
+                {
+                    var amount = int.Parse(statement.Groups["amount"].Value, System.Globalization.CultureInfo.InvariantCulture);
+                    var seconds = statement.Groups["unit"].Value == "Seconds" ? amount : amount / 1000.0;
+                    var inline = Regex.IsMatch(statement.Value, @"Regex\.(?:IsMatch|Match|Matches|Replace|Split)\(", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(10));
+                    if (inline || seconds < 2)
+                    {
+                        var line = text.AsSpan(0, statement.Index).Count('\n') + 1;
+                        offenders.Add($"{Path.GetRelativePath(repo, file)}:{line}: {string.Join(' ', statement.Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))[..Math.Min(120, statement.Value.Length)]}");
+                    }
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0, "bounded regex statements with a literal budget:\n" + string.Join('\n', offenders));
     }
 
     [Fact]
@@ -1064,6 +1142,14 @@ public sealed class EvidenceDocsExportTests
             new EvidenceDocsExportOptions(unterminatedIndex, Path.Combine(temp.Path, "unterminated-docs")));
         Assert.DoesNotContain(unterminatedResult.Chunks.SelectMany(chunk => chunk.Gaps),
             gap => gap.Reason == "unsafe-property-redacted");
+        // Not redacted is not the same as dropped: the body renders a long or SQL-looking
+        // value as a hash of the value itself, so the exact hash proves the property
+        // survived classification verbatim, and the literal marker proves it was not
+        // replaced by the redaction value.
+        var unterminatedHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(unterminated))).ToLowerInvariant()[..12];
+        var unterminatedSerialized = JsonSerializer.Serialize(unterminatedResult);
+        Assert.Contains($"query:redacted-{unterminatedHash}", unterminatedSerialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("query:redacted-value", unterminatedSerialized, StringComparison.Ordinal);
 
         // The same prefix with a terminator is raw SQL: the engine switch must not change
         // what gets redacted.

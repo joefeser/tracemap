@@ -28,10 +28,13 @@ internal static class CiWorkflowProducerExtractor
     internal const int MaxFileBytes = 1_048_576;
     internal const long MaxTotalBytes = 8_388_608;
 
+    // Anchored, unambiguous patterns: NonBacktracking keeps them linear, and the generous
+    // bound is a safety net that thread starvation under parallel load must not trip
+    // (#857: tight wall-clock regex budgets failed full-suite runs).
     private static readonly Regex KeyPattern = new("^[A-Za-z_][A-Za-z0-9_-]*\\z",
-        RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
     private static readonly Regex EnvExpression = new("^\\$\\{\\{\\s*env\\.(?<name>[A-Za-z_][A-Za-z0-9_]*)\\s*\\}\\}$",
-        RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
 
     internal static CiWorkflowResult Read(
         ScanOptions options,
