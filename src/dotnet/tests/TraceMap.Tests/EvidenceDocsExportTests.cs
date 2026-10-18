@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
@@ -1064,6 +1066,14 @@ public sealed class EvidenceDocsExportTests
             new EvidenceDocsExportOptions(unterminatedIndex, Path.Combine(temp.Path, "unterminated-docs")));
         Assert.DoesNotContain(unterminatedResult.Chunks.SelectMany(chunk => chunk.Gaps),
             gap => gap.Reason == "unsafe-property-redacted");
+        // Not redacted is not the same as dropped: the body renders a long or SQL-looking
+        // value as a hash of the value itself, so the exact hash proves the property
+        // survived classification verbatim, and the literal marker proves it was not
+        // replaced by the redaction value.
+        var unterminatedHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(unterminated))).ToLowerInvariant()[..12];
+        var unterminatedSerialized = JsonSerializer.Serialize(unterminatedResult);
+        Assert.Contains($"query:redacted-{unterminatedHash}", unterminatedSerialized, StringComparison.Ordinal);
+        Assert.DoesNotContain("query:redacted-value", unterminatedSerialized, StringComparison.Ordinal);
 
         // The same prefix with a terminator is raw SQL: the engine switch must not change
         // what gets redacted.
