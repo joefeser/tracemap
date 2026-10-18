@@ -9,7 +9,7 @@ the full .NET suite and public CLI smoke on frozen code/binaries. The new
 [pinned static corpus](validation/WEBFORMS_HTTP_ENTRY_PUBLIC_CORPUS.md) distinguish
 containment, declarative references and framework candidates from calls. All
 existing getter, MyBase/MyClass, provenance and bounded-reader controls remain.
-Fresh scans need legacy-webforms 0.14.2, vb-semantic 0.10.6 and csharp-semantic
+Fresh scans need legacy-webforms 0.14.3, vb-semantic 0.10.7 and csharp-semantic
 0.22.4 for the new witnesses. Windows/pinned adapter/private gates remain separate.
 
 PR #872 review correction: legacy-webforms/0.13.12 retains the exact selected
@@ -4894,3 +4894,108 @@ history stays in the private staging repo — a history scan recorded on the
 issue found keys and license material that make history unpublishable. Wiring
 the instrumenter/validator/goldens into `IlRewriteEvidenceExtractor` coverage
 is the follow-up stage on the issue.
+
+## Late-binding density census (#854)
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~Late_binding_census'`
+in standard Debug configuration, followed by the full Debug suite. The lane
+pins the census's defining property — it is exactly derivable from the
+emitted ManagedIlCallObserved facts for the same assembly (lateBound = calls
+whose target identity encodes Microsoft.VisualBasic.CompilerServices
+LateBinding/NewLateBinding; observed = all call facts) — plus the
+zero-late-binding case (density none) and the deterministic bucket
+thresholds. The census is a late-bound call-site density indicator for triage ahead
+of the 2004 projectless VB corpus readback; it does NOT establish the
+assembly's Option Strict settings (those come from web.config, per-file
+Option statements, or both alongside this evidence). No current consumer
+reads the census; per-page projection over source-mapped sites is a
+follow-up consumer.
+
+## dotnetperf oracle corpus lane — stage 2a (#856)
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~OracleCorpusLaneTests'`
+in standard Debug configuration, followed by the full Debug suite. The lane
+scans the corpus's own committed VS-era test fixtures with the compiled/IL
+lanes and pins: deterministic admission across repeated scans (identical
+fact IDs), runtime-floor facts on era-real binaries (these fixtures were
+rebuilt with 4.x tooling, so the attribute basis fires with a
+basis-consistent floor; the mscorlib path is pinned by the net20-net48
+matrix elsewhere), late-binding census and IL call observations present,
+and the two typed input boundaries — bare netmodules and the MultiModule
+assembly manifest — rejected with their named gaps. No dotnetperf code
+executes; the corpus bytes do the work.
+
+## dotnetperf era rewriter oracle — stage 2b spike (#856)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~OracleRewriteSpikeTests|FullyQualifiedName~OracleAdaptationPinTests' -warnaserror`
+in standard Debug configuration, followed by the full Debug suite. The 2013
+`ILInstrumenter`+`ILValidator` compile from adapted copies in the
+`TraceMap.Oracle` test-support project (era `NetPerf.Common`/`NetPerf.Client`
+dependency surface mirrored member-for-member by shims) and the pair test pins
+the full oracle loop: the instrumenter rewrites a fresh copy of the committed
+`CompiledEvidence.CSharp.dll` target, every rewritten body passes their own
+validator, memberrefs to `NetPerf.Client.Messaging` are present in the output,
+and a scan with `IlRewriteEvidence: true` plus the before/after paths emits
+`ManagedIlRewriteObserved` facts. A second test certifies the committed corpus
+fixture `CallGraphTestClasses.dll` — real 2013 era-instrumented bytes — under
+the same validator. `OracleAdaptationPinTests` diff-pins each adapted file
+against its corpus source (order-sensitive line diff; corpus sources also
+SHA-256-pinned) so adaptation drift is impossible: the differing lines must be
+exactly the documented adaptation set. New adaptation classes this stage: the
+FilterEnd removal splits into two distinct translations — a filter *region end*
+becomes `HandlerStart` (ECMA-335 adjacency), while an era *has-a-filter* guard
+(`FilterEnd != null`, or a `FilterStart != null || FilterEnd != null` pair)
+collapses to `FilterStart != null`, and `PreviousInstr(FilterEnd)`'s
+null-propagation (complete null pair for filterless entries) is carried as
+`PreviousInstr(FilterStart == null ? null : HandlerStart)`. The
+`NetPerfMetadata.InstrumentationData` literal is string-typed; the shim factory
+interface must return `string` there or Cecil aborts the write mid-stream.
+
+## dotnetperf goldens as static expectations — stage 2c (#856)
+
+Run `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~OracleGoldenLaneTests' -warnaserror`
+in standard Debug configuration, followed by the full Debug suite. The lane
+consumes the corpus's recorded goldens as static expectations, with no Core
+changes (test-side oracle only; no new facts, rules, or extractor versions):
+
+- The machine-generated validator suites — SwitchInstrTest (16,674 era
+  cases), SingleTargetBranchesTest (16,536), ProtectedBlocksTest (663,
+  including two hand-authored inline constructions; five intentionally-empty
+  era documentation tests are pinned as no-ops) — are parsed at test time from
+  the byte-pinned corpus into expectation records with exact per-suite count
+  pins; anything off-shape lands in a counted irregular list (pinned empty).
+- `Generated_goldens_replay_against_the_adapted_era_validator` replays a
+  deterministic stratified sample (2,427 cases: every protected-blocks golden
+  plus first-two/last-one of each of the 588 suite×verdict×opcode×handler-kind
+  categories) through the era construction helpers (adapted, extraction-pinned
+  in `GoldenBodyBuilders.cs` against the corpus test sources) and the adapted
+  era validator, asserting every verdict and the exact recorded error-message
+  prefix/suffix. `Full_generated_golden_sweep` replays all 33,873 expectations
+  (~0.6 s) and self-skips unless `TRACEMAP_ORACLE_FULL_GOLDENS=1` (visible
+  skip; the compiled-dotnet-evidence-foundation spec keeps the full corpus out
+  of the default suite). At introduction the full sweep passes: the stage-2b
+  Cecil adaptations reproduce the era validator's goldens exactly.
+- `Golden_constructed_bodies_decode_identically_through_both_tracemap_readers`
+  writes 24 sampled golden bodies (era-validated EH/branch shapes, catch types
+  pinned to object because the era never serialized these bodies) into a temp
+  assembly and scans it with the IL body lane: no `IlReaderDisagreement` or
+  `IlValueReaderDisagreementOrLimit` gaps, and a call fact per body.
+- `Era_instrumented_fixture_id_map_matches_the_recorded_xml_golden`: the
+  committed `CallGraphTestClasses.xml` is canonically the DLL's baked
+  `InstrumentationData` literal (same instanceHash, module id, assembly
+  identity, pre-instrumentation hash, and 414-method map), and tracemap's
+  Cecil decode of the instrumented DLL's messaging callbacks
+  (`ldsfld NetPerfMetadata::ModuleIdentifier` + `ldc.i4 <id>`) reproduces the
+  recorded (id, signature) multiset exactly — multisets because the era
+  signature format omits generic arity, so distinct methods can share a
+  signature. The Duplicates fixture (no XML twin) is checked for the same
+  literal-vs-decode consistency internally.
+
+Limitations, stated: module ids and instanceHash are run-random era outputs —
+compared, never re-derived; golden replay certifies the adapted validator's
+agreement with era verdicts, not instrumenter semantics (that is stage 2b's
+validator-certified pair); sequence-point ids are runtime concepts with no IL
+representation and are out of scope. LeaveInstrTest (851 lines) is deferred:
+its bodies are hand-authored ilasm text with no construction helper, and
+ilasm is excluded from the corpus — it rides the existing ilasm-gated
+endurance pattern (TRACEMAP_PARITY_ILASM) later.

@@ -174,3 +174,22 @@ fallthrough. Added default-first/middle/last, destructuring-label, and read-only
 label positives. This is the final authorized round's repair; no additional
 Codex request is planned. Final-head freshness and hosted CI need owner handoff.
 Final TypeScript build and 340 tests passed after the switch-label correction.
+
+## Current-dev audit — 2026-10-17
+
+User requested #873 from freshly fetched origin/dev, local commits only.
+New isolated branch: `codex/webforms-entry-873-current-dev`.
+Starting SHA: `c98744ec1fa7c8576e589c4ed4c2cd932b3b8512`.
+This baseline already contains the complete implementation, review repairs, public
+fixtures, matrix and historical validation. The entries above describe historical
+branches and authorization; they do not authorize publication in this task.
+
+Inspected entry extraction, framework witness admission, report projection and
+HttpEntryBoundaryRegressionTests. Existing candidate/call separation and negative
+controls are retained. No production change is needed based on this audit. Corrected
+stale versions in docs/VALIDATION.md to match ScannerVersions and the coverage
+matrix (legacy-webforms/0.14.3, vb-semantic/0.10.7, csharp-semantic/0.22.4).
+
+Current validation is pending; historical full-suite results are not reused as
+proof of the current baseline. Final results belong in current-dev-validation.md.
+No push, PR, merge, reviewer request or GitHub workflow mutation is authorized.
