@@ -1,4 +1,6 @@
+using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using TraceMap.Cli;
 using TraceMap.Core;
@@ -1026,6 +1028,54 @@ public sealed class EvidenceDocsExportTests
 
         var record = EvidenceDocsExporter.StableIdInputRecord([new("chunkFamily", "endpoint"), new("missing", null)]);
         Assert.Equal("11:chunkFamily=8:endpoint\n7:missing=0:\n", record);
+    }
+
+    [Fact]
+    public void Docs_export_safety_patterns_are_nonbacktracking_with_load_tolerant_timeouts()
+    {
+        // Enumerated by field type on purpose: a pattern added later is covered without
+        // registering it anywhere. #857: a 250 ms budget on these patterns tripped under
+        // parallel load on a 36-character match while every case passed in isolation.
+        var patterns = typeof(EvidenceDocsExporter)
+            .GetFields(BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(field => field.FieldType == typeof(Regex))
+            .Select(field => (field.Name, Pattern: (Regex)field.GetValue(null)!))
+            .ToArray();
+        Assert.True(patterns.Length >= 14, "expected the redaction pattern battery");
+        Assert.All(patterns, item =>
+        {
+            Assert.True(item.Pattern.Options.HasFlag(RegexOptions.NonBacktracking), item.Name);
+            Assert.True(item.Pattern.MatchTimeout >= TimeSpan.FromSeconds(2), item.Name);
+        });
+    }
+
+    [Fact]
+    public async Task Docs_export_classifies_pathological_sql_like_property_without_timing_out()
+    {
+        using var temp = new TempDirectory();
+        // "select" repeated with no terminating keyword: a backtracking `.+` rescans to the
+        // end from every occurrence (quadratic, and a RegexMatchTimeoutException on the old
+        // 250 ms budget); NonBacktracking stays linear. Without a terminator the value is
+        // not raw SQL, so it must pass through unredacted.
+        var unterminated = string.Concat(Enumerable.Repeat("select ", 20_000));
+        var unterminatedIndex = CreateSingleIndex(temp.Path, propertiesJson: JsonSerializer.Serialize(
+            new Dictionary<string, string> { ["extractorId"] = "test-extractor", ["query"] = unterminated }));
+        var unterminatedResult = await EvidenceDocsExporter.ExportAsync(
+            new EvidenceDocsExportOptions(unterminatedIndex, Path.Combine(temp.Path, "unterminated-docs")));
+        Assert.DoesNotContain(unterminatedResult.Chunks.SelectMany(chunk => chunk.Gaps),
+            gap => gap.Reason == "unsafe-property-redacted");
+
+        // The same prefix with a terminator is raw SQL: the engine switch must not change
+        // what gets redacted.
+        var terminated = unterminated + "from Customers";
+        var terminatedIndex = CreateSingleIndex(temp.Path, propertiesJson: JsonSerializer.Serialize(
+            new Dictionary<string, string> { ["extractorId"] = "test-extractor", ["query"] = terminated }));
+        var terminatedResult = await EvidenceDocsExporter.ExportAsync(
+            new EvidenceDocsExportOptions(terminatedIndex, Path.Combine(temp.Path, "terminated-docs")));
+        var gap = Assert.Single(terminatedResult.Chunks.SelectMany(chunk => chunk.Gaps),
+            gap => gap.Reason == "unsafe-property-redacted");
+        Assert.Contains("redaction-category:raw-sql", gap.SupportingIds);
+        Assert.DoesNotContain("Customers", JsonSerializer.Serialize(terminatedResult), StringComparison.Ordinal);
     }
 
     private static string CreateSingleIndex(string root, string filePath = "src/Api/Controller.cs", string? propertiesJson = """{"method":"GET","route":"/api/orders/{}"}""", string scannerVersion = "tracemap-tests")
