@@ -1545,7 +1545,7 @@ public static class LegacyDataMetadataExtractor
     private static void ExtractDataConfig(string repoPath, ScanManifest manifest, FileInventoryItem item, List<CodeFact> facts)
     {
         var fileName = Path.GetFileName(item.RelativePath);
-        if (Regex.IsMatch(fileName, @"\.(Debug|Release|Staging|Production)\.config$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
+        if (Regex.IsMatch(fileName, @"\.(Debug|Release|Staging|Production)\.config$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexBudget.LoadTolerant))
         {
             AddGap(manifest, facts, item.RelativePath, RuleIds.LegacyDataConfig, "ConfigTransformPresent", "Config transform companion file is checked in.", null);
         }
