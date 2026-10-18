@@ -2111,7 +2111,7 @@ public static partial class LegacyWebFormsExtractor
                     var insideCallback = constraintStart >= callbackStart && constraintStart < absoluteEnd;
                     var boundedPrecedingDeclaration = constraint.Index < binding.Index
                         && binding.Index - (constraint.Index + constraint.Length) <= 4096
-                        && Regex.IsMatch(callback, $@"\b{Regex.Escape(constraintName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250));
+                        && Regex.IsMatch(callback, $@"\b{Regex.Escape(constraintName)}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexBudget.LoadTolerant);
                     if (!insideCallback && !boundedPrecedingDeclaration)
                     {
                         continue;

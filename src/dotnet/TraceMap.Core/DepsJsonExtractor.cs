@@ -18,9 +18,12 @@ internal static class DepsJsonExtractor
 {
     private static readonly HashSet<string> Excluded = new(StringComparer.OrdinalIgnoreCase)
         { ".git", ".tracemap", ".nuget", "obj", "node_modules" };
-    private static readonly Regex Name = new("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static readonly Regex Version = new("^[0-9]+(?:\\.[0-9]+){0,3}(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static readonly Regex Target = new("^[A-Za-z0-9.][A-Za-z0-9._/+,=\\-]{0,255}\\z", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    // Anchored character-class validators: NonBacktracking keeps them linear, and the
+    // generous bound is a safety net that thread starvation under parallel load must
+    // not trip (#857: tight wall-clock regex budgets failed full-suite runs).
+    private static readonly Regex Name = new("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\\z", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
+    private static readonly Regex Version = new("^[0-9]+(?:\\.[0-9]+){0,3}(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?\\z", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
+    private static readonly Regex Target = new("^[A-Za-z0-9.][A-Za-z0-9._/+,=\\-]{0,255}\\z", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
 
     internal static DepsJsonResult Read(ScanOptions options, CancellationToken cancellationToken)
     {

@@ -103,9 +103,9 @@ public static partial class LegacyWebFormsExtractor
             return;
         }
         var source = SourceText.From(markup);
-        var masked = Regex.Replace(MaskServerComments(markup), @"<!--[\s\S]*?-->", m => new string(' ', m.Length), RegexOptions.None, TimeSpan.FromSeconds(1));
+        var masked = Regex.Replace(MaskServerComments(markup), @"<!--[\s\S]*?-->", m => new string(' ', m.Length), RegexOptions.None, RegexBudget.LoadTolerant);
         // No naming-container inference: any template makes instance scope unavailable.
-        var nestedScope = Regex.IsMatch(masked, @"<\s*(?:\w+:)?\w*Template\b", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
+        var nestedScope = Regex.IsMatch(masked, @"<\s*(?:\w+:)?\w*Template\b", RegexOptions.IgnoreCase, RegexBudget.LoadTolerant);
         foreach (Match expression in InlineServerExpressionRegex().Matches(masked))
         {
             var evidence = new EvidenceSpan(page.FilePath, LineAt(source, expression.Index),
@@ -113,7 +113,7 @@ public static partial class LegacyWebFormsExtractor
                 "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor);
             var parsed = Regex.Match(expression.Groups["body"].Value,
                 @"^\s*(?<control>[A-Za-z_][A-Za-z0-9_]*)\s*\.\s*(?<property>[A-Za-z_][A-Za-z0-9_]*)\s*$",
-                RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+                RegexOptions.CultureInvariant, RegexBudget.LoadTolerant);
             if (expression.Groups["marker"].Value != "#" || !parsed.Success || nestedScope)
             {
                 EntryGap(manifest, evidence, RuleIds.WebFormsEntryProperty, "UnsupportedExpressionOrScope", [pageFact], facts);
