@@ -19,7 +19,9 @@ public static class WebFormsWizardTarget
     private const string WebsiteGuid = "E24C65DC-7377-472B-9ABA-BC803B73C61A";
     private static readonly Regex SolutionEntry = new(
         "^Project\\(\"\\{(?<type>[A-Fa-f0-9-]+)\\}\"\\)\\s*=\\s*\"[^\"]*\",\\s*\"(?<path>[^\"]+)\",\\s*\"\\{[A-Fa-f0-9-]+\\}\"\\s*$",
-        RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+        // Quote-delimited segments make the parse unambiguous; NonBacktracking keeps it
+        // linear and the bound is load-tolerant (#857).
+        RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
 
     public static WebFormsWizardTargetInfo Inspect(string input, string? selectedWebRoot = null)
     {
