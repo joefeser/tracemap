@@ -10,7 +10,8 @@ cannot reach). Every ambiguity resolves to the full suite:
 
 - a shared-core path (TraceMap.Core/Cli/Storage/Combine/Reporting/Reduction,
   the rule catalog, build props, the solution, the test project file, shared
-  test helpers, this selector or its workflow) forces the full suite;
+  test helpers, the AGENTS.md root marker fixtures walk up to, this selector or
+  its workflow) forces the full suite;
 - a campaign family's own sources, samples or test files trigger that family;
 - anything else (other test files, docs, site, scripts, workflows, adapters,
   the Oracle project, the Access / SqlValidation / EndpointAlignment projects,
@@ -55,6 +56,8 @@ FULL_SUITE_FILENAMES: frozenset[str] = frozenset({
     "global.json",
     "TraceMap.sln",
     "TraceMap.Tests.csproj",
+    # Repository-root marker: campaign fixtures locate the repo by walking up to it.
+    "AGENTS.md",
 })
 
 # Any MSBuild directory-level file (props, targets, rsp, ...) shapes every build.

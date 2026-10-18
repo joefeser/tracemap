@@ -343,7 +343,7 @@ ambiguity resolves to the full suite:
 
 | Changed paths | Lane |
 | --- | --- |
-| `src/dotnet/TraceMap.{Core,Cli,Storage,Combine,Reporting,Reduction}/**`, `rules/**`, `Directory.Build.*`, `global.json`, `TraceMap.sln`, `TraceMap.Tests.csproj`, shared test helpers (non-`*Tests.cs` files in the test project), the selector or its workflow | full suite |
+| `src/dotnet/TraceMap.{Core,Cli,Storage,Combine,Reporting,Reduction}/**`, `rules/**`, `Directory.Build.*`, `global.json`, `TraceMap.sln`, `TraceMap.Tests.csproj`, shared test helpers (non-`*Tests.cs` files in the test project), the `AGENTS.md` root marker fixtures walk up to, the selector or its workflow | full suite |
 | `samples/sql-database-matrix/**` or `SqlDatabaseMatrixTests.cs` | the SQL-matrix family runs (`FullyQualifiedName~SqlDatabaseMatrixTests`) |
 | `samples/outbound-http-coverage/**` or `OutboundHttp*Tests.cs` | the outbound-HTTP family runs |
 | `samples/compiled-dotnet-evidence/**`, `samples/fixture-build/**` or `WebFormsReview*Tests.cs` | the WebForms-review family runs |
