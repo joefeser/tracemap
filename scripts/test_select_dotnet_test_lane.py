@@ -61,6 +61,7 @@ class SelectDotnetTestLaneTests(unittest.TestCase):
             "global.json",
             "src/dotnet/TraceMap.sln",
             "src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj",
+            "AGENTS.md",
             "scripts/select_dotnet_test_lane.py",
             ".github/workflows/adapter-validation.yml",
         ):
