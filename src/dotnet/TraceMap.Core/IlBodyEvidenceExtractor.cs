@@ -222,15 +222,23 @@ internal static class IlBodyEvidenceExtractor
         + "other dynamic mechanisms (Reflection, DLR, delegates) are not counted. No current reducer or report consumes this census; high density is documented consumer guidance for downweighting source-lane call-graph claims, not implemented behavior. "
         + "The census never establishes runtime behavior, dispatch outcomes, or the assembly Option Strict setting.";
 
-    // Exact declaring-type match: the encoded target identity frames the declaring
-    // type as type(namespace:<n>:<ns>|names:<m>:<name>) immediately followed by the
-    // |member: component; that anchor makes a signature type mention (which can
-    // never legally precede the member component) unmatchable, and only
-    // LateBinding/NewLateBinding in Microsoft.VisualBasic.CompilerServices counts.
-    // Substring matching would false-positive on same-namespace helper-shaped names
-    // (MyLateBindingHelper) and on signature-only mentions.
+    // Exact declaring-type match over the call fact's encoded target identity.
+    // MemberRef targets (helper referenced from another assembly) frame the
+    // declaring type as the parenthesized type(namespace:<n>:<ns>|names:<m>:<name>)
+    // immediately followed by the |member: component; MethodDef targets (the
+    // assembly defines the helper type itself — embedded or IL-merged
+    // CompilerServices helpers, plain or generic) frame it as the bare
+    // type:namespace:...|names:...|arity:<n> followed by |method: or
+    // |constructor:. Anchoring on the member/method/constructor component makes a
+    // signature type mention (which can never legally precede it) unmatchable, and
+    // only LateBinding/NewLateBinding in Microsoft.VisualBasic.CompilerServices
+    // counts. Substring matching would false-positive on same-namespace
+    // helper-shaped names (MyLateBindingHelper) and on signature-only mentions.
+    // MethodSpec targets embed the element identity, so both shapes match through
+    // generic instantiations.
     private static readonly System.Text.RegularExpressions.Regex LateBindingHelperType = new(
-        @"type\(namespace:[0-9]+:Microsoft\.VisualBasic\.CompilerServices\|names:[0-9]+:(?:New)?LateBinding\)\|member:",
+        @"(?:type\(namespace:[0-9]+:Microsoft\.VisualBasic\.CompilerServices\|names:[0-9]+:(?:New)?LateBinding\)\|member:"
+        + @"|type:namespace:[0-9]+:Microsoft\.VisualBasic\.CompilerServices\|names:[0-9]+:(?:New)?LateBinding\|arity:[0-9]+\|(?:method|constructor):)",
         System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.Compiled,
         TimeSpan.FromMilliseconds(500));
 

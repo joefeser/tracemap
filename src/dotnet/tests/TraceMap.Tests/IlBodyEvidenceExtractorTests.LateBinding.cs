@@ -327,6 +327,70 @@ public sealed partial class IlBodyEvidenceExtractorTests
         Assert.DoesNotContain("proves", IlBodyEvidenceExtractor.CensusLimitation, StringComparison.Ordinal);
         Assert.Contains("does not prove the compiler generated the call", IlBodyEvidenceExtractor.CensusLimitation, StringComparison.Ordinal);
         Assert.Contains("never establishes runtime behavior, dispatch outcomes, or the assembly Option Strict setting", IlBodyEvidenceExtractor.CensusLimitation, StringComparison.Ordinal);
+
+        // The emitted census fact carries exactly this limitation — pin the
+        // property, not only the constant.
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var scan = Scan(new ScanOptions(fixture.Source, TempOutput(), CompiledInputPaths: [fixture.Assembly], IlBodyEvidence: true));
+        var census = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedLateBindingCensus);
+        Assert.Equal(IlBodyEvidenceExtractor.CensusLimitation, census.Properties["limitation"]);
+    }
+
+    [Fact]
+    public void Late_binding_census_counts_same_module_helper_definitions()
+    {
+        // An assembly that DEFINES the CompilerServices helper type itself
+        // (embedded or IL-merged) calls it through MethodDef tokens — and generic
+        // instantiations through MethodSpec wrapping the MethodDef identity — so
+        // the census must match the methoddef identity shape, not only memberrefs.
+        using var temp = new TempDirectory();
+        var assemblyPath = Path.Combine(temp.Path, "EmbeddedLateBinding.dll");
+        WriteEmbeddedLateBindingAssembly(assemblyPath);
+        var scan = Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, "out"), CompiledInputPaths: [assemblyPath], IlBodyEvidence: true));
+        var census = Assert.Single(scan.Facts, fact => fact.FactType == FactTypes.ManagedLateBindingCensus);
+        Assert.Equal("2", census.Properties["observedIlCallCount"]);
+        Assert.Equal("high", census.Properties["lateBindingDensity"]);
+    }
+
+    private static void WriteEmbeddedLateBindingAssembly(string path)
+    {
+        using var module = Mono.Cecil.ModuleDefinition.CreateModule("EmbeddedLateBinding",
+            new Mono.Cecil.ModuleParameters { Kind = Mono.Cecil.ModuleKind.Dll });
+        var helper = new Mono.Cecil.TypeDefinition("Microsoft.VisualBasic.CompilerServices", "NewLateBinding",
+            Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Sealed | Mono.Cecil.TypeAttributes.Abstract,
+            module.TypeSystem.Object);
+        module.Types.Add(helper);
+
+        Mono.Cecil.MethodDefinition EmptyBody(string name, int genericParameterCount)
+        {
+            var method = new Mono.Cecil.MethodDefinition(name,
+                Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+            for (var i = 0; i < genericParameterCount; i++)
+                method.GenericParameters.Add(new Mono.Cecil.GenericParameter("T" + i, method));
+            method.Body.GetILProcessor().Emit(Mono.Cecil.Cil.OpCodes.Ret);
+            return method;
+        }
+
+        var lateCall = EmptyBody("LateCall", 0);
+        var lateCallGeneric = EmptyBody("LateCallGeneric", 1);
+        helper.Methods.Add(lateCall);
+        helper.Methods.Add(lateCallGeneric);
+
+        var caller = new Mono.Cecil.TypeDefinition("EmbeddedLateBinding", "Caller",
+            Mono.Cecil.TypeAttributes.Public | Mono.Cecil.TypeAttributes.Sealed | Mono.Cecil.TypeAttributes.Abstract,
+            module.TypeSystem.Object);
+        module.Types.Add(caller);
+        var run = new Mono.Cecil.MethodDefinition("Run",
+            Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
+        var processor = run.Body.GetILProcessor();
+        processor.Emit(Mono.Cecil.Cil.OpCodes.Call, lateCall);
+        var instantiated = new Mono.Cecil.GenericInstanceMethod(lateCallGeneric);
+        instantiated.GenericArguments.Add(module.TypeSystem.Int32);
+        processor.Emit(Mono.Cecil.Cil.OpCodes.Call, instantiated);
+        processor.Emit(Mono.Cecil.Cil.OpCodes.Ret);
+        caller.Methods.Add(run);
+
+        module.Write(path);
     }
 
     [Fact]
@@ -338,6 +402,16 @@ public sealed partial class IlBodyEvidenceExtractorTests
         // Same-namespace helper-shaped declaring type: NOT late binding.
         const string helperNamed = "memberref|type:scope(assembly:name:28:Microsoft.VisualBasic|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:37:Microsoft.VisualBasic.CompilerServices|names:20:MyLateBindingHelper)|member:6:Helper|signature:y";
         Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(helperNamed));
+        // MethodDef-encoded same-module helper (embedded/IL-merged definition),
+        // exactly as the call fact embeds it: bare type:namespace:...|arity:|method:.
+        const string methodDef = "assembly:name:19:EmbeddedLateBinding|version:7:0.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:19:EmbeddedLateBinding|targetFramework:7:unknown|type:namespace:38:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding|arity:0|method:8:LateCall|arity:0|call:default|hasThis:false|explicitThis:false|()->type(namespace:6:System|names:4:Void)";
+        Assert.True(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(methodDef));
+        // Generic instantiation of a same-module helper method: same declaring-type framing.
+        const string methodSpec = "assembly:name:19:EmbeddedLateBinding|version:7:0.0.0.0|module:19:EmbeddedLateBinding|type:namespace:38:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding|arity:0|method:15:LateCallGeneric|arity:1|call:default|()->type(namespace:6:System|names:4:Void)|gargs:<type(namespace:6:System|names:5:Int32)>";
+        Assert.True(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(methodSpec));
+        // Same-module helper-shaped name: NOT late binding.
+        const string methodDefHelper = "assembly:name:19:EmbeddedLateBinding|module:19:EmbeddedLateBinding|type:namespace:38:Microsoft.VisualBasic.CompilerServices|names:20:MyLateBindingHelper|arity:0|method:6:Helper|arity:0|call:default";
+        Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(methodDefHelper));
         // LateBinding-named type in a DIFFERENT namespace: NOT late binding.
         const string wrongNamespace = "memberref|type:scope(assembly:name:11:Contoso.Lib|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:11:Contoto.Core|names:11:LateBinding)|member:4:Fill|signature:y";
         Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(wrongNamespace));
