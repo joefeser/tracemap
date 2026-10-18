@@ -222,20 +222,182 @@ internal static class IlBodyEvidenceExtractor
         + "other dynamic mechanisms (Reflection, DLR, delegates) are not counted. No current reducer or report consumes this census; high density is documented consumer guidance for downweighting source-lane call-graph claims, not implemented behavior. "
         + "The census never establishes runtime behavior, dispatch outcomes, or the assembly Option Strict setting.";
 
-    // Exact declaring-type match: the encoded target identity frames the declaring
-    // type as type(namespace:<n>:<ns>|names:<m>:<name>) immediately followed by the
-    // |member: component; that anchor makes a signature type mention (which can
-    // never legally precede the member component) unmatchable, and only
-    // LateBinding/NewLateBinding in Microsoft.VisualBasic.CompilerServices counts.
-    // Substring matching would false-positive on same-namespace helper-shaped names
-    // (MyLateBindingHelper) and on signature-only mentions.
-    private static readonly System.Text.RegularExpressions.Regex LateBindingHelperType = new(
-        @"type\(namespace:[0-9]+:Microsoft\.VisualBasic\.CompilerServices\|names:[0-9]+:(?:New)?LateBinding\)\|member:",
-        System.Text.RegularExpressions.RegexOptions.CultureInvariant | System.Text.RegularExpressions.RegexOptions.Compiled,
-        TimeSpan.FromMilliseconds(500));
-
+    // Exact declaring-type match over the call fact's encoded target identity,
+    // parsed structurally. Every encoded string value is length-framed
+    // (EncodeIdentityComponent), so values may legally contain '|' — a regex over
+    // the raw text could be impersonated by a crafted metadata name embedding the
+    // framing. The parser walks components honoring the frames, so text inside a
+    // value can never cross a component boundary.
+    //
+    // Two encodings carry the declaring type:
+    //   memberref|type:scope(...)type(namespace:<framed>|names:<framed>)|member:<framed>|...
+    //     (helper referenced from another assembly)
+    //   assembly:name:<framed>|...|type:namespace:<framed>|names:<framed>|arity:<n>|method:<framed>|...
+    //     (the assembly defines the helper type itself — embedded or IL-merged
+    //     CompilerServices helpers; generic instantiations embed the same element
+    //     identity, so they are covered)
+    // Only LateBinding/NewLateBinding in Microsoft.VisualBasic.CompilerServices
+    // counts, with the member/method/constructor component anchored right after
+    // the declaring type — signature type mentions are always later components.
     internal static bool IsLateBoundHelperTarget(string targetIdentity) =>
-        LateBindingHelperType.IsMatch(targetIdentity);
+        IsMemberRefLateBindingHelper(targetIdentity) || IsBareFramedLateBindingHelper(targetIdentity);
+
+    private const string LateBindingHelperNamespace = "Microsoft.VisualBasic.CompilerServices";
+
+    private static bool IsMemberRefLateBindingHelper(string identity)
+    {
+        const string prefix = "memberref|type:scope(";
+        if (!identity.StartsWith(prefix, StringComparison.Ordinal))
+            return false;
+        // Walk the scope group's framed components until its closing paren.
+        var position = prefix.Length;
+        while (position < identity.Length && identity[position] != ')')
+        {
+            var separator = identity.IndexOf(':', position);
+            if (separator < 0)
+                return false;
+            if (!TryReadFramedValue(identity, separator + 1, out _, out var scopeEnd))
+                return false;
+            position = scopeEnd < identity.Length && identity[scopeEnd] == '|' ? scopeEnd + 1 : scopeEnd;
+        }
+        if (position >= identity.Length || identity[position] != ')')
+            return false;
+        position++;
+        if (!identity.AsSpan(position).StartsWith("type(namespace:", StringComparison.Ordinal))
+            return false;
+        // "type(namespace:" already ends with the namespace tag, so the helper
+        // reads the framed value directly.
+        position += "type(namespace:".Length;
+        if (!TryReadHelperNamespaceAndNames(identity, ref position, namespaceTagPending: false))
+            return false;
+        return identity.AsSpan(position).StartsWith(")|member:", StringComparison.Ordinal);
+    }
+
+    private static bool IsBareFramedLateBindingHelper(string identity)
+    {
+        var position = 0;
+        while (position < identity.Length)
+        {
+            var tagEnd = identity.IndexOf(':', position);
+            if (tagEnd < 0)
+                return false;
+            var tag = identity.Substring(position, tagEnd - position);
+            var valueStart = tagEnd + 1;
+            if (!TryReadComponentValue(identity, valueStart, out var boundary))
+                return false;
+
+            if (tag == "type")
+            {
+                // The type component's value is multi-segment
+                // (namespace:<framed>|names:<framed>), so its extent is parsed here,
+                // not by the single-segment component reader. The helper type must
+                // be followed by its arity component and then the
+                // method/constructor anchor (constructors of the helper type count).
+                var cursor = valueStart;
+                if (!TryReadHelperNamespaceAndNames(identity, ref cursor, namespaceTagPending: true))
+                    return false;
+                if (!identity.AsSpan(cursor).StartsWith("|arity:", StringComparison.Ordinal))
+                    return false;
+                var afterArity = identity.IndexOf('|', cursor + "|arity:".Length);
+                if (afterArity < 0)
+                    return false;
+                return NextComponentTagIs(identity, afterArity, "method", "constructor");
+            }
+            position = boundary >= identity.Length ? identity.Length : boundary + 1;
+        }
+        return false;
+    }
+
+    // Consumes "namespace:<framed CompilerServices>|names:<framed helper name>"
+    // (with or without the leading separator) at cursor, leaving it on the
+    // character that ends the names value. Nested types concatenate name
+    // segments inside one names value and therefore cannot match.
+    private static bool TryReadHelperNamespaceAndNames(string identity, ref int cursor, bool namespaceTagPending)
+    {
+        var position = cursor;
+        if (namespaceTagPending)
+        {
+            if (position < identity.Length && identity[position] == '|')
+                position++;
+            if (!identity.AsSpan(position).StartsWith("namespace:", StringComparison.Ordinal))
+                return false;
+            position += "namespace:".Length;
+        }
+        if (!TryReadFramedValue(identity, position, out var namespaceValue, out var namespaceEnd)
+            || !namespaceValue.SequenceEqual(LateBindingHelperNamespace))
+            return false;
+        position = namespaceEnd;
+        if (!identity.AsSpan(position).StartsWith("|names:", StringComparison.Ordinal))
+            return false;
+        position += "|names:".Length;
+        if (!TryReadFramedValue(identity, position, out var namesValue, out var namesEnd))
+            return false;
+        cursor = namesEnd;
+        return namesValue.SequenceEqual("LateBinding") || namesValue.SequenceEqual("NewLateBinding");
+    }
+
+    private static bool NextComponentTagIs(string identity, int boundary, params string[] tags)
+    {
+        if (boundary + 1 >= identity.Length || identity[boundary] != '|')
+            return false;
+        var tagEnd = identity.IndexOf(':', boundary + 1);
+        if (tagEnd < 0)
+            return false;
+        var tag = identity.AsSpan(boundary + 1, tagEnd - boundary - 1);
+        foreach (var candidate in tags)
+            if (tag.SequenceEqual(candidate))
+                return true;
+        return false;
+    }
+
+
+    // Reads a length-framed value whose value may contain '|'. Frames appear as
+    // <len>:<value> possibly preceded by one alphabetic sub-tag
+    // (method:8:LateCall, assembly:name:28:...): skip at most one non-numeric
+    // segment before the digits. The declared length must land exactly on a
+    // component boundary ('|' or a closing paren).
+    private static bool TryReadFramedValue(string identity, int start, out ReadOnlySpan<char> value, out int end)
+    {
+        value = default;
+        end = 0;
+        var position = start;
+        for (var segment = 0; segment < 2; segment++)
+        {
+            var colon = identity.IndexOf(':', position);
+            if (colon < 0)
+                return false;
+            var head = identity.AsSpan(position, colon - position);
+            if (head.Length > 0 && uint.TryParse(head, CultureInfo.InvariantCulture, out var length) && length <= int.MaxValue - colon)
+            {
+                var valueStart = colon + 1;
+                if (valueStart + (int)length > identity.Length)
+                    return false;
+                var valueEnd = valueStart + (int)length;
+                if (valueEnd != identity.Length && identity[valueEnd] != '|' && identity[valueEnd] != ')')
+                    return false;
+                value = identity.AsSpan(valueStart, (int)length);
+                end = valueEnd;
+                return true;
+            }
+            position = colon + 1;
+        }
+        return false;
+    }
+
+    // Reads one top-level component value: framed when the digits land on a
+    // boundary (the encoder frames every string value), otherwise bare up to the
+    // next separator.
+    private static bool TryReadComponentValue(string identity, int start, out int boundary)
+    {
+        if (TryReadFramedValue(identity, start, out _, out var framedEnd))
+        {
+            boundary = framedEnd;
+            return true;
+        }
+        var bareEnd = identity.IndexOf('|', start);
+        boundary = bareEnd < 0 ? identity.Length : bareEnd;
+        return true;
+    }
 
     private static string CensusBucket(int lateBound, int observed) => lateBound == 0 ? "none"
         : observed == 0 ? "unknown"
