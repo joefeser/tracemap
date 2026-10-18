@@ -8,21 +8,25 @@ using TraceMap.Storage;
 
 namespace TraceMap.Tests;
 
-public sealed class SqlDatabaseMatrixTests
+// The 16-cell matrix theory splits into one sibling class per target framework
+// (each still named SqlDatabaseMatrixTests* so existing --filter lanes match):
+// xunit runs test classes in parallel but serializes tests within a class, so
+// the single 24-minute class was the suite's wall-clock tail (~24.6 min of CPU
+// against ~6x-parallel everything else). Each sibling is a ~3-minute collection.
+internal static class SqlDatabaseMatrixCells
 {
-    private static string Repo()
+    internal static string Repo()
     {
         var repo = new DirectoryInfo(AppContext.BaseDirectory);
         while (repo is not null && !File.Exists(Path.Combine(repo.FullName,"AGENTS.md"))) repo = repo.Parent;
         return repo!.FullName;
     }
-    private static string? Caller(CodeFact fact) => Regex.Match(fact.SourceSymbol ?? "", @"\.(Case\d+|Control\w+)(?:\(|<|$)") is { Success:true } match ? match.Groups[1].Value : null;
-    public static IEnumerable<object[]> Cells() => new[] { "net20", "net35", "net40", "net45", "net452", "net472", "net48", "net10.0" }
-        .SelectMany(tfm => new[] { "csharp", "vb" }.Select(language => new object[] { tfm, language }));
+    internal static string? Caller(CodeFact fact) => Regex.Match(fact.SourceSymbol ?? "", @"\.(Case\d+|Control\w+)(?:\(|<|$)") is { Success:true } match ? match.Groups[1].Value : null;
 
-    [Theory]
-    [MemberData(nameof(Cells))]
-    public async Task Public_overloads_survive_every_applicable_mode_and_retained_report(string tfm, string language)
+    internal static IEnumerable<object[]> CellsFor(string tfm) =>
+        new[] { "csharp", "vb" }.Select(language => new object[] { tfm, language });
+
+    internal static async Task PublicOverloadsSurviveEveryApplicableModeAndRetainedReport(string tfm, string language)
     {
         var sample = Path.Combine(Repo(),"samples/sql-database-matrix",tfm,language);
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
@@ -130,6 +134,12 @@ public sealed class SqlDatabaseMatrixTests
         Assert.DoesNotContain("SELECT PublicId",JsonSerializer.Serialize(calls));
     }
 
+}
+
+public sealed class SqlDatabaseMatrixTests
+{
+    private static string Repo() => SqlDatabaseMatrixCells.Repo();
+
     [Fact]
     public async Task Projectless_vb_wrapper_reaches_database_migration_inventory()
     {
@@ -148,4 +158,84 @@ public sealed class SqlDatabaseMatrixTests
         var outputs = await GroupedCompiledPathReportWriter.WriteAsync(handoff,Path.Combine(temp.Path,"grouped"));
         Assert.Contains("Database operation: ExecuteScalar",await File.ReadAllTextAsync(outputs.HtmlPath));
     }
+}
+
+public sealed class SqlDatabaseMatrixTestsNet20
+{
+    public static IEnumerable<object[]> Cells() => SqlDatabaseMatrixCells.CellsFor("net20");
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public Task Public_overloads_survive_every_applicable_mode_and_retained_report(string tfm, string language) =>
+        SqlDatabaseMatrixCells.PublicOverloadsSurviveEveryApplicableModeAndRetainedReport(tfm, language);
+}
+
+public sealed class SqlDatabaseMatrixTestsNet35
+{
+    public static IEnumerable<object[]> Cells() => SqlDatabaseMatrixCells.CellsFor("net35");
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public Task Public_overloads_survive_every_applicable_mode_and_retained_report(string tfm, string language) =>
+        SqlDatabaseMatrixCells.PublicOverloadsSurviveEveryApplicableModeAndRetainedReport(tfm, language);
+}
+
+public sealed class SqlDatabaseMatrixTestsNet40
+{
+    public static IEnumerable<object[]> Cells() => SqlDatabaseMatrixCells.CellsFor("net40");
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public Task Public_overloads_survive_every_applicable_mode_and_retained_report(string tfm, string language) =>
+        SqlDatabaseMatrixCells.PublicOverloadsSurviveEveryApplicableModeAndRetainedReport(tfm, language);
+}
+
+public sealed class SqlDatabaseMatrixTestsNet45
+{
+    public static IEnumerable<object[]> Cells() => SqlDatabaseMatrixCells.CellsFor("net45");
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public Task Public_overloads_survive_every_applicable_mode_and_retained_report(string tfm, string language) =>
+        SqlDatabaseMatrixCells.PublicOverloadsSurviveEveryApplicableModeAndRetainedReport(tfm, language);
+}
+
+public sealed class SqlDatabaseMatrixTestsNet452
+{
+    public static IEnumerable<object[]> Cells() => SqlDatabaseMatrixCells.CellsFor("net452");
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public Task Public_overloads_survive_every_applicable_mode_and_retained_report(string tfm, string language) =>
+        SqlDatabaseMatrixCells.PublicOverloadsSurviveEveryApplicableModeAndRetainedReport(tfm, language);
+}
+
+public sealed class SqlDatabaseMatrixTestsNet472
+{
+    public static IEnumerable<object[]> Cells() => SqlDatabaseMatrixCells.CellsFor("net472");
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public Task Public_overloads_survive_every_applicable_mode_and_retained_report(string tfm, string language) =>
+        SqlDatabaseMatrixCells.PublicOverloadsSurviveEveryApplicableModeAndRetainedReport(tfm, language);
+}
+
+public sealed class SqlDatabaseMatrixTestsNet48
+{
+    public static IEnumerable<object[]> Cells() => SqlDatabaseMatrixCells.CellsFor("net48");
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public Task Public_overloads_survive_every_applicable_mode_and_retained_report(string tfm, string language) =>
+        SqlDatabaseMatrixCells.PublicOverloadsSurviveEveryApplicableModeAndRetainedReport(tfm, language);
+}
+
+public sealed class SqlDatabaseMatrixTestsNet100
+{
+    public static IEnumerable<object[]> Cells() => SqlDatabaseMatrixCells.CellsFor("net10.0");
+
+    [Theory]
+    [MemberData(nameof(Cells))]
+    public Task Public_overloads_survive_every_applicable_mode_and_retained_report(string tfm, string language) =>
+        SqlDatabaseMatrixCells.PublicOverloadsSurviveEveryApplicableModeAndRetainedReport(tfm, language);
 }
