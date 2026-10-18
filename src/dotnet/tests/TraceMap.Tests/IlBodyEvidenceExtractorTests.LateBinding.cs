@@ -397,11 +397,19 @@ public sealed partial class IlBodyEvidenceExtractorTests
     public void Late_binding_detection_is_an_exact_declaring_type_match()
     {
         // Real framing from the fixture's encoded identities.
-        const string real = "memberref|type:scope(assembly:name:28:Microsoft.VisualBasic|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:37:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding)|member:8:LateCall|signature:y";
+        const string real = "memberref|type:scope(assembly:name:21:Microsoft.VisualBasic|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:38:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding)|member:8:LateCall|signature:y";
         Assert.True(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(real));
         // Same-namespace helper-shaped declaring type: NOT late binding.
-        const string helperNamed = "memberref|type:scope(assembly:name:28:Microsoft.VisualBasic|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:37:Microsoft.VisualBasic.CompilerServices|names:20:MyLateBindingHelper)|member:6:Helper|signature:y";
+        const string helperNamed = "memberref|type:scope(assembly:name:21:Microsoft.VisualBasic|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:38:Microsoft.VisualBasic.CompilerServices|names:19:MyLateBindingHelper)|member:6:Helper|signature:y";
         Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(helperNamed));
+        // A crafted method NAME embedding the full declaring-type framing must NOT
+        // impersonate the helper owner: the structural parse consumes the framed
+        // name value atomically, so embedded pipes never form components.
+        const string spoofedName = "assembly:name:19:EmbeddedLateBinding|version:7:0.0.0.0|module:19:EmbeddedLateBinding|type:namespace:19:EmbeddedLateBinding|names:6:Caller|arity:0|method:1:x|type:namespace:38:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding|arity:0|method:8:LateCall|arity:0|call:default";
+        Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(spoofedName));
+        // A nested helper-named type (concatenated names segments) is not the helper.
+        const string nestedNames = "assembly:name:19:EmbeddedLateBinding|module:19:EmbeddedLateBinding|type:namespace:38:Microsoft.VisualBasic.CompilerServices|names:22:Outer14:NewLateBinding|arity:0|method:4:Call|arity:0|call:default";
+        Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(nestedNames));
         // MethodDef-encoded same-module helper (embedded/IL-merged definition),
         // exactly as the call fact embeds it: bare type:namespace:...|arity:|method:.
         const string methodDef = "assembly:name:19:EmbeddedLateBinding|version:7:0.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:19:EmbeddedLateBinding|targetFramework:7:unknown|type:namespace:38:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding|arity:0|method:8:LateCall|arity:0|call:default|hasThis:false|explicitThis:false|()->type(namespace:6:System|names:4:Void)";
@@ -410,17 +418,17 @@ public sealed partial class IlBodyEvidenceExtractorTests
         const string methodSpec = "assembly:name:19:EmbeddedLateBinding|version:7:0.0.0.0|module:19:EmbeddedLateBinding|type:namespace:38:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding|arity:0|method:15:LateCallGeneric|arity:1|call:default|()->type(namespace:6:System|names:4:Void)|gargs:<type(namespace:6:System|names:5:Int32)>";
         Assert.True(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(methodSpec));
         // Same-module helper-shaped name: NOT late binding.
-        const string methodDefHelper = "assembly:name:19:EmbeddedLateBinding|module:19:EmbeddedLateBinding|type:namespace:38:Microsoft.VisualBasic.CompilerServices|names:20:MyLateBindingHelper|arity:0|method:6:Helper|arity:0|call:default";
+        const string methodDefHelper = "assembly:name:19:EmbeddedLateBinding|module:19:EmbeddedLateBinding|type:namespace:38:Microsoft.VisualBasic.CompilerServices|names:19:MyLateBindingHelper|arity:0|method:6:Helper|arity:0|call:default";
         Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(methodDefHelper));
         // LateBinding-named type in a DIFFERENT namespace: NOT late binding.
-        const string wrongNamespace = "memberref|type:scope(assembly:name:11:Contoso.Lib|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:11:Contoto.Core|names:11:LateBinding)|member:4:Fill|signature:y";
+        const string wrongNamespace = "memberref|type:scope(assembly:name:11:Contoso.Lib|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:12:Contoto.Core|names:11:LateBinding)|member:4:Fill|signature:y";
         Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(wrongNamespace));
         // The legacy pre-2.0 helper class still counts.
-        const string legacy = "memberref|type:scope(assembly:name:20:Microsoft.VisualBasic|version:7:8.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:37:Microsoft.VisualBasic.CompilerServices|names:11:LateBinding)|member:7:LateGet|signature:y";
+        const string legacy = "memberref|type:scope(assembly:name:21:Microsoft.VisualBasic|version:7:8.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:38:Microsoft.VisualBasic.CompilerServices|names:11:LateBinding)|member:7:LateGet|signature:y";
         Assert.True(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(legacy));
         // A signature that MENTIONS the helper type must not count: the helper
         // framing appears after the member component, never anchored before |member:.
-        const string signatureMention = "memberref|type:scope(assembly:name:11:Contoso.Lib|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:11:Contoso.Core|names:6:Worker)|member:4:Take|signature:ns(37:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding)";
+        const string signatureMention = "memberref|type:scope(assembly:name:11:Contoso.Lib|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:12:Contoso.Core|names:6:Worker)|member:4:Take|signature:ns(37:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding)";
         Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(signatureMention));
     }
 
