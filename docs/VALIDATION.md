@@ -334,6 +334,32 @@ python3 scripts/test_validate_adapter_artifacts.py
 ./scripts/check-private-paths.sh
 ```
 
+## Pull Request Test Lane (change-impact v1)
+
+The `.NET adapter` job in `adapter-validation.yml` selects its lane from the pull
+request's changed paths with `scripts/select_dotnet_test_lane.py` (unit tests in
+`scripts/test_select_dotnet_test_lane.py`). The selection is deterministic and every
+ambiguity resolves to the full suite:
+
+| Changed paths | Lane |
+| --- | --- |
+| `src/dotnet/TraceMap.{Core,Cli,Storage,Combine,Reporting,Reduction}/**`, `rules/**`, `Directory.Build.*`, `global.json`, `TraceMap.sln`, `TraceMap.Tests.csproj`, shared test helpers (non-`*Tests.cs` files in the test project), the selector or its workflow | full suite |
+| `samples/sql-database-matrix/**` or `SqlDatabaseMatrixTests.cs` | the SQL-matrix family runs (`FullyQualifiedName~SqlDatabaseMatrixTests`) |
+| `samples/outbound-http-coverage/**` or `OutboundHttp*Tests.cs` | the outbound-HTTP family runs |
+| `samples/compiled-dotnet-evidence/**`, `samples/fixture-build/**` or `WebFormsReview*Tests.cs` | the WebForms-review family runs |
+| anything else (other test files, docs, site, scripts, workflows, adapters, the Oracle project, the Access / SqlValidation / EndpointAlignment projects, non-campaign samples) | reduced lane: campaign families not triggered are excluded with `FullyQualifiedName!~…`; the step name and job summary say **partial** |
+
+Pushes to `dev`/`main`, `workflow_dispatch`, missing change data and change sets of 250+
+files always run the full suite, so nothing merges on a reduced run. The excluded
+families are the suite's heavy, self-contained lanes (measured 2026-10-18: 21 classes,
+347 of 4,391 tests, 58% of test-minutes); a reduced run is a partial result and is
+labelled as such, never a claim that those lanes passed.
+
+The same table is the local gate policy: before pushing a head whose changes are
+confined to leaf areas (review fixes, test-only edits, docs), run the touched lanes;
+run the full Debug suite with `-warnaserror` for shared-core changes and on the final
+head before merge.
+
 ## Web Forms large-index report memory
 
 For changes to packet input loading or serialization, run the memory regressions
