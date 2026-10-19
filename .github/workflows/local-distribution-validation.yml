@@ -27,11 +27,18 @@ permissions:
   contents: read
 
 jobs:
+  # The serial lane list used to be the pull-request critical path (Windows ~26 min, macOS
+  # ~17 min of back-to-back lanes behind ~3 min of checkout/restore/build overhead). Each
+  # OS now fans the same lanes out across four parallel jobs grouped by measured duration,
+  # so the wall clock is overhead + the longest group (~6 min, the IL body matrix). The
+  # commands and filters are unchanged; a lane simply runs in the job whose `lane` value
+  # it is gated on. Windows-only steps stay Windows-only inside the distribution lane.
   package-smoke:
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
+        lane: [metadata, pdb-rewrite, il-body, distribution]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -43,23 +50,29 @@ jobs:
       - name: Restore locked dependencies
         run: dotnet restore src/dotnet/TraceMap.sln --locked-mode
       - name: Run portable compiled metadata fixture matrix
+        if: matrix.lane == 'metadata'
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~ManagedMetadataExtractorTests|FullyQualifiedName~SourceMetadataReconciliationTests"
       # Fail early on OS pipe/junction regressions, before longer metadata lanes.
       - name: Validate promotion process and junction boundaries
+        if: matrix.lane == 'metadata'
         shell: pwsh
         run: |
           dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~WebFormsWizardBuildTests|FullyQualifiedName~DirectoryLinkFixtureTests|FullyQualifiedName~Fixture_cleanup_clears_readonly_git_objects|FullyQualifiedName~Linked_input_escape_is_rejected|FullyQualifiedName~Separate_receipt_root_rejects_invalid_or_escaped_inputs|FullyQualifiedName~Relocated_history_never_uses_original_policy_locators_to_bypass_current_owned_links"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Run portable PDB fixture matrix
+        if: matrix.lane == 'pdb-rewrite'
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~PortablePdbExtractorTests
       - name: Run IL body evidence fixture matrix
+        if: matrix.lane == 'il-body'
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~IlBodyEvidenceExtractorTests
       - name: Run IL rewrite member and signature fixture matrix
+        if: matrix.lane == 'pdb-rewrite'
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~IlRewriteMemberShapeEvidenceExtractorTests
       - name: Run bounded public ECMA-335 topology and debug-evidence matrix
+        if: matrix.lane == 'pdb-rewrite'
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter "FullyQualifiedName~IlRewriteAssemblyTopologyTests|FullyQualifiedName~IlRewriteEmbeddedPdbTests|FullyQualifiedName~IlRewritePublicIntegrationTests"
       - name: Build native Windows PDB fixtures
-        if: runner.os == 'Windows'
+        if: matrix.lane == 'distribution' && runner.os == 'Windows'
         shell: pwsh
         run: |
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
@@ -72,27 +85,32 @@ jobs:
           & "$roslyn/vbc.exe" /nologo /target:library /debug:full "/out:$root/vb/CompiledEvidence.VisualBasic.dll" "/pdb:$root/vb/CompiledEvidence.VisualBasic.pdb" samples/compiled-dotnet-evidence/windows-pdb/NativePdbFixture.vb
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate native Windows PDB fail-closed lane
-        if: runner.os == 'Windows'
+        if: matrix.lane == 'distribution' && runner.os == 'Windows'
         shell: pwsh
         env:
           TRACEMAP_WINDOWS_PDB_ROOT: ${{ runner.temp }}/tracemap-windows-pdb
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~Windows_produced_native_pdb_lane
       - name: Validate existing Web Forms publish proof on public fixture
-        if: runner.os == 'Windows'
+        if: matrix.lane == 'distribution' && runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/tests/Test-ExistingWebFormsPublishProof.ps1
       - name: Run local distribution smoke
+        if: matrix.lane == 'distribution'
         shell: pwsh
         run: ./scripts/smoke-local-distribution.ps1 -OutputDirectory "${{ runner.temp }}/tracemap-local-distribution"
       - name: Validate focused output link safety and publish receipt identities
+        if: matrix.lane == 'distribution'
         shell: pwsh
         run: |
           ./scripts/tests/Test-FocusedWebFormsOutputSafety.ps1
           dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~WebFormsPublishedRootTests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # The receipt certifies only the distribution lane that produced it; the workflow
+      # conclusion (every lane job green) is what certifies the OS.
       - name: Retain sanitized receipt
+        if: matrix.lane == 'distribution'
         uses: actions/upload-artifact@v4
         with:
-          name: local-distribution-${{ matrix.os }}
+          name: local-distribution-${{ matrix.os }}-distribution-lane
           path: ${{ runner.temp }}/tracemap-local-distribution/local-distribution-smoke.json
           if-no-files-found: error
