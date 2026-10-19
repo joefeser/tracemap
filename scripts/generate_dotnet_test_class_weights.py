@@ -13,11 +13,14 @@ recomputes the input digest when it loads the table, so a hand edit fails loudly
 the generator digest is provenance only.
 
 Regenerate from a run whose durations should drive the packing (a new or split test
-class, a materially different suite), naming the commit that run tested:
+class, a materially different suite), naming the commit that run tested. The hosted
+shards are the runner class that executes the shards, and each uploads its trx as a
+`dotnet-trx-<shard>` artifact, so a full-lane pull-request run is the natural source:
 
-    dotnet test src/dotnet/TraceMap.sln --logger trx
-    python3 scripts/generate_dotnet_test_class_weights.py <run.trx> --commit <sha> --runner <label>
+    gh run download <run-id> --pattern 'dotnet-trx-*' --dir trx
+    python3 scripts/generate_dotnet_test_class_weights.py trx/*/*.trx --commit <sha> --runner ubuntu-latest
 
+A single full run works the same way (`dotnet test src/dotnet/TraceMap.sln --logger trx`).
 A class missing from the table is never lost: the selector routes every class it does
 not list to the catch-all shard. xunit writes one trx result per test case, so a
 class's `tests` value is its case count, skipped cases included.
@@ -58,7 +61,12 @@ def _tag(name: str) -> str:
 
 def project_trx(trx_path: Path) -> tuple[dict[str, dict[str, float | int]], dict[str, object]]:
     """Return (class map, run facts) from a trx; the class map is the bounded input."""
-    root = ElementTree.parse(trx_path).getroot()
+    data = trx_path.read_bytes()
+    # A trx carries no DTD. Refusing one closes the external-entity and entity-expansion
+    # class outright, without a defusedxml dependency on the runner.
+    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+        raise ValueError(f"{trx_path.name}: a trx has no document type declaration; refusing to parse one")
+    root = ElementTree.fromstring(data)  # nosemgrep: python.lang.security.use-defused-xml-parse
     class_of: dict[str, str] = {}
     for unit_test in root.iter(_tag("UnitTest")):
         method = unit_test.find(_tag("TestMethod"))
@@ -87,6 +95,29 @@ def project_trx(trx_path: Path) -> tuple[dict[str, dict[str, float | int]], dict
     for key in COUNTERS:
         run[key] = int(counters.get(key, "0")) if counters is not None else None
     return classes, run
+
+
+def project_trx_files(trx_paths: list[Path]) -> tuple[dict[str, dict[str, float | int]], dict[str, object]]:
+    """Merge the trx files of one run — the shards of a hosted run, or a single full run.
+
+    Shards partition the suite by class, so a class appearing in two files means the
+    shards overlapped; that is refused rather than summed.
+    """
+    classes: dict[str, dict[str, float | int]] = {}
+    run: dict[str, object] = {"started": None, "finished": None, **{key: 0 for key in COUNTERS}}
+    for trx_path in trx_paths:
+        file_classes, file_run = project_trx(trx_path)
+        overlap = sorted(set(classes) & set(file_classes))
+        if overlap:
+            raise ValueError(f"{trx_path.name}: {overlap[0]} already appears in another trx; the shards overlap")
+        classes.update(file_classes)
+        for key, pick in (("started", min), ("finished", max)):
+            values = [value for value in (run[key], file_run[key]) if value is not None]
+            run[key] = pick(values) if values else None  # type: ignore[type-var]
+        for key in COUNTERS:
+            value = file_run[key]
+            run[key] = (int(run[key]) + int(value)) if value is not None and run[key] is not None else None  # type: ignore[arg-type]
+    return dict(sorted(classes.items())), run
 
 
 def build_table(classes: dict[str, dict[str, float | int]], run: dict[str, object],
@@ -120,13 +151,14 @@ def summary(table: dict[str, object]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("trx", type=Path, help="trx from a full-suite `dotnet test --logger trx` run")
+    parser.add_argument("trx", type=Path, nargs="+",
+                        help="trx files of one run: a full `dotnet test --logger trx`, or every shard's dotnet-trx-* artifact")
     parser.add_argument("--commit", required=True, help="commit the trx run tested")
     parser.add_argument("--runner", required=True, help="where it ran, e.g. the runner label")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help=f"table path (default {DEFAULT_OUT.name})")
     args = parser.parse_args(argv)
 
-    classes, run = project_trx(args.trx)
+    classes, run = project_trx_files(args.trx)
     table = build_table(classes, run, args.commit, args.runner)
     args.out.write_text(json.dumps(table, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {args.out}")

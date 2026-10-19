@@ -107,6 +107,37 @@ class GenerateDotnetTestClassWeightsTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 GENERATOR.project_trx(self.write_trx(directory, empty))
 
+    def test_document_type_declarations_are_refused_before_parsing(self) -> None:
+        # No trx has a DTD; refusing one is what closes external entities and entity expansion.
+        doctype = TRX.replace("<TestRun ", '<!DOCTYPE TestRun [<!ENTITY x "y">]>\n<TestRun ', 1)
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaises(ValueError) as refused:
+                GENERATOR.project_trx(self.write_trx(Path(temp), doctype))
+        self.assertIn("document type declaration", str(refused.exception))
+
+    def test_shard_trx_files_merge_into_one_run(self) -> None:
+        second = (TRX.replace("TraceMap.Tests.Alpha", "TraceMap.Tests.Gamma")
+                  .replace("TraceMap.Tests.Beta", "TraceMap.Tests.Delta")
+                  .replace('start="2026-01-01T00:00:01', 'start="2026-01-01T00:00:00')
+                  .replace('finish="2026-01-01T00:10:00', 'finish="2026-01-01T00:12:00'))
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            other = directory / "other.trx"
+            other.write_text(second, encoding="utf-8")
+            classes, run = GENERATOR.project_trx_files([self.write_trx(directory), other])
+        self.assertEqual(["TraceMap.Tests.Alpha", "TraceMap.Tests.Beta", "TraceMap.Tests.Delta", "TraceMap.Tests.Gamma"],
+                         list(classes))
+        self.assertEqual(CLASSES["TraceMap.Tests.Beta"], classes["TraceMap.Tests.Delta"])
+        self.assertEqual({"started": "2026-01-01T00:00:00.0000000-05:00", "finished": "2026-01-01T00:12:00.0000000-05:00",
+                          "total": 8, "executed": 6, "passed": 6, "failed": 0}, run)
+
+    def test_overlapping_shard_trx_files_are_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            trx = self.write_trx(Path(temp))
+            with self.assertRaises(ValueError) as refused:
+                GENERATOR.project_trx_files([trx, trx])
+        self.assertIn("shards overlap", str(refused.exception))
+
     def test_checked_in_table_matches_its_own_stamp(self) -> None:
         table = json.loads(GENERATOR.DEFAULT_OUT.read_text(encoding="utf-8"))
         self.assertEqual(GENERATOR.SCHEMA_VERSION, table["schemaVersion"])

@@ -1,6 +1,6 @@
 {
   "schemaVersion": "dotnet-test-class-weights.v1",
-  "generatorSha256": "20f29718c5c4cdb19ea3c46e8faabfe11fce9dff6061aa29acc5fc74ce5d29f9",
+  "generatorSha256": "e6d1a93240bebeda25be4539befb9d58bd0292fae2fc00351261f31e7bdbf835",
   "boundedInputKind": "privacy-projected-class-durations",
   "boundedInputSha256": "59bbbea4dfd0e1c82e26961b0b6f63ed496836f7682c8eff457ddbb763821c5e",
   "source": {
