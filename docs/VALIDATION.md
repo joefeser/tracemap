@@ -368,9 +368,10 @@ Every pull request and manual dispatch runs its lane as four parallel hosted
 split by test class, plus a `.NET adapter` summary job that fails when any shard failed
 or the selector did not run, so a required-status rule has one stable name to point at.
 The split is packed from `scripts/dotnet-test-class-weights.json`, the per-class
-durations and case counts of one run. Every shard uploads its trx as a
-`dotnet-trx-<shard>` artifact (the `dev`/`main` push uploads `dotnet-trx-full`), so the
-table is regenerated from the runner class that actually executes the shards:
+durations and case counts of one run. Every hosted shard uploads its trx as a
+`dotnet-trx-<shard>` artifact — the self-hosted push entry uploads none, since its trx
+would name the box's user and paths — so the table is regenerated from the runner class
+that actually executes the shards:
 
 ```bash
 gh run download <full-lane run id> --pattern 'dotnet-trx-*' --dir trx
@@ -382,7 +383,12 @@ and the table carries the generator's SHA-256 and the SHA-256 of its privacy-pro
 input (the class map only — never a trx, which names the machine and its paths); the
 selector recomputes the input digest on load, so a hand-edited table fails the run.
 Heaviest class first into the lightest of four bins packs the bins to within a class of
-each other.
+each other. The current table is the hosted shard run at `64d523d43`: 224 classes,
+4,394 cases, 61.1 hosted test-minutes, 15.3 per bin. The floor under any packing is the
+longest serialized class — `IlBodyEvidenceExtractorTests`, 95 cases on one thread for
+5.6 minutes — so the shard that holds it cannot finish its tests sooner whatever else it
+carries; splitting that class is the next lever, as #885 and #887 were for the SQL-matrix
+and Web Forms lanes.
 
 Shards 1–3 are explicit class lists, `FullyQualifiedName~<class>.|…`. The trailing dot
 is the method separator in a test's fully qualified name, so `…ExecutionTests.` cannot
@@ -395,20 +401,20 @@ no classes is dropped. Only `rest`, which every lane keeps, runs the `scan` and 
 `adapter-index-dotnet` for the combine job. A push to `dev`/`main` is the one non-sharded
 entry: the whole suite in one job on the self-hosted runner, as before.
 
-Verified at `0ffb3bb29` with `dotnet test --list-tests` under each shard's filter and
-again by the shard runs themselves: full lane 1,031 + 1,010 + 1,169 + 1,184 = 4,394, the
-unfiltered total; reduced lane 979 + 831 + 1,133 + 1,104 = 4,047 = 4,394 − the 347
-campaign-family cases. Every count equals the table's class-level expectation, which the
-job summary prints per shard. Limitations: those expectations are class-level, so in the
-reduced lane a family token inside a listed class's *method* name would trim that shard
-by that one test (none exist today); and the table cannot vouch for classes it does not
-list, which is exactly why the catch-all exists — a class name containing another class's
-name plus a dot cannot occur within one assembly, since a type and a namespace cannot
-share a name, and the loader rejects any such pair in the table. Durations measured on
-one runner class do not transfer uniformly to another: packed from the 5950X's
-32-thread run, one hosted shard took 7m17s of tests against 3m39s–5m02s for the other
-three, because a long serial class that finished alone there was under-weighted; packing
-from the hosted shards' own trx removes that.
+Verified with `dotnet test --list-tests` under each shard's filter and again by the shard
+runs themselves: full lane 1,347 + 878 + 1,096 + 1,073 = 4,394, the unfiltered total;
+reduced lane 1,329 + 685 + 1,088 + 945 = 4,047 = 4,394 − the 347 campaign-family cases.
+Every count equals the table's class-level expectation, which the job summary prints per
+shard. Limitations: those expectations are class-level, so in the reduced lane a family
+token inside a listed class's *method* name would trim that shard by that one test (none
+exist today); and the table cannot vouch for classes it does not list, which is exactly
+why the catch-all exists — a class name containing another class's name plus a dot
+cannot occur within one assembly, since a type and a namespace cannot share a name, and
+the loader rejects any such pair in the table. Durations measured on one runner class do
+not transfer uniformly to another: packed from the 5950X's 32-thread run (139.4
+test-minutes there), one hosted shard took 7m17s of tests against 3m39s–5m02s for the
+other three, because a long serial class that finished alone there was under-weighted;
+packing from the hosted shards' own trx removes that.
 
 Where the job runs: only pushes to `dev`/`main` — reviewed, merged code — execute on
 the self-hosted Linux runner (labels `self-hosted, linux-x64, amd5950x`; a 16-core box

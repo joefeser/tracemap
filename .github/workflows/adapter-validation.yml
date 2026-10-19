@@ -103,13 +103,15 @@ jobs:
           else
             dotnet test src/dotnet/TraceMap.sln --no-build --logger "$TRX_LOGGER" --results-directory "$TRX_DIR"
           fi
-      # Every shard leaves its trx, so the weights table can be regenerated from the runner
-      # class that actually executes the shards: download the dotnet-trx-* artifacts of a
-      # full-lane run and pass them all to scripts/generate_dotnet_test_class_weights.py.
+      # Every hosted shard leaves its trx, so the weights table can be regenerated from the
+      # runner class that actually executes the shards: download the dotnet-trx-* artifacts
+      # of a full-lane run and pass them all to scripts/generate_dotnet_test_class_weights.py.
+      # The selector gives the self-hosted entry no trx artifact: that file would name the
+      # box's user and paths, which the private-path rule keeps out of anything published.
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && matrix.trx != ''
         with:
-          name: dotnet-trx-${{ matrix.name }}
+          name: ${{ matrix.trx }}
           path: ${{ runner.temp }}/trx/*.trx
           if-no-files-found: warn
           retention-days: 30
