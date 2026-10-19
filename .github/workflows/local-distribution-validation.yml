@@ -105,10 +105,12 @@ jobs:
           ./scripts/tests/Test-FocusedWebFormsOutputSafety.ps1
           dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter FullyQualifiedName~WebFormsPublishedRootTests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # The receipt certifies only the distribution lane that produced it; the workflow
+      # conclusion (every lane job green) is what certifies the OS.
       - name: Retain sanitized receipt
         if: matrix.lane == 'distribution'
         uses: actions/upload-artifact@v4
         with:
-          name: local-distribution-${{ matrix.os }}
+          name: local-distribution-${{ matrix.os }}-distribution-lane
           path: ${{ runner.temp }}/tracemap-local-distribution/local-distribution-smoke.json
           if-no-files-found: error
