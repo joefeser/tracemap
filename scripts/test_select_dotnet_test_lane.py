@@ -229,8 +229,9 @@ class ShardMatrixTests(unittest.TestCase):
         self.assertEqual(MODULE.ARTIFACT, shard.artifact)
         self.assertTrue(shard.catch_all)
         self.assertEqual(sum(w.tests for w in SYNTHETIC), shard.expected_tests)
+        self.assertEqual("", shard.trx)  # that trx would name the box's user and paths
         self.assertEqual({"name": "full", "runner": ["self-hosted", "linux-x64", "amd5950x"], "filter": "",
-                          "artifact": MODULE.ARTIFACT}, shard.matrix_entry())
+                          "artifact": MODULE.ARTIFACT, "trx": ""}, shard.matrix_entry())
 
     def test_full_lane_pull_request_packs_listed_shards_and_a_catch_all(self) -> None:
         shards = self.shards(FULL)
@@ -259,6 +260,8 @@ class ShardMatrixTests(unittest.TestCase):
         self.assertEqual(sum(w.tests for w in SYNTHETIC), sum(s.expected_tests for s in shards))
         self.assertEqual([False, False, False, True], [s.catch_all for s in shards])
         self.assertEqual(["", "", "", MODULE.ARTIFACT], [s.artifact for s in shards])
+        self.assertEqual(["dotnet-trx-shard-1", "dotnet-trx-shard-2", "dotnet-trx-shard-3", "dotnet-trx-rest"],
+                         [s.trx for s in shards])
 
     def test_workflow_dispatch_runs_hosted_shards(self) -> None:
         shards = self.shards(MODULE.select_lane([], "workflow_dispatch"), event="workflow_dispatch")
@@ -316,7 +319,7 @@ class ShardMatrixTests(unittest.TestCase):
         entries = json.loads(text)["include"]
         self.assertEqual(4, len(entries))
         for entry in entries:
-            self.assertEqual({"name", "runner", "filter", "artifact"}, set(entry))
+            self.assertEqual({"name", "runner", "filter", "artifact", "trx"}, set(entry))
             self.assertIsInstance(entry["runner"], list)
             for token in entry["filter"].replace("|", "&").split("&"):
                 self.assertRegex(token, r"^FullyQualifiedName!?~[A-Za-z0-9_.]+$")

@@ -149,14 +149,22 @@ class Shard:
     name: str
     runner: tuple[str, ...]
     filter: str
-    artifact: str  # artifact this shard uploads, or "" for none
+    artifact: str  # adapter-index artifact this shard uploads, or "" for none
     classes: tuple[str, ...]  # table classes this shard runs (the catch-all also runs unlisted ones)
     catch_all: bool
     expected_tests: int  # class-level, from the weights table
     seconds: float
 
+    @property
+    def trx(self) -> str:
+        # Hosted shards publish their trx so the table can be repacked from hosted timings.
+        # The self-hosted entry never does: its trx names the box's user and paths, and the
+        # public repository's private-path rule keeps those out of anything shareable.
+        return "" if self.runner == SELF_HOSTED_RUNNER else f"dotnet-trx-{self.name}"
+
     def matrix_entry(self) -> dict[str, object]:
-        return {"name": self.name, "runner": list(self.runner), "filter": self.filter, "artifact": self.artifact}
+        return {"name": self.name, "runner": list(self.runner), "filter": self.filter, "artifact": self.artifact,
+                "trx": self.trx}
 
 
 def _is_shared_core(path: str) -> bool:
