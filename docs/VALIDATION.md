@@ -360,6 +360,14 @@ regression in an excluded family then surfaces on the `dev` push, before promoti
 campaign-named test class added inside a neutrally named file is excluded until that
 push; keep the one-class-per-matching-file convention for campaign families.
 
+Where the job runs: same-repo pull requests and `dev`/`main` pushes execute on the
+self-hosted Linux runner (labels `self-hosted, linux-x64, amd5950x`; a 16-core box that
+runs the full suite in ~15 minutes against ~22 on hosted `ubuntu-latest`). Fork pull
+requests stay on hosted runners, and the repository requires approval for all outside
+contributors before any fork workflow runs, so the self-hosted box only executes code
+from this repository's own branches. If the runner is offline the job queues rather
+than falling back; hosted is the fallback only for forks.
+
 The same table is the local gate policy: before pushing a head whose changes are
 confined to leaf areas (review fixes, test-only edits, docs), run the touched lanes;
 run the full Debug suite with `-warnaserror` for shared-core changes and on the final
