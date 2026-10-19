@@ -360,6 +360,19 @@ regression in an excluded family then surfaces on the `dev` push, before promoti
 campaign-named test class added inside a neutrally named file is excluded until that
 push; keep the one-class-per-matching-file convention for campaign families.
 
+Where the job runs: only pushes to `dev`/`main` — reviewed, merged code — execute on
+the self-hosted Linux runner (labels `self-hosted, linux-x64, amd5950x`; a 16-core box
+that runs the full suite in ~15 minutes against ~22 on hosted `ubuntu-latest`). Every
+pull request and manual dispatch runs on hosted runners. This is a hard boundary, not a
+policy: a `pull_request` run executes the workflow file from the PR head, so no
+expression inside the workflow can stop PR-controlled YAML from selecting the
+persistent runner; keeping the runner out of PR events altogether is the only version
+that holds. (The repository additionally requires approval for all outside contributors
+before any fork workflow runs.) A PR's wall clock is unaffected today because the
+Windows `package-smoke` job, not the .NET suite, is its critical path. If the runner is
+offline, the `dev`/`main` push job queues rather than falling back, so a dead runner is
+visible.
+
 The same table is the local gate policy: before pushing a head whose changes are
 confined to leaf areas (review fixes, test-only edits, docs), run the touched lanes;
 run the full Debug suite with `-warnaserror` for shared-core changes and on the final

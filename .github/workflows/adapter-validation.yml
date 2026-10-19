@@ -18,7 +18,12 @@ concurrency:
 jobs:
   dotnet:
     name: .NET adapter
-    runs-on: ubuntu-latest
+    # Only pushes to dev/main (reviewed, merged code; the trigger above limits push to
+    # those branches) run on the self-hosted Linux box (amd5950x: 16C/32T, measured
+    # 15 min vs ~22 min hosted). Every pull request and manual dispatch stays on hosted
+    # runners: a pull_request run executes the workflow file from the PR head, so no
+    # in-workflow check can keep PR-controlled code off a persistent runner.
+    runs-on: ${{ github.event_name == 'push' && fromJSON('["self-hosted", "linux-x64", "amd5950x"]') || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
