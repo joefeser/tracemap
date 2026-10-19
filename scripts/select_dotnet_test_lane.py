@@ -47,6 +47,7 @@ import hashlib
 import json
 import os
 import sys
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -324,11 +325,14 @@ def main(argv: list[str] | None = None) -> int:
             handle.write(f"lane={decision.lane}\n")
             handle.write(f"filter={decision.filter}\n")
             handle.write(f"partial={'true' if decision.partial else 'false'}\n")
-            handle.write(f"reason={decision.reason}\n")
+            # The reason quotes a changed path, the one value here a pull request authors;
+            # the delimited form keeps it from ever reading as another output record.
+            delimiter = f"ghadelimiter_{uuid.uuid4()}"
+            handle.write(f"reason<<{delimiter}\n{decision.reason}\n{delimiter}\n")
             handle.write(f"matrix={matrix_json(shards)}\n")
 
     if args.json:
-        print(json.dumps({"decision": decision.__dict__, "matrix": json.loads(matrix_json(shards))}, indent=2))
+        print(json.dumps({**decision.__dict__, "matrix": json.loads(matrix_json(shards))}, indent=2))
     else:
         print(decision.summary())
         print(shard_summary(shards, decision, table.commit))

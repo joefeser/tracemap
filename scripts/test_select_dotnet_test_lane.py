@@ -186,9 +186,30 @@ class SelectDotnetTestLaneTests(unittest.TestCase):
             self.assertEqual(1, len(matrix_lines))
             matrix = json.loads(matrix_lines[0][len("matrix="):])
             self.assertEqual(["shard-1", "shard-2", "shard-3", "rest"], [entry["name"] for entry in matrix["include"]])
+            # The reason quotes a pull-request-authored path, so it is written in the
+            # delimited form rather than as a `reason=` line another record could follow.
+            opener = next(line for line in written if line.startswith("reason<<ghadelimiter_"))
+            delimiter = opener[len("reason<<"):]
+            start = written.index(opener)
+            self.assertEqual(delimiter, written[start + 2])
+            self.assertIn("changes are confined to leaf areas", written[start + 1])
+            self.assertFalse(any(line.startswith("reason=") for line in written))
             self.assertIn("reduced (partial)", stdout.getvalue())
             self.assertIn("excluded families: OutboundHttp, SqlDatabaseMatrix, WebFormsReview", stdout.getvalue())
             self.assertIn("| rest | ubuntu-latest | everything not listed", stdout.getvalue())
+
+    def test_json_output_keeps_the_top_level_decision_fields_and_adds_the_matrix(self) -> None:
+        stdin = io.StringIO("src/dotnet/TraceMap.Core/ScanEngine.cs\n")
+        stdin.isatty = lambda: False  # type: ignore[method-assign]
+        stdout = io.StringIO()
+        with mock.patch("sys.stdin", stdin), redirect_stdout(stdout):
+            self.assertEqual(0, MODULE.main(["--event", "pull_request", "--json"]))
+        payload = json.loads(stdout.getvalue())
+        self.assertEqual("full", payload["lane"])
+        self.assertEqual("", payload["filter"])
+        self.assertEqual([], payload["excluded"])
+        self.assertIn("shared-core path changed", payload["reason"])
+        self.assertEqual(["shard-1", "shard-2", "shard-3", "rest"], [entry["name"] for entry in payload["matrix"]["include"]])
 
     def test_selector_inputs_force_full_suite(self) -> None:
         for path in ("scripts/dotnet-test-class-weights.json", "scripts/generate_dotnet_test_class_weights.py",

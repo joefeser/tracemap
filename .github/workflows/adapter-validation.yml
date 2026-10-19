@@ -92,14 +92,27 @@ jobs:
       - name: Build and test (${{ needs.select.outputs.lane }} lane, ${{ matrix.name }})
         env:
           LANE_FILTER: ${{ matrix.filter }}
+          TRX_LOGGER: trx;LogFileName=${{ matrix.name }}.trx
+          TRX_DIR: ${{ runner.temp }}/trx
         run: |
           dotnet build src/dotnet/TraceMap.sln
           if [ -n "$LANE_FILTER" ]; then
             echo "shard filter: --filter \"$LANE_FILTER\""
-            dotnet test src/dotnet/TraceMap.sln --no-build --filter "$LANE_FILTER"
+            dotnet test src/dotnet/TraceMap.sln --no-build --filter "$LANE_FILTER" \
+              --logger "$TRX_LOGGER" --results-directory "$TRX_DIR"
           else
-            dotnet test src/dotnet/TraceMap.sln --no-build
+            dotnet test src/dotnet/TraceMap.sln --no-build --logger "$TRX_LOGGER" --results-directory "$TRX_DIR"
           fi
+      # Every shard leaves its trx, so the weights table can be regenerated from the runner
+      # class that actually executes the shards: download the dotnet-trx-* artifacts of a
+      # full-lane run and pass them all to scripts/generate_dotnet_test_class_weights.py.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dotnet-trx-${{ matrix.name }}
+          path: ${{ runner.temp }}/trx/*.trx
+          if-no-files-found: warn
+          retention-days: 30
       # Exactly one shard (the catch-all, which every lane keeps) produces the artifact the
       # combine job downloads; the scan needs only the build, not any test.
       - name: Generate and validate artifacts
@@ -116,6 +129,22 @@ jobs:
           name: ${{ matrix.artifact }}
           path: ${{ runner.temp }}/tracemap-dotnet/index.sqlite
           if-no-files-found: error
+
+  dotnet-result:
+    # One stable check with the job's former name, so a required-status rule can keep
+    # pointing at `.NET adapter` whatever the shard count. It fails when any shard
+    # failed, or when the matrix never ran because the selector failed.
+    name: .NET adapter
+    needs: dotnet
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every shard to succeed
+        env:
+          RESULT: ${{ needs.dotnet.result }}
+        run: |
+          echo "shard matrix result: $RESULT"
+          test "$RESULT" = success
 
   typescript:
     name: TypeScript adapter
