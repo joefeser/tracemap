@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import io
+import json
 import sys
 import tempfile
 import unittest
@@ -21,6 +23,45 @@ sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 
 ALL_FAMILIES = ("OutboundHttp", "SqlDatabaseMatrix", "WebFormsReview")
+ALL_FAMILY_TERMS = "&FullyQualifiedName!~OutboundHttp&FullyQualifiedName!~SqlDatabaseMatrixTests&FullyQualifiedName!~WebFormsReview"
+FULL = MODULE.LaneDecision("full", "test")
+PR = "pull_request"
+
+
+def weights(*entries: tuple[str, float, int]) -> tuple[MODULE.ClassWeight, ...]:
+    return tuple(MODULE.ClassWeight("TraceMap.Tests." + name, seconds, tests) for name, seconds, tests in entries)
+
+
+# Longest-first into the lightest of four bins: bin 1 takes Legacy(340) then the three
+# light classes; bin 2 Preparation(330)+OutboundHttpCoverage(100), both campaign classes;
+# bin 3 IlBody(320)+Relocation(150); the catch-all bin SqlNet100(260)+Execution(200).
+SYNTHETIC = weights(
+    ("OutboundHttpLegacyCoverageTests", 340.0, 15),
+    ("WebFormsReviewPreparationTests", 330.0, 70),
+    ("IlBodyEvidenceExtractorTests", 320.0, 95),
+    ("SqlDatabaseMatrixTestsNet100", 260.0, 2),
+    ("WebFormsReviewExecutionTests", 200.0, 20),
+    ("WebFormsReviewExecutionTestsRelocation", 150.0, 7),
+    ("OutboundHttpCoverageTests", 100.0, 14),
+    ("EvidenceDocsExportTests", 50.0, 25),
+    ("ScanManifestTests", 10.0, 4),
+    ("RuleCatalogTests", 5.0, 3),
+)
+
+
+def write_table(directory: Path, classes: dict[str, dict[str, float | int]], **overrides: object) -> Path:
+    table: dict[str, object] = {
+        "schemaVersion": MODULE.WEIGHTS_SCHEMA,
+        "generatorSha256": "0" * 64,
+        "boundedInputKind": "privacy-projected-class-durations",
+        "boundedInputSha256": hashlib.sha256(MODULE._canonical(classes)).hexdigest(),
+        "source": {"commit": "abc1234", "runner": "test"},
+        "classes": classes,
+    }
+    table.update(overrides)
+    path = directory / "weights.json"
+    path.write_text(json.dumps(table), encoding="utf-8")
+    return path
 
 
 class SelectDotnetTestLaneTests(unittest.TestCase):
@@ -141,8 +182,166 @@ class SelectDotnetTestLaneTests(unittest.TestCase):
             self.assertIn(
                 "filter=FullyQualifiedName!~OutboundHttp&FullyQualifiedName!~SqlDatabaseMatrixTests&FullyQualifiedName!~WebFormsReview",
                 written)
+            matrix_lines = [line for line in written if line.startswith("matrix=")]
+            self.assertEqual(1, len(matrix_lines))
+            matrix = json.loads(matrix_lines[0][len("matrix="):])
+            self.assertEqual(["shard-1", "shard-2", "shard-3", "rest"], [entry["name"] for entry in matrix["include"]])
             self.assertIn("reduced (partial)", stdout.getvalue())
             self.assertIn("excluded families: OutboundHttp, SqlDatabaseMatrix, WebFormsReview", stdout.getvalue())
+            self.assertIn("| rest | ubuntu-latest | everything not listed", stdout.getvalue())
+
+    def test_selector_inputs_force_full_suite(self) -> None:
+        for path in ("scripts/dotnet-test-class-weights.json", "scripts/generate_dotnet_test_class_weights.py",
+                     "scripts/test_generate_dotnet_test_class_weights.py"):
+            self.assertEqual("full", self.select("docs/README.md", path).lane, path)
+
+
+class ShardMatrixTests(unittest.TestCase):
+    def shards(self, decision: MODULE.LaneDecision, event: str = PR) -> tuple[MODULE.Shard, ...]:
+        return MODULE.build_shards(decision, event, SYNTHETIC)
+
+    def test_push_is_one_self_hosted_entry_with_no_shard_filter(self) -> None:
+        (shard,) = self.shards(MODULE.select_lane([], "push"), event="push")
+        self.assertEqual("full", shard.name)
+        self.assertEqual(MODULE.SELF_HOSTED_RUNNER, shard.runner)
+        self.assertEqual("", shard.filter)
+        self.assertEqual(MODULE.ARTIFACT, shard.artifact)
+        self.assertTrue(shard.catch_all)
+        self.assertEqual(sum(w.tests for w in SYNTHETIC), shard.expected_tests)
+        self.assertEqual({"name": "full", "runner": ["self-hosted", "linux-x64", "amd5950x"], "filter": "",
+                          "artifact": MODULE.ARTIFACT}, shard.matrix_entry())
+
+    def test_full_lane_pull_request_packs_listed_shards_and_a_catch_all(self) -> None:
+        shards = self.shards(FULL)
+        self.assertEqual(["shard-1", "shard-2", "shard-3", "rest"], [s.name for s in shards])
+        self.assertTrue(all(s.runner == MODULE.HOSTED_RUNNER for s in shards))
+        self.assertEqual(
+            ("TraceMap.Tests.OutboundHttpLegacyCoverageTests", "TraceMap.Tests.EvidenceDocsExportTests",
+             "TraceMap.Tests.ScanManifestTests", "TraceMap.Tests.RuleCatalogTests"), shards[0].classes)
+        self.assertEqual(
+            ("TraceMap.Tests.WebFormsReviewPreparationTests", "TraceMap.Tests.OutboundHttpCoverageTests"), shards[1].classes)
+        self.assertEqual(
+            ("TraceMap.Tests.IlBodyEvidenceExtractorTests", "TraceMap.Tests.WebFormsReviewExecutionTestsRelocation"),
+            shards[2].classes)
+        self.assertEqual(
+            ("TraceMap.Tests.SqlDatabaseMatrixTestsNet100", "TraceMap.Tests.WebFormsReviewExecutionTests"), shards[3].classes)
+        self.assertEqual(
+            "FullyQualifiedName~TraceMap.Tests.OutboundHttpLegacyCoverageTests."
+            "|FullyQualifiedName~TraceMap.Tests.EvidenceDocsExportTests."
+            "|FullyQualifiedName~TraceMap.Tests.ScanManifestTests."
+            "|FullyQualifiedName~TraceMap.Tests.RuleCatalogTests.", shards[0].filter)
+        listed = [name for shard in shards[:-1] for name in shard.classes]
+        self.assertEqual("&".join(f"FullyQualifiedName!~{name}." for name in listed), shards[3].filter)
+        self.assertEqual(8, len(listed))
+        self.assertEqual(len(set(listed)), len(listed))
+        self.assertEqual(set(w.name for w in SYNTHETIC), set(listed) | set(shards[3].classes))
+        self.assertEqual(sum(w.tests for w in SYNTHETIC), sum(s.expected_tests for s in shards))
+        self.assertEqual([False, False, False, True], [s.catch_all for s in shards])
+        self.assertEqual(["", "", "", MODULE.ARTIFACT], [s.artifact for s in shards])
+
+    def test_workflow_dispatch_runs_hosted_shards(self) -> None:
+        shards = self.shards(MODULE.select_lane([], "workflow_dispatch"), event="workflow_dispatch")
+        self.assertEqual(4, len(shards))
+        self.assertTrue(all(s.runner == MODULE.HOSTED_RUNNER for s in shards))
+
+    def test_reduced_lane_ands_family_exclusions_into_every_shard_and_drops_empty_ones(self) -> None:
+        shards = self.shards(MODULE.select_lane(["docs/README.md"], PR))
+        # shard-2 held only campaign classes and is gone; the catch-all stays even with no known member.
+        self.assertEqual(["shard-1", "shard-3", "rest"], [s.name for s in shards])
+        self.assertEqual(
+            ("TraceMap.Tests.EvidenceDocsExportTests", "TraceMap.Tests.ScanManifestTests", "TraceMap.Tests.RuleCatalogTests"),
+            shards[0].classes)
+        self.assertEqual(
+            "|".join(f"FullyQualifiedName~{name}.{ALL_FAMILY_TERMS}" for name in shards[0].classes), shards[0].filter)
+        self.assertEqual(("TraceMap.Tests.IlBodyEvidenceExtractorTests",), shards[1].classes)
+        self.assertEqual(f"FullyQualifiedName~TraceMap.Tests.IlBodyEvidenceExtractorTests.{ALL_FAMILY_TERMS}", shards[1].filter)
+        self.assertEqual(
+            "&".join(f"FullyQualifiedName!~{name}." for name in shards[0].classes + shards[1].classes) + ALL_FAMILY_TERMS,
+            shards[2].filter)
+        self.assertEqual((), shards[2].classes)
+        self.assertEqual(0, shards[2].expected_tests)
+        self.assertEqual(MODULE.ARTIFACT, shards[2].artifact)
+        self.assertEqual(25 + 4 + 3 + 95, sum(s.expected_tests for s in shards))
+
+    def test_triggered_family_stays_listed_and_only_the_others_are_excluded(self) -> None:
+        shards = self.shards(MODULE.select_lane(["samples/outbound-http-coverage/Program.cs"], PR))
+        self.assertEqual(["shard-1", "shard-2", "shard-3", "rest"], [s.name for s in shards])
+        terms = "&FullyQualifiedName!~SqlDatabaseMatrixTests&FullyQualifiedName!~WebFormsReview"
+        self.assertEqual(("TraceMap.Tests.OutboundHttpCoverageTests",), shards[1].classes)
+        self.assertEqual(f"FullyQualifiedName~TraceMap.Tests.OutboundHttpCoverageTests.{terms}", shards[1].filter)
+        self.assertTrue(shards[0].filter.startswith(f"FullyQualifiedName~TraceMap.Tests.OutboundHttpLegacyCoverageTests.{terms}|"))
+        rest_terms = shards[3].filter.split("&")
+        self.assertIn("FullyQualifiedName!~TraceMap.Tests.OutboundHttpLegacyCoverageTests.", rest_terms)
+        self.assertNotIn("FullyQualifiedName!~OutboundHttp", rest_terms)
+        self.assertEqual(["FullyQualifiedName!~SqlDatabaseMatrixTests", "FullyQualifiedName!~WebFormsReview"], rest_terms[-2:])
+
+    def test_class_token_boundary_keeps_a_sibling_from_matching(self) -> None:
+        token = MODULE.ClassWeight("TraceMap.Tests.WebFormsReviewExecutionTests", 1.0, 1).token
+        self.assertEqual("TraceMap.Tests.WebFormsReviewExecutionTests.", token)
+        self.assertIn(token, "TraceMap.Tests.WebFormsReviewExecutionTests.Scan_lifecycle")
+        self.assertNotIn(token, "TraceMap.Tests.WebFormsReviewExecutionTestsRelocation.Scan_lifecycle")
+
+    def test_packing_is_deterministic_and_balanced(self) -> None:
+        first = MODULE.pack_classes(SYNTHETIC, 4)
+        self.assertEqual(first, MODULE.pack_classes(tuple(reversed(SYNTHETIC)), 4))
+        loads = [sum(w.seconds for w in members) for members in first]
+        self.assertEqual([405.0, 430.0, 470.0, 460.0], loads)
+        with self.assertRaises(ValueError):
+            MODULE.pack_classes(SYNTHETIC, 1)
+
+    def test_matrix_json_is_one_line_of_include_entries(self) -> None:
+        text = MODULE.matrix_json(self.shards(FULL))
+        self.assertNotIn("\n", text)
+        entries = json.loads(text)["include"]
+        self.assertEqual(4, len(entries))
+        for entry in entries:
+            self.assertEqual({"name", "runner", "filter", "artifact"}, set(entry))
+            self.assertIsInstance(entry["runner"], list)
+            for token in entry["filter"].replace("|", "&").split("&"):
+                self.assertRegex(token, r"^FullyQualifiedName!?~[A-Za-z0-9_.]+$")
+
+    def test_load_class_weights_validates_the_table(self) -> None:
+        classes = {"TraceMap.Tests.A": {"seconds": 1.5, "tests": 2}, "TraceMap.Tests.B": {"seconds": 0.5, "tests": 1}}
+        with tempfile.TemporaryDirectory() as temp:
+            directory = Path(temp)
+            loaded = MODULE.load_class_weights(write_table(directory, classes))
+            self.assertEqual((MODULE.ClassWeight("TraceMap.Tests.A", 1.5, 2), MODULE.ClassWeight("TraceMap.Tests.B", 0.5, 1)),
+                             loaded.classes)
+            self.assertEqual("abc1234", loaded.commit)
+            cases = {
+                "hand-edited class map": dict(boundedInputSha256="0" * 64),
+                "wrong schema": dict(schemaVersion="dotnet-test-class-weights.v0"),
+            }
+            for label, overrides in cases.items():
+                with self.assertRaises(ValueError, msg=label):
+                    MODULE.load_class_weights(write_table(directory, classes, **overrides))
+            for label, bad in {
+                "empty": {},
+                "ambiguous token": {"TraceMap.Tests.A": {"seconds": 1, "tests": 1}, "TraceMap.Tests.A.B": {"seconds": 1, "tests": 1}},
+                "filter operator": {"TraceMap.Tests.A|B": {"seconds": 1, "tests": 1}},
+                "no tests": {"TraceMap.Tests.A": {"seconds": 1, "tests": 0}},
+                "negative seconds": {"TraceMap.Tests.A": {"seconds": -1, "tests": 1}},
+            }.items():
+                with self.assertRaises(ValueError, msg=label):
+                    MODULE.load_class_weights(write_table(directory, bad))
+
+    def test_checked_in_table_loads_and_packs_evenly(self) -> None:
+        table = MODULE.load_class_weights().classes
+        total_tests = sum(w.tests for w in table)
+        total_seconds = sum(w.seconds for w in table)
+        self.assertGreater(len(table), MODULE.HOSTED_SHARDS)
+        shards = MODULE.build_shards(FULL, PR, table)
+        self.assertEqual(MODULE.HOSTED_SHARDS, len(shards))
+        self.assertEqual(total_tests, sum(s.expected_tests for s in shards))
+        names = [name for shard in shards for name in shard.classes]
+        self.assertEqual(len(set(names)), len(names))
+        self.assertEqual(len(table), len(names))
+        for shard in shards:
+            self.assertLess(abs(shard.seconds - total_seconds / MODULE.HOSTED_SHARDS), 0.15 * total_seconds / MODULE.HOSTED_SHARDS)
+        reduced = MODULE.build_shards(MODULE.select_lane(["docs/README.md"], PR), PR, table)
+        self.assertEqual("rest", reduced[-1].name)
+        self.assertTrue(all("WebFormsReview" not in name and "SqlDatabaseMatrixTests" not in name and "OutboundHttp" not in name
+                            for shard in reduced for name in shard.classes))
 
 
 if __name__ == "__main__":

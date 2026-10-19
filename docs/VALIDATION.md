@@ -338,12 +338,13 @@ python3 scripts/test_validate_adapter_artifacts.py
 
 The `.NET adapter` job in `adapter-validation.yml` selects its lane from the pull
 request's changed paths with `scripts/select_dotnet_test_lane.py` (unit tests in
-`scripts/test_select_dotnet_test_lane.py`). The selection is deterministic and every
-ambiguity resolves to the full suite:
+`scripts/test_select_dotnet_test_lane.py`), in a small `Select .NET lane` job that runs
+first and hands the lane to the test job as a matrix. The selection is deterministic and
+every ambiguity resolves to the full suite:
 
 | Changed paths | Lane |
 | --- | --- |
-| `src/dotnet/TraceMap.{Core,Cli,Storage,Combine,Reporting,Reduction}/**`, `rules/**`, `Directory.Build.*`, `global.json`, `TraceMap.sln`, `TraceMap.Tests.csproj`, shared test helpers (non-`*Tests.cs` files in the test project), the `AGENTS.md` root marker fixtures walk up to, the selector or its workflow | full suite |
+| `src/dotnet/TraceMap.{Core,Cli,Storage,Combine,Reporting,Reduction}/**`, `rules/**`, `Directory.Build.*`, `global.json`, `TraceMap.sln`, `TraceMap.Tests.csproj`, shared test helpers (non-`*Tests.cs` files in the test project), the `AGENTS.md` root marker fixtures walk up to, the selector, its weights table or generator, or its workflow | full suite |
 | `samples/sql-database-matrix/**` or `SqlDatabaseMatrixTests.cs` | the SQL-matrix family runs (`FullyQualifiedName~SqlDatabaseMatrixTests`) |
 | `samples/outbound-http-coverage/**` or `OutboundHttp*Tests.cs` | the outbound-HTTP family runs |
 | `samples/compiled-dotnet-evidence/**`, `samples/fixture-build/**` or `WebFormsReview*Tests.cs` | the WebForms-review family runs |
@@ -360,20 +361,56 @@ regression in an excluded family then surfaces on the `dev` push, before promoti
 campaign-named test class added inside a neutrally named file is excluded until that
 push; keep the one-class-per-matching-file convention for campaign families.
 
+### Hosted shards
+
+Every pull request and manual dispatch runs its lane as four parallel hosted
+`ubuntu-latest` jobs — `.NET adapter (shard-1)`, `(shard-2)`, `(shard-3)` and `(rest)` —
+split by test class. The split is packed from `scripts/dotnet-test-class-weights.json`,
+the per-class durations and case counts of one full-suite run (currently the self-hosted
+Linux run at `4d8303642`: 224 classes, 4,394 cases, 139.4 test-minutes). Regenerate it
+from any full run's trx with
+`python3 scripts/generate_dotnet_test_class_weights.py <run.trx> --commit <sha> --runner <label>`;
+the table carries the generator's SHA-256 and the SHA-256 of its privacy-projected input
+(the class map only — never the trx, which names the machine and its paths), and the
+selector recomputes the input digest on load, so a hand-edited table fails the run.
+Heaviest class first into the lightest of four bins gives four bins of 34.9
+table-minutes each.
+
+Shards 1–3 are explicit class lists, `FullyQualifiedName~<class>.|…`. The trailing dot
+is the method separator in a test's fully qualified name, so `…ExecutionTests.` cannot
+match `…ExecutionTestsRelocation.<method>`. `rest` is the catch-all,
+`FullyQualifiedName!~<class>.&…` over every listed class, so a class the table does not
+know — new, renamed or split — always runs there and nothing falls through. In the
+reduced lane the family exclusions are ANDed onto every class term (vstest binds `&`
+tighter than `|` and has no parentheses) and appended to the catch-all; a shard left with
+no classes is dropped. Only `rest`, which every lane keeps, runs the `scan` and uploads
+`adapter-index-dotnet` for the combine job. A push to `dev`/`main` is the one non-sharded
+entry: the whole suite in one job on the self-hosted runner, as before.
+
+Verified at `0ffb3bb29` with `dotnet test --list-tests` under each shard's filter: full
+lane 1,031 + 1,010 + 1,169 + 1,184 = 4,394, the unfiltered total; reduced lane
+979 + 831 + 1,133 + 1,104 = 4,047 = 4,394 − the 347 campaign-family cases. Every count
+equals the table's class-level expectation, which the job summary prints per shard.
+Limitations: those expectations are class-level, so in the reduced lane a family token
+inside a listed class's *method* name would trim that shard by that one test (none exist
+today); and the table cannot vouch for classes it does not list, which is exactly why the
+catch-all exists — a class name containing another class's name plus a dot cannot occur
+within one assembly, since a type and a namespace cannot share a name, and the loader
+rejects any such pair in the table.
+
 Where the job runs: only pushes to `dev`/`main` — reviewed, merged code — execute on
 the self-hosted Linux runner (labels `self-hosted, linux-x64, amd5950x`; a 16-core box
-that runs the full suite in ~15 minutes against ~22 on hosted `ubuntu-latest`). Every
-pull request and manual dispatch runs on hosted runners. This is a hard boundary, not a
-policy: a `pull_request` run executes the workflow file from the PR head, so no
-expression inside the workflow can stop PR-controlled YAML from selecting the
+that runs the full suite in ~12 minutes in one job, against ~22 on hosted `ubuntu-latest`).
+Every pull request and manual dispatch runs on hosted runners, sharded as above. This is a
+hard boundary, not a policy: a `pull_request` run executes the workflow file from the PR
+head, so no expression inside the workflow can stop PR-controlled YAML from selecting the
 persistent runner; keeping the runner out of PR events altogether is the only version
 that holds. (The repository additionally requires approval for all outside contributors
-before any fork workflow runs.) A PR's wall clock was unaffected by the runner because the
-Windows `package-smoke` job, not the .NET suite, was its critical path; that job's
-serial lanes now fan out across four parallel jobs per OS (`metadata`, `pdb-rewrite`,
-`il-body`, `distribution`), unchanged commands, grouped by measured duration. If the runner is
-offline, the `dev`/`main` push job queues rather than falling back, so a dead runner is
-visible.
+before any fork workflow runs.) Before the shards, the hosted `.NET adapter` job
+(16–22 minutes) was a pull request's critical path once the Windows `package-smoke`
+lanes had fanned out across four parallel jobs per OS (`metadata`, `pdb-rewrite`,
+`il-body`, `distribution`). If the runner is offline, the `dev`/`main` push job queues
+rather than falling back, so a dead runner is visible.
 
 The same table is the local gate policy: before pushing a head whose changes are
 confined to leaf areas (review fixes, test-only edits, docs), run the touched lanes;
