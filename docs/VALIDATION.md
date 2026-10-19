@@ -368,8 +368,10 @@ policy: a `pull_request` run executes the workflow file from the PR head, so no
 expression inside the workflow can stop PR-controlled YAML from selecting the
 persistent runner; keeping the runner out of PR events altogether is the only version
 that holds. (The repository additionally requires approval for all outside contributors
-before any fork workflow runs.) A PR's wall clock is unaffected today because the
-Windows `package-smoke` job, not the .NET suite, is its critical path. If the runner is
+before any fork workflow runs.) A PR's wall clock was unaffected by the runner because the
+Windows `package-smoke` job, not the .NET suite, was its critical path; that job's
+serial lanes now fan out across four parallel jobs per OS (`metadata`, `pdb-rewrite`,
+`il-body`, `distribution`), unchanged commands, grouped by measured duration. If the runner is
 offline, the `dev`/`main` push job queues rather than falling back, so a dead runner is
 visible.
 
