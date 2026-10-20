@@ -49,23 +49,43 @@ public sealed class OutboundHttpLegacyCoverageTests
         Assert.Single(plain.Facts, fact => fact.RuleId == RuleIds.VisualBasicHttpCoverageGap);
         Assert.DoesNotContain(plain.Facts, fact => fact.FactType == FactTypes.HttpCallDetected);
     }
+}
 
+// The legacy matrix is one body over seven target frameworks in two languages, and xunit
+// runs a class's cases on one thread; the rows are split by language into two classes that
+// share the body. Both names contain `OutboundHttpLegacyCoverageTests`, so every existing
+// filter still selects the whole matrix.
+public sealed class OutboundHttpLegacyCoverageTestsCSharp
+{
     [Theory]
     [InlineData("net20", "csharp", 57, "2.0.0.0")]
-    [InlineData("net20", "vb", 57, "2.0.0.0")]
     [InlineData("net35", "csharp", 57, "2.0.0.0")]
-    [InlineData("net35", "vb", 57, "2.0.0.0")]
     [InlineData("net40", "csharp", 57, "4.0.0.0")]
-    [InlineData("net40", "vb", 57, "4.0.0.0")]
     [InlineData("net45", "csharp", 116, "4.0.0.0")]
-    [InlineData("net45", "vb", 116, "4.0.0.0")]
     [InlineData("net48", "csharp", 116, "4.0.0.0")]
-    [InlineData("net48", "vb", 116, "4.0.0.0")]
     [InlineData("net452", "csharp", 116, "4.0.0.0")]
-    [InlineData("net452", "vb", 116, "4.0.0.0")]
     [InlineData("net472", "csharp", 116, "4.0.0.0")]
+    public Task Legacy_reference_overloads_preserve_identity_signatures_and_mode_limits(string tfm, string language, int count, string systemVersion) =>
+        OutboundHttpLegacyCoverageShared.Legacy_reference_overloads_preserve_identity_signatures_and_mode_limits(tfm, language, count, systemVersion);
+}
+
+public sealed class OutboundHttpLegacyCoverageTestsVisualBasic
+{
+    [Theory]
+    [InlineData("net20", "vb", 57, "2.0.0.0")]
+    [InlineData("net35", "vb", 57, "2.0.0.0")]
+    [InlineData("net40", "vb", 57, "4.0.0.0")]
+    [InlineData("net45", "vb", 116, "4.0.0.0")]
+    [InlineData("net48", "vb", 116, "4.0.0.0")]
+    [InlineData("net452", "vb", 116, "4.0.0.0")]
     [InlineData("net472", "vb", 116, "4.0.0.0")]
-    public async Task Legacy_reference_overloads_preserve_identity_signatures_and_mode_limits(string tfm, string language, int count, string systemVersion)
+    public Task Legacy_reference_overloads_preserve_identity_signatures_and_mode_limits(string tfm, string language, int count, string systemVersion) =>
+        OutboundHttpLegacyCoverageShared.Legacy_reference_overloads_preserve_identity_signatures_and_mode_limits(tfm, language, count, systemVersion);
+}
+
+internal static class OutboundHttpLegacyCoverageShared
+{
+    internal static async Task Legacy_reference_overloads_preserve_identity_signatures_and_mode_limits(string tfm, string language, int count, string systemVersion)
     {
         var repo = new DirectoryInfo(AppContext.BaseDirectory);
         while (repo is not null && !File.Exists(Path.Combine(repo.FullName, "AGENTS.md"))) repo = repo.Parent;
