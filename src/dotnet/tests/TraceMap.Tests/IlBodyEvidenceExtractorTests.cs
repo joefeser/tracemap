@@ -10,10 +10,11 @@ using CecilTypeDefinition = Mono.Cecil.TypeDefinition;
 using CecilAssemblyDefinition = Mono.Cecil.AssemblyDefinition;
 using TraceMap.Cli;
 using TraceMap.Core;
+using static TraceMap.Tests.IlBodyEvidenceExtractorShared;
 
 namespace TraceMap.Tests;
 
-public sealed partial class IlBodyEvidenceExtractorTests
+public sealed class IlBodyEvidenceExtractorTestsDecoding
 {
     [Fact]
     public void Cecil_opcode_name_uses_raw_name_only_for_matching_numeric_opcode()
@@ -317,7 +318,10 @@ public sealed partial class IlBodyEvidenceExtractorTests
             && fact.Properties.GetValueOrDefault("gapKind") == "MalformedIlBody");
         Assert.DoesNotContain(result.Facts, fact => fact.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
     }
+}
 
+public sealed class IlBodyEvidenceExtractorTests
+{
     [Fact]
     public void Jmp_operand_is_hashed_but_not_reported_as_a_direct_call()
     {
@@ -631,7 +635,10 @@ public sealed partial class IlBodyEvidenceExtractorTests
         Assert.Contains(result.Facts, fact => fact.FactType == FactTypes.ManagedIlCallObserved
             && uncertainBodies.Contains(fact.Properties.GetValueOrDefault("ilBodyFactId")));
     }
+}
 
+public sealed class IlBodyEvidenceExtractorTestsArtifactsAndReaders
+{
     [Fact]
     public void Repeat_scans_are_byte_identical_across_artifacts()
     {
@@ -909,182 +916,6 @@ public sealed partial class IlBodyEvidenceExtractorTests
         Assert.Equal(BodyFact(first, "StringBeta").TargetSymbol, BodyFact(second, "StringBeta").TargetSymbol);
     }
 
-    private static CodeFact BodyFact(ScanResult result, string methodName, string? signatureFragment = null, string? assemblyIdentity = null)
-    {
-        var matches = result.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared
-            && fact.TargetSymbol!.Contains($"method:{methodName.Length.ToString(CultureInfo.InvariantCulture)}:{methodName}|", StringComparison.Ordinal)
-            && (signatureFragment is null || fact.TargetSymbol.Contains(signatureFragment, StringComparison.Ordinal))
-            && (assemblyIdentity is null || fact.Properties.GetValueOrDefault("assemblyIdentity")!.Contains(assemblyIdentity, StringComparison.Ordinal))).ToArray();
-        return Assert.Single(matches);
-    }
-
-    private static (List<string> FirstOpcodes, List<string> SecondOpcodes) OpcodeSequences(string assembly, string first, string second)
-    {
-        using var loaded = CecilAssemblyDefinition.ReadAssembly(assembly);
-        var methods = AllMethods(loaded.MainModule.Types)
-            .GroupBy(method => method.Name)
-            .ToDictionary(group => group.Key, group => group.First());
-        return (Opcodes(methods[first]), Opcodes(methods[second]));
-    }
-
-    private static IEnumerable<CecilMethodDefinition> AllMethods(IEnumerable<CecilTypeDefinition> types)
-    {
-        foreach (var type in types)
-        foreach (var method in type.Methods)
-            yield return method;
-    }
-
-    private static List<string> Opcodes(CecilMethodDefinition method) => method.Body.Instructions.Select(instruction => instruction.OpCode.Name.ToString()).ToList();
-
-    private static byte[] CorruptFirstMethodBody(string assembly)
-    {
-        var bytes = File.ReadAllBytes(assembly);
-        using var stream = new MemoryStream(bytes, writable: false);
-        using var pe = new PEReader(stream);
-        var reader = pe.GetMetadataReader();
-        foreach (var handle in reader.MethodDefinitions)
-        {
-            var method = reader.GetMethodDefinition(handle);
-            if (method.RelativeVirtualAddress == 0)
-                continue;
-            var body = pe.GetMethodBody(method.RelativeVirtualAddress);
-            var rva = method.RelativeVirtualAddress;
-            // Tiny bodies: IL starts at rva + 1; fat bodies: rva + 12. Use the
-            // reader-reported IL size to land inside either header shape.
-            var headerSize = (bytes[FileOffset(pe, rva)] & 0x03) == 0x02 ? 1 : 12;
-            var ilOffset = FileOffset(pe, rva) + headerSize;
-            // 0x0f is an unassigned single-byte opcode; any reader must fail
-            // closed instead of decoding past the corrupted stream.
-            bytes[ilOffset] = 0xee;
-            return bytes;
-        }
-        throw new InvalidOperationException("No method body found to corrupt.");
-    }
-
-    private static byte[] CorruptSwitchTable(string assembly, int declareCount)
-    {
-        var bytes = File.ReadAllBytes(assembly);
-        using var stream = new MemoryStream(bytes, writable: false);
-        using var pe = new PEReader(stream);
-        var reader = pe.GetMetadataReader();
-        foreach (var handle in reader.MethodDefinitions)
-        {
-            var method = reader.GetMethodDefinition(handle);
-            if (method.RelativeVirtualAddress == 0 || reader.GetString(method.Name) != "SwitchTable")
-                continue;
-            var ilStart = FileOffset(pe, method.RelativeVirtualAddress) + ((bytes[FileOffset(pe, method.RelativeVirtualAddress)] & 0x03) == 0x02 ? 1 : 12);
-            var position = ilStart;
-            // Skip nops/locals prologue opcodes until the switch opcode (0x45).
-            while (bytes[position] != 0x45)
-                position += bytes[position] == 0x00 ? 1 : 2;
-            var countOffset = position + 1;
-            bytes[countOffset] = (byte)(declareCount & 0xff);
-            bytes[countOffset + 1] = (byte)((declareCount >> 8) & 0xff);
-            bytes[countOffset + 2] = (byte)((declareCount >> 16) & 0xff);
-            bytes[countOffset + 3] = (byte)((declareCount >> 24) & 0xff);
-            return bytes;
-        }
-        throw new InvalidOperationException("SwitchTable body not found.");
-    }
-
-    private static void WriteBranchAndJmpAssembly(string path)
-    {
-        using var assembly = CecilAssemblyDefinition.CreateAssembly(
-            new AssemblyNameDefinition("BranchAndJmp", new Version(1, 0)),
-            "BranchAndJmp",
-            ModuleKind.Dll);
-        var module = assembly.MainModule;
-        var type = new CecilTypeDefinition("Fixture", "IlShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
-        module.Types.Add(type);
-        var target = new CecilMethodDefinition("Target", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
-        target.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
-        type.Methods.Add(target);
-        var jump = new CecilMethodDefinition("Jump", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
-        jump.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Jmp, target));
-        type.Methods.Add(jump);
-        var otherTarget = new CecilMethodDefinition("OtherTarget", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
-        otherTarget.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
-        type.Methods.Add(otherTarget);
-        var jumpOther = new CecilMethodDefinition("JumpOther", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
-        jumpOther.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Jmp, otherTarget));
-        type.Methods.Add(jumpOther);
-        var branch = new CecilMethodDefinition("Branch", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
-        var ret = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret);
-        branch.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Br_S, ret));
-        branch.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ldc_I4, 123456));
-        branch.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Pop));
-        branch.Body.Instructions.Add(ret);
-        type.Methods.Add(branch);
-        assembly.Write(path);
-    }
-
-    private static void WriteTerminalHandlerAssembly(string path)
-    {
-        using var assembly = CecilAssemblyDefinition.CreateAssembly(
-            new AssemblyNameDefinition("TerminalHandler", new Version(1, 0)),
-            "TerminalHandler",
-            ModuleKind.Dll);
-        var module = assembly.MainModule;
-        var type = new CecilTypeDefinition("Fixture", "IlShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
-        module.Types.Add(type);
-        var method = new CecilMethodDefinition("TerminalHandler", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
-        var tryStart = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ldnull);
-        var throwInstruction = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Throw);
-        var handlerStart = Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Pop);
-        method.Body.Instructions.Add(tryStart);
-        method.Body.Instructions.Add(throwInstruction);
-        method.Body.Instructions.Add(handlerStart);
-        method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
-        method.Body.ExceptionHandlers.Add(new Mono.Cecil.Cil.ExceptionHandler(Mono.Cecil.Cil.ExceptionHandlerType.Catch)
-        {
-            TryStart = tryStart,
-            TryEnd = handlerStart,
-            HandlerStart = handlerStart,
-            HandlerEnd = null,
-            CatchType = module.ImportReference(typeof(Exception))
-        });
-        type.Methods.Add(method);
-        assembly.Write(path);
-    }
-
-    private static void WriteDeepLocalAssembly(string path)
-    {
-        using var assembly = CecilAssemblyDefinition.CreateAssembly(
-            new AssemblyNameDefinition("DeepLocal", new Version(1, 0)),
-            "DeepLocal",
-            ModuleKind.Dll);
-        var module = assembly.MainModule;
-        var type = new CecilTypeDefinition("Fixture", "IlShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
-        module.Types.Add(type);
-        var method = new CecilMethodDefinition("DeepLocal", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
-        Mono.Cecil.TypeReference localType = module.TypeSystem.Int32;
-        for (var index = 0; index <= ManagedMetadataExtractor.MaximumSignatureTypeNesting; index++)
-            localType = new Mono.Cecil.ArrayType(localType);
-        method.Body.InitLocals = true;
-        method.Body.Variables.Add(new Mono.Cecil.Cil.VariableDefinition(localType));
-        method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
-        type.Methods.Add(method);
-        assembly.Write(path);
-    }
-
-    private static void WriteManyLocalsAssembly(string path)
-    {
-        using var assembly = CecilAssemblyDefinition.CreateAssembly(
-            new AssemblyNameDefinition("ManyLocals", new Version(1, 0)),
-            "ManyLocals",
-            ModuleKind.Dll);
-        var module = assembly.MainModule;
-        var type = new CecilTypeDefinition("Fixture", "IlShapes", Mono.Cecil.TypeAttributes.Public, module.TypeSystem.Object);
-        module.Types.Add(type);
-        var method = new CecilMethodDefinition("ManyLocals", Mono.Cecil.MethodAttributes.Public | Mono.Cecil.MethodAttributes.Static, module.TypeSystem.Void);
-        method.Body.InitLocals = true;
-        for (var index = 0; index < 128; index++)
-            method.Body.Variables.Add(new Mono.Cecil.Cil.VariableDefinition(module.TypeSystem.Int32));
-        method.Body.Instructions.Add(Mono.Cecil.Cil.Instruction.Create(Mono.Cecil.Cil.OpCodes.Ret));
-        type.Methods.Add(method);
-        assembly.Write(path);
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -1152,57 +983,5 @@ public sealed partial class IlBodyEvidenceExtractorTests
             IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, new IlBodyLimits(),
                 new IlBodyEvidenceExtractor.IlWorkBudget(2_000_000), CancellationToken.None));
         Assert.Equal("IlOperandEncodingUnsupported", error.GapKind);
-    }
-
-    private static void RewriteShortBranchDelta(byte[] bytes, string methodName, byte delta)
-    {
-        using var stream = new MemoryStream(bytes, writable: false);
-        using var pe = new PEReader(stream);
-        var reader = pe.GetMetadataReader();
-        foreach (var handle in reader.MethodDefinitions)
-        {
-            var method = reader.GetMethodDefinition(handle);
-            if (reader.GetString(method.Name) != methodName)
-                continue;
-            var bodyOffset = FileOffset(pe, method.RelativeVirtualAddress);
-            var headerSize = (bytes[bodyOffset] & 0x03) == 0x02 ? 1 : 12;
-            var ilOffset = bodyOffset + headerSize;
-            Assert.Equal((byte)Mono.Cecil.Cil.OpCodes.Br_S.Value, bytes[ilOffset]);
-            bytes[ilOffset + 1] = delta;
-            return;
-        }
-        throw new InvalidOperationException($"{methodName} body not found.");
-    }
-
-    private static int FileOffset(PEReader pe, int rva)
-    {
-        foreach (var section in pe.PEHeaders.SectionHeaders)
-        {
-            if (rva >= section.VirtualAddress && rva < section.VirtualAddress + Math.Max(section.VirtualSize, section.SizeOfRawData))
-                return section.PointerToRawData + (rva - section.VirtualAddress);
-        }
-        throw new InvalidOperationException("RVA outside any section.");
-    }
-
-    private static ScanResult Scan(ScanOptions options) => ScanEngine.Scan(options);
-
-    private static string TempOutput() => Path.Combine(Directory.CreateTempSubdirectory("tracemap-il-output-").FullName, "out");
-
-    private static (string Source, string Assembly) Fixture(string language, string assemblyName)
-    {
-        var source = Path.Combine(FindRepoRoot(), "samples", "compiled-dotnet-evidence", language);
-        return (source, Path.Combine(source, "bin", "Debug", "net10.0", assemblyName + ".dll"));
-    }
-
-    private static string FindRepoRoot()
-    {
-        var current = AppContext.BaseDirectory;
-        while (current is not null)
-        {
-            if (Directory.Exists(Path.Combine(current, ".git")) || File.Exists(Path.Combine(current, ".git")))
-                return current;
-            current = Directory.GetParent(current)?.FullName;
-        }
-        throw new InvalidOperationException("Repository root not found.");
     }
 }

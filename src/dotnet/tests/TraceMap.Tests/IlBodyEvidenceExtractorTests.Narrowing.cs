@@ -11,10 +11,11 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.VisualBasic;
 using Microsoft.CodeAnalysis.VisualBasic.Syntax;
 using TraceMap.Core;
+using static TraceMap.Tests.IlBodyEvidenceExtractorShared;
 
 namespace TraceMap.Tests;
 
-public sealed partial class IlBodyEvidenceExtractorTests
+public sealed class IlBodyEvidenceExtractorTestsNarrowing
 {
     private static string NarrowingMethod(string name) => EventMethod(ReceiverAssembly(LateAssembly), "NarrowingMatrix", name,
         LateStatic + "(" + (name == "FromLong" ? "type(namespace:6:System|names:5:Int64)" : OverloadInt) + ")->" + OverloadInt);

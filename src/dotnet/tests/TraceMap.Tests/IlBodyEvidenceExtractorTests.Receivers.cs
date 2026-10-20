@@ -6,12 +6,12 @@ using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text.Json;
 using TraceMap.Core;
+using static TraceMap.Tests.IlBodyEvidenceExtractorShared;
 
 namespace TraceMap.Tests;
 
-public sealed partial class IlBodyEvidenceExtractorTests
+public sealed class IlBodyEvidenceExtractorTestsReceivers
 {
-    private const string ReceiverNamespace = "TraceMap.CompiledFixtures.Equivalence";
     private const string ReceiverSignature = "arity:0|call:default|hasThis:true|explicitThis:false|()->type(namespace:6:System|names:5:Int32)";
 
     [Theory]
@@ -226,36 +226,5 @@ public sealed partial class IlBodyEvidenceExtractorTests
         return Assert.Single(calls);
     }
 
-    private static MethodDefinitionHandle ReceiverHandle(MetadataReader reader, string owner, string name)
-    {
-        var type = Assert.Single(reader.TypeDefinitions, handle => reader.GetString(reader.GetTypeDefinition(handle).Namespace) == ReceiverNamespace && reader.GetString(reader.GetTypeDefinition(handle).Name) == owner);
-        return Assert.Single(reader.GetTypeDefinition(type).GetMethods(), handle => reader.GetString(reader.GetMethodDefinition(handle).Name) == name);
-    }
-    private static string ReceiverToken(MethodDefinitionHandle handle) => "0x" + MetadataTokens.GetToken(handle).ToString("x8", CultureInfo.InvariantCulture);
-    private static string ReceiverAssembly(string name) => "assembly:name:" + name.Length + ":" + name + "|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null|module:" + (name.Length + 4) + ":" + name + ".dll|targetFramework:25:.NETCoreApp,Version=v10.0";
     private static string ReceiverMethod(string assembly, string owner, string name) => assembly + "|type:namespace:37:" + ReceiverNamespace + "|names:" + owner.Length + ":" + owner + "|arity:0|method:" + name.Length + ":" + name + "|" + ReceiverSignature;
-
-    private static void AssertReceiverEvidence(ScanResult result, CodeFact fact, string assembly, string rule)
-    {
-        Assert.Equal(rule, fact.RuleId);
-        Assert.Equal(EvidenceTiers.Tier2Structural, fact.EvidenceTier);
-        Assert.Equal(result.Manifest.CommitSha, fact.CommitSha);
-        Assert.Equal(result.Manifest.RepoName, fact.Repo);
-        Assert.Matches("^[0-9a-f]{40}$", fact.CommitSha);
-        Assert.Equal(1, fact.Evidence.StartLine);
-        Assert.Equal(1, fact.Evidence.EndLine);
-        Assert.Null(fact.Evidence.SnippetHash);
-        Assert.False(string.IsNullOrWhiteSpace(fact.Properties["limitation"]));
-        var compiled = result.Manifest.CompiledInputProvenance!;
-        var input = Assert.Single(compiled.Outcomes, outcome => outcome.SafeLocator == fact.Evidence.FilePath);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assembly))).ToLowerInvariant(), fact.Properties["rawFileSha256"]);
-        Assert.Equal(input.ProvenanceBindingInputSha256, fact.Properties["provenanceBindingInputSha256"]);
-        var il = rule != RuleIds.DotNetCompiledMember;
-        var provenance = result.Manifest.IlBodyProvenance!;
-        Assert.Equal(il ? nameof(IlBodyEvidenceExtractor) : nameof(ManagedMetadataExtractor), fact.Evidence.ExtractorId);
-        Assert.Equal(il ? ScannerVersions.IlBodyEvidenceExtractor : ScannerVersions.ManagedMetadataExtractor, fact.Evidence.ExtractorVersion);
-        Assert.Equal(il ? "managed-il-v1" : ManagedMetadataExtractor.MetadataLocationKind, fact.Properties["evidenceLocationKind"]);
-        Assert.Equal(il ? provenance.BoundedInputSha256 : compiled.BoundedInputSha256, fact.Properties[il ? "ilBoundedInputSha256" : "boundedInputSha256"]);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(typeof(IlBodyEvidenceExtractor).Assembly.Location))).ToLowerInvariant(), fact.Properties[il ? "ilGeneratorSha256" : "generatorSha256"]);
-    }
 }

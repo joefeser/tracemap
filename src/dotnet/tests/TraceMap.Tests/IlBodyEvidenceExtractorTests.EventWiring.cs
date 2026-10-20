@@ -8,18 +8,15 @@ using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text.Json;
 using TraceMap.Core;
+using static TraceMap.Tests.IlBodyEvidenceExtractorShared;
 
 namespace TraceMap.Tests;
 
-public sealed partial class IlBodyEvidenceExtractorTests
+public sealed class IlBodyEvidenceExtractorTestsEventWiring
 {
     private const string EventVoid = "type(namespace:6:System|names:4:Void)";
-    private const string EventAction = "scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:6:Action)";
-    private const string EventInstance = "arity:0|call:default|hasThis:true|explicitThis:false|";
 
-    private static string EventMethod(string assembly, string owner, string name, string signature) => assembly
-        + "|type:namespace:37:" + ReceiverNamespace + "|names:" + owner.Length + ":" + owner
-        + "|arity:0|method:" + name.Length + ":" + name + "|" + signature;
+    private const string EventAction = "scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:6:Action)";
 
     [Theory]
     [InlineData("csharp", "CompiledEvidence.CSharp", false)]
@@ -375,56 +372,5 @@ public sealed partial class IlBodyEvidenceExtractorTests
             AssertReceiverEvidence(scan, body, fixture.Assembly, RuleIds.DotNetIlBody);
             AssertReceiverEvidence(scan, call, fixture.Assembly, RuleIds.DotNetIlCall);
         }
-    }
-
-    private static void CheckEventGap(ScanResult scan, CodeFact gap, string assembly, bool il)
-    {
-        Assert.Equal(il ? RuleIds.DotNetIlGap : RuleIds.DotNetCompiledGap, gap.RuleId);
-        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
-        Assert.Equal(scan.Manifest.CommitSha, gap.CommitSha);
-        Assert.Equal(scan.Manifest.RepoName, gap.Repo);
-        Assert.Equal(1, gap.Evidence.StartLine);
-        Assert.Equal(1, gap.Evidence.EndLine);
-        Assert.Equal(il ? nameof(IlBodyEvidenceExtractor) : nameof(ManagedMetadataExtractor), gap.Evidence.ExtractorId);
-        Assert.Equal(il ? ScannerVersions.IlBodyEvidenceExtractor : ScannerVersions.ManagedMetadataExtractor, gap.Evidence.ExtractorVersion);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(assembly))).ToLowerInvariant(), gap.Properties["rawFileSha256"]);
-        var binding = il ? Assert.Single(scan.Manifest.IlBodyProvenance!.Outcomes, input => input.SafeLocator == gap.Evidence.FilePath).ProvenanceBindingInputSha256
-            : Assert.Single(scan.Manifest.CompiledInputProvenance!.Outcomes, input => input.SafeLocator == gap.Evidence.FilePath).ProvenanceBindingInputSha256;
-        Assert.Equal(binding, gap.Properties["provenanceBindingInputSha256"]);
-        Assert.Equal(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(typeof(IlBodyEvidenceExtractor).Assembly.Location))).ToLowerInvariant(), gap.Properties[il ? "ilGeneratorSha256" : "generatorSha256"]);
-        Assert.Equal(il ? scan.Manifest.IlBodyProvenance!.BoundedInputSha256 : scan.Manifest.CompiledInputProvenance!.BoundedInputSha256, gap.Properties[il ? "ilBoundedInputSha256" : "boundedInputSha256"]);
-        Assert.False(string.IsNullOrWhiteSpace(gap.Properties["limitation"]));
-    }
-
-    // Independent operand-width decoder using framework opcode definitions, not
-    // Cecil or the production decoder; reject unknown/truncated instructions.
-    private static (int Offset, OpCode OpCode, int Token)[] DecodeEventBody(byte[] bytes)
-    {
-        var opcodes = typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(field => field.FieldType == typeof(OpCode)).Select(field => (OpCode)field.GetValue(null)!)
-            .ToDictionary(opcode => unchecked((ushort)opcode.Value));
-        var decoded = new List<(int, OpCode, int)>();
-        for (var offset = 0; offset < bytes.Length;)
-        {
-            var start = offset;
-            ushort value = bytes[offset++];
-            if (value == 0xfe) { Assert.True(offset < bytes.Length); value = (ushort)(0xfe00 | bytes[offset++]); }
-            Assert.True(opcodes.TryGetValue(value, out var opcode));
-            var size = opcode.OperandType switch
-            {
-                OperandType.InlineNone => 0,
-                OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or OperandType.ShortInlineVar => 1,
-                OperandType.InlineVar => 2,
-                OperandType.InlineI or OperandType.InlineBrTarget or OperandType.InlineField or OperandType.InlineMethod
-                    or OperandType.InlineSig or OperandType.InlineString or OperandType.InlineTok or OperandType.InlineType or OperandType.ShortInlineR => 4,
-                OperandType.InlineI8 or OperandType.InlineR => 8,
-                _ => throw new InvalidDataException("Unexpected fixture operand: " + opcode.OperandType)
-            };
-            Assert.True(offset + size <= bytes.Length);
-            var token = opcode.OperandType is OperandType.InlineMethod or OperandType.InlineField or OperandType.InlineType or OperandType.InlineString ? BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(offset, 4)) : 0;
-            decoded.Add((start, opcode, token));
-            offset += size;
-        }
-        return decoded.ToArray();
     }
 }

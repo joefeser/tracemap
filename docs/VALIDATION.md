@@ -383,12 +383,21 @@ and the table carries the generator's SHA-256 and the SHA-256 of its privacy-pro
 input (the class map only — never a trx, which names the machine and its paths); the
 selector recomputes the input digest on load, so a hand-edited table fails the run.
 Heaviest class first into the lightest of four bins packs the bins to within a class of
-each other. The current table is the hosted shard run at `64d523d43`: 224 classes,
-4,394 cases, 61.1 hosted test-minutes, 15.3 per bin. The floor under any packing is the
-longest serialized class — `IlBodyEvidenceExtractorTests`, 95 cases on one thread for
-5.6 minutes — so the shard that holds it cannot finish its tests sooner whatever else it
-carries; splitting that class is the next lever, as #885 and #887 were for the SQL-matrix
-and Web Forms lanes.
+each other. The current table is the hosted shard run at `b1adb6172`: 232 classes,
+4,394 cases, 57.6 hosted test-minutes, 14.4 per bin. The floor under any packing is the
+longest serialized class: xunit runs a class's cases on one thread, so a shard cannot
+finish its tests sooner than its longest class, whatever else it carries.
+`IlBodyEvidenceExtractorTests` was that floor (95 cases, 5.6 minutes on one thread); it
+is now nine sibling classes — the original plus `…Decoding`, `…ArtifactsAndReaders`,
+`…Collections`, `…EventWiring`, `…LateBinding`, `…Narrowing`, `…OverloadAmbiguity` and
+`…Receivers`, 18 cases and 1.4 minutes at most — whose names all contain
+`IlBodyEvidenceExtractorTests`, so every existing `--filter` lane still matches the whole
+family; the helpers they share live in `IlBodyEvidenceExtractorShared`. A class the
+table does not yet list runs in `rest` until the table is regenerated from the next
+full-lane run, which is exactly how the siblings ran on the pull request that split
+them. The longest serialized classes are now `OutboundHttpLegacyCoverageTests` (15
+cases, 3.7 minutes) and `IlRewriteEvidenceExtractorTests` (43 cases, 3.3 minutes), the
+next candidates if the wall has to fall further.
 
 Shards 1–3 are explicit class lists, `FullyQualifiedName~<class>.|…`. The trailing dot
 is the method separator in a test's fully qualified name, so `…ExecutionTests.` cannot
@@ -402,8 +411,8 @@ no classes is dropped. Only `rest`, which every lane keeps, runs the `scan` and 
 entry: the whole suite in one job on the self-hosted runner, as before.
 
 Verified with `dotnet test --list-tests` under each shard's filter and again by the shard
-runs themselves: full lane 1,347 + 878 + 1,096 + 1,073 = 4,394, the unfiltered total;
-reduced lane 1,329 + 685 + 1,088 + 945 = 4,047 = 4,394 − the 347 campaign-family cases.
+runs themselves: full lane 1,023 + 1,306 + 939 + 1,126 = 4,394, the unfiltered total;
+reduced lane 932 + 1,216 + 861 + 1,038 = 4,047 = 4,394 − the 347 campaign-family cases.
 Every count equals the table's class-level expectation, which the job summary prints per
 shard. Limitations: those expectations are class-level, so in the reduced lane a family
 token inside a listed class's *method* name would trim that shard by that one test (none
