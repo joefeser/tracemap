@@ -1,0 +1,914 @@
+{
+  "schemaVersion": "dotnet-test-class-weights.v1",
+  "generatorSha256": "e6d1a93240bebeda25be4539befb9d58bd0292fae2fc00351261f31e7bdbf835",
+  "boundedInputKind": "privacy-projected-class-durations",
+  "boundedInputSha256": "ad8f0c763671a48f02b84d8fe1f076664e214dfc86cf7dba0ba0dd99a0ae2841",
+  "source": {
+    "commit": "64d523d43",
+    "runner": "ubuntu-latest (hosted, 4 vCPU, four shards)",
+    "started": "2026-10-19T22:13:19.4580811+00:00",
+    "finished": "2026-10-19T22:22:16.5731222+00:00",
+    "total": 4394,
+    "executed": 4392,
+    "passed": 4392,
+    "failed": 0
+  },
+  "classes": {
+    "TraceMap.Tests.AccessCopyCloneCandidateTests": {
+      "seconds": 0.198,
+      "tests": 9
+    },
+    "TraceMap.Tests.AccessDesignEvidenceCompositionTests": {
+      "seconds": 1.904,
+      "tests": 21
+    },
+    "TraceMap.Tests.AccessDesignEvidenceReaderTests": {
+      "seconds": 0.215,
+      "tests": 50
+    },
+    "TraceMap.Tests.AccessExpressionProjectorTests": {
+      "seconds": 0.062,
+      "tests": 27
+    },
+    "TraceMap.Tests.AccessFoundationTests": {
+      "seconds": 1.156,
+      "tests": 90
+    },
+    "TraceMap.Tests.AccessLocalReviewBundleTests": {
+      "seconds": 2.754,
+      "tests": 13
+    },
+    "TraceMap.Tests.AccessMacroReportingTests": {
+      "seconds": 2.359,
+      "tests": 11
+    },
+    "TraceMap.Tests.AccessParallelsSourceRunnerTests": {
+      "seconds": 0.007,
+      "tests": 7
+    },
+    "TraceMap.Tests.AccessScreenDataFlowTests": {
+      "seconds": 0.387,
+      "tests": 26
+    },
+    "TraceMap.Tests.AccessUiProjectionTests": {
+      "seconds": 2.098,
+      "tests": 43
+    },
+    "TraceMap.Tests.AccessVbaProjectionTests": {
+      "seconds": 0.378,
+      "tests": 25
+    },
+    "TraceMap.Tests.AccessVbaSourceExportTests": {
+      "seconds": 0.075,
+      "tests": 4
+    },
+    "TraceMap.Tests.AnalyzerCapabilityDiagnosticTests": {
+      "seconds": 5.403,
+      "tests": 10
+    },
+    "TraceMap.Tests.ApiDtoContractDiffTests": {
+      "seconds": 4.072,
+      "tests": 16
+    },
+    "TraceMap.Tests.AppCodeRegistrationMatrixTests": {
+      "seconds": 0.557,
+      "tests": 93
+    },
+    "TraceMap.Tests.BackendExtractionSampleTests": {
+      "seconds": 1.578,
+      "tests": 1
+    },
+    "TraceMap.Tests.BuildEnvironmentDiagnosticTests": {
+      "seconds": 11.254,
+      "tests": 26
+    },
+    "TraceMap.Tests.CSharpFullSnapshotStabilityTests": {
+      "seconds": 38.811,
+      "tests": 12
+    },
+    "TraceMap.Tests.CSharpGraphCorrectnessFixtureTests": {
+      "seconds": 10.502,
+      "tests": 5
+    },
+    "TraceMap.Tests.CSharpIdentityReceiverFixtureTests": {
+      "seconds": 3.968,
+      "tests": 2
+    },
+    "TraceMap.Tests.CSharpLegacyIncompleteFixtureTests": {
+      "seconds": 4.329,
+      "tests": 2
+    },
+    "TraceMap.Tests.CSharpSemanticExtractorTests": {
+      "seconds": 13.126,
+      "tests": 10
+    },
+    "TraceMap.Tests.CSharpSyntaxExtractorTests": {
+      "seconds": 1.814,
+      "tests": 8
+    },
+    "TraceMap.Tests.CentralPackageVersionTests": {
+      "seconds": 0.015,
+      "tests": 6
+    },
+    "TraceMap.Tests.CiWorkflowProducerEvidenceTests": {
+      "seconds": 8.693,
+      "tests": 65
+    },
+    "TraceMap.Tests.CliTests": {
+      "seconds": 14.283,
+      "tests": 14
+    },
+    "TraceMap.Tests.ComReferenceWorkspaceFallbackTests": {
+      "seconds": 1.282,
+      "tests": 6
+    },
+    "TraceMap.Tests.CombineTests": {
+      "seconds": 3.08,
+      "tests": 4
+    },
+    "TraceMap.Tests.CombinedChangeImpactTests": {
+      "seconds": 3.504,
+      "tests": 13
+    },
+    "TraceMap.Tests.CombinedDependencyDiffTests": {
+      "seconds": 3.376,
+      "tests": 17
+    },
+    "TraceMap.Tests.CombinedDependencyPathTests": {
+      "seconds": 7.272,
+      "tests": 95
+    },
+    "TraceMap.Tests.CombinedDependencyReportTests": {
+      "seconds": 2.363,
+      "tests": 22
+    },
+    "TraceMap.Tests.CombinedReverseQueryTests": {
+      "seconds": 3.656,
+      "tests": 16
+    },
+    "TraceMap.Tests.CombinedRouteFlowTests": {
+      "seconds": 12.175,
+      "tests": 87
+    },
+    "TraceMap.Tests.CompiledAdmissionWorkUsageTests": {
+      "seconds": 0.005,
+      "tests": 18
+    },
+    "TraceMap.Tests.CompiledAttachmentCombineTests": {
+      "seconds": 14.164,
+      "tests": 22
+    },
+    "TraceMap.Tests.CompiledAttachmentProducerTests": {
+      "seconds": 5.841,
+      "tests": 24
+    },
+    "TraceMap.Tests.CompiledBaselinePrewalkTests": {
+      "seconds": 1.122,
+      "tests": 5
+    },
+    "TraceMap.Tests.CompiledTwoHopCutoffTests": {
+      "seconds": 2.437,
+      "tests": 12
+    },
+    "TraceMap.Tests.ConstructedGenericSampleTests": {
+      "seconds": 30.062,
+      "tests": 6
+    },
+    "TraceMap.Tests.ConstructedGenericSignatureTests": {
+      "seconds": 0.003,
+      "tests": 10
+    },
+    "TraceMap.Tests.ContractDeltaImpactV2Tests": {
+      "seconds": 0.894,
+      "tests": 14
+    },
+    "TraceMap.Tests.DatabaseCommandStateTests": {
+      "seconds": 9.693,
+      "tests": 11
+    },
+    "TraceMap.Tests.DatabaseDesignReviewTests": {
+      "seconds": 1.691,
+      "tests": 10
+    },
+    "TraceMap.Tests.DeepProjectlessNativeWorkflowTests": {
+      "seconds": 40.601,
+      "tests": 1
+    },
+    "TraceMap.Tests.DepsJsonEvidenceTests": {
+      "seconds": 1.848,
+      "tests": 41
+    },
+    "TraceMap.Tests.DirectoryLinkFixtureTests": {
+      "seconds": 0.001,
+      "tests": 1
+    },
+    "TraceMap.Tests.EndpointAlignmentTests": {
+      "seconds": 0.292,
+      "tests": 6
+    },
+    "TraceMap.Tests.EvidenceDocsExportTests": {
+      "seconds": 5.115,
+      "tests": 26
+    },
+    "TraceMap.Tests.ExactSourceScopeTests": {
+      "seconds": 10.75,
+      "tests": 9
+    },
+    "TraceMap.Tests.ExplicitVisualBasicContextTests": {
+      "seconds": 19.626,
+      "tests": 52
+    },
+    "TraceMap.Tests.FrameworkMigrationAdversarialRegressionTests": {
+      "seconds": 0.278,
+      "tests": 8
+    },
+    "TraceMap.Tests.FrameworkMigrationCompositionTests": {
+      "seconds": 1.161,
+      "tests": 3
+    },
+    "TraceMap.Tests.FrameworkMigrationConsumerAuditTests": {
+      "seconds": 1.235,
+      "tests": 5
+    },
+    "TraceMap.Tests.FrameworkMigrationEvidenceExtractorTests": {
+      "seconds": 3.591,
+      "tests": 31
+    },
+    "TraceMap.Tests.FrameworkSignatureCandidateTests": {
+      "seconds": 11.167,
+      "tests": 109
+    },
+    "TraceMap.Tests.GeneratedSemanticPathTests": {
+      "seconds": 5.397,
+      "tests": 7
+    },
+    "TraceMap.Tests.GitMetadataOutputTests": {
+      "seconds": 1.214,
+      "tests": 12
+    },
+    "TraceMap.Tests.GroupedCompiledPathHandoffTests": {
+      "seconds": 1.17,
+      "tests": 42
+    },
+    "TraceMap.Tests.HttpEntryBoundaryRegressionTests": {
+      "seconds": 23.603,
+      "tests": 19
+    },
+    "TraceMap.Tests.IlAsmIldasmParityGateTests": {
+      "seconds": 0.011,
+      "tests": 8
+    },
+    "TraceMap.Tests.IlBodyEvidenceExtractorTests": {
+      "seconds": 337.109,
+      "tests": 95
+    },
+    "TraceMap.Tests.IlCallValueExtractorTests": {
+      "seconds": 0.086,
+      "tests": 35
+    },
+    "TraceMap.Tests.IlCommandBindingExtractorTests": {
+      "seconds": 27.118,
+      "tests": 70
+    },
+    "TraceMap.Tests.IlDasmTextParserTests": {
+      "seconds": 0.088,
+      "tests": 26
+    },
+    "TraceMap.Tests.IlRewriteAssemblyTopologyTests": {
+      "seconds": 53.736,
+      "tests": 6
+    },
+    "TraceMap.Tests.IlRewriteControlFlowEvidenceExtractorTests": {
+      "seconds": 68.238,
+      "tests": 16
+    },
+    "TraceMap.Tests.IlRewriteEmbeddedPdbTests": {
+      "seconds": 0.606,
+      "tests": 7
+    },
+    "TraceMap.Tests.IlRewriteEvidenceExtractorTests": {
+      "seconds": 191.001,
+      "tests": 43
+    },
+    "TraceMap.Tests.IlRewriteMemberShapeEvidenceExtractorTests": {
+      "seconds": 72.396,
+      "tests": 15
+    },
+    "TraceMap.Tests.IlRewritePdbEvidenceExtractorTests": {
+      "seconds": 178.221,
+      "tests": 30
+    },
+    "TraceMap.Tests.IlRewritePublicIntegrationTests": {
+      "seconds": 0.138,
+      "tests": 1
+    },
+    "TraceMap.Tests.IndexedGraphPayloadTests": {
+      "seconds": 0.005,
+      "tests": 5
+    },
+    "TraceMap.Tests.InlineReceiverMigrationTests": {
+      "seconds": 0.243,
+      "tests": 6
+    },
+    "TraceMap.Tests.IntegratedMigrationReportTests": {
+      "seconds": 0.332,
+      "tests": 4
+    },
+    "TraceMap.Tests.IntegrationExtractorTests": {
+      "seconds": 0.286,
+      "tests": 6
+    },
+    "TraceMap.Tests.JsonlFactWriterTests": {
+      "seconds": 0.142,
+      "tests": 1
+    },
+    "TraceMap.Tests.LazyConstructorLoggingTests": {
+      "seconds": 47.274,
+      "tests": 59
+    },
+    "TraceMap.Tests.LegacyAsmxExtractorTests": {
+      "seconds": 0.534,
+      "tests": 13
+    },
+    "TraceMap.Tests.LegacyAspNetExtractorTests": {
+      "seconds": 1.594,
+      "tests": 23
+    },
+    "TraceMap.Tests.LegacyBaselineArtifactsTests": {
+      "seconds": 1.508,
+      "tests": 28
+    },
+    "TraceMap.Tests.LegacyBatchDataMovementExtractorTests": {
+      "seconds": 0.723,
+      "tests": 11
+    },
+    "TraceMap.Tests.LegacyDataEdmxSymbolCompositionTests": {
+      "seconds": 55.962,
+      "tests": 30
+    },
+    "TraceMap.Tests.LegacyDataMetadataExtractorTests": {
+      "seconds": 3.699,
+      "tests": 59
+    },
+    "TraceMap.Tests.LegacyDataModelDescriptorProjectionTests": {
+      "seconds": 0.008,
+      "tests": 4
+    },
+    "TraceMap.Tests.LegacyDataModelRuleCatalogTests": {
+      "seconds": 0.043,
+      "tests": 5
+    },
+    "TraceMap.Tests.LegacyDataRelationshipGapClassifierTests": {
+      "seconds": 0.012,
+      "tests": 5
+    },
+    "TraceMap.Tests.LegacyEvidencePackTests": {
+      "seconds": 0.416,
+      "tests": 10
+    },
+    "TraceMap.Tests.LegacyFlowCompositionTests": {
+      "seconds": 3.841,
+      "tests": 25
+    },
+    "TraceMap.Tests.LegacyRemotingExtractorTests": {
+      "seconds": 5.04,
+      "tests": 9
+    },
+    "TraceMap.Tests.LegacyStoryReconciliationTests": {
+      "seconds": 0.914,
+      "tests": 3
+    },
+    "TraceMap.Tests.LegacyWcfExtractorTests": {
+      "seconds": 0.726,
+      "tests": 22
+    },
+    "TraceMap.Tests.LegacyWebFormsAdversarialFixtureTests": {
+      "seconds": 15.436,
+      "tests": 3
+    },
+    "TraceMap.Tests.LegacyWebFormsEventIdentityTests": {
+      "seconds": 1.696,
+      "tests": 6
+    },
+    "TraceMap.Tests.LegacyWebFormsExtractorTests": {
+      "seconds": 19.11,
+      "tests": 53
+    },
+    "TraceMap.Tests.LegacyWinFormsExtractorTests": {
+      "seconds": 0.915,
+      "tests": 19
+    },
+    "TraceMap.Tests.LocalReviewCommandTests": {
+      "seconds": 24.795,
+      "tests": 18
+    },
+    "TraceMap.Tests.ManagedMetadataExtractorTests": {
+      "seconds": 28.535,
+      "tests": 151
+    },
+    "TraceMap.Tests.MarkdownReportWriterTests": {
+      "seconds": 0.016,
+      "tests": 9
+    },
+    "TraceMap.Tests.MessageSurfaceTests": {
+      "seconds": 1.592,
+      "tests": 8
+    },
+    "TraceMap.Tests.MessyWorkspaceRegressionTests": {
+      "seconds": 89.665,
+      "tests": 58
+    },
+    "TraceMap.Tests.MigrationRegressionCorpusTests": {
+      "seconds": 0.242,
+      "tests": 2
+    },
+    "TraceMap.Tests.MsBuildBinlogExtractorTests": {
+      "seconds": 10.255,
+      "tests": 9
+    },
+    "TraceMap.Tests.OracleAdaptationPinTests": {
+      "seconds": 0.085,
+      "tests": 4
+    },
+    "TraceMap.Tests.OracleCorpusLaneTests": {
+      "seconds": 2.745,
+      "tests": 5
+    },
+    "TraceMap.Tests.OracleGoldenLaneTests": {
+      "seconds": 1.767,
+      "tests": 6
+    },
+    "TraceMap.Tests.OracleRewriteSpikeTests": {
+      "seconds": 0.457,
+      "tests": 2
+    },
+    "TraceMap.Tests.OutboundHttpCoverageTests": {
+      "seconds": 117.093,
+      "tests": 14
+    },
+    "TraceMap.Tests.OutboundHttpLegacyCoverageTests": {
+      "seconds": 151.148,
+      "tests": 15
+    },
+    "TraceMap.Tests.PackageDecisionComparisonExternalClaimsTests": {
+      "seconds": 1.937,
+      "tests": 22
+    },
+    "TraceMap.Tests.PackageDecisionLockfileEvidenceTests": {
+      "seconds": 5.964,
+      "tests": 8
+    },
+    "TraceMap.Tests.PackageDecisionPythonJvmEvidenceTests": {
+      "seconds": 0.447,
+      "tests": 3
+    },
+    "TraceMap.Tests.PackageDecisionTests": {
+      "seconds": 0.804,
+      "tests": 17
+    },
+    "TraceMap.Tests.PackageProducedTests": {
+      "seconds": 0.016,
+      "tests": 9
+    },
+    "TraceMap.Tests.PackageUpgradeImpactTests": {
+      "seconds": 1.508,
+      "tests": 14
+    },
+    "TraceMap.Tests.PortablePdbExtractorTests": {
+      "seconds": 108.755,
+      "tests": 56
+    },
+    "TraceMap.Tests.PortfolioReportTests": {
+      "seconds": 2.003,
+      "tests": 24
+    },
+    "TraceMap.Tests.PostgresArchiveLinkExtractorTests": {
+      "seconds": 0.145,
+      "tests": 7
+    },
+    "TraceMap.Tests.PostgresPermissionEvidenceExtractorTests": {
+      "seconds": 0.597,
+      "tests": 13
+    },
+    "TraceMap.Tests.PostgresSchemaMigrationExtractorTests": {
+      "seconds": 0.322,
+      "tests": 24
+    },
+    "TraceMap.Tests.ProjectlessCompilationContextMatrixTests": {
+      "seconds": 0.133,
+      "tests": 36
+    },
+    "TraceMap.Tests.ProjectlessParameterCandidateTests": {
+      "seconds": 5.643,
+      "tests": 59
+    },
+    "TraceMap.Tests.ProjectlessSqlReportingTests": {
+      "seconds": 1.8,
+      "tests": 10
+    },
+    "TraceMap.Tests.ProjectlessVisualBasicHttpTests": {
+      "seconds": 0.394,
+      "tests": 13
+    },
+    "TraceMap.Tests.ProjectlessVisualBasicWebFormsDiagnosticsTests": {
+      "seconds": 0.35,
+      "tests": 2
+    },
+    "TraceMap.Tests.PromotionReviewInlineServerExpressionTests": {
+      "seconds": 0.555,
+      "tests": 9
+    },
+    "TraceMap.Tests.PromotionReviewProjectScopeTests": {
+      "seconds": 5.427,
+      "tests": 13
+    },
+    "TraceMap.Tests.PromotionReviewRegressionTests": {
+      "seconds": 3.394,
+      "tests": 2
+    },
+    "TraceMap.Tests.PromotionReviewVisualBasicExpressionCallTests": {
+      "seconds": 3.814,
+      "tests": 3
+    },
+    "TraceMap.Tests.PromotionReviewWebFormsClientTests": {
+      "seconds": 0.042,
+      "tests": 17
+    },
+    "TraceMap.Tests.PropertyChainMigrationTests": {
+      "seconds": 0.617,
+      "tests": 7
+    },
+    "TraceMap.Tests.PropertyFlowTests": {
+      "seconds": 5.155,
+      "tests": 33
+    },
+    "TraceMap.Tests.PropertyMappingTests": {
+      "seconds": 13.637,
+      "tests": 17
+    },
+    "TraceMap.Tests.PublishGenericParameterTests": {
+      "seconds": 0.14,
+      "tests": 21
+    },
+    "TraceMap.Tests.PublishMemberCandidateIndexTests": {
+      "seconds": 0.939,
+      "tests": 23
+    },
+    "TraceMap.Tests.RazorSemanticModelBindingTests": {
+      "seconds": 7.994,
+      "tests": 5
+    },
+    "TraceMap.Tests.ReducerTests": {
+      "seconds": 0.67,
+      "tests": 12
+    },
+    "TraceMap.Tests.ReleaseReviewTests": {
+      "seconds": 5.438,
+      "tests": 30
+    },
+    "TraceMap.Tests.ReverseImpactArtifactQueryTests": {
+      "seconds": 2.262,
+      "tests": 21
+    },
+    "TraceMap.Tests.ReverseImpactTraversalTests": {
+      "seconds": 3.883,
+      "tests": 41
+    },
+    "TraceMap.Tests.RuntimeInventoryBoundaryTests": {
+      "seconds": 6.704,
+      "tests": 6
+    },
+    "TraceMap.Tests.ScanEngineTests": {
+      "seconds": 9.468,
+      "tests": 45
+    },
+    "TraceMap.Tests.ScanExecutionReceiptTests": {
+      "seconds": 3.032,
+      "tests": 28
+    },
+    "TraceMap.Tests.ScanOutputTransactionTests": {
+      "seconds": 0.02,
+      "tests": 4
+    },
+    "TraceMap.Tests.ScanProgressDiagnosticsTests": {
+      "seconds": 27.82,
+      "tests": 34
+    },
+    "TraceMap.Tests.SelfDiagnosticsTests": {
+      "seconds": 0.07,
+      "tests": 4
+    },
+    "TraceMap.Tests.SnapshotDiffTests": {
+      "seconds": 4.487,
+      "tests": 28
+    },
+    "TraceMap.Tests.SourceMetadataReconciliationTests": {
+      "seconds": 127.056,
+      "tests": 45
+    },
+    "TraceMap.Tests.SourceSnapshotInspectorTests": {
+      "seconds": 0.032,
+      "tests": 14
+    },
+    "TraceMap.Tests.SourceSnapshotRetentionTests": {
+      "seconds": 1.58,
+      "tests": 18
+    },
+    "TraceMap.Tests.SqlDatabaseMatrixTests": {
+      "seconds": 0.77,
+      "tests": 1
+    },
+    "TraceMap.Tests.SqlDatabaseMatrixTestsNet100": {
+      "seconds": 88.238,
+      "tests": 2
+    },
+    "TraceMap.Tests.SqlDatabaseMatrixTestsNet20": {
+      "seconds": 29.747,
+      "tests": 2
+    },
+    "TraceMap.Tests.SqlDatabaseMatrixTestsNet35": {
+      "seconds": 33.16,
+      "tests": 2
+    },
+    "TraceMap.Tests.SqlDatabaseMatrixTestsNet40": {
+      "seconds": 19.475,
+      "tests": 2
+    },
+    "TraceMap.Tests.SqlDatabaseMatrixTestsNet45": {
+      "seconds": 48.462,
+      "tests": 2
+    },
+    "TraceMap.Tests.SqlDatabaseMatrixTestsNet452": {
+      "seconds": 43.166,
+      "tests": 2
+    },
+    "TraceMap.Tests.SqlDatabaseMatrixTestsNet472": {
+      "seconds": 108.044,
+      "tests": 2
+    },
+    "TraceMap.Tests.SqlDatabaseMatrixTestsNet48": {
+      "seconds": 107.647,
+      "tests": 2
+    },
+    "TraceMap.Tests.SqlExecutionContextExtractorTests": {
+      "seconds": 0.175,
+      "tests": 10
+    },
+    "TraceMap.Tests.SqlProjectRefactorTests": {
+      "seconds": 0.743,
+      "tests": 9
+    },
+    "TraceMap.Tests.SqlReviewRegressionTests": {
+      "seconds": 3.217,
+      "tests": 32
+    },
+    "TraceMap.Tests.SqlRunbookPacketTests": {
+      "seconds": 0.295,
+      "tests": 7
+    },
+    "TraceMap.Tests.SqlSchemaChangeImpactTests": {
+      "seconds": 0.894,
+      "tests": 12
+    },
+    "TraceMap.Tests.SqlSecretSafetyExtractorTests": {
+      "seconds": 0.237,
+      "tests": 10
+    },
+    "TraceMap.Tests.SqlShapeExtractorTests": {
+      "seconds": 0.019,
+      "tests": 4
+    },
+    "TraceMap.Tests.SqlValidationHarnessTests": {
+      "seconds": 0.129,
+      "tests": 18
+    },
+    "TraceMap.Tests.SqlValidationSummaryTests": {
+      "seconds": 1.263,
+      "tests": 19
+    },
+    "TraceMap.Tests.SqlWrapperRouteTests": {
+      "seconds": 2.634,
+      "tests": 5
+    },
+    "TraceMap.Tests.SqliteIndexValidatorTests": {
+      "seconds": 0.031,
+      "tests": 3
+    },
+    "TraceMap.Tests.SqliteIndexWriterTests": {
+      "seconds": 22.632,
+      "tests": 11
+    },
+    "TraceMap.Tests.StackedMigrationRegressionTests": {
+      "seconds": 0.104,
+      "tests": 1
+    },
+    "TraceMap.Tests.StaticHtmlEvidenceExplorerTests": {
+      "seconds": 2.444,
+      "tests": 62
+    },
+    "TraceMap.Tests.TemporaryFixtureCleanupTests": {
+      "seconds": 0.006,
+      "tests": 4
+    },
+    "TraceMap.Tests.TraceMapVersionTests": {
+      "seconds": 0.703,
+      "tests": 7
+    },
+    "TraceMap.Tests.VaultExportTests": {
+      "seconds": 21.471,
+      "tests": 62
+    },
+    "TraceMap.Tests.VbNetFixtureTests": {
+      "seconds": 0.264,
+      "tests": 2
+    },
+    "TraceMap.Tests.VisualBasicConfiguredImportsTests": {
+      "seconds": 0.055,
+      "tests": 36
+    },
+    "TraceMap.Tests.VisualBasicDataBoundaryTests": {
+      "seconds": 10.638,
+      "tests": 5
+    },
+    "TraceMap.Tests.VisualBasicDocumentRollbackTests": {
+      "seconds": 0.01,
+      "tests": 3
+    },
+    "TraceMap.Tests.VisualBasicExternalBoundaryTests": {
+      "seconds": 59.341,
+      "tests": 7
+    },
+    "TraceMap.Tests.VisualBasicExtractionTests": {
+      "seconds": 49.733,
+      "tests": 34
+    },
+    "TraceMap.Tests.VisualBasicFoundationTests": {
+      "seconds": 13.789,
+      "tests": 10
+    },
+    "TraceMap.Tests.VisualBasicSyntaxTypeLookupTests": {
+      "seconds": 9.348,
+      "tests": 2
+    },
+    "TraceMap.Tests.VisualBasicValidationMatrixTests": {
+      "seconds": 16.143,
+      "tests": 9
+    },
+    "TraceMap.Tests.VisualBasicWebFormsCompositionTests": {
+      "seconds": 15.348,
+      "tests": 22
+    },
+    "TraceMap.Tests.WebFormsAgentEvidenceHandoffTests": {
+      "seconds": 2.108,
+      "tests": 26
+    },
+    "TraceMap.Tests.WebFormsBoundedCoverageTests": {
+      "seconds": 43.792,
+      "tests": 16
+    },
+    "TraceMap.Tests.WebFormsCodePathReviewTests": {
+      "seconds": 0.311,
+      "tests": 10
+    },
+    "TraceMap.Tests.WebFormsConfigMigrationTests": {
+      "seconds": 0.109,
+      "tests": 11
+    },
+    "TraceMap.Tests.WebFormsDatabaseEvidenceAuditTests": {
+      "seconds": 1.462,
+      "tests": 6
+    },
+    "TraceMap.Tests.WebFormsEvidenceQueryTests": {
+      "seconds": 14.399,
+      "tests": 17
+    },
+    "TraceMap.Tests.WebFormsGapFamilyRegressionTests": {
+      "seconds": 0.065,
+      "tests": 23
+    },
+    "TraceMap.Tests.WebFormsHandlerSummaryTests": {
+      "seconds": 0.197,
+      "tests": 1
+    },
+    "TraceMap.Tests.WebFormsModernizationPacketTests": {
+      "seconds": 26.639,
+      "tests": 50
+    },
+    "TraceMap.Tests.WebFormsNativeScaleTests": {
+      "seconds": 8.408,
+      "tests": 2
+    },
+    "TraceMap.Tests.WebFormsOperatorWorkflowTests": {
+      "seconds": 5.853,
+      "tests": 5
+    },
+    "TraceMap.Tests.WebFormsProofImportTests": {
+      "seconds": 9.76,
+      "tests": 45
+    },
+    "TraceMap.Tests.WebFormsPublishReceiptSetTests": {
+      "seconds": 2.873,
+      "tests": 25
+    },
+    "TraceMap.Tests.WebFormsPublishedRootTests": {
+      "seconds": 0.311,
+      "tests": 17
+    },
+    "TraceMap.Tests.WebFormsRawEvidenceAuditTests": {
+      "seconds": 0.461,
+      "tests": 16
+    },
+    "TraceMap.Tests.WebFormsReportMemoryTests": {
+      "seconds": 9.615,
+      "tests": 42
+    },
+    "TraceMap.Tests.WebFormsReviewExecutionTests": {
+      "seconds": 57.815,
+      "tests": 42
+    },
+    "TraceMap.Tests.WebFormsReviewExecutionTestsQueryEvidence": {
+      "seconds": 18.241,
+      "tests": 4
+    },
+    "TraceMap.Tests.WebFormsReviewExecutionTestsRelocation": {
+      "seconds": 64.607,
+      "tests": 18
+    },
+    "TraceMap.Tests.WebFormsReviewExecutionTestsReportsAndRecovery": {
+      "seconds": 87.313,
+      "tests": 38
+    },
+    "TraceMap.Tests.WebFormsReviewExecutionTestsStatusAndPhaseUsage": {
+      "seconds": 49.957,
+      "tests": 18
+    },
+    "TraceMap.Tests.WebFormsReviewExecutionTestsToolLocation": {
+      "seconds": 66.594,
+      "tests": 18
+    },
+    "TraceMap.Tests.WebFormsReviewInputValidationTests": {
+      "seconds": 12.408,
+      "tests": 35
+    },
+    "TraceMap.Tests.WebFormsReviewPhaseObservationTests": {
+      "seconds": 0.018,
+      "tests": 5
+    },
+    "TraceMap.Tests.WebFormsReviewPreflightTests": {
+      "seconds": 0.792,
+      "tests": 53
+    },
+    "TraceMap.Tests.WebFormsReviewPreparationTests": {
+      "seconds": 172.426,
+      "tests": 70
+    },
+    "TraceMap.Tests.WebFormsStaticExplorerTests": {
+      "seconds": 13.378,
+      "tests": 6
+    },
+    "TraceMap.Tests.WebFormsVbImportContextTests": {
+      "seconds": 0.081,
+      "tests": 19
+    },
+    "TraceMap.Tests.WebFormsWizardBuildTests": {
+      "seconds": 9.191,
+      "tests": 18
+    },
+    "TraceMap.Tests.WebFormsWizardCommandTests": {
+      "seconds": 4.571,
+      "tests": 13
+    },
+    "TraceMap.Tests.WebFormsWizardExecutionTests": {
+      "seconds": 8.986,
+      "tests": 5
+    },
+    "TraceMap.Tests.WebFormsWizardFormsTests": {
+      "seconds": 0.022,
+      "tests": 16
+    },
+    "TraceMap.Tests.WebFormsWizardNativeTests": {
+      "seconds": 14.212,
+      "tests": 13
+    },
+    "TraceMap.Tests.WebFormsWizardPublicationTests": {
+      "seconds": 3.414,
+      "tests": 14
+    },
+    "TraceMap.Tests.WebFormsWizardRepairTests": {
+      "seconds": 0.134,
+      "tests": 5
+    },
+    "TraceMap.Tests.WebFormsWizardSelectionTests": {
+      "seconds": 0.104,
+      "tests": 7
+    },
+    "TraceMap.Tests.WebFormsWizardStoreTests": {
+      "seconds": 0.224,
+      "tests": 15
+    },
+    "TraceMap.Tests.WebFormsWizardTargetTests": {
+      "seconds": 0.165,
+      "tests": 8
+    }
+  }
+}
