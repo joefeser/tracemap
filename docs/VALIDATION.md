@@ -383,8 +383,8 @@ and the table carries the generator's SHA-256 and the SHA-256 of its privacy-pro
 input (the class map only — never a trx, which names the machine and its paths); the
 selector recomputes the input digest on load, so a hand-edited table fails the run.
 Heaviest class first into the lightest of four bins packs the bins to within a class of
-each other. The current table is the hosted shard run at `b1adb6172`: 232 classes,
-4,394 cases, 57.6 hosted test-minutes, 14.4 per bin. The floor under any packing is the
+each other. The current table is the hosted shard run at `5b4f4f7fa`: 236 classes,
+4,394 cases, 53.6 hosted test-minutes, 13.4 per bin. The floor under any packing is the
 longest serialized class: xunit runs a class's cases on one thread, so a shard cannot
 finish its tests sooner than its longest class, whatever else it carries.
 `IlBodyEvidenceExtractorTests` was that floor (95 cases, 5.6 minutes on one thread); it
@@ -402,6 +402,9 @@ cases, 3.3 minutes on one thread) is now three siblings — the original, `…Ga
 languages, 3.7 minutes) runs its rows by language in `…CSharp` and `…VisualBasic`, which
 share the matrix body through `OutboundHttpLegacyCoverageShared`, while the original class
 keeps its projectless-website case; the family filters match every sibling as before.
+The longest serialized class is now `IlRewritePdbEvidenceExtractorTests` (30 cases,
+2.4–3.6 minutes across runs — hosted class times vary that much), then
+`WebFormsReviewPreparationTests` (70 cases, 2.2 minutes).
 
 Shards 1–3 are explicit class lists, `FullyQualifiedName~<class>.|…`. The trailing dot
 is the method separator in a test's fully qualified name, so `…ExecutionTests.` cannot
@@ -415,8 +418,8 @@ no classes is dropped. Only `rest`, which every lane keeps, runs the `scan` and 
 entry: the whole suite in one job on the self-hosted runner, as before.
 
 Verified with `dotnet test --list-tests` under each shard's filter and again by the shard
-runs themselves: full lane 1,023 + 1,306 + 939 + 1,126 = 4,394, the unfiltered total;
-reduced lane 932 + 1,216 + 861 + 1,038 = 4,047 = 4,394 − the 347 campaign-family cases.
+runs themselves: full lane 1,027 + 1,015 + 1,189 + 1,163 = 4,394, the unfiltered total;
+reduced lane 1,023 + 846 + 1,086 + 1,092 = 4,047 = 4,394 − the 347 campaign-family cases.
 Every count equals the table's class-level expectation, which the job summary prints per
 shard. Limitations: those expectations are class-level, so in the reduced lane a family
 token inside a listed class's *method* name would trim that shard by that one test (none
