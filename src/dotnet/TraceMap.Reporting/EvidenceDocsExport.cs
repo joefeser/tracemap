@@ -298,21 +298,29 @@ public static partial class EvidenceDocsExporter
         PropertyNameCaseInsensitive = true
     };
 
-    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
-    private static readonly Regex YearMonthPattern = new(@"^\d{4}-\d{2}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex SafeClosedTextPattern = new(@"^[A-Za-z0-9._:/@,+ \[\]\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex SafePathPattern = new(@"^[A-Za-z0-9._/\-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex UnixLocalPathPattern = new("(?:^|[\\s:='\\\"(\\[])/(?!/)[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex CommitIdentityPattern = new(@"^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex WindowsPathPattern = new("(?:^|[\\s:='\\\"])(?:[A-Za-z]:[\\\\/]|\\\\\\\\)", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex RawHostPattern = new(@"\b(www\.|[A-Za-z0-9.-]+\.(com|net|org|io|local))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex RawSqlPattern = new(@"\b(select|insert|update|delete|merge)\b.+\b(from|into|set|where|values)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex ConfigSecretPattern = new(@"(password|passwd|pwd|secret|token|apikey|api_key|connectionstring|connection string)\s*[=:]", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex CredentialPattern = new(@"(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex StackTracePattern = new(@"(?:\bSystem\.(?:[A-Za-z_][A-Za-z0-9_`]*\.)*[A-Za-z_][A-Za-z0-9_`]*Exception\b(?:\s*:\s*|\s+at\s+)|(?:^|\s)at\s+[A-Za-z_][A-Za-z0-9_.+`<>]*\([^)]*\)|--- End of stack trace)", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex SafeMetadataKeyPattern = new(@"^[A-Za-z0-9_.-]+$", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex ContentHashLinePattern = new(@"tracemap_content_sha256: [0-9a-f]{64}", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
-    private static readonly Regex RepeatedDashPattern = new("-+", RegexOptions.Compiled | RegexOptions.CultureInvariant, RegexTimeout);
+    // Every pattern below is a bounded safety classifier over indexed or generated
+    // strings. NonBacktracking keeps match cost linear so no input shape can explode,
+    // and the generous timeout is a safety bound that wall-clock thread starvation
+    // under parallel load must not trip (#857: the 250 ms budget failed a 36-character
+    // match in a full-suite run while every case passed in isolation).
+    internal static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(2);
+    internal const RegexOptions SafetyPatternOptions = RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking;
+    private static readonly Regex YearMonthPattern = new(@"^\d{4}-\d{2}$", SafetyPatternOptions, RegexTimeout);
+    private static readonly Regex SafeClosedTextPattern = new(@"^[A-Za-z0-9._:/@,+ \[\]\-]+$", SafetyPatternOptions, RegexTimeout);
+    private static readonly Regex SafePathPattern = new(@"^[A-Za-z0-9._/\-]+$", SafetyPatternOptions, RegexTimeout);
+    // No `(?!/)` after the first slash: the following character class cannot match `/`,
+    // so the lookahead was implied, and NonBacktracking does not support lookarounds.
+    private static readonly Regex UnixLocalPathPattern = new("(?:^|[\\s:='\\\"(\\[])/[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*", SafetyPatternOptions | RegexOptions.IgnoreCase, RegexTimeout);
+    private static readonly Regex CommitIdentityPattern = new(@"^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$", SafetyPatternOptions, RegexTimeout);
+    private static readonly Regex WindowsPathPattern = new("(?:^|[\\s:='\\\"])(?:[A-Za-z]:[\\\\/]|\\\\\\\\)", SafetyPatternOptions, RegexTimeout);
+    private static readonly Regex RawHostPattern = new(@"\b(www\.|[A-Za-z0-9.-]+\.(com|net|org|io|local))\b", SafetyPatternOptions | RegexOptions.IgnoreCase, RegexTimeout);
+    private static readonly Regex RawSqlPattern = new(@"\b(select|insert|update|delete|merge)\b.+\b(from|into|set|where|values)\b", SafetyPatternOptions | RegexOptions.IgnoreCase, RegexTimeout);
+    private static readonly Regex ConfigSecretPattern = new(@"(password|passwd|pwd|secret|token|apikey|api_key|connectionstring|connection string)\s*[=:]", SafetyPatternOptions | RegexOptions.IgnoreCase, RegexTimeout);
+    private static readonly Regex CredentialPattern = new(@"(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})", SafetyPatternOptions, RegexTimeout);
+    private static readonly Regex StackTracePattern = new(@"(?:\bSystem\.(?:[A-Za-z_][A-Za-z0-9_`]*\.)*[A-Za-z_][A-Za-z0-9_`]*Exception\b(?:\s*:\s*|\s+at\s+)|(?:^|\s)at\s+[A-Za-z_][A-Za-z0-9_.+`<>]*\([^)]*\)|--- End of stack trace)", SafetyPatternOptions, RegexTimeout);
+    private static readonly Regex SafeMetadataKeyPattern = new(@"^[A-Za-z0-9_.-]+$", SafetyPatternOptions, RegexTimeout);
+    private static readonly Regex ContentHashLinePattern = new(@"tracemap_content_sha256: [0-9a-f]{64}", SafetyPatternOptions, RegexTimeout);
+    private static readonly Regex RepeatedDashPattern = new("-+", SafetyPatternOptions, RegexTimeout);
 
     public static async Task<EvidenceDocsExportResult> ExportAsync(EvidenceDocsExportOptions options, CancellationToken cancellationToken = default)
     {

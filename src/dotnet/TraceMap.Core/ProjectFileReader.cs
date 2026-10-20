@@ -663,9 +663,12 @@ public static class ProjectFileReader
         }
     }
 
-    private static readonly Regex SafeNuGetPackageIdPattern = new("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static readonly Regex SafeLockfileTargetFrameworkPattern = new("^[A-Za-z0-9][A-Za-z0-9._/+,-]{0,127}$", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-    private static readonly Regex SafeNuGetResolvedVersionPattern = new("^[0-9]+(?:\\.[0-9]+){0,3}(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$", RegexOptions.Compiled | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+    // Anchored character-class validators: NonBacktracking keeps them linear, and the
+    // generous bound is a safety net that thread starvation under parallel load must
+    // not trip (#857: tight wall-clock regex budgets failed full-suite runs).
+    private static readonly Regex SafeNuGetPackageIdPattern = new("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
+    private static readonly Regex SafeLockfileTargetFrameworkPattern = new("^[A-Za-z0-9][A-Za-z0-9._/+,-]{0,127}$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
+    private static readonly Regex SafeNuGetResolvedVersionPattern = new("^[0-9]+(?:\\.[0-9]+){0,3}(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
 
     private static bool TryLoadXml(string fullPath, out XDocument document)
     {

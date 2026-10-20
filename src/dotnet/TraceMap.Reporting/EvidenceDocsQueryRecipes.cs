@@ -46,8 +46,10 @@ public static class EvidenceDocsQueryRecipes
     public const string SchemaVersion = "tracemap-evidence-query-recipes.v1";
     public const string RecipeRuleId = "docs-export.query-recipe.v1";
     public const string HintRuleId = "docs-export.retrieval-hint.v1";
-    private static readonly Regex MutationPattern = new(@"\b(insert|update|delete|merge|replace|drop|alter|create|attach|detach|vacuum|reindex|pragma|transaction|commit|rollback)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250));
-    private static readonly Regex TablePattern = new(@"\b(?:from|join)\s+([A-Za-z_][A-Za-z0-9_]*)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250));
+    // Same engine and bound as the exporter's safety patterns (#857: a 250 ms budget on
+    // these fixed recipe strings tripped under parallel load in a full-suite run).
+    private static readonly Regex MutationPattern = new(@"\b(insert|update|delete|merge|replace|drop|alter|create|attach|detach|vacuum|reindex|pragma|transaction|commit|rollback)\b", EvidenceDocsExporter.SafetyPatternOptions | RegexOptions.IgnoreCase, EvidenceDocsExporter.RegexTimeout);
+    private static readonly Regex TablePattern = new(@"\b(?:from|join)\s+([A-Za-z_][A-Za-z0-9_]*)", EvidenceDocsExporter.SafetyPatternOptions | RegexOptions.IgnoreCase, EvidenceDocsExporter.RegexTimeout);
     private static readonly HashSet<string> AllowedTables = new(StringComparer.OrdinalIgnoreCase)
     {
         "facts", "combined_facts", "call_edges", "combined_call_edges"

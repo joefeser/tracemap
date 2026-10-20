@@ -334,6 +334,52 @@ python3 scripts/test_validate_adapter_artifacts.py
 ./scripts/check-private-paths.sh
 ```
 
+## Pull Request Test Lane (change-impact v1)
+
+The `.NET adapter` job in `adapter-validation.yml` selects its lane from the pull
+request's changed paths with `scripts/select_dotnet_test_lane.py` (unit tests in
+`scripts/test_select_dotnet_test_lane.py`). The selection is deterministic and every
+ambiguity resolves to the full suite:
+
+| Changed paths | Lane |
+| --- | --- |
+| `src/dotnet/TraceMap.{Core,Cli,Storage,Combine,Reporting,Reduction}/**`, `rules/**`, `Directory.Build.*`, `global.json`, `TraceMap.sln`, `TraceMap.Tests.csproj`, shared test helpers (non-`*Tests.cs` files in the test project), the `AGENTS.md` root marker fixtures walk up to, the selector or its workflow | full suite |
+| `samples/sql-database-matrix/**` or `SqlDatabaseMatrixTests.cs` | the SQL-matrix family runs (`FullyQualifiedName~SqlDatabaseMatrixTests`) |
+| `samples/outbound-http-coverage/**` or `OutboundHttp*Tests.cs` | the outbound-HTTP family runs |
+| `samples/compiled-dotnet-evidence/**`, `samples/fixture-build/**` or `WebFormsReview*Tests.cs` | the WebForms-review family runs |
+| anything else (other test files, docs, site, scripts, workflows, adapters, the Oracle project, the Access / SqlValidation / EndpointAlignment projects, non-campaign samples) | reduced lane: campaign families not triggered are excluded with `FullyQualifiedName!~…`; the step name and job summary say **partial** |
+
+Pushes to `dev`/`main`, `workflow_dispatch`, missing or failed change-path lookups and
+change sets of 250+ files always run the full suite. Renamed files contribute both their
+old and new paths. The excluded families are the suite's heavy, self-contained lanes
+(measured 2026-10-18: 21 classes, 347 of 4,391 tests, 58% of test-minutes); a reduced
+run is a partial result and is labelled as such, never a claim that those lanes passed.
+The trade-off is deliberate: a pull request can merge on a reduced pass, and a
+regression in an excluded family then surfaces on the `dev` push, before promotion to
+`main`. Known limitation: the family exclusion is by class-name substring, so a
+campaign-named test class added inside a neutrally named file is excluded until that
+push; keep the one-class-per-matching-file convention for campaign families.
+
+Where the job runs: only pushes to `dev`/`main` — reviewed, merged code — execute on
+the self-hosted Linux runner (labels `self-hosted, linux-x64, amd5950x`; a 16-core box
+that runs the full suite in ~15 minutes against ~22 on hosted `ubuntu-latest`). Every
+pull request and manual dispatch runs on hosted runners. This is a hard boundary, not a
+policy: a `pull_request` run executes the workflow file from the PR head, so no
+expression inside the workflow can stop PR-controlled YAML from selecting the
+persistent runner; keeping the runner out of PR events altogether is the only version
+that holds. (The repository additionally requires approval for all outside contributors
+before any fork workflow runs.) A PR's wall clock was unaffected by the runner because the
+Windows `package-smoke` job, not the .NET suite, was its critical path; that job's
+serial lanes now fan out across four parallel jobs per OS (`metadata`, `pdb-rewrite`,
+`il-body`, `distribution`), unchanged commands, grouped by measured duration. If the runner is
+offline, the `dev`/`main` push job queues rather than falling back, so a dead runner is
+visible.
+
+The same table is the local gate policy: before pushing a head whose changes are
+confined to leaf areas (review fixes, test-only edits, docs), run the touched lanes;
+run the full Debug suite with `-warnaserror` for shared-core changes and on the final
+head before merge.
+
 ## Web Forms large-index report memory
 
 For changes to packet input loading or serialization, run the memory regressions

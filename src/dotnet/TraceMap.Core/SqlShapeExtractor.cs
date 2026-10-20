@@ -163,11 +163,11 @@ public static class SqlShapeExtractor
 
     internal static string NormalizeSql(string value)
     {
-        value = Regex.Replace(value, "--[^\n\r]*", " ", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-        value = Regex.Replace(value, @"/\*.*?\*/", " ", RegexOptions.CultureInvariant | RegexOptions.Singleline, TimeSpan.FromMilliseconds(100));
-        value = Regex.Replace(value, @"'(?:''|\\['""]|[^'])*'", "' '", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-        value = Regex.Replace(value, @"""(?:""""|\\[""']|[^""])*""", "\" \"", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
-        value = Regex.Replace(value, @"\s+", " ", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        value = Regex.Replace(value, "--[^\n\r]*", " ", RegexOptions.CultureInvariant, RegexBudget.LoadTolerant);
+        value = Regex.Replace(value, @"/\*.*?\*/", " ", RegexOptions.CultureInvariant | RegexOptions.Singleline, RegexBudget.LoadTolerant);
+        value = Regex.Replace(value, @"'(?:''|\\['""]|[^'])*'", "' '", RegexOptions.CultureInvariant, RegexBudget.LoadTolerant);
+        value = Regex.Replace(value, @"""(?:""""|\\[""']|[^""])*""", "\" \"", RegexOptions.CultureInvariant, RegexBudget.LoadTolerant);
+        value = Regex.Replace(value, @"\s+", " ", RegexOptions.CultureInvariant, RegexBudget.LoadTolerant);
         return value.Trim().TrimEnd(';');
     }
 
@@ -284,14 +284,14 @@ public static class SqlShapeExtractor
 
     private static IReadOnlyList<string> Matches(string sql, string pattern)
     {
-        return Regex.Matches(sql, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))
+        return Regex.Matches(sql, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexBudget.LoadTolerant)
             .Select(match => match.Groups[1].Value)
             .ToArray();
     }
 
     private static IReadOnlyList<string> TopLevelMatches(string sql, string pattern)
     {
-        return Regex.Matches(sql, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))
+        return Regex.Matches(sql, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexBudget.LoadTolerant)
             .Where(match => ParenthesisDepthBefore(sql, match.Index) == 0)
             .Select(match => match.Groups[1].Value)
             .ToArray();
@@ -317,13 +317,13 @@ public static class SqlShapeExtractor
 
     private static string MatchGroup(string sql, string pattern, RegexOptions options = RegexOptions.IgnoreCase)
     {
-        var match = Regex.Match(sql, pattern, options | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        var match = Regex.Match(sql, pattern, options | RegexOptions.CultureInvariant, RegexBudget.LoadTolerant);
         return match.Success ? match.Groups[1].Value : string.Empty;
     }
 
     private static string Between(string sql, string start, string end)
     {
-        var match = Regex.Match(sql, $@"\b{start}\b(.*?)(?:\b{end}\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline, TimeSpan.FromMilliseconds(100));
+        var match = Regex.Match(sql, $@"\b{start}\b(.*?)(?:\b{end}\b|$)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline, RegexBudget.LoadTolerant);
         return match.Success ? match.Groups[1].Value : string.Empty;
     }
 
@@ -332,9 +332,9 @@ public static class SqlShapeExtractor
         var columns = new List<string>();
         foreach (var part in SplitCsv(text))
         {
-            var cleaned = Regex.Replace(part.Trim(), @"\bAS\b\s+[A-Za-z_][A-Za-z0-9_]*$", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+            var cleaned = Regex.Replace(part.Trim(), @"\bAS\b\s+[A-Za-z_][A-Za-z0-9_]*$", string.Empty, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, RegexBudget.LoadTolerant);
             var token = cleaned.Contains('.') ? cleaned[(cleaned.LastIndexOf('.') + 1)..].Trim() : cleaned.Trim();
-            if (Regex.IsMatch(token, @"\s", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
+            if (Regex.IsMatch(token, @"\s", RegexOptions.CultureInvariant, RegexBudget.LoadTolerant))
             {
                 token = Regex.Split(token, @"\s+").Last();
             }
@@ -343,7 +343,7 @@ public static class SqlShapeExtractor
             if (!string.IsNullOrWhiteSpace(name)
                 && name != "*"
                 && !SqlStopWords.Contains(name.ToUpperInvariant())
-                && Regex.IsMatch(name, @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
+                && Regex.IsMatch(name, @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant, RegexBudget.LoadTolerant))
             {
                 columns.Add(name);
             }
@@ -415,7 +415,7 @@ public static class SqlShapeExtractor
             value = value[(value.LastIndexOf('.') + 1)..].Trim('"', '`', '[', ']');
         }
 
-        if (value.Length == 0 || !Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100)))
+        if (value.Length == 0 || !Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant, RegexBudget.LoadTolerant))
         {
             return string.Empty;
         }
@@ -427,7 +427,7 @@ public static class SqlShapeExtractor
     {
         value = value.Trim().Trim('"', '`', '[', ']');
         return value.Length > 0
-            && Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100))
+            && Regex.IsMatch(value, @"^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant, RegexBudget.LoadTolerant)
                 ? value
                 : string.Empty;
     }

@@ -54,7 +54,7 @@ public static class WebFormsWizardBuild
         CheckResult(version);
         if (version.ExitCode != 0 || !System.Text.RegularExpressions.Regex.IsMatch(version.StandardOutput,
                 @"(?m)^\d+\.\d+(?:\.\d+)*(?:[-+][A-Za-z0-9.-]+)?\s*$",
-                System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1))) throw Fail("TOOLCHAIN_PROBE_FAILED");
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant, RegexBudget.LoadTolerant)) throw Fail("TOOLCHAIN_PROBE_FAILED");
         Recheck(plan);
         var result = await runner(plan.Tool, plan.WorkingDirectory, plan.BuildArguments, cancellationToken);
         CheckResult(result);
