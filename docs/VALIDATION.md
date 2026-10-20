@@ -395,9 +395,13 @@ is now nine sibling classes — the original plus `…Decoding`, `…ArtifactsAn
 family; the helpers they share live in `IlBodyEvidenceExtractorShared`. A class the
 table does not yet list runs in `rest` until the table is regenerated from the next
 full-lane run, which is exactly how the siblings ran on the pull request that split
-them. The longest serialized classes are now `OutboundHttpLegacyCoverageTests` (15
-cases, 3.7 minutes) and `IlRewriteEvidenceExtractorTests` (43 cases, 3.3 minutes), the
-next candidates if the wall has to fall further.
+them. The next two floors went the same way: `IlRewriteEvidenceExtractorTests` (43
+cases, 3.3 minutes on one thread) is now three siblings — the original, `…Gaps` and
+`…LanesAndArtifacts`, with the helpers in `IlRewriteEvidenceExtractorShared` — and
+`OutboundHttpLegacyCoverageTests` (one legacy matrix of seven target frameworks in two
+languages, 3.7 minutes) runs its rows by language in `…CSharp` and `…VisualBasic`, which
+share the matrix body through `OutboundHttpLegacyCoverageShared`, while the original class
+keeps its projectless-website case; the family filters match every sibling as before.
 
 Shards 1–3 are explicit class lists, `FullyQualifiedName~<class>.|…`. The trailing dot
 is the method separator in a test's fully qualified name, so `…ExecutionTests.` cannot
