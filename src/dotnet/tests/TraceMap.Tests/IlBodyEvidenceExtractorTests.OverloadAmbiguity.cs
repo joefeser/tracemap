@@ -12,15 +12,16 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.VisualBasic;
 using Microsoft.CodeAnalysis.VisualBasic.Syntax;
 using TraceMap.Core;
+using static TraceMap.Tests.IlBodyEvidenceExtractorShared;
 
 namespace TraceMap.Tests;
 
-public sealed partial class IlBodyEvidenceExtractorTests
+public sealed class IlBodyEvidenceExtractorTestsOverloadAmbiguity
 {
-    private const string OverloadInt = "type(namespace:6:System|names:5:Int32)";
     private static string OverloadType(bool uri) => uri
         ? "scope(assembly:name:14:System.Runtime|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:6:System|names:3:Uri)"
         : "type(namespace:6:System|names:6:String)";
+
     private static string OverloadMethod(string name, string parameter = "") => EventMethod(ReceiverAssembly(LateAssembly), "OverloadMatrix", name, LateStatic + "(" + parameter + ")->" + OverloadInt);
 
     [Theory]
