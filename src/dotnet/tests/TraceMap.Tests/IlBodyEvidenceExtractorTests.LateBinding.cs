@@ -7,17 +7,17 @@ using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text.Json;
 using TraceMap.Core;
+using static TraceMap.Tests.IlBodyEvidenceExtractorShared;
 
 namespace TraceMap.Tests;
 
-public sealed partial class IlBodyEvidenceExtractorTests
+public sealed class IlBodyEvidenceExtractorTestsLateBinding
 {
-    private const string LateAssembly = "CompiledEvidence.VisualBasic";
-    private const string LateStatic = "arity:0|call:default|hasThis:false|explicitThis:false|";
     private static string LateMethod(string name) => EventMethod(ReceiverAssembly(LateAssembly), "LateBindingMatrix", name,
         LateStatic + "(" + (name == "ReadDirect"
             ? "scope(assembly:name:28:CompiledEvidence.VisualBasic|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:37:TraceMap.CompiledFixtures.Equivalence|names:17:LateBindingTarget)"
             : CollectionObject) + ")->" + CollectionObject);
+
     private static string LateTarget(string name) => EventMethod(ReceiverAssembly(LateAssembly), "LateBindingTarget", name, EventInstance + "()->" + CollectionObject);
 
     [Fact]
@@ -278,6 +278,7 @@ public sealed partial class IlBodyEvidenceExtractorTests
         CheckEventGap(scan, Assert.Single(scan.Facts, fact => fact.Properties.GetValueOrDefault("gapKind") == kind), input, il: true);
         Assert.DoesNotContain(scan.Facts, fact => fact.FactType is FactTypes.ManagedIlBodyDeclared or FactTypes.ManagedIlCallObserved);
     }
+
     [Fact]
     public void Late_binding_census_counts_match_hand_derived_fixture_ground_truth()
     {
@@ -431,5 +432,4 @@ public sealed partial class IlBodyEvidenceExtractorTests
         const string signatureMention = "memberref|type:scope(assembly:name:11:Contoso.Lib|version:7:1.0.0.0|culture:7:neutral|publicKeyToken:4:null)type(namespace:12:Contoso.Core|names:6:Worker)|member:4:Take|signature:ns(37:Microsoft.VisualBasic.CompilerServices|names:14:NewLateBinding)";
         Assert.False(IlBodyEvidenceExtractor.IsLateBoundHelperTarget(signatureMention));
     }
-
 }

@@ -8,15 +8,13 @@ using System.Reflection.PortableExecutable;
 using System.Security.Cryptography;
 using System.Text.Json;
 using TraceMap.Core;
+using static TraceMap.Tests.IlBodyEvidenceExtractorShared;
 
 namespace TraceMap.Tests;
 
-public sealed partial class IlBodyEvidenceExtractorTests
+public sealed class IlBodyEvidenceExtractorTestsCollections
 {
-    private const string CollectionObject = "type(namespace:6:System|names:6:Object)";
     private const string CollectionInt = "type(namespace:6:System|names:5:Int32)";
-    private static string CollectionType(string assembly, string ns, string name, string version = "10.0.0.0") =>
-        $"scope(assembly:name:{assembly.Length}:{assembly}|version:{version.Length}:{version}|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)type(namespace:{ns.Length}:{ns}|names:{name.Length}:{name})";
 
     [Theory]
     [InlineData("csharp", "CompiledEvidence.CSharp")]

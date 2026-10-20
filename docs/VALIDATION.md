@@ -385,10 +385,16 @@ selector recomputes the input digest on load, so a hand-edited table fails the r
 Heaviest class first into the lightest of four bins packs the bins to within a class of
 each other. The current table is the hosted shard run at `64d523d43`: 224 classes,
 4,394 cases, 61.1 hosted test-minutes, 15.3 per bin. The floor under any packing is the
-longest serialized class — `IlBodyEvidenceExtractorTests`, 95 cases on one thread for
-5.6 minutes — so the shard that holds it cannot finish its tests sooner whatever else it
-carries; splitting that class is the next lever, as #885 and #887 were for the SQL-matrix
-and Web Forms lanes.
+longest serialized class: xunit runs a class's cases on one thread, so a shard cannot
+finish its tests sooner than its longest class, whatever else it carries.
+`IlBodyEvidenceExtractorTests` was that floor (95 cases, 5.6 minutes on one thread); it
+is now nine sibling classes — the original plus `…Decoding`, `…ArtifactsAndReaders`,
+`…Collections`, `…EventWiring`, `…LateBinding`, `…Narrowing`, `…OverloadAmbiguity` and
+`…Receivers`, 18 cases at most — whose names all contain `IlBodyEvidenceExtractorTests`,
+so every existing `--filter` lane still matches the whole family; the helpers they share
+live in `IlBodyEvidenceExtractorShared`. A class the table does not yet list runs in
+`rest` until the table is regenerated from the next full-lane run, which is exactly how
+the siblings ran on the pull request that split them.
 
 Shards 1–3 are explicit class lists, `FullyQualifiedName~<class>.|…`. The trailing dot
 is the method separator in a test's fully qualified name, so `…ExecutionTests.` cannot
