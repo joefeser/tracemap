@@ -81,7 +81,7 @@ When semantic analysis fails:
 ## Review checklist before finishing a task
 
 - Before opening or updating a PR, resolve known actionable review findings plus compiler and analyzer warnings introduced by the branch. For a proven tool false positive, use the narrowest documented suppression and pin the intended behavior with a test; do not leave warning annotations for reviewers to rediscover.
-- Does `dotnet test` pass?
+- Does `dotnet test` pass? Local gate policy: for heads confined to leaf areas (review fixes, test-only edits, docs), run the touched lanes; for shared-core changes and on the final head before merge, run the full Debug suite with `-warnaserror`. The lane table is `scripts/select_dotnet_test_lane.py` (see `docs/VALIDATION.md`, "Pull Request Test Lane"); CI always runs the full suite on `dev`/`main`.
 - Can the CLI run against at least one sample repo?
 - For language-adapter changes, did we follow `docs/VALIDATION.md` and run or explicitly defer the relevant pinned smoke checks?
 - If a required local tool appears missing, check Homebrew first (`brew list`, `brew --prefix <formula>`, or `brew info <formula>`) and try the Homebrew path before stopping. Some tools may be installed outside system discovery paths, such as Java under `/opt/homebrew/opt` or Node via `nvm`. If Homebrew/path discovery does not find the tool, stop and ask instead of guessing or rewriting the workflow.
