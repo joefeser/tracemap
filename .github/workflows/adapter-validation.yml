@@ -16,27 +16,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  dotnet:
-    name: .NET adapter
-    # Only pushes to dev/main (reviewed, merged code; the trigger above limits push to
-    # those branches) run on the self-hosted Linux box (amd5950x: 16C/32T, measured
-    # 15 min vs ~22 min hosted). Every pull request and manual dispatch stays on hosted
-    # runners: a pull_request run executes the workflow file from the PR head, so no
-    # in-workflow check can keep PR-controlled code off a persistent runner.
-    runs-on: ${{ github.event_name == 'push' && fromJSON('["self-hosted", "linux-x64", "amd5950x"]') || 'ubuntu-latest' }}
+  select:
+    name: Select .NET lane
+    runs-on: ubuntu-latest
+    outputs:
+      lane: ${{ steps.lane.outputs.lane }}
+      partial: ${{ steps.lane.outputs.partial }}
+      matrix: ${{ steps.lane.outputs.matrix }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
-        with:
-          # Full-suite semantic scans honor the SQL corpus's global.json.
-          # Keep the current SDK too; installing only latest cannot resolve
-          # the deliberately non-roll-forward fixture compiler baseline.
-          dotnet-version: |
-            10.0.x
-            10.0.302
-      - name: Verify pinned SQL fixture SDK resolves
-        working-directory: samples/sql-database-matrix
-        run: dotnet --version
       # Change-impact v1: pull requests confined to leaf areas run a reduced lane that
       # excludes the self-contained campaign families (WebFormsReview*, SqlDatabaseMatrix*,
       # OutboundHttp*); shared-core changes, pushes to dev/main, dispatches, missing change
@@ -59,27 +47,78 @@ jobs:
             : > "$RUNNER_TEMP/changed-paths.txt"
             echo "::warning::changed-path lookup failed; the full suite will run"
           fi
-      - name: Select test lane from changed paths
+      # The lane becomes the .NET adapter job's matrix. A push is one entry on the
+      # self-hosted box with no shard filter; every other event is four hosted shards packed
+      # by test class from scripts/dotnet-test-class-weights.json (measured durations). The
+      # last shard is the catch-all that excludes every listed class, so a class the table
+      # does not know still runs. The selector's and the table generator's tests run first.
+      - name: Select test lane and shard matrix from changed paths
         id: lane
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 scripts/test_select_dotnet_test_lane.py
+          python3 scripts/test_generate_dotnet_test_class_weights.py
           touch "$RUNNER_TEMP/changed-paths.txt"
           python3 scripts/select_dotnet_test_lane.py --event "$EVENT_NAME" --github-output "$GITHUB_OUTPUT" \
             < "$RUNNER_TEMP/changed-paths.txt" | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Build and test (${{ steps.lane.outputs.lane }} lane)
+
+  dotnet:
+    name: .NET adapter (${{ matrix.name }})
+    needs: select
+    # Only pushes to dev/main (reviewed, merged code; the trigger above limits push to
+    # those branches) run on the self-hosted Linux box (amd5950x: 16C/32T, ~12 min for the
+    # whole suite in one job). Every pull request and manual dispatch stays on hosted
+    # runners, as parallel shards: a pull_request run executes the workflow file from the
+    # PR head, so no in-workflow check can keep PR-controlled code off a persistent runner.
+    # The selector emits the runner with each matrix entry.
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          # Full-suite semantic scans honor the SQL corpus's global.json.
+          # Keep the current SDK too; installing only latest cannot resolve
+          # the deliberately non-roll-forward fixture compiler baseline.
+          dotnet-version: |
+            10.0.x
+            10.0.302
+      - name: Verify pinned SQL fixture SDK resolves
+        working-directory: samples/sql-database-matrix
+        run: dotnet --version
+      - name: Build and test (${{ needs.select.outputs.lane }} lane, ${{ matrix.name }})
         env:
-          LANE_FILTER: ${{ steps.lane.outputs.filter }}
+          LANE_FILTER: ${{ matrix.filter }}
+          TRX_LOGGER: trx;LogFileName=${{ matrix.name }}.trx
+          TRX_DIR: ${{ runner.temp }}/trx
         run: |
           dotnet build src/dotnet/TraceMap.sln
           if [ -n "$LANE_FILTER" ]; then
-            echo "partial run: --filter \"$LANE_FILTER\""
-            dotnet test src/dotnet/TraceMap.sln --no-build --filter "$LANE_FILTER"
+            echo "shard filter: --filter \"$LANE_FILTER\""
+            dotnet test src/dotnet/TraceMap.sln --no-build --filter "$LANE_FILTER" \
+              --logger "$TRX_LOGGER" --results-directory "$TRX_DIR"
           else
-            dotnet test src/dotnet/TraceMap.sln --no-build
+            dotnet test src/dotnet/TraceMap.sln --no-build --logger "$TRX_LOGGER" --results-directory "$TRX_DIR"
           fi
+      # Every hosted shard leaves its trx, so the weights table can be regenerated from the
+      # runner class that actually executes the shards: download the dotnet-trx-* artifacts
+      # of a full-lane run and pass them all to scripts/generate_dotnet_test_class_weights.py.
+      # The selector gives the self-hosted entry no trx artifact: that file would name the
+      # box's user and paths, which the private-path rule keeps out of anything published.
+      - uses: actions/upload-artifact@v4
+        if: always() && matrix.trx != ''
+        with:
+          name: ${{ matrix.trx }}
+          path: ${{ runner.temp }}/trx/*.trx
+          if-no-files-found: warn
+          retention-days: 30
+      # Exactly one shard (the catch-all, which every lane keeps) produces the artifact the
+      # combine job downloads; the scan needs only the build, not any test.
       - name: Generate and validate artifacts
+        if: matrix.artifact != ''
         run: |
           dotnet run --project src/dotnet/TraceMap.Cli --no-build -- scan \
             --repo samples/modern-sample \
@@ -87,10 +126,27 @@ jobs:
           python3 scripts/validate-adapter-artifacts.py "$RUNNER_TEMP/tracemap-dotnet"
           python3 scripts/test_validate_adapter_artifacts.py
       - uses: actions/upload-artifact@v4
+        if: matrix.artifact != ''
         with:
-          name: adapter-index-dotnet
+          name: ${{ matrix.artifact }}
           path: ${{ runner.temp }}/tracemap-dotnet/index.sqlite
           if-no-files-found: error
+
+  dotnet-result:
+    # One stable check with the job's former name, so a required-status rule can keep
+    # pointing at `.NET adapter` whatever the shard count. It fails when any shard
+    # failed, or when the matrix never ran because the selector failed.
+    name: .NET adapter
+    needs: dotnet
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every shard to succeed
+        env:
+          RESULT: ${{ needs.dotnet.result }}
+        run: |
+          echo "shard matrix result: $RESULT"
+          test "$RESULT" = success
 
   typescript:
     name: TypeScript adapter
