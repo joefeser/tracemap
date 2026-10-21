@@ -301,15 +301,38 @@ public sealed class CiWorkflowProducerEvidenceTests
         var result = Read(temp.Path);
 
         // Effective id after CI overrides: the flag wins; without a flag the packed project's
-        // explicit declaration is the evidence. Weaker fallback ids are never promoted here.
-        var declared = Assert.Single(result.Rows);
+        // explicit declaration is the evidence. Since 2026-10-22 (live estate: ~100 packages, ONE
+        // IsPackable in-repo, ids never declared), a packed project with no explicit id DERIVES from
+        // the MSBuild filename default - the CI pack step is stronger intent than tier-3 metadata,
+        // and the row is marked derived-default so no consumer mistakes it for declared.
+        Assert.Equal(2, result.Rows.Count);
+        var declared = Assert.Single(result.Rows, row => row.IdProvenance == "declared");
         Assert.Equal("Contoso.Declared", declared.Package);
         Assert.Null(declared.Version); // no CI version override: the version stays unevidenced
+        var derived = Assert.Single(result.Rows, row => row.IdProvenance == "derived-default");
+        Assert.Equal("Fallback", derived.Package); // filename default - NOT the AssemblyName (CI reads the file it packs)
         var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-producer-id-unevidenced").ToArray();
-        Assert.Equal(3, unevidenced.Length);
-        Assert.Contains(unevidenced, gap => gap.Detail!.Contains("no explicit PackageId", StringComparison.Ordinal));
+        Assert.Equal(2, unevidenced.Length); // sln + bare-target stay gaps: no single id is attributable
         Assert.Contains(unevidenced, gap => gap.Detail!.Contains("solution packs", StringComparison.Ordinal));
         Assert.Contains(unevidenced, gap => gap.Detail!.Contains("no explicit project target", StringComparison.Ordinal));
+    }
+
+    [Fact] // 2026-10-22: the zero-signal producer - NOTHING in the csproj, only the CI pack step
+    public void Zero_signal_project_packs_by_ci_step_alone_as_derived_default()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Bare", row.Package);
+        Assert.Equal("derived-default", row.IdProvenance);
+        Assert.Equal("src/Bare.csproj", row.ProjectPath);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
     }
 
     [Fact]

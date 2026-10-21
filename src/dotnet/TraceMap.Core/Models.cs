@@ -705,7 +705,7 @@ public static class ScannerVersions
     public const string FileInventoryExtractor = "file-inventory/0.1.0";
     public const string ProjectFileExtractor = "project-file/0.4.2"; // 0.4.2: bounded producer input/edge gaps and attributed summary omissions; 0.4.1: final-value producer gates and bounded dependency provenance/gaps; 0.2.0: CPM pins + versionOverride (#804); 0.3.0: PackageProduced facts (#818); 0.4.0: SDK-default identity tiers — packageIdProvenance (declared/interpolated/derived-default), bounded $(MSBuildProjectName) evaluation, pack signals and ProjectReference pack dependencies
     public const string DepsJsonExtractor = "deps-json/0.1.0";
-    public const string CiWorkflowExtractor = "ci-workflow/0.1.0";
+    public const string CiWorkflowExtractor = "ci-workflow/0.2.0"; // 0.2: derived-default ids from the packed project filename (policy change — no cache resumes silently)
     public const string NuGetLockfileExtractor = "nuget-lockfile/0.1.0";
     public const string BuildEnvironmentExtractor = "build-environment/0.6.1";
     public const string AnalyzerCapabilityExtractor = "analyzer-capability/0.1.0";
