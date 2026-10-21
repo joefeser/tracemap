@@ -308,6 +308,17 @@ public static class ProjectFileReader
         {
             if (!sdkStyle) return null; // legacy non-SDK: AssemblyName is a build artifact, not a package declaration
             if (EvaluateBoundedIdentity(assemblyName, projectName, out var interpolated) is not { } evaluated) return null;
+            // An INTERPOLATED AssemblyName alone is naming, not packing (live 2026-10-21: a repo whose
+            // convention is AssemblyName=Prefix.$(MSBuildProjectName) on projects consumed in-solution
+            // became false producers — a .Tests sibling included). The interpolated path carries the
+            // same pack-intent gate as derived-default: literal IsPackable=true or pack metadata, plus
+            // the test-SDK guard. A literal (non-interpolated) AssemblyName keeps legacy behavior —
+            // full explicit ids on this estate are deliberate.
+            if (interpolated)
+            {
+                if (packableLiteralTrue) packSignalLines["IsPackable"] = packableLine;
+                if (packSignalLines.Count == 0 || (testSdkReferenced && !packableLiteralTrue)) return null;
+            }
             (id, source, idLine) = (evaluated, PackageIdSources.AssemblyName, assemblyNameLine);
             provenance = interpolated ? PackageIdProvenances.Interpolated : PackageIdProvenances.Declared;
             explicitId = false;
@@ -332,7 +343,9 @@ public static class ProjectFileReader
         var versionLine = version is null ? null : packageVersion is not null ? packageVersionLine : plainVersionLine;
         if (version is not null && !IsSafeNuGetResolvedVersion(version)) { version = null; versionLine = null; } // unevidenced, never projected
         var spanEnd = versionLine is { } vl && version is not null ? Math.Max(idLine, vl) : idLine;
-        var packSignals = provenance == PackageIdProvenances.DerivedDefault ? string.Join(',', packSignalLines.Keys) : null;
+        var packSignals = provenance == PackageIdProvenances.DerivedDefault
+            || (source == PackageIdSources.AssemblyName && provenance == PackageIdProvenances.Interpolated)
+            ? string.Join(',', packSignalLines.Keys) : null;
         return new ProducedPackageCandidate(relativePath, id, version, explicitId, spanEnd, spanStart, source, provenance, packSignals, projectReferences);
     }
 
