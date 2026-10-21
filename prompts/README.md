@@ -100,6 +100,10 @@ the TraceMap PowerShell handoff. A verified launcher can then be supplied with
 
 ## Remaining retained HTTP groups
 
+[`accept-h2-h3-http-entry.md`](accept-h2-h3-http-entry.md) corrects downstream-root
+selection by querying the verified event entry. It checks H2 and H3 independently
+and preserves truncation as an enumeration limitation, not an extraction verdict.
+
 [`investigate-retained-h2-h3-h4-http.md`](investigate-retained-h2-h3-h4-http.md)
 investigates the remaining three HTTP groups on the work machine without rescanning
 or changing accepted H1/database artifacts. It distinguishes method-only paths
