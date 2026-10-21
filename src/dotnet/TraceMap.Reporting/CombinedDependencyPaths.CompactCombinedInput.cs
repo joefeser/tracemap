@@ -13,6 +13,7 @@ public static partial class CombinedDependencyPathReporter
         bool hasExtractorId, bool hasExtractorVersion, ReportInputBudget budget, CancellationToken token,
         IIndexedCombinedFacts? storage = null)
     {
+        RegisterRepresentativeEvidenceOrder(connection);
         await using (var identity = connection.CreateCommand())
         {
             identity.CommandText = """
