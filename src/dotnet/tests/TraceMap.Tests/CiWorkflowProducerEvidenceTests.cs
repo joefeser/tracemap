@@ -318,6 +318,29 @@ public sealed class CiWorkflowProducerEvidenceTests
     }
 
 
+
+    [Fact] // 2026-10-22 live: 27 *.Tests ghost producers on the real estate — hint-swept test projects must not ship
+    public void Hint_lane_skips_test_projects_unless_literal_ispackable()
+    {
+        const string testProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>";
+        const string packedTestProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable>true</IsPackable>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>";
+        const string libProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "on:\n  workflow_dispatch:\njobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", workflow);
+        WriteProject(temp.Path, "src/Lib.csproj", libProject);
+        WriteProject(temp.Path, "src/Lib.Tests.csproj", testProject);
+        WriteProject(temp.Path, "src/Lib.PackedTests.csproj", packedTestProject);
+
+        var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")) { IndexCiProducers = true, CiHintWorkflows = new[] { "org/shared-ci/.github/workflows/dotnet-release-library.yml" } };
+        var result = CiWorkflowProducerExtractor.Read(options, [], CancellationToken.None);
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Contains(result.Rows, row => row.Package == "Lib");
+        Assert.Contains(result.Rows, row => row.Package == "Lib.PackedTests"); // literal IsPackable=true ships even as a test project
+        Assert.DoesNotContain(result.Rows, row => row.Package == "Lib.Tests"); // plain test project: never ships
+    }
+
     [Fact] // 2026-10-22 live shape: shared dotnet-release-library.yml@main called with nuget_publication_path —
     // the hint says this repo publishes; ZERO-SIGNAL projects become ci producers with derived ids
     public void Hinted_shared_workflow_call_makes_unclaimed_projects_ci_producers()

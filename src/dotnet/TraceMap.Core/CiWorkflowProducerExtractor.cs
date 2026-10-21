@@ -120,6 +120,20 @@ internal static class CiWorkflowProducerExtractor
                     if (producedPaths.Contains(rel)) continue; // the project lane already claims it — one fact per project, the stronger local evidence wins
                     var id = Path.GetFileNameWithoutExtension(csproj);
                     if (!ProjectFileReader.IsSafeNuGetPackageId(id)) continue;
+                    // Test-project guard (live 2026-10-22: 27 *.Tests ghost producers on the real
+                    // estate): the solution-pack hint sweeps every SDK project, but test projects do
+                    // not ship — same rule as tier-3: Test.Sdk reference skips unless literal
+                    // IsPackable=true. Bounded read; unreadable files are skipped conservatively.
+                    try
+                    {
+                        var text = File.ReadAllText(csproj);
+                        var isTest = text.Contains("Microsoft.NET.Test.Sdk", StringComparison.Ordinal);
+                        var packableTrue = System.Text.RegularExpressions.Regex.IsMatch(text,
+                            @"<IsPackable\s*>true\s*</IsPackable", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        if (isTest && !packableTrue) continue;
+                    }
+                    catch (IOException) { continue; }
+                    catch (UnauthorizedAccessException) { continue; }
                     rows.Add(new CiWorkflowProducerRow(matchedPath!, id, null, rel, 1, 1, "derived-default"));
                     emitted++;
                 }
