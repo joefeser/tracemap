@@ -1,5 +1,21 @@
 # TraceMap Validation Guide
 
+## Package producer repair gate (#900)
+
+Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~PackageProducedTests|FullyQualifiedName~CentralPackageVersion|FullyQualifiedName~CiWorkflow' -warnaserror`,
+then the full Debug solution suite with `-warnaserror`. Project-file extractor
+0.4.1 requires a fresh scan. The synthetic matrix covers SDK declaration forms,
+case-insensitive final property assignments including empty values, pack signals
+before/after identity, earlier version spans, and test-SDK/false/naming-only
+refusals. Dependency scan tests retain same-ID targets with distinct identity
+provenance, line-attributed unresolved gaps, deterministic repeats and independent
+ID-list/evidence-list bounds. Include values are hashed, never emitted raw.
+Smoke a trusted synthetic repository through the CLI and inspect PackageProduced,
+AnalysisGap and reduced manifest coverage. No downloaded project or arbitrary
+import is evaluated for these tests; nearest Directory.Build.props and general
+MSBuild property/condition/import evaluation remain deferred.
+
+
 ## WebForms entry relationship gate (#873)
 
 Run `HttpEntryBoundaryRegressionTests` with the focused HTTP/VB/WebForms,

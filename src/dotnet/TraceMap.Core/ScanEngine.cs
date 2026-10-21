@@ -271,6 +271,8 @@ public static class ScanEngine
         var nugetLockfiles = ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory);
         var packageManifestGaps = nugetLockfiles.Gaps
             .Select(gap => $"NuGet lockfile analysis reported `{gap.Category}`.")
+            .Concat(producedPackages.Any(ProjectFileReader.HasDependencyProjectionGap)
+                ? ["Package producer dependency analysis reported partial coverage."] : [])
             .Concat(depsJson?.Gaps.Select(gap => $"Build-output dependency analysis reported `{gap.Kind}`.") ?? [])
             .Concat(ciProducers?.Gaps.Select(gap => $"CI workflow producer analysis reported `{gap.Kind}`.") ?? [])
             .OrderBy(gap => gap, StringComparer.Ordinal)
@@ -1121,9 +1123,45 @@ public static class ScanEngine
                 var packDependencies = string.Join(',', produced.PackDependencies);
                 if (packDependencies.Length <= 256)
                     producedProperties["packDependencies"] = packDependencies; // bounded like lockfile dependencyNames
+                else
+                {
+                    producedProperties["packDependenciesOmittedCount"] = produced.PackDependencies.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    producedProperties["packDependenciesTruncated"] = "true";
+                }
             }
             if (produced.UnresolvedPackDependencyCount > 0)
                 producedProperties["packDependencyUnresolvedCount"] = produced.UnresolvedPackDependencyCount.ToString();
+            if (produced.DependencyEvidence.Count > 0)
+            {
+                var projection = ProjectFileReader.ProjectDependencyEvidence(produced);
+                producedProperties["packDependencyEvidence"] = projection.Json;
+                producedProperties["packDependencyEvidenceCount"] = produced.DependencyEvidence.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (projection.Omitted > 0)
+                    producedProperties["packDependencyEvidenceOmittedCount"] = projection.Omitted.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (ProjectFileReader.HasDependencyProjectionGap(produced))
+                    producedProperties["packDependencyCoverage"] = "partial";
+
+                // Each unresolved declaration remains attributable even if the summary is capped.
+                foreach (var edge in produced.DependencyEvidence.Where(edge => edge.PackageId is null))
+                    AddDependencyGap(edge.Line, "package-producer-dependency-unresolved", edge.IncludeHash);
+                if (projection.Omitted > 0 || producedProperties.ContainsKey("packDependenciesTruncated"))
+                    AddDependencyGap(produced.SpanStart, "package-producer-dependency-projection-limit", null);
+            }
+
+            void AddDependencyGap(int line, string kind, string? includeHash)
+            {
+                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = kind,
+                    ["message"] = "Static ProjectReference package dependency evidence is incomplete; no restore or pack was evaluated.",
+                    ["producerPackageId"] = produced.PackageId
+                };
+                if (includeHash is not null) properties["includeHash"] = includeHash;
+                facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.ProjectFile,
+                    EvidenceTiers.Tier4Unknown,
+                    new EvidenceSpan(produced.ProjectPath, line, line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                    projectPath: produced.ProjectPath, properties: properties));
+            }
             if (produced.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
                 producedProperties["manifestKind"] = "vbproj";
             AddSafeVersionProperties(producedProperties, produced.Version);
@@ -1457,6 +1495,7 @@ public static class ScanEngine
 
         if (knownGaps.Any(gap => (gap.StartsWith("NuGet lockfile analysis reported", StringComparison.Ordinal)
             || gap.StartsWith("Build-output dependency analysis reported", StringComparison.Ordinal)
+            || gap.StartsWith("Package producer dependency analysis reported", StringComparison.Ordinal)
             || gap.StartsWith("CI workflow producer analysis reported", StringComparison.Ordinal))))
             return "Package/dependency evidence coverage is partial; inspect package manifest gaps and any separate semantic diagnostics.";
 
