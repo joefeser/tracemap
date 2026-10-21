@@ -240,10 +240,47 @@ public sealed class PackageProducedTests
         Assert.False(produced.ExplicitPackageId); // never promoted to a literal declaration (the CI lane keeps its gap)
         Assert.Equal(PackageIdSources.AssemblyName, produced.PackageIdSource);
         Assert.Equal(PackageIdProvenances.Interpolated, produced.PackageIdProvenance);
-        Assert.Null(produced.PackSignals); // a declared identity needs no signals
+        Assert.Equal("Authors", produced.PackSignals); // the pack-intent gate names what carried it (naming alone is not packing)
         Assert.Null(produced.Version); // unevidenced: versions here are computed at build time
         Assert.Equal(3, produced.SpanStart);
         Assert.Equal(3, produced.Line); // the span cites the AssemblyName itself
+    }
+
+    [Fact] // live 2026-10-21: AssemblyName=Prefix.$(MSBuildProjectName) on projects consumed in-solution
+    public void ReadProducedPackages_interpolated_assemblyname_without_pack_intent_is_refused()
+    {
+        const string project = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>
+                <TargetFramework>net10.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """;
+        using var temp = new TempDirectory();
+        Write(temp.Path, "src/Svc/Svc.Domain.csproj", project);
+
+        Assert.Empty(ProjectFileReader.ReadProducedPackages(temp.Path, [Project("src/Svc/Svc.Domain.csproj", project)]));
+    }
+
+    [Fact]
+    public void ReadProducedPackages_interpolated_assemblyname_with_literal_ispackable_produces()
+    {
+        const string project = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>
+                <IsPackable>true</IsPackable>
+              </PropertyGroup>
+            </Project>
+            """;
+        using var temp = new TempDirectory();
+        Write(temp.Path, "src/Svc/Svc.Domain.csproj", project);
+
+        var produced = Assert.Single(ProjectFileReader.ReadProducedPackages(temp.Path, [Project("src/Svc/Svc.Domain.csproj", project)]));
+        Assert.Equal("Alt.Svc.Domain", produced.PackageId);
+        Assert.Equal(PackageIdProvenances.Interpolated, produced.PackageIdProvenance);
+        Assert.Equal("IsPackable", produced.PackSignals);
     }
 
     [Fact]
@@ -577,6 +614,7 @@ public sealed class PackageProducedTests
               <PropertyGroup>
                 <TargetFramework>net10.0</TargetFramework>
                 <AssemblyName>Prefix.$(MSBuildProjectName)</AssemblyName>
+                <Authors>Fixture Authors</Authors>
               </PropertyGroup>
             </Project>
             """;
