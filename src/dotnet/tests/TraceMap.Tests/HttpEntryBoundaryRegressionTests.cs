@@ -225,7 +225,16 @@ public sealed class HttpEntryBoundaryRegressionTests
             Assert.Equal(JsonSerializer.Serialize(result.WebFormsEntries), JsonSerializer.Serialize(bounded.Report.WebFormsEntries));
             if (type == "LifecycleWidget")
             {
-                var packet = GroupedCompiledPathHandoffBuilder.Create(bounded.Report, new string('a', 64));
+                var legacyOptions = options with { IncludeLegacyRoots = true };
+                var legacy = await CombinedDependencyPathReporter.BuildReportAsync(legacyOptions);
+                var legacyBounded = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(legacyOptions,
+                    new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
+                Assert.NotEmpty(legacyBounded.Report.Paths);
+                Assert.Equal(JsonSerializer.Serialize(result.WebFormsEntries), JsonSerializer.Serialize(legacy.WebFormsEntries));
+                Assert.Equal(JsonSerializer.Serialize(legacy.WebFormsEntries), JsonSerializer.Serialize(legacyBounded.Report.WebFormsEntries));
+                Assert.All(legacyBounded.Report.Paths.SelectMany(p => p.Edges), e => Assert.DoesNotContain(e.EdgeKind,
+                    new[] { "control-containment", "declarative-property-reference", "framework-lifecycle-candidate" }));
+                var packet = GroupedCompiledPathHandoffBuilder.Create(legacyBounded.Report, new string('a', 64));
                 var output = await GroupedCompiledPathReportWriter.WriteAsync(packet, Path.Combine(temp.Path, "lifecycle-html"));
                 var html = await File.ReadAllTextAsync(output.HtmlPath);
                 Assert.Contains("framework-lifecycle-candidate", html);

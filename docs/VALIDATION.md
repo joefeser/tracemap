@@ -3,6 +3,14 @@
 ## Retained handler HTTP reporting
 
 Grouped HTML exposes the existing `header.webFormsEntries` inventory separately
+with or without `IncludeLegacyRoots`; root selection must not suppress this inventory.
+Shareable legacy views still omit the private inventory; their privacy boundary is unchanged.
+The signed-framework regression covers both ordinary and bounded legacy-root readers,
+equal candidate inventories, actual HTTP paths and no synthetic candidate call edges.
+The explicitly authorized isolated fresh-scan workflow is
+`prompts/fresh-scan-h4-lifecycle-evidence.md`.
+
+The inventory is separate
 from call paths, including lifecycle candidates, their provenance and unresolved
 boundaries. Null and empty inventories are explicitly non-conclusive. Rendering
 does not derive new relationships, change tiers, or add framework dispatch edges.

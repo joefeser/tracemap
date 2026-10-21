@@ -100,6 +100,11 @@ the TraceMap PowerShell handoff. A verified launcher can then be supplied with
 
 ## Remaining retained HTTP groups
 
+[`fresh-scan-h4-lifecycle-evidence.md`](fresh-scan-h4-lifecycle-evidence.md) authorizes
+one isolated fresh scan with the original scope/inputs after the old retained index
+was found to lack H4 lifecycle candidates. It preserves all accepted baselines and
+checks candidate extraction separately from path evidence and rendering.
+
 [`verify-h4-lifecycle-entry-inventory.md`](verify-h4-lifecycle-entry-inventory.md)
 checks lifecycle candidate visibility separately from H4's call path. It distinguishes
 missing retained evidence, index-to-report loss and HTML rendering loss, without
