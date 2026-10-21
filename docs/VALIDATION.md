@@ -2,6 +2,45 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+## Retained handler HTTP reporting
+
+The compile-only
+`samples/http-entry-dual-terminal` fixture pins two independent terminals from a
+shared event/helper/constructor chain, cycle truncation, a downstream-root control,
+and a shallow-depth negative. Source-root receipts use
+`single-source-method-retained-static-review-not-parity`, not the compiled-method
+claim label. This changes labeling, not extraction or traversal tiers.
+
+Grouped HTML exposes the existing `header.webFormsEntries` inventory separately
+with or without `IncludeLegacyRoots`; root selection must not suppress this inventory.
+Shareable legacy views still omit the private inventory; their privacy boundary is unchanged.
+The signed-framework regression covers both ordinary and bounded legacy-root readers,
+equal candidate inventories, actual HTTP paths and no synthetic candidate call edges.
+
+The inventory is separate
+from call paths, including lifecycle candidates, their provenance and unresolved
+boundaries. Null and empty inventories are explicitly non-conclusive. Rendering
+does not derive new relationships, change tiers, or add framework dispatch edges.
+`GroupedCompiledPathHandoffTests.Entry_inventory_is_visible_without_becoming_a_call_edge`
+pins candidate/empty/unavailable output, HTML escaping and lossless path preservation.
+`HttpEntryBoundaryRegressionTests.Real_webforms_framework_keeps_override_body_and_host_entry_separate`
+also exercises the HTML against the public signed-framework VB fixture.
+
+`webforms-review requery-handler --surface http-client` selects outbound HTTP
+terminals in the same verified retained combined index. It requires `--handler` or `--source-root`
+and rejects compiled roots, compiled-only traversal, database surface-name filters
+and method-graph mode. Omitting the option preserves the database default. Input
+admission, root uniqueness, traversal limits, receipts and provenance checks are
+unchanged; extractor and path-algorithm versions are unchanged because this is CLI
+exposure of an existing terminal family, not a new evidence or traversal rule.
+
+`WebFormsReviewExecutionTestsHandlerHttp` pins successful native reporting from a
+synthetic projectless VB handler through a helper to an HTTP terminal, including
+the retained syntax rule, tier, source line and supporting evidence, plus selector
+rejections and database-default isolation. This is static candidate evidence, not
+proof that a request ran. The full Debug suite with `-warnaserror` is required for
+this CLI change. Select the actual HTTP handler, not a database root.
+
 ## Package producer repair gate (#900)
 
 Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~PackageProducedTests|FullyQualifiedName~CentralPackageVersion|FullyQualifiedName~CiWorkflow' -warnaserror`,
@@ -5118,3 +5157,15 @@ representation and are out of scope. LeaveInstrTest (851 lines) is deferred:
 its bodies are hand-authored ilasm text with no construction helper, and
 ilasm is excluded from the corpus — it rides the existing ilasm-gated
 endurance pattern (TRACEMAP_PARITY_ILASM) later.
+
+## Explicit retained HTTP source roots
+
+`webforms-review requery-handler --source-root <private-selector.json> --surface http-client`
+selects a source method independently of a previous report's root roster. The existing
+run/bundle receipt and index hash remain mandatory. The selector's `sourceIndexId`,
+`scanId`, `commitSha`, and `symbolId` must match exactly one retained `MethodDeclared`.
+This does not create evidence, rescan, or upgrade tiers. Missing source declarations
+remain unsupported. Duplicate JSON properties are rejected. Named handler selection
+now distinguishes no match (`HANDLER_REQUERY_ROOT_NOT_FOUND`) from multiple matches.
+The HTTP test lane includes a retained helper absent from the original report roots
+and rejection of mismatched source, scan, commit and symbol identities, with unchanged input hashes.

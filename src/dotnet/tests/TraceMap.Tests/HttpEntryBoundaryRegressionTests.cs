@@ -17,6 +17,111 @@ namespace TraceMap.Tests;
 public sealed class HttpEntryBoundaryRegressionTests
 {
     [Fact]
+    public async Task Shared_event_entry_retains_two_independent_terminals_despite_cycle_truncation()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
+        Assert.NotNull(root);
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(root.FullName, "samples/http-entry-dual-terminal"), Path.Combine(temp.Path, "scan")));
+        Assert.Equal("Succeeded", scan.Manifest.BuildStatus);
+        var entry = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.Properties.GetValueOrDefault("name") == "RefreshChanged");
+        var helper = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.Properties.GetValueOrDefault("name") == "BeginQuery");
+        Assert.Contains(scan.Facts, f => f.FactType == FactTypes.VisualBasicEventBindingDeclared && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        var terminals = scan.Facts.Where(f => f.FactType == FactTypes.HttpCallDetected).ToArray();
+        Assert.Equal(2, terminals.Length);
+        Assert.All(terminals, f => Assert.Equal(EvidenceTiers.Tier1Semantic, f.EvidenceTier));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["webforms"]));
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, FromSymbol: entry.TargetSymbol,
+            ToSurface: "http-client", MaxDepth: 20) { ExactFromSymbol = true, IncludeLegacyRoots = true };
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        var bounded = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(options,
+            new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
+        foreach (var result in new[] { report, bounded.Report })
+        {
+            Assert.True(result.Summary.Truncated);
+            Assert.Contains(result.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "cycle");
+            foreach (var terminal in terminals)
+                Assert.Contains(result.Paths, p => p.Nodes[^1].FilePath == terminal.Evidence.FilePath
+                    && p.Nodes[^1].StartLine == terminal.Evidence.StartLine && p.Nodes[^1].RuleId == terminal.RuleId);
+            Assert.All(result.Paths, p =>
+            {
+                Assert.Equal(entry.TargetSymbol, p.Nodes[0].SymbolId);
+                Assert.Contains(p.Nodes, node => node.SymbolId == helper.TargetSymbol);
+                Assert.Equal("http-client", p.Nodes[^1].SurfaceKind);
+                Assert.Equal(EvidenceTiers.Tier1Semantic, p.Nodes[^1].EvidenceTier);
+                Assert.NotEmpty(p.SupportingFactIds);
+                Assert.All(p.Edges, edge => Assert.Equal(EvidenceTiers.Tier1Semantic, edge.EvidenceTier));
+            });
+        }
+        var downstream = await CombinedDependencyPathReporter.BuildReportAsync(options with { FromSymbol = helper.TargetSymbol });
+        Assert.NotEmpty(downstream.Paths);
+        Assert.All(downstream.Paths, p => Assert.DoesNotContain(p.Nodes, node => node.SymbolId == entry.TargetSymbol));
+        var limited = await CombinedDependencyPathReporter.BuildReportAsync(options with { MaxDepth = 1 });
+        Assert.True(limited.Summary.Truncated);
+        Assert.True(limited.Paths.Select(p => p.Nodes[^1].StartLine).Distinct().Count()
+            < terminals.Select(f => f.Evidence.StartLine).Distinct().Count());
+        var packet = GroupedCompiledPathHandoffBuilder.Create(bounded.Report, new string('a', 64));
+        Assert.Equal(JsonSerializer.Serialize(bounded.Report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(packet)));
+        var output = await GroupedCompiledPathReportWriter.WriteAsync(packet, Path.Combine(temp.Path, "html"));
+        Assert.Contains("Enumeration incomplete: retained routes remain evidence", await File.ReadAllTextAsync(output.HtmlPath));
+    }
+
+    [Fact]
+    public async Task Csharp_inheritance_fixture_records_current_declaration_and_entry_limits()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
+        Assert.NotNull(root);
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(root.FullName, "samples/http-entry-inheritance-csharp"), Path.Combine(temp.Path, "scan")));
+        Assert.Equal("Succeeded", scan.Manifest.BuildStatus);
+        var direct = Assert.Single(scan.Facts, f => f.FactType == FactTypes.SymbolRelationship
+            && f.ContractElement == "Overrides" && f.SourceSymbol!.Contains("BaseWidget.OnLoad", StringComparison.Ordinal));
+        Assert.Equal("OnLoad", direct.Properties["webFormsFrameworkEntry"]);
+        var inherited = Assert.Single(scan.Facts, f => f.FactType == FactTypes.SymbolRelationship
+            && f.ContractElement == "Overrides" && f.SourceSymbol!.Contains("DerivedWidget.OnLoad", StringComparison.Ordinal));
+        Assert.False(inherited.Properties.ContainsKey("webFormsFrameworkEntry"));
+        Assert.DoesNotContain(scan.Facts, f => f.FactType is FactTypes.MethodDeclared or FactTypes.PropertyDeclared
+            && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        Assert.Contains(scan.Facts, f => f.FactType == FactTypes.PropertyDeclared && f.EvidenceTier == EvidenceTiers.Tier3SyntaxOrTextual);
+        // C# does resolve the inherited property access. The absent semantic
+        // declaration/entry join must not be misreported as absent extraction.
+        var access = Assert.Single(scan.Facts, f => f.FactType == FactTypes.PropertyAccessed
+            && f.SourceSymbol!.Contains("Host.ExplicitRead", StringComparison.Ordinal)
+            && f.ContractElement == "Profile");
+        Assert.Equal(EvidenceTiers.Tier1Semantic, access.EvidenceTier);
+        Assert.Equal(RuleIds.CSharpSemanticPropertyAccess, access.RuleId);
+        Assert.Contains("BaseWidget.Profile", access.TargetSymbol);
+        Assert.Equal("global::HttpInheritance.BaseWidget", access.Properties["containingType"]);
+        Assert.False(string.IsNullOrEmpty(access.Properties["targetSymbolId"]));
+        Assert.Equal("Widgets.cs", access.Evidence.FilePath);
+        Assert.True(access.Evidence.StartLine > 0);
+        Assert.Equal(2, scan.Facts.Count(f => f.FactType == FactTypes.WebFormsEntryRelationship && f.RuleId == RuleIds.WebFormsEntryContainment));
+        Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.WebFormsEntryRelationship
+            && f.RuleId is RuleIds.WebFormsEntryProperty or RuleIds.WebFormsEntryLifecycle);
+        Assert.Equal(2, scan.Facts.Count(f => f.FactType == FactTypes.AnalysisGap && f.RuleId == RuleIds.WebFormsEntryProperty));
+
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var query = new CombinedDependencyPathOptions(index, temp.Path,
+            FromSymbol: "global::HttpInheritance.Host.Page_Load(object sender, global::System.EventArgs e)", ToSurface: "http-client")
+        { ExactFromSymbol = true };
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(query);
+        Assert.Empty(report.Paths);
+        Assert.NotNull(report.WebFormsEntries);
+        Assert.Equal(2, report.WebFormsEntries.Relationships.Count(r => r.EdgeKind == "control-containment"));
+        Assert.DoesNotContain(report.Paths.SelectMany(p => p.Edges), e => e.EdgeKind == "control-containment");
+        var bounded = await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(query,
+            new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
+        Assert.Equal(JsonSerializer.Serialize(report.Paths), JsonSerializer.Serialize(bounded.Paths));
+        Assert.Equal(JsonSerializer.Serialize(report.WebFormsEntries), JsonSerializer.Serialize(bounded.WebFormsEntries));
+    }
+
+    [Fact]
     public void Csharp_framework_witness_requires_real_reference_override_and_exact_signature()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
@@ -172,6 +277,25 @@ public sealed class HttpEntryBoundaryRegressionTests
             Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(typeof(CombinedDependencyPathReporter).Assembly.Location))), result.WebFormsEntries.GeneratorSha256);
             Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(result.WebFormsEntries.Relationships))), result.WebFormsEntries.BoundedInputSha256);
             Assert.Equal(JsonSerializer.Serialize(result.WebFormsEntries), JsonSerializer.Serialize(bounded.Report.WebFormsEntries));
+            if (type == "LifecycleWidget")
+            {
+                var legacyOptions = options with { IncludeLegacyRoots = true };
+                var legacy = await CombinedDependencyPathReporter.BuildReportAsync(legacyOptions);
+                var legacyBounded = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(legacyOptions,
+                    new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
+                Assert.NotEmpty(legacyBounded.Report.Paths);
+                Assert.Equal(JsonSerializer.Serialize(result.WebFormsEntries), JsonSerializer.Serialize(legacy.WebFormsEntries));
+                Assert.Equal(JsonSerializer.Serialize(legacy.WebFormsEntries), JsonSerializer.Serialize(legacyBounded.Report.WebFormsEntries));
+                Assert.All(legacyBounded.Report.Paths.SelectMany(p => p.Edges), e => Assert.DoesNotContain(e.EdgeKind,
+                    new[] { "control-containment", "declarative-property-reference", "framework-lifecycle-candidate" }));
+                var packet = GroupedCompiledPathHandoffBuilder.Create(legacyBounded.Report, new string('a', 64));
+                var output = await GroupedCompiledPathReportWriter.WriteAsync(packet, Path.Combine(temp.Path, "lifecycle-html"));
+                var html = await File.ReadAllTextAsync(output.HtmlPath);
+                Assert.Contains("framework-lifecycle-candidate", html);
+                Assert.Contains("legacy.webforms.entry-lifecycle.v1", html);
+                Assert.Contains("Framework dispatch, control construction and lifecycle execution are unproven.", html);
+                Assert.Contains("not traversed call edges", html);
+            }
             Assert.All(result.Paths.SelectMany(p => p.Edges), e => Assert.DoesNotContain(e.EdgeKind,
                 new[] { "control-containment", "declarative-property-reference", "framework-lifecycle-candidate" }));
             var repeat = await CombinedDependencyPathReporter.BuildReportAsync(options);
@@ -284,8 +408,13 @@ public sealed class HttpEntryBoundaryRegressionTests
             ("missing-member", original.Replace("profileWidget.Profile", "profileWidget.Missing"), false),
             ("nested-member", original.Replace("profileWidget.Profile", "profileWidget.Profile.Name"), false),
             ("dynamic", original.Replace("profileWidget.Profile", "Eval(\"Profile\")"), false),
+            ("bind", original.Replace("profileWidget.Profile", "Bind(\"Profile\")"), false),
+            ("indexer", original.Replace("profileWidget.Profile", "profileWidget.Profile(\"column\")"), false),
+            ("render-expression", original.Replace("<%#", "<%="), false),
+            ("container-chain", original.Replace("profileWidget.Profile", "Container.profileWidget.Profile"), false),
             ("invocation", original.Replace("profileWidget.Profile", "profileWidget.Profile()"), false),
             ("template", original.Replace("<%#", "<ItemTemplate><%#") + "</ItemTemplate>", false),
+            ("nested-templates", original.Replace("<%#", "<ItemTemplate><HeaderTemplate><%#") + "</HeaderTemplate></ItemTemplate>", false),
             ("missing-type", original.Replace("demo:ProfileWidget", "demo:MissingWidget"), false),
             ("wrong-assembly", original.Replace("Assembly=\"HttpEntryBoundaries\"", "Assembly=\"Other\""), false),
             ("ambiguous-registration", original.Replace("<demo:ProfileWidget", "<%@ Register TagPrefix=\"demo\" Namespace=\"Other\" Assembly=\"Other\" %>\n<demo:ProfileWidget"), false)
@@ -321,6 +450,11 @@ public sealed class HttpEntryBoundaryRegressionTests
             var references = facts.Where(f => f.RuleId == RuleIds.WebFormsEntryProperty && f.FactType == FactTypes.WebFormsEntryRelationship && f.Evidence.FilePath == "Host.aspx").ToArray();
             Assert.True(expected == (references.Length == 1), name + ": " + JsonSerializer.Serialize(references));
             if (!expected) Assert.Contains(facts, f => f.RuleId == RuleIds.WebFormsEntryProperty && f.FactType == FactTypes.AnalysisGap);
+            if (name is "bind" or "indexer" or "render-expression" or "container-chain" or "nested-templates")
+                Assert.Contains(facts, f => f.RuleId == RuleIds.WebFormsEntryProperty
+                    && f.FactType == FactTypes.AnalysisGap && f.Evidence.FilePath == "Host.aspx"
+                    && f.Properties.GetValueOrDefault("gapKind") == "UnsupportedExpressionOrScope"
+                    && f.EvidenceTier == EvidenceTiers.Tier4Unknown);
             Assert.Equal(JsonSerializer.Serialize(facts), JsonSerializer.Serialize(LegacyWebFormsExtractor.Extract(repo, scan.Manifest, inventory, inputs)));
             var index = Path.Combine(output, name + ".sqlite");
             SqliteIndexWriter.Write(index, scan.Manifest, inputs.Concat(facts).ToArray());

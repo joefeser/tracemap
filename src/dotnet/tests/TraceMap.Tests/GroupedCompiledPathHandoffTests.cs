@@ -9,6 +9,44 @@ public sealed class GroupedCompiledPathHandoffTests
 {
     private static readonly string IndexHash = new('a', 64);
 
+    [Theory]
+    [InlineData("candidate")]
+    [InlineData("empty")]
+    [InlineData("unavailable")]
+    public async Task Entry_inventory_is_visible_without_becoming_a_call_edge(string scenario)
+    {
+        var original = Report();
+        WebFormsEntryRelation[] rows = scenario == "candidate" ? [new("entry-fact", "source", new string('b', 40),
+            "test/1", "legacy.webforms.entry-lifecycle.v1", "framework-lifecycle-candidate", "Tier2Structural",
+            "System.Web.UI.Control.CreateChildControls", "Widget.CreateChildControls<script>", "method-id", null, null, null,
+            "Widget.vb", 12, 14, ["override-fact", "declaration-fact"], "Framework dispatch remains unproven.")] : [];
+        var inventory = new WebFormsEntryInventory("webforms-entry-inventory.v1", "PartialStaticEvidence", new string('c', 64),
+            Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(rows))), rows);
+        var report = original with { WebFormsEntries = scenario == "unavailable" ? null : inventory };
+        var packet = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+        var restored = GroupedCompiledPathHandoffBuilder.Restore(packet);
+        Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(restored));
+        Assert.Equal(JsonSerializer.Serialize(original.Paths), JsonSerializer.Serialize(restored.Paths));
+        Assert.Equal(original.Summary.Truncated, restored.Summary.Truncated);
+        using var temp = new TempDirectory();
+        var output = await GroupedCompiledPathReportWriter.WriteAsync(packet, temp.Path);
+        var html = await File.ReadAllTextAsync(output.HtmlPath);
+        Assert.Contains("separate from call paths", html);
+        Assert.Contains("not traversed call edges", html);
+        if (scenario == "candidate")
+        {
+            Assert.Contains("framework-lifecycle-candidate", html);
+            Assert.Contains("Tier2Structural", html);
+            Assert.Contains("override-fact, declaration-fact", html);
+            Assert.Contains("Widget.vb:12-14", html);
+            Assert.Contains("Framework dispatch remains unproven.", html);
+            Assert.Contains("Widget.CreateChildControls&lt;script&gt;", html);
+            Assert.DoesNotContain("Widget.CreateChildControls<script>", html);
+            Assert.Contains(inventory.BoundedInputSha256, html);
+        }
+        else Assert.Contains(scenario == "empty" ? "No entry relationships were retained" : "Entry relationship inventory unavailable", html);
+    }
+
     [Fact]
     public async Task Persistence_coverage_wording_is_correct_and_legacy_projection_remains_readable()
     {
@@ -508,15 +546,19 @@ public sealed class GroupedCompiledPathHandoffTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task Route_presence_is_separate_from_enumeration_completeness(bool hasPaths, bool truncated)
+    [InlineData(false, false, "database-api")]
+    [InlineData(false, true, "database-api")]
+    [InlineData(true, false, "database-api")]
+    [InlineData(true, true, "database-api")]
+    [InlineData(false, false, "http-client")]
+    [InlineData(false, true, "http-client")]
+    [InlineData(true, false, "http-client")]
+    [InlineData(true, true, "http-client")]
+    public async Task Route_presence_is_separate_from_enumeration_completeness(bool hasPaths, bool truncated, string surface)
     {
         using var temp = new TempDirectory();
         var original = Report();
-        var report = original with { Paths = hasPaths ? original.Paths : [],
+        var report = original with { Query = original.Query with { ToSurface = surface }, Paths = hasPaths ? original.Paths : [],
             Summary = original.Summary with { PathCount = hasPaths ? original.Paths.Count : 0, Truncated = truncated } };
         var handoff = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
         var output = await GroupedCompiledPathReportWriter.WriteAsync(handoff, temp.Path);
@@ -526,6 +568,19 @@ public sealed class GroupedCompiledPathHandoffTests
         Assert.Equal(truncated, html.Contains("Enumeration incomplete:", StringComparison.Ordinal));
         if (hasPaths) Assert.Contains("terminal's tier does not upgrade the whole route", html);
         if (truncated) Assert.Contains("Exact-chain grouping happens after bounded variant enumeration", html);
+        if (surface == "http-client")
+        {
+            Assert.Contains("not runtime execution or proof that an HTTP request was sent", html);
+            Assert.Contains(hasPaths ? "or a remote endpoint was reached" : "outbound HTTP usage remains unproven", html);
+            Assert.DoesNotContain("no database dependencies", html);
+            Assert.DoesNotContain("proof that SQL ran", html);
+            Assert.DoesNotContain("proof of a specific SQL statement or stored procedure", html);
+        }
+        else
+        {
+            Assert.Contains("proof that SQL ran", html);
+            Assert.Contains(hasPaths ? "proof of a specific SQL statement or stored procedure" : "no database dependencies", html);
+        }
         Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(handoff)));
     }
 

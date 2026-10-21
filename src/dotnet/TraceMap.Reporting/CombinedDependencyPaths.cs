@@ -400,7 +400,7 @@ public static partial class CombinedDependencyPathReporter
     private const int MaxTraversalDiagnosticShapes = 32;
     private const string Version = "1.0";
     private const string Algorithm = "bounded-bfs";
-    private const string AlgorithmVersion = "1.9";
+    private const string AlgorithmVersion = "1.10";
     private const int MarkdownPathLimit = 100;
     private const int MarkdownInventoryLimit = 200;
     private const string EndpointMatchRuleId = "combined.paths.endpoint-match.v1";
@@ -896,7 +896,8 @@ public static partial class CombinedDependencyPathReporter
                 .Concat(read.CompiledAttachmentLinks.Count == 0 ? [] : new[]
                 { "Compiled attachment joins use an explicitly validated local parent/index link and preserve original fact namespaces. They remain static review evidence, not runtime execution, source-line identity, build authenticity or full-site coverage." }).ToArray())
         {
-            WebFormsEntries = legacyMode ? null : BuildWebFormsEntryInventory(read, options.StartingFactIds is not null),
+            // Legacy roots alone must not suppress private inventory; shareable legacy views still omit it.
+            WebFormsEntries = IsLegacyView(options.View) ? null : BuildWebFormsEntryInventory(read, options.StartingFactIds is not null),
             CompiledAttachmentLinks = read.CompiledAttachmentLinks.Count == 0 ? null : read.CompiledAttachmentLinks,
             RootTraversal = rootTraversal is null ? null : new CombinedPathRootTraversal(
                 rootTraversal.ReachedNodeCount,
