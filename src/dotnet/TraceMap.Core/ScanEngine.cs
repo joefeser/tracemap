@@ -264,13 +264,17 @@ public static class ScanEngine
             .Distinct(StringComparer.Ordinal)
             .ToArray();
         var depsJson = options.IndexDepsJson ? DepsJsonExtractor.Read(options, cancellationToken) : null;
-        var producedPackages = ProjectFileReader.ReadProducedPackages(repoPath, inventory);
+        var producerReadGaps = new List<ProducedPackageReadGap>();
+        var producedPackages = ProjectFileReader.ReadProducedPackages(repoPath, inventory, producerReadGaps);
         var ciProducers = options.IndexCiProducers
             ? CiWorkflowProducerExtractor.Read(options, producedPackages, cancellationToken)
             : null;
         var nugetLockfiles = ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory);
         var packageManifestGaps = nugetLockfiles.Gaps
             .Select(gap => $"NuGet lockfile analysis reported `{gap.Category}`.")
+            .Concat(producerReadGaps.Select(gap => $"Package producer file analysis reported `{gap.Kind}`."))
+            .Concat(producedPackages.Any(ProjectFileReader.HasDependencyProjectionGap)
+                ? ["Package producer dependency analysis reported partial coverage."] : [])
             .Concat(depsJson?.Gaps.Select(gap => $"Build-output dependency analysis reported `{gap.Kind}`.") ?? [])
             .Concat(ciProducers?.Gaps.Select(gap => $"CI workflow producer analysis reported `{gap.Kind}`.") ?? [])
             .OrderBy(gap => gap, StringComparer.Ordinal)
@@ -379,6 +383,7 @@ public static class ScanEngine
                     ProjectFileReader.ReadPackageReferences(repoPath, inventory),
                     ProjectFileReader.ReadCentralPackageVersions(repoPath, inventory),
                     producedPackages,
+                    producerReadGaps,
                     nugetLockfiles,
                     depsJson,
                     ciProducers,
@@ -863,6 +868,7 @@ public static class ScanEngine
         IReadOnlyList<PackageReferenceInfo> packageReferences,
         IReadOnlyList<CentralPackageVersionInfo> centralPackageVersions,
         IReadOnlyList<ProducedPackageInfo> producedPackages,
+        IReadOnlyList<ProducedPackageReadGap> producerReadGaps,
         NuGetLockfileReadResult nugetLockfiles,
         DepsJsonResult? depsJson,
         CiWorkflowResult? ciProducers,
@@ -1095,6 +1101,17 @@ public static class ScanEngine
                 properties: pinProperties));
         }
 
+        foreach (var gap in producerReadGaps)
+            facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.ProjectFile,
+                EvidenceTiers.Tier4Unknown,
+                new EvidenceSpan(gap.ProjectPath, 1, 1, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                projectPath: gap.ProjectPath,
+                properties: new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = gap.Kind,
+                    ["message"] = "Producer XML was unreadable or exceeded the 1 MiB input bound; producer coverage is partial."
+                }));
+
         foreach (var produced in producedPackages)
         {
             var producedProperties = new SortedDictionary<string, string>(StringComparer.Ordinal)
@@ -1110,8 +1127,80 @@ public static class ScanEngine
                 ["surfaceKind"] = "package-config",
                 ["targetFramework"] = string.Empty
             };
+            producedProperties["packageIdProvenance"] = produced.PackageIdProvenance; // declared | interpolated | derived-default — a derived default must never be presented as declared
             if (!produced.ExplicitPackageId)
-                producedProperties["packageIdSource"] = "AssemblyName"; // fallback id — a weaker claim, visible to consumers
+                producedProperties["packageIdSource"] = produced.PackageIdSource; // non-literal id — a weaker claim, visible to consumers
+            if (produced.PackSignals is not null)
+                producedProperties["packSignals"] = produced.PackSignals; // derived-default only: the pack signals that justified the producer claim
+            if (produced.PackDependencies.Count > 0)
+            {
+                producedProperties["packDependencyCount"] = produced.PackDependencies.Count.ToString();
+                var packDependencies = string.Join(',', produced.PackDependencies);
+                if (packDependencies.Length <= 256)
+                    producedProperties["packDependencies"] = packDependencies; // bounded like lockfile dependencyNames
+                else
+                {
+                    producedProperties["packDependenciesOmittedCount"] = produced.PackDependencies.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    producedProperties["packDependenciesTruncated"] = "true";
+                }
+            }
+            if (produced.UnresolvedPackDependencyCount > 0)
+                producedProperties["packDependencyUnresolvedCount"] = produced.UnresolvedPackDependencyCount.ToString();
+            if (produced.DependencyEvidence.Count > 0)
+            {
+                var projection = ProjectFileReader.ProjectDependencyEvidence(produced);
+                producedProperties["packDependencyEvidence"] = projection.Json;
+                producedProperties["packDependencyEvidenceCount"] = produced.DependencyEvidence.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (projection.Omitted > 0)
+                    producedProperties["packDependencyEvidenceOmittedCount"] = projection.Omitted.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (ProjectFileReader.HasDependencyProjectionGap(produced))
+                    producedProperties["packDependencyCoverage"] = "partial";
+
+                // The reader retains at most 256 entries. Every retained edge omitted from the
+                // JSON summary keeps line-attributed evidence, without an unbounded fact loop.
+                var projectedCount = produced.DependencyEvidence.Count - projection.Omitted;
+                for (var index = 0; index < produced.DependencyEvidence.Count; index++)
+                {
+                    var edge = produced.DependencyEvidence[index];
+                    if (edge.PackageId is null)
+                        AddDependencyGap(edge.Line, "package-producer-dependency-unresolved", edge.IncludeHash);
+                    else if (index >= projectedCount)
+                        AddDependencyGap(edge.Line, "package-producer-dependency-evidence-omitted", edge.IncludeHash, edge);
+                }
+                if (produced.OmittedReferenceCount > 0)
+                {
+                    producedProperties["packDependencyReferenceOmittedCount"] = produced.OmittedReferenceCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    AddDependencyGap(produced.ReferenceLimitLine, "package-producer-reference-limit", null);
+                }
+                if (projection.Omitted > 0 || producedProperties.ContainsKey("packDependenciesTruncated"))
+                    AddDependencyGap(produced.SpanStart, "package-producer-dependency-projection-limit", null);
+            }
+
+            void AddDependencyGap(int line, string kind, string? includeHash, PackDependencyEvidence? edge = null)
+            {
+                var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["gapKind"] = kind,
+                    ["message"] = "Static ProjectReference package dependency evidence is incomplete; no restore or pack was evaluated.",
+                    ["producerPackageId"] = produced.PackageId
+                };
+                if (includeHash is not null) properties["includeHash"] = includeHash;
+                if (kind == "package-producer-reference-limit")
+                    properties["omittedReferenceCount"] = produced.OmittedReferenceCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (edge is not null)
+                {
+                    properties["targetProjectPath"] = edge.TargetProjectPath!;
+                    properties["targetPackageId"] = edge.PackageId!;
+                    properties["targetPackageIdSource"] = edge.PackageIdSource!;
+                    properties["targetPackageIdProvenance"] = edge.PackageIdProvenance!;
+                    properties["targetStartLine"] = edge.TargetStartLine!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    properties["targetEndLine"] = edge.TargetEndLine!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
+                facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.ProjectFile,
+                    EvidenceTiers.Tier4Unknown,
+                    new EvidenceSpan(produced.ProjectPath, line, line, null, "ProjectFileExtractor", ScannerVersions.ProjectFileExtractor),
+                    projectPath: produced.ProjectPath, properties: properties));
+            }
             if (produced.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
                 producedProperties["manifestKind"] = "vbproj";
             AddSafeVersionProperties(producedProperties, produced.Version);
@@ -1445,6 +1534,8 @@ public static class ScanEngine
 
         if (knownGaps.Any(gap => (gap.StartsWith("NuGet lockfile analysis reported", StringComparison.Ordinal)
             || gap.StartsWith("Build-output dependency analysis reported", StringComparison.Ordinal)
+            || gap.StartsWith("Package producer file analysis reported", StringComparison.Ordinal)
+            || gap.StartsWith("Package producer dependency analysis reported", StringComparison.Ordinal)
             || gap.StartsWith("CI workflow producer analysis reported", StringComparison.Ordinal))))
             return "Package/dependency evidence coverage is partial; inspect package manifest gaps and any separate semantic diagnostics.";
 

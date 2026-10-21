@@ -103,7 +103,19 @@ public sealed class CSharpFullSnapshotStabilityTests
             Path.Combine(temp.Path, "project-scoped"),
             projectPaths: ["src/Caller/Caller.csproj"]);
 
-        Assert.Equal("Succeeded", scoped.Manifest.BuildStatus);
+        // Compilation support is retained, but the target producer is outside the evidence scope.
+        // Do not present its unresolved package dependency as complete scan coverage.
+        Assert.Equal("FailedOrPartial", scoped.Manifest.BuildStatus);
+        Assert.Equal("Level1SemanticAnalysisReduced", scoped.Manifest.AnalysisLevel);
+        var gaps = scoped.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap).ToArray();
+        Assert.Equal(2, gaps.Length); // manifest coverage summary plus the attributable dependency gap
+        Assert.Single(gaps, fact => fact.RuleId == RuleIds.RepoManifest);
+        var dependencyGap = Assert.Single(gaps, fact => fact.RuleId == RuleIds.ProjectFile);
+        Assert.Equal("package-producer-dependency-unresolved", dependencyGap.Properties["gapKind"]);
+        Assert.Equal(RuleIds.ProjectFile, dependencyGap.RuleId);
+        Assert.Equal("src/Caller/Caller.csproj", dependencyGap.Evidence.FilePath);
+        Assert.Equal(7, dependencyGap.Evidence.StartLine);
+        Assert.Equal(FactFactory.Hash("../Target/Target.csproj", 64), dependencyGap.Properties["includeHash"]);
         Assert.DoesNotContain(scoped.Inventory, item => item.RelativePath.StartsWith("src/Target/", StringComparison.Ordinal));
         Assert.DoesNotContain(scoped.Facts, fact => fact.Evidence.FilePath.StartsWith("src/Target/", StringComparison.Ordinal));
         Assert.DoesNotContain(scoped.Facts, fact =>
