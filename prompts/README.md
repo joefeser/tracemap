@@ -98,6 +98,13 @@ the TraceMap PowerShell handoff. A verified launcher can then be supplied with
 `Start-FocusedWebFormsClaudeReview.ps1 -ClaudeLauncherPath`.
 
 
+## Remaining retained HTTP groups
+
+[`investigate-retained-h2-h3-h4-http.md`](investigate-retained-h2-h3-h4-http.md)
+investigates the remaining three HTTP groups on the work machine without rescanning
+or changing accepted H1/database artifacts. It distinguishes method-only paths
+from entry-to-HTTP evidence and requests public-safe synthetic gap descriptions.
+
 ## SQL report comparison
 
 [`assess-sql-migration-report-improvement.md`](assess-sql-migration-report-improvement.md)
