@@ -17,6 +17,9 @@ this prompt there using the original inventory's artifact references. The tool
 checkout and retained evidence directory do not need to be the same directory.
 
 1. Record tool branch, SHA and dirty state. Preserve unrelated untracked files.
+   Read these live from the tool checkout using `git branch --show-current`,
+   `git rev-parse HEAD`, and `git status --short`; never reuse an earlier agent
+   message or inventory's tool SHA. The operator may have pulled independently.
    Stop if tracked changes affect the build. Read the inventory and verify the
    retained index hash against its receipt. Keep private references local.
 2. Resolve H1's actual HTTP entry handler from its recorded event-binding fact,
@@ -30,6 +33,10 @@ checkout and retained evidence directory do not need to be the same directory.
 3. Build `src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj` once using
    `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --nologo -c Debug`.
    Record exit and warnings. Use that checkout's built CLI.
+   Capture HEAD immediately before and after the build and query; stop if it
+   changes. Hash the actual invoked `tracemap.dll` with SHA-256 after building
+   and after querying. Require both hashes to equal the receipt GeneratorSha256.
+   A Git commit ID and a binary SHA-256 are different identities; record both.
 4. Run the following command shape with locally resolved values and the recorded
    accepted depth. The bundle is the completed report or recovery directory, not
    the SQLite filename. The destination must be new, outside Git and outside the
@@ -60,3 +67,16 @@ H1 root verified yes/no, path present yes/no, chain/variant counts, evidence tie
 truncation, and FIRST HTTP BASELINE ACCEPTED / PATH NOT ESTABLISHED / ROOT NOT FOUND / AMBIGUOUS ROOT /
 INPUT MISMATCH / CONTEXT REJECTED / TIME LIMIT REACHED. Keep private paths, hashes,
 symbols, URLs, payloads and artifacts local. No uploads or commits from this run.
+
+## Existing accepted run with a stale tool SHA in its note
+
+Do not rebuild or rerun merely to correct prose. Read the existing receipt, original
+build/query evidence, and current checkout HEAD afresh. Verify the recorded invoked
+binary hash against GeneratorSha256. Current HEAD alone does not prove which binary
+produced an earlier receipt, particularly after an operator pull. If the original
+build/query evidence establishes the revision and binary used, write a private
+correction addendum beside the note recording the old value, verified revision,
+verification basis, and unchanged receipt/report hashes. Leave native receipts,
+reports, and accepted database artifacts byte-for-byte unchanged. If historical
+revision provenance cannot be established, say REVISION ATTRIBUTION UNVERIFIED;
+do not relabel the old result with current HEAD or rerun without operator direction.
