@@ -75,6 +75,50 @@ internal static class CiWorkflowProducerExtractor
             gaps.Add(new(".github/workflows", "ci-workflow-discovery-failed"));
         }
         if (files == 0 && gaps.Count == 0) gaps.Add(new(".github/workflows", "ci-workflow-not-found"));
+        // Operator hints (ci-hints.v1.json): a job-level `uses: <owner>/<repo>/.github/workflows/<file>@<ref>`
+        // of a hinted shared workflow asserts THIS REPO publishes packages (live shape: shared
+        // dotnet-release-library.yml@main called with nuget_publication_path). Every SDK project in the
+        // repo not already produced by the project lane becomes a ci producer, id from the filename
+        // default, marked derived-default — the hint is operator-asserted intent, the strongest ci form.
+        if (options.CiHintWorkflows is { Count: > 0 } && Directory.Exists(workflows))
+        {
+            var hinted = new HashSet<string>(
+                options.CiHintWorkflows.Select(NormalizeUses), StringComparer.Ordinal);
+            string? matched = null; string? matchedPath = null;
+            foreach (var path in Directory.EnumerateFiles(workflows, "*.yml", SearchOption.TopDirectoryOnly)
+                         .Concat(Directory.EnumerateFiles(workflows, "*.yaml", SearchOption.TopDirectoryOnly))
+                         .Take(MaxFiles))
+            {
+                foreach (var rawLine in File.ReadLines(path))
+                {
+                    var trimmed = rawLine.Trim();
+                    if (!trimmed.StartsWith("uses:", StringComparison.Ordinal)) continue;
+                    var value = trimmed["uses:".Length..].Trim().Trim('\'', '"');
+                    if (!value.Contains(".github/workflows/", StringComparison.Ordinal)) continue; // step-level actions (no workflows path) are not reusable-workflow calls
+                    if (!hinted.Contains(NormalizeUses(value))) continue;
+                    matched = value; matchedPath = path; break;
+                }
+                if (matched is not null) break;
+            }
+            if (matched is { } hintMatch)
+            {
+                var producedPaths = new HashSet<string>(producedByPath.Keys, StringComparer.Ordinal);
+                var emitted = 0;
+                foreach (var csproj in Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Take(MaxDiscoveryEntries))
+                {
+                    var rel = Path.GetRelativePath(root, csproj);
+                    if (producedPaths.Contains(rel)) continue; // the project lane already claims it — one fact per project, the stronger local evidence wins
+                    var id = Path.GetFileNameWithoutExtension(csproj);
+                    if (!ProjectFileReader.IsSafeNuGetPackageId(id)) continue;
+                    rows.Add(new CiWorkflowProducerRow(matchedPath!, id, null, rel, 1, 1, "derived-default"));
+                    emitted++;
+                }
+                observed.Add($"ci-hint:{hintMatch}");
+                if (emitted == 0)
+                    gaps.Add(new(matchedPath!, "ci-hint-no-projects",
+                        "hinted shared workflow called but no unclaimed packable project found in the repo"));
+            }
+        }
         using var generator = File.OpenRead(typeof(CiWorkflowProducerExtractor).Assembly.Location);
         // The signature includes bounded reads and categorical omissions. It is not a source snapshot.
         var signature = JsonSerializer.Serialize(new
@@ -85,6 +129,13 @@ internal static class CiWorkflowProducerExtractor
         });
         return new(ResolveConflicts(rows, gaps), OrderGaps(gaps).ToArray(),
             Convert.ToHexString(SHA256.HashData(generator)).ToLowerInvariant(), FactFactory.Hash(signature, 64));
+    }
+
+    private static string NormalizeUses(string uses)
+    {
+        var t = uses.Trim();
+        var at = t.IndexOf('@');
+        return (at >= 0 ? t[..at] : t).TrimEnd('/');
     }
 
     private static void ReadWorkflows(
@@ -330,7 +381,7 @@ internal static class CiWorkflowProducerExtractor
             {
                 properties["packageIdProvenance"] = "derived-default"; // ci evidence + filename-chain id — never presented as declared
                 properties["packageIdSource"] = "MSBuildProjectName";
-                properties["packSignals"] = "ci-pack-step";
+                properties["packSignals"] = "ci-hint-workflow"; // operator-asserted shared workflow (stronger than a local pack step)
             }
             // Unresolvable versions are omitted entirely (never empty, never guessed) — the
             // consuming registry renders them as unevidenced.

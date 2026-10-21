@@ -11,6 +11,20 @@ namespace TraceMap.Cli;
 
 public static class Program
 {
+
+    internal static IReadOnlyList<string> ReadCiHints(string path)
+    {
+        if (!File.Exists(path)) throw new ArgumentException($"--ci-hints file not found: {path}");
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path));
+        if (doc.RootElement.TryGetProperty("packWorkflows", out var packWorkflows) && packWorkflows.ValueKind == System.Text.Json.JsonValueKind.Array)
+            return packWorkflows.EnumerateArray()
+                .Where(e => e.ValueKind == System.Text.Json.JsonValueKind.Object && e.TryGetProperty("uses", out _))
+                .Select(e => e.GetProperty("uses").GetString()!)
+                .Where(u => !string.IsNullOrWhiteSpace(u))
+                .ToList();
+        return [];
+    }
+
     public static async Task<int> Main(string[] args)
     {
         return await TraceMapCommand.RunAsync(args, Console.Out, Console.Error);
@@ -439,6 +453,9 @@ public static class TraceMapCommand
         {
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
+            CiHintWorkflows = values.TryGetValue("--ci-hints", out var ciHintsPath)
+                ? Program.ReadCiHints(ciHintsPath)
+                : null,
             WebFormsVbImportContextPath = values.GetValueOrDefault("--webforms-vb-import-context"),
             VisualBasicCompilationContextPath = values.GetValueOrDefault("--vb-compilation-context")
         };
@@ -2933,6 +2950,7 @@ public static class TraceMapCommand
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
               --index-deps-json        Read existing bin/**/*.deps.json as stale-qualified build-output evidence; does not build.
               --index-ci-producers     Read .github/workflows/*.yml|*.yaml dotnet pack definitions as ci-defined producer evidence.
+              --ci-hints <file>         Operator hints JSON (ci-hints.v1: packWorkflows[].uses) — a job-level reusable-workflow call to a hinted workflow means this repo publishes; unclaimed SDK projects become ci producers (derived ids).
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
               --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.
               --binlog-commit-sha <sha>

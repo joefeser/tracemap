@@ -184,6 +184,7 @@ public sealed record ScanOptions(
     public DepsJsonLimits? DepsJsonLimits { get; init; }
     public string? WebFormsVbImportContextPath { get; init; }
     public bool IndexCiProducers { get; init; }
+    public IReadOnlyList<string>? CiHintWorkflows { get; init; } // operator hints (ci-hints.v1.json packWorkflows[].uses): a job-level uses: match means THIS REPO publishes packages (live: shared dotnet-release-library.yml@main with nuget_publication_path)
     public string? VisualBasicCompilationContextPath { get; init; }
 }
 
