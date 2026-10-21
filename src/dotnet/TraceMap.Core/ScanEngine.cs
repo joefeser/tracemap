@@ -558,6 +558,7 @@ public static class ScanEngine
             $"webformspublish={webFormsPublishBoundedInputSha256 ?? string.Empty}");
         if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonInputSignature}";
         if (options.IndexCiProducers) optionSignature += $"|ciproducers={ciProducersInputSignature}";
+        if (options.CiHintWorkflows is { Count: > 0 }) optionSignature += $"|cihints={FrameValues(options.CiHintWorkflows)}";
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }

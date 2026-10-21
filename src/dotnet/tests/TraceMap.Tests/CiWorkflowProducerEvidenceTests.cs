@@ -317,6 +317,27 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Contains(unevidenced, gap => gap.Detail!.Contains("no explicit project target", StringComparison.Ordinal));
     }
 
+
+    [Fact] // 2026-10-22 live shape: shared dotnet-release-library.yml@main called with nuget_publication_path —
+    // the hint says this repo publishes; ZERO-SIGNAL projects become ci producers with derived ids
+    public void Hinted_shared_workflow_call_makes_unclaimed_projects_ci_producers()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "on:\n  workflow_dispatch:\njobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main\n    with:\n      nuget_publication_path: 'Some/Path/'";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+
+        var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")) { IndexCiProducers = true, CiHintWorkflows = new[] { "org/shared-ci/.github/workflows/dotnet-release-library.yml" } };
+        var result = CiWorkflowProducerExtractor.Read(options, [], CancellationToken.None);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Bare", row.Package);
+        Assert.Equal("derived-default", row.IdProvenance);
+        Assert.Equal("src/Bare.csproj", row.ProjectPath);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-hint-no-projects");
+    }
+
     [Fact] // 2026-10-22: the zero-signal producer - NOTHING in the csproj, only the CI pack step
     public void Zero_signal_project_packs_by_ci_step_alone_as_derived_default()
     {
