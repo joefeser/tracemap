@@ -9,7 +9,8 @@ using System.Text.RegularExpressions;
 namespace TraceMap.Core;
 
 internal sealed record CiWorkflowProducerRow(
-    string WorkflowPath, string Package, string? Version, string? ProjectPath, int StartLine, int EndLine);
+    string WorkflowPath, string Package, string? Version, string? ProjectPath, int StartLine, int EndLine,
+    string IdProvenance = "declared"); // declared (flag or explicit csproj id) | derived-default (filename chain — live 2026-10-22: an estate of ~100 packages where NOTHING declares id and one csproj sets IsPackable; the CI pack step is the pack INTENT, the filename default is the identity contract)
 internal sealed record CiWorkflowGap(string Path, string Kind, string? Detail = null, int Line = 1);
 internal sealed record CiWorkflowResult(
     IReadOnlyList<CiWorkflowProducerRow> Rows,
@@ -325,6 +326,12 @@ internal static class CiWorkflowProducerExtractor
                 ["workflowPath"] = row.WorkflowPath
             };
             if (row.ProjectPath is not null) properties["projectPath"] = row.ProjectPath;
+            if (row.IdProvenance == "derived-default")
+            {
+                properties["packageIdProvenance"] = "derived-default"; // ci evidence + filename-chain id — never presented as declared
+                properties["packageIdSource"] = "MSBuildProjectName";
+                properties["packSignals"] = "ci-pack-step";
+            }
             // Unresolvable versions are omitted entirely (never empty, never guessed) — the
             // consuming registry renders them as unevidenced.
             if (row.Version is not null) properties["version"] = row.Version;
@@ -1319,6 +1326,7 @@ internal static class CiWorkflowProducerExtractor
         List<CiWorkflowGap> gaps)
     {
         string? packageId = null;
+        var derivedId = false;
         if (occurrence.RawPackageId is { } rawId)
         {
             // Effective id AFTER CI overrides: the flag wins; anything unevidenced is skipped.
@@ -1337,6 +1345,19 @@ internal static class CiWorkflowProducerExtractor
         {
             packageId = produced.PackageId; // CI packs the project: its explicit declaration is the id evidence
         }
+        else if (occurrence.ProjectTarget is { } fileTarget
+            && !fileTarget.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
+            && !occurrence.TargetUnresolvable
+            && Path.GetFileNameWithoutExtension(fileTarget) is { } fileDerived
+            && ProjectFileReader.IsSafeNuGetPackageId(fileDerived))
+        {
+            // DERIVED (2026-10-22 live finding): the CI pack step is stronger pack intent than the
+            // metadata signals tier-3 already trusts; when the packed project declares no id, the
+            // MSBuild filename default is the identity contract — same rule, ci evidence source.
+            // The fact carries packageIdProvenance=derived-default so no consumer mistakes it for declared.
+            packageId = fileDerived;
+            derivedId = true;
+        }
         else if (occurrence.TargetUnresolvable)
         {
             gaps.Add(new(occurrence.WorkflowPath, "ci-producer-id-unevidenced",
@@ -1351,6 +1372,11 @@ internal static class CiWorkflowProducerExtractor
         {
             gaps.Add(new(occurrence.WorkflowPath, "ci-producer-id-unevidenced",
                 "no explicit project target", occurrence.StartLine));
+        }
+        else if (occurrence.ProjectTarget is { } unsafeTarget && !unsafeTarget.EndsWith(".sln", StringComparison.OrdinalIgnoreCase) && !occurrence.TargetUnresolvable)
+        {
+            gaps.Add(new(occurrence.WorkflowPath, "ci-producer-id-unevidenced",
+                "packed project declares no explicit PackageId and its filename is not a safe package id", occurrence.StartLine));
         }
         else
         {
@@ -1377,7 +1403,8 @@ internal static class CiWorkflowProducerExtractor
                 && !attributed.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
                 ? attributed
                 : null,
-            occurrence.StartLine, occurrence.EndLine));
+            occurrence.StartLine, occurrence.EndLine,
+            derivedId ? "derived-default" : "declared"));
     }
 
     /// Resolves a flag value that is exactly one ${{ env.NAME }} expression against the
