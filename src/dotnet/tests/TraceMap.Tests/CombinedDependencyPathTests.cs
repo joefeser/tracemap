@@ -11,6 +11,62 @@ namespace TraceMap.Tests;
 
 public sealed class CombinedDependencyPathTests
 {
+    [Theory]
+    [InlineData("ordinary", true)]
+    [InlineData("bounded-single", true)]
+    [InlineData("bounded-combined", true)]
+    [InlineData("ordinary", false)]
+    [InlineData("bounded-single", false)]
+    [InlineData("bounded-combined", false)]
+    public async Task Symbol_representatives_do_not_depend_on_fact_ids_or_input_order(string reader, bool hasDeclaration)
+    {
+        using var temp = new TempDirectory();
+        var snapshots = new List<string>();
+        foreach (var reverse in new[] { false, true })
+        {
+            var manifest = Manifest("representatives", "test") with { ScanId = reverse ? "scan-b" : "scan-a" };
+            var declaration = MethodFact(manifest, "Widget.Send()", "Widgets/Ω.cs", 40) with
+            {
+                FactId = reverse ? "z-declaration" : "a-declaration",
+                EvidenceTier = EvidenceTiers.Tier2Structural
+            };
+            var call = CallFact(manifest, "Page.Click()", "Widget.Send()", "Page.cs", 10) with
+            { FactId = reverse ? "a-call" : "z-call" };
+            var terminal = HttpClientFact(manifest, "GET", "/fixture", "/fixture", "Widget.cs", 42, "Widget.Send()") with
+            { FactId = "m-terminal" };
+            var facts = hasDeclaration ? new[] { declaration, call, terminal } : new[] { call, terminal };
+            var index = Path.Combine(temp.Path, reverse ? "b.sqlite" : "a.sqlite");
+            SqliteIndexWriter.Write(index, manifest, reverse ? facts.Reverse().ToArray() : facts);
+            if (reader == "bounded-combined")
+            {
+                var combined = Path.Combine(temp.Path, reverse ? "combined-b.sqlite" : "combined-a.sqlite");
+                await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["fixture"]));
+                index = combined;
+            }
+            var query = new CombinedDependencyPathOptions(index, temp.Path, FromSymbol: "Page.Click()", ToSurface: "http-client")
+            { ExactFromSymbol = true };
+            var budget = new ReportInputBudget(1000, 1000, 16 * 1024 * 1024);
+            var report = reader == "bounded-combined"
+                ? (await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(query, budget)).Report
+                : reader == "bounded-single"
+                    ? await CombinedDependencyPathReporter.BuildBoundedSingleIndexReportAsync(query, budget)
+                    : await CombinedDependencyPathReporter.BuildReportAsync(query);
+            Assert.NotEmpty(report.Paths);
+            var node = report.Paths.SelectMany(p => p.Nodes).First(n => n.SymbolId == "Widget.Send()");
+            Assert.Equal(hasDeclaration ? RuleIds.CSharpSemanticDeclarations : RuleIds.CSharpSemanticCallGraph, node.RuleId);
+            Assert.Equal(hasDeclaration ? EvidenceTiers.Tier2Structural : EvidenceTiers.Tier1Semantic, node.EvidenceTier);
+            Assert.Equal(hasDeclaration ? "Widgets/Ω.cs" : "Page.cs", node.FilePath);
+            Assert.Equal(hasDeclaration ? 40 : 10, node.StartLine);
+            snapshots.Add(JsonSerializer.Serialize(report.Paths.Select(p => new
+            {
+                p.Classification, p.Confidence,
+                Nodes = p.Nodes.Select(n => new { n.SymbolId, n.NodeKind, n.RuleId, n.EvidenceTier, n.FilePath, n.StartLine }),
+                Edges = p.Edges.Select(e => new { e.EdgeKind, e.RuleId, e.EvidenceTier, e.FilePath, e.StartLine })
+            })));
+        }
+        Assert.Equal(snapshots[0], snapshots[1]);
+    }
+
     [Fact]
     public async Task Incomplete_reverse_distance_pass_is_discarded_without_hiding_the_selected_path()
     {
@@ -1672,9 +1728,11 @@ public sealed class CombinedDependencyPathTests
         var gap = Assert.Single(result.Report.Gaps, gap => gap.GapKind == "DispatchCandidateFanOut");
         Assert.Equal("combined.dispatch-gap.v1", gap.RuleId);
         Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
-        Assert.Equal("Services/StatusService9.cs", gap.FilePath);
-        Assert.Equal(27, gap.StartLine);
-        Assert.Equal(27, gap.EndLine);
+        // No declaration is retained for the interface. Its stable call-site
+        // witness replaces whichever implementation fact happened to hash first.
+        Assert.Equal("Controllers/StatusController.cs", gap.FilePath);
+        Assert.Equal(14, gap.StartLine);
+        Assert.Equal(14, gap.EndLine);
         Assert.Equal(server.CommitSha, gap.CommitSha);
         Assert.Equal(server.ScannerVersion, gap.ExtractorVersion);
         Assert.Equal("combined-symbol-relationships", gap.EvidenceScope);

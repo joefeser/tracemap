@@ -30,7 +30,8 @@ public static partial class CombinedDependencyPathReporter
         {
             storagePhase = "facts";
             if (sorted) throw new InvalidOperationException("COMBINED_GRAPH_STORAGE_FROZEN");
-            using var command = Command("insert into graph_facts values($ordinal,$id,$source,$original,$key,$type,$payload,$call,$reference);", fact.CombinedFactId);
+            using var command = Command("insert into graph_facts values($ordinal,$id,$source,$original,$key,$type,$payload,$call,$reference,$representative);", fact.CombinedFactId);
+            command.Parameters.AddWithValue("$representative", RepresentativeEvidenceKey(fact));
             command.Parameters.AddWithValue("$reference", (object?)CommandFactReference(fact) ?? DBNull.Value);
             command.Parameters.AddWithValue("$ordinal", storedFactCount + 1);
             command.Parameters.AddWithValue("$source", fact.SourceIndexId);
@@ -54,7 +55,7 @@ public static partial class CombinedDependencyPathReporter
                 + (sourceKeys ? "where f.id=(select candidate.id from graph_facts candidate where candidate.source_key=f.source_key order by candidate.id collate graph_ordinal limit 1) "
                     : types is null ? "" : "where fact_type in (" + string.Join(",", Enumerable.Range(0, types.Count).Select(index => "$type" + index)) + ") ")
                 + "order by "
-                + (identityOrder ? "id collate graph_ordinal" : "ordinal") + ";");
+                + (identityOrder ? "representative_key collate graph_ordinal,id collate graph_ordinal" : "ordinal") + ";");
             if (types is not null)
                 for (var index = 0; index < types.Count; index++) command.Parameters.AddWithValue("$type" + index, types[index]);
             using var reader = command.ExecuteReader();
@@ -202,7 +203,42 @@ public static partial class CombinedDependencyPathReporter
 
     private static IEnumerable<CombinedFactRow> IdentityOrderedFacts(IReadOnlyList<CombinedFactRow> facts)
         => facts is IIndexedCombinedFacts indexed ? indexed.IdentityOrdered
-            : facts.OrderBy(fact => fact.CombinedFactId, StringComparer.Ordinal);
+            : facts.OrderBy(RepresentativeEvidenceKey, StringComparer.Ordinal)
+                .ThenBy(fact => fact.CombinedFactId, StringComparer.Ordinal);
+
+    // A symbol's display witness must not depend on a scan-derived fact hash.
+    // Prefer declarations, then path facts, then metadata-only observations,
+    // not the strongest tier. Redundant argument observations must not replace
+    // a retained call witness. Remaining
+    // ties use the actual displayed evidence; IDs break only equivalent ties.
+    // The same key is indexed on disk so bounded readers do not materialize a sort.
+    private static string RepresentativeEvidenceKey(CombinedFactRow fact)
+        => RepresentativeEvidenceKey(fact.FactType, fact.RuleId, fact.EvidenceTier, fact.FilePath,
+            fact.StartLine, fact.EndLine, fact.SourceSymbol, fact.TargetSymbol);
+
+    private static void RegisterRepresentativeEvidenceOrder(Microsoft.Data.Sqlite.SqliteConnection connection)
+    {
+        connection.CreateCollation("representative_ordinal", StringComparer.Ordinal.Compare);
+        connection.CreateFunction<string, string, string, string?, int, int, string?, string?, string>(
+            "representative_evidence_key", RepresentativeEvidenceKey, isDeterministic: true);
+    }
+
+    private static string RepresentativeEvidenceKey(string factType, string ruleId, string tier,
+        string? filePath, int startLine, int endLine, string? sourceSymbol, string? targetSymbol)
+        => System.Text.Json.JsonSerializer.Serialize(new[]
+        {
+            factType is TraceMap.Core.FactTypes.MethodDeclared
+                or TraceMap.Core.FactTypes.ManagedMethodDeclared
+                or TraceMap.Core.FactTypes.TypeDeclared
+                or TraceMap.Core.FactTypes.PropertyDeclared
+                or TraceMap.Core.FactTypes.FieldDeclared
+                or TraceMap.Core.FactTypes.EventDeclared ? "0"
+                : SymbolWitnessFactTypes.Contains(factType, StringComparer.Ordinal) ? "2" : "1",
+            factType, ruleId, tier, filePath,
+            startLine.ToString("D10", System.Globalization.CultureInfo.InvariantCulture),
+            endLine.ToString("D10", System.Globalization.CultureInfo.InvariantCulture),
+            sourceSymbol, targetSymbol
+        });
 
     internal static IEnumerable<CombinedFactRow> FactsOfTypes(IReadOnlyList<CombinedFactRow> facts, params string[] types)
         => facts is IIndexedCombinedFacts indexed ? indexed.OfTypes(types)
