@@ -37,24 +37,28 @@ public static partial class WebFormsReviewExecutionCommand
         var failureStage = "arguments";
         try
         {
-            if (args.Length < 9 || args.Length > 17 || args.Length % 2 != 1 || args[0] != "requery-handler" || args[1] != "--run" ||
+            if (args.Length < 9 || args.Length > 19 || args.Length % 2 != 1 || args[0] != "requery-handler" || args[1] != "--run" ||
                 args[3] != "--bundle" || args[5] is not ("--handler" or "--compiled-root") || args[7] != "--out") throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
             string? surfaceName = null;
             var compiledOnly = false;
             var methodGraph = false;
+            var httpClient = false;
             int? maxDepth = null;
             for (var i = 9; i < args.Length; i += 2)
             {
                 if (args[i] == "--surface-name" && args[i + 1] == "DbDataAdapter.Fill" && surfaceName is null) surfaceName = args[i + 1];
                 else if (args[i] == "--traversal-scope" && args[i + 1] == "compiled-il" && !compiledOnly) compiledOnly = true;
                 else if (args[i] == "--view" && args[i + 1] == "method-graph" && !methodGraph) methodGraph = true;
+                else if (args[i] == "--surface" && args[i + 1] == "http-client" && !httpClient) httpClient = true;
                 else if (args[i] == "--max-depth" && maxDepth is null &&
                     int.TryParse(args[i + 1], System.Globalization.NumberStyles.None,
                         System.Globalization.CultureInfo.InvariantCulture, out var depth) && depth is >= 1 and <= 64) maxDepth = depth;
                 else throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             }
             var run = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
-            if (methodGraph && (compiledOnly || surfaceName is not null)) throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
+            if (methodGraph && (compiledOnly || surfaceName is not null || httpClient) ||
+                httpClient && (compiledOnly || surfaceName is not null || args[5] == "--compiled-root"))
+                throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             var bundle = WebFormsReviewPreflightCommand.PhysicalPath(args[4]);
             var handler = args[6];
             CombinedPathSymbolRoot? explicitRoot = null;
@@ -175,7 +179,7 @@ public static partial class WebFormsReviewExecutionCommand
             var budget = config.Budgets.Reports ?? new();
             WebFormsReviewPreflightCommand.ValidateReportBudgets(budget);
             RetainedMethodGraph? graphView = null;
-            var terminalScope = compiledOnly || surfaceName is not null ? "database-api" : "database-operations";
+            var terminalScope = httpClient ? "http-client" : compiledOnly || surfaceName is not null ? "database-api" : "database-operations";
             var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: methodGraph ? null : terminalScope, SurfaceName: surfaceName, IncludeLegacyRoots: true,
                 MaxDepth: maxDepth ?? config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { ExactFromSymbol = true, CompiledOnly = compiledOnly, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork),

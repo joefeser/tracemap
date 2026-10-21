@@ -2,6 +2,23 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+## Retained handler HTTP reporting
+
+`webforms-review requery-handler --surface http-client` selects outbound HTTP
+terminals in the same verified retained combined index. It requires `--handler`
+and rejects compiled roots, compiled-only traversal, database surface-name filters
+and method-graph mode. Omitting the option preserves the database default. Input
+admission, root uniqueness, traversal limits, receipts and provenance checks are
+unchanged; extractor and path-algorithm versions are unchanged because this is CLI
+exposure of an existing terminal family, not a new evidence or traversal rule.
+
+`WebFormsReviewExecutionTestsHandlerHttp` pins successful native reporting from a
+synthetic projectless VB handler through a helper to an HTTP terminal, including
+the retained syntax rule, tier, source line and supporting evidence, plus selector
+rejections and database-default isolation. This is static candidate evidence, not
+proof that a request ran. The full Debug suite with `-warnaserror` is required for
+this CLI change. Select the actual HTTP handler, not a database root.
+
 ## Package producer repair gate (#900)
 
 Run `dotnet test src/dotnet/TraceMap.sln --filter 'FullyQualifiedName~PackageProducedTests|FullyQualifiedName~CentralPackageVersion|FullyQualifiedName~CiWorkflow' -warnaserror`,

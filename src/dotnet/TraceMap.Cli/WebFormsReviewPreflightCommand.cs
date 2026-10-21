@@ -121,7 +121,8 @@ public static partial class WebFormsReviewPreflightCommand
         node-limit report outputs without scanning or changing the original run.
         query-recovery --bundle <bundle> accepts the same bounded query options.
         query-recovery --bundle <bundle> --handler <method-name> counts retained handler paths only.
-        requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il] [--max-depth <1..64>]
+        requery-handler --run <retained-run> --bundle <completed-report-or-recovery-bundle> --handler <method-name> --out <new-folder> [--surface http-client] [--surface-name DbDataAdapter.Fill] [--traversal-scope compiled-il] [--max-depth <1..64>]
+          HTTP surface requires a source handler; incompatible with surface-name, compiled-il, compiled-root and method-graph. Default remains database-operations.
         Substitute --compiled-root <local-root.json> for --handler to select one exact retained compiled method
         by sourceIndexId, scanId, commitSha and symbolId, even when absent from the original report roots.
         Compiled-root path queries use compiled-il traversal; original inputs are not rescanned.
