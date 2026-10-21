@@ -38,7 +38,7 @@ public static partial class WebFormsReviewExecutionCommand
         try
         {
             if (args.Length < 9 || args.Length > 19 || args.Length % 2 != 1 || args[0] != "requery-handler" || args[1] != "--run" ||
-                args[3] != "--bundle" || args[5] is not ("--handler" or "--compiled-root") || args[7] != "--out") throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
+                args[3] != "--bundle" || args[5] is not ("--handler" or "--compiled-root" or "--source-root") || args[7] != "--out") throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
             string? surfaceName = null;
             var compiledOnly = false;
             var methodGraph = false;
@@ -56,13 +56,16 @@ public static partial class WebFormsReviewExecutionCommand
                 else throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             }
             var run = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
+            var sourceRoot = args[5] == "--source-root";
+            if (sourceRoot && (!httpClient || compiledOnly || methodGraph || surfaceName is not null))
+                throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             if (methodGraph && (compiledOnly || surfaceName is not null || httpClient) ||
                 httpClient && (compiledOnly || surfaceName is not null || args[5] == "--compiled-root"))
                 throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             var bundle = WebFormsReviewPreflightCommand.PhysicalPath(args[4]);
             var handler = args[6];
             CombinedPathSymbolRoot? explicitRoot = null;
-            if (args[5] == "--compiled-root")
+            if (args[5] == "--compiled-root" || sourceRoot)
             {
                 var rootBytes = await WebFormsReviewPreflightCommand.ReadSmallAsync(
                     WebFormsReviewPreflightCommand.PhysicalPath(handler), 16_384, token);
@@ -70,8 +73,8 @@ public static partial class WebFormsReviewExecutionCommand
                 explicitRoot = JsonSerializer.Deserialize<CombinedPathSymbolRoot>(rootBytes, JsonOptions);
                 if (explicitRoot is null || new[] { explicitRoot.SourceIndexId, explicitRoot.ScanId, explicitRoot.CommitSha, explicitRoot.SymbolId }
                     .Any(value => string.IsNullOrWhiteSpace(value)) || explicitRoot.SymbolId.Length > 8192)
-                    throw Fail("COMPILED_ROOT_INVALID");
-                if (!methodGraph) compiledOnly = true;
+                    throw Fail(sourceRoot ? "SOURCE_ROOT_INVALID" : "COMPILED_ROOT_INVALID");
+                if (!methodGraph && !sourceRoot) compiledOnly = true;
             }
             else if (handler.Length is < 1 or > 128 || handler.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_')) throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
             var destination = WebFormsReviewPreflightCommand.PhysicalPath(args[8]);
@@ -146,6 +149,7 @@ public static partial class WebFormsReviewExecutionCommand
                     var fields = item.Children.ToDictionary(child => child.Pointer.Split('/')[^1], child => child.Value?.GetString(), StringComparer.Ordinal);
                     return new CombinedPathSymbolRoot(fields["sourceIndexId"]!, fields["scanId"]!, fields["commitSha"]!, fields["symbolId"]!);
                 }).Where(root => root.SymbolId.Split('(', 2)[0].EndsWith("." + handler, StringComparison.Ordinal)).Distinct().ToArray();
+                if (roots.Length == 0) throw Fail("HANDLER_REQUERY_ROOT_NOT_FOUND");
                 if (roots.Length != 1) throw Fail("HANDLER_REQUERY_ROOT_NOT_UNIQUE");
             }
             var indexPath = OwnedPath(run, context.ReportAttempt + "/combined.sqlite");
@@ -169,12 +173,13 @@ public static partial class WebFormsReviewExecutionCommand
                 command.Parameters.AddWithValue("$source", explicitRoot.SourceIndexId);
                 command.Parameters.AddWithValue("$scan", explicitRoot.ScanId);
                 command.Parameters.AddWithValue("$commit", explicitRoot.CommitSha);
-                command.Parameters.AddWithValue("$kind", FactTypes.ManagedMethodDeclared);
+                command.Parameters.AddWithValue("$kind", sourceRoot ? FactTypes.MethodDeclared : FactTypes.ManagedMethodDeclared);
                 command.Parameters.AddWithValue("$symbol", explicitRoot.SymbolId);
                 using var reader = await command.ExecuteReaderAsync(token);
-                if (!await reader.ReadAsync(token) || await reader.ReadAsync(token)) throw Fail("COMPILED_ROOT_NOT_UNIQUE");
+                if (!await reader.ReadAsync(token)) throw Fail(sourceRoot ? "SOURCE_ROOT_NOT_FOUND" : "COMPILED_ROOT_NOT_UNIQUE");
+                if (await reader.ReadAsync(token)) throw Fail(sourceRoot ? "SOURCE_ROOT_NOT_UNIQUE" : "COMPILED_ROOT_NOT_UNIQUE");
             }
-            await output.WriteLineAsync($"handlerStage=root-verified;rootIdentities=1;selection={(explicitRoot is null ? "retained-handler" : "exact-compiled-method")};no-scan;no-combine");
+            await output.WriteLineAsync($"handlerStage=root-verified;rootIdentities=1;selection={(explicitRoot is null ? "retained-handler" : sourceRoot ? "exact-source-method" : "exact-compiled-method")};no-scan;no-combine");
             var config = plan.Configuration;
             var budget = config.Budgets.Reports ?? new();
             WebFormsReviewPreflightCommand.ValidateReportBudgets(budget);
