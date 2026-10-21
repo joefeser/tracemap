@@ -48,6 +48,20 @@ to that DLL. Verify other native generator hashes against their own assemblies,
 not the CLI by assumption. If no committed verifier exists for a hash contract,
 report NOT VERIFIED; do not invent a verification claim or a new helper.
 
+HARD STOP: a nonzero build exit, warnings promoted to errors, or unverifiable
+invoked-binary identity means BUILD BLOCKED / BINARY PROVENANCE UNVERIFIED.
+Do not run any requery using an existing DLL after a failed build, even if the
+compiler emitted a DLL or the diagnostic appears unrelated to HTTP. Retained
+historical evidence may still be useful, but it cannot qualify the current tool.
+Preserve the prior note and add a correction; never silently rewrite its verdict.
+
+If a local governance wrapper rejects `exact-source-method`, identify whether it
+is committed tooling or a private runner. Keep source-method, compiled-method and
+named-handler selection kinds distinct. Do not relabel a source receipt as compiled
+to appease a wrapper. Report RUNNER CONTRACT MISMATCH separately; do not modify the
+runner. Direct native CLI verification below is permitted only after the build and
+binary identity gates pass, and does not certify wrapper compatibility.
+
 ## 2. Verify roots and generate bounded current-tool reports
 
 Resolve each root from retained facts with sourceIndexId, scanId, commitSha and
@@ -103,6 +117,7 @@ binary verification yes/no, baseline unchanged yes/no and elapsed time.
 
 Overall verdict: READY FOR ACCEPTED STATIC HTTP REVIEW / READY WITH RECORDED
 LIMITATIONS / BLOCKED BY MISSING INPUT / TOOL UPDATE REQUIRED / REGRESSION SUSPECTED /
-TIME LIMIT. Truncation and unproven H4 dispatch must remain explicit even when ready.
+TIME LIMIT / BUILD BLOCKED / BINARY PROVENANCE UNVERIFIED. A failed build or unverified
+binary forbids either READY verdict. Truncation and unproven H4 dispatch must remain explicit even when ready.
 If blocked, name the smallest operator action; do not execute it. No exhaustive
 HTTP coverage, runtime behavior, SQL validity or migration-readiness claim.

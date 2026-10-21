@@ -2759,7 +2759,7 @@ public static class TraceMapCommand
     {
         public IEnumerable<string> Keys => values.Keys.Concat(flags);
 
-        public bool TryGetValue(string key, out string? value)
+        public bool TryGetValue(string key, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? value)
         {
             if (values.TryGetValue(key, out var list) && list.Count > 0)
             {

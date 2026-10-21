@@ -6,6 +6,25 @@ namespace TraceMap.Tests;
 public sealed class CliTests
 {
     [Fact]
+    public async Task Scan_ci_hints_requires_a_value_instead_of_treating_it_as_a_flag()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        var result = await TraceMapCommand.RunAsync(["scan", "--ci-hints"], output, error);
+        Assert.Equal(1, result);
+        Assert.Contains("Missing value for --ci-hints", error.ToString());
+    }
+
+    [Fact]
+    public void Ci_hints_reader_retains_supplied_workflow_values()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "hints.json");
+        File.WriteAllText(path, """{"schemaVersion":"ci-hints.v1","packWorkflows":[{"uses":"example/shared/.github/workflows/pack.yml@main"}]}""");
+        Assert.Equal(["example/shared/.github/workflows/pack.yml@main"], Program.ReadCiHints(path));
+    }
+
+    [Fact]
     public void Scan_error_line_names_differing_snapshot_paths_when_known()
     {
         var exception = new SourceSnapshotException(details: ["src/Generated.cs (appeared)", "src/Old.sql (disappeared)"]);
@@ -83,8 +102,10 @@ public sealed class CliTests
         Assert.Equal(string.Empty, error.ToString());
     }
 
-    [Fact]
-    public async Task Scan_against_temporary_directory_writes_required_outputs()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Scan_against_temporary_directory_writes_required_outputs(bool withCiHints)
     {
         using var temp = new TempDirectory();
         var repo = Path.Combine(temp.Path, "repo");
@@ -108,7 +129,12 @@ public sealed class CliTests
         using var output = new StringWriter();
         using var error = new StringWriter();
 
-        var exitCode = await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", outputPath], output, error);
+        var hintsPath = Path.Combine(temp.Path, "ci-hints.json");
+        File.WriteAllText(hintsPath, """{"schemaVersion":"ci-hints.v1","packWorkflows":[]}""");
+        string[] arguments = withCiHints
+            ? ["scan", "--repo", repo, "--out", outputPath, "--ci-hints", hintsPath]
+            : ["scan", "--repo", repo, "--out", outputPath];
+        var exitCode = await TraceMapCommand.RunAsync(arguments, output, error);
 
         Assert.Equal(0, exitCode);
         Assert.True(File.Exists(Path.Combine(outputPath, "scan-manifest.json")));
