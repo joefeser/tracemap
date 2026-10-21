@@ -5157,3 +5157,15 @@ representation and are out of scope. LeaveInstrTest (851 lines) is deferred:
 its bodies are hand-authored ilasm text with no construction helper, and
 ilasm is excluded from the corpus — it rides the existing ilasm-gated
 endurance pattern (TRACEMAP_PARITY_ILASM) later.
+
+## Explicit retained HTTP source roots
+
+`webforms-review requery-handler --source-root <private-selector.json> --surface http-client`
+selects a source method independently of a previous report's root roster. The existing
+run/bundle receipt and index hash remain mandatory. The selector's `sourceIndexId`,
+`scanId`, `commitSha`, and `symbolId` must match exactly one retained `MethodDeclared`.
+This does not create evidence, rescan, or upgrade tiers. Missing source declarations
+remain unsupported. Duplicate JSON properties are rejected. Named handler selection
+now distinguishes no match (`HANDLER_REQUERY_ROOT_NOT_FOUND`) from multiple matches.
+The HTTP test lane includes a retained helper absent from the original report roots
+and rejection of mismatched source, scan, commit and symbol identities, with unchanged input hashes.

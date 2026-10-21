@@ -1186,6 +1186,79 @@ public sealed class WebFormsReviewExecutionTestsRelocation
 public sealed class WebFormsReviewExecutionTestsHandlerHttp
 {
     [Theory]
+    [InlineData("valid")]
+    [InlineData("scan")]
+    [InlineData("source")]
+    [InlineData("commit")]
+    [InlineData("symbol")]
+    public async Task Explicit_source_root_selects_method_outside_previous_report_roots_and_checks_identity(string scenario)
+    {
+        using var fixture = new Fixture();
+        fixture.AddPublicEventFixture(http: true);
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+        var bundle = Path.Combine(fixture.Run, fixture.LastCheckpoint().Reports!.ReportAttempt);
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var error = new StringWriter();
+        var destination = Path.Combine(fixture.Root, "source-http-query");
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+            "--bundle", bundle, "--handler", "SendRequest", "--out", destination, "--surface", "http-client"], TextWriter.Null, error));
+        Assert.Contains("HANDLER_REQUERY_ROOT_NOT_FOUND", error.ToString(), StringComparison.Ordinal);
+        CombinedPathSymbolRoot root;
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = Path.Combine(bundle, "combined.sqlite"), Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString()))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT s.source_index_id,s.scan_id,s.commit_sha,f.target_symbol FROM combined_facts f JOIN index_sources s ON s.source_index_id=f.source_index_id WHERE f.fact_type='MethodDeclared' AND f.target_symbol LIKE '%SendRequest%'";
+            using var reader = command.ExecuteReader();
+            Assert.True(reader.Read());
+            root = new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3));
+            Assert.False(reader.Read());
+        }
+        root = scenario switch
+        {
+            "scan" => root with { ScanId = "missing" },
+            "source" => root with { SourceIndexId = "missing" },
+            "commit" => root with { CommitSha = "missing" },
+            "symbol" => root with { SymbolId = "missing" },
+            _ => root
+        };
+        var selector = Path.Combine(fixture.Root, "source-root.json");
+        File.WriteAllText(selector, JsonSerializer.Serialize(root, JsonOptions));
+        var result = await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+            "--bundle", bundle, "--source-root", selector, "--out", destination, "--surface", "http-client"], TextWriter.Null, error);
+        Assert.True(result == (scenario == "valid" ? 0 : 1), error.ToString());
+        if (scenario != "valid")
+        {
+            Assert.Contains("SOURCE_ROOT_NOT_FOUND", error.ToString(), StringComparison.Ordinal);
+            Assert.False(Directory.Exists(destination));
+        }
+        else
+        {
+            var receipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(destination,
+                WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+            Assert.True(receipt.ExactChains > 0);
+            Assert.Equal("http-client", receipt.Query.ToSurface);
+            Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);
+            var report = JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(File.ReadAllText(Path.Combine(destination,
+                GroupedCompiledPathReportWriter.HandoffName)), JsonOptions)!;
+            Assert.NotEmpty(report.Variants);
+            Assert.All(report.Variants, variant =>
+            {
+                var nodes = variant.NodeReferences.Select(id => report.Nodes[id]).ToArray();
+                Assert.Contains(nodes, node => node.SymbolId == root.SymbolId);
+                Assert.Equal("http-client", nodes[^1].SurfaceKind);
+                Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, nodes[^1].EvidenceTier);
+                Assert.Equal(RuleIds.VisualBasicSyntaxHttpCandidate, nodes[^1].RuleId);
+                Assert.NotEmpty(variant.Path.SupportingFactIds);
+            });
+        }
+        foreach (var (path, hash) in before) Assert.Equal(hash, Hash(path));
+    }
+
+    [Theory]
     [InlineData("--surface-name", "DbDataAdapter.Fill")]
     [InlineData("--traversal-scope", "compiled-il")]
     [InlineData("--view", "method-graph")]

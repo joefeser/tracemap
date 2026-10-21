@@ -22,8 +22,11 @@ checkout and retained evidence directory do not need to be the same directory.
 2. Resolve H1's actual HTTP entry handler from its recorded event-binding fact,
    caller edge and HTTP-operation fact. Verify exact symbol joins in the same
    index. Do NOT reuse the database Save handler merely because its query receipt
-   supplies the known bundle and limits. If the CLI's handler-name selector cannot
-   uniquely select H1, stop with AMBIGUOUS ROOT; do not substitute another handler.
+   supplies the known bundle and limits. Resolve exactly one retained MethodDeclared
+   fact for H1 and its index_sources identity. Write a private selector JSON outside
+   Git with sourceIndexId, scanId, commitSha and symbolId copied exactly from that
+   evidence. Do not infer identities from display names. Stop on absent or ambiguous
+   declaration evidence. The selector need not occur in the old report's symbolRoots.
 3. Build `src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj` once using
    `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --nologo -c Debug`.
    Record exit and warnings. Use that checkout's built CLI.
@@ -34,7 +37,7 @@ checkout and retained evidence directory do not need to be the same directory.
    configuration; verify they match the recorded limits, without increasing them.
 
    ```text
-   dotnet <built-tracemap.dll> webforms-review requery-handler --run <retained-run> --bundle <retained-bundle> --handler <verified-H1-handler-name> --out <new-private-output> --surface http-client --max-depth <recorded-depth>
+   dotnet <built-tracemap.dll> webforms-review requery-handler --run <retained-run> --bundle <retained-bundle> --source-root <private-H1-selector.json> --out <new-private-output> --surface http-client --max-depth <recorded-depth>
    ```
 
 5. Verify the new receipt records HTTP scope, no database surface-name filter,
@@ -54,6 +57,6 @@ checkout and retained evidence directory do not need to be the same directory.
 Write one new private Markdown note with exact commands and evidence references.
 Return only public tool SHA, build status, elapsed time, hash-verification result,
 H1 root verified yes/no, path present yes/no, chain/variant counts, evidence tiers,
-truncation, and FIRST HTTP BASELINE ACCEPTED / PATH NOT ESTABLISHED / AMBIGUOUS ROOT /
+truncation, and FIRST HTTP BASELINE ACCEPTED / PATH NOT ESTABLISHED / ROOT NOT FOUND / AMBIGUOUS ROOT /
 INPUT MISMATCH / CONTEXT REJECTED / TIME LIMIT REACHED. Keep private paths, hashes,
 symbols, URLs, payloads and artifacts local. No uploads or commits from this run.
