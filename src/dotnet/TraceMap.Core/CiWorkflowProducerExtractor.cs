@@ -82,8 +82,17 @@ internal static class CiWorkflowProducerExtractor
         // default, marked derived-default — the hint is operator-asserted intent, the strongest ci form.
         if (options.CiHintWorkflows is { Count: > 0 } && Directory.Exists(workflows))
         {
-            var hinted = new HashSet<string>(
-                options.CiHintWorkflows.Select(NormalizeUses), StringComparer.Ordinal);
+            // Matching: full normalized path OR path-boundary SUFFIX (an entry like
+            // "dotnet-release-library.yml" or "shared-repo/.github/workflows/x.yml" matches the full
+            // uses value) — live 2026-10-22: exact-match-only silently missed on the real estate.
+            bool HintMatches(string normalizedUses, string hint)
+            {
+                if (normalizedUses.Equals(hint, StringComparison.Ordinal)) return true;
+                return normalizedUses.Length > hint.Length
+                    && normalizedUses.EndsWith(hint, StringComparison.Ordinal)
+                    && normalizedUses[^hint.Length] == '/';
+            }
+            var hints = options.CiHintWorkflows.Select(NormalizeUses).ToList();
             string? matched = null; string? matchedPath = null;
             foreach (var path in Directory.EnumerateFiles(workflows, "*.yml", SearchOption.TopDirectoryOnly)
                          .Concat(Directory.EnumerateFiles(workflows, "*.yaml", SearchOption.TopDirectoryOnly))
@@ -95,7 +104,8 @@ internal static class CiWorkflowProducerExtractor
                     if (!trimmed.StartsWith("uses:", StringComparison.Ordinal)) continue;
                     var value = trimmed["uses:".Length..].Trim().Trim('\'', '"');
                     if (!value.Contains(".github/workflows/", StringComparison.Ordinal)) continue; // step-level actions (no workflows path) are not reusable-workflow calls
-                    if (!hinted.Contains(NormalizeUses(value))) continue;
+                    var norm = NormalizeUses(value);
+                    if (!hints.Any(h => HintMatches(norm, h))) continue;
                     matched = value; matchedPath = path; break;
                 }
                 if (matched is not null) break;
