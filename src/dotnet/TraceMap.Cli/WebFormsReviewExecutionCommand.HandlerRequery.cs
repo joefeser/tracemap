@@ -37,28 +37,35 @@ public static partial class WebFormsReviewExecutionCommand
         var failureStage = "arguments";
         try
         {
-            if (args.Length < 9 || args.Length > 17 || args.Length % 2 != 1 || args[0] != "requery-handler" || args[1] != "--run" ||
-                args[3] != "--bundle" || args[5] is not ("--handler" or "--compiled-root") || args[7] != "--out") throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
+            if (args.Length < 9 || args.Length > 19 || args.Length % 2 != 1 || args[0] != "requery-handler" || args[1] != "--run" ||
+                args[3] != "--bundle" || args[5] is not ("--handler" or "--compiled-root" or "--source-root") || args[7] != "--out") throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
             string? surfaceName = null;
             var compiledOnly = false;
             var methodGraph = false;
+            var httpClient = false;
             int? maxDepth = null;
             for (var i = 9; i < args.Length; i += 2)
             {
                 if (args[i] == "--surface-name" && args[i + 1] == "DbDataAdapter.Fill" && surfaceName is null) surfaceName = args[i + 1];
                 else if (args[i] == "--traversal-scope" && args[i + 1] == "compiled-il" && !compiledOnly) compiledOnly = true;
                 else if (args[i] == "--view" && args[i + 1] == "method-graph" && !methodGraph) methodGraph = true;
+                else if (args[i] == "--surface" && args[i + 1] == "http-client" && !httpClient) httpClient = true;
                 else if (args[i] == "--max-depth" && maxDepth is null &&
                     int.TryParse(args[i + 1], System.Globalization.NumberStyles.None,
                         System.Globalization.CultureInfo.InvariantCulture, out var depth) && depth is >= 1 and <= 64) maxDepth = depth;
                 else throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             }
             var run = WebFormsReviewPreflightCommand.PhysicalPath(args[2]);
-            if (methodGraph && (compiledOnly || surfaceName is not null)) throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
+            var sourceRoot = args[5] == "--source-root";
+            if (sourceRoot && (!httpClient || compiledOnly || methodGraph || surfaceName is not null))
+                throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
+            if (methodGraph && (compiledOnly || surfaceName is not null || httpClient) ||
+                httpClient && (compiledOnly || surfaceName is not null || args[5] == "--compiled-root"))
+                throw Fail("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID");
             var bundle = WebFormsReviewPreflightCommand.PhysicalPath(args[4]);
             var handler = args[6];
             CombinedPathSymbolRoot? explicitRoot = null;
-            if (args[5] == "--compiled-root")
+            if (args[5] == "--compiled-root" || sourceRoot)
             {
                 var rootBytes = await WebFormsReviewPreflightCommand.ReadSmallAsync(
                     WebFormsReviewPreflightCommand.PhysicalPath(handler), 16_384, token);
@@ -66,8 +73,8 @@ public static partial class WebFormsReviewExecutionCommand
                 explicitRoot = JsonSerializer.Deserialize<CombinedPathSymbolRoot>(rootBytes, JsonOptions);
                 if (explicitRoot is null || new[] { explicitRoot.SourceIndexId, explicitRoot.ScanId, explicitRoot.CommitSha, explicitRoot.SymbolId }
                     .Any(value => string.IsNullOrWhiteSpace(value)) || explicitRoot.SymbolId.Length > 8192)
-                    throw Fail("COMPILED_ROOT_INVALID");
-                if (!methodGraph) compiledOnly = true;
+                    throw Fail(sourceRoot ? "SOURCE_ROOT_INVALID" : "COMPILED_ROOT_INVALID");
+                if (!methodGraph && !sourceRoot) compiledOnly = true;
             }
             else if (handler.Length is < 1 or > 128 || handler.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_')) throw Fail("HANDLER_REQUERY_ARGUMENT_INVALID");
             var destination = WebFormsReviewPreflightCommand.PhysicalPath(args[8]);
@@ -142,6 +149,7 @@ public static partial class WebFormsReviewExecutionCommand
                     var fields = item.Children.ToDictionary(child => child.Pointer.Split('/')[^1], child => child.Value?.GetString(), StringComparer.Ordinal);
                     return new CombinedPathSymbolRoot(fields["sourceIndexId"]!, fields["scanId"]!, fields["commitSha"]!, fields["symbolId"]!);
                 }).Where(root => root.SymbolId.Split('(', 2)[0].EndsWith("." + handler, StringComparison.Ordinal)).Distinct().ToArray();
+                if (roots.Length == 0) throw Fail("HANDLER_REQUERY_ROOT_NOT_FOUND");
                 if (roots.Length != 1) throw Fail("HANDLER_REQUERY_ROOT_NOT_UNIQUE");
             }
             var indexPath = OwnedPath(run, context.ReportAttempt + "/combined.sqlite");
@@ -165,17 +173,18 @@ public static partial class WebFormsReviewExecutionCommand
                 command.Parameters.AddWithValue("$source", explicitRoot.SourceIndexId);
                 command.Parameters.AddWithValue("$scan", explicitRoot.ScanId);
                 command.Parameters.AddWithValue("$commit", explicitRoot.CommitSha);
-                command.Parameters.AddWithValue("$kind", FactTypes.ManagedMethodDeclared);
+                command.Parameters.AddWithValue("$kind", sourceRoot ? FactTypes.MethodDeclared : FactTypes.ManagedMethodDeclared);
                 command.Parameters.AddWithValue("$symbol", explicitRoot.SymbolId);
                 using var reader = await command.ExecuteReaderAsync(token);
-                if (!await reader.ReadAsync(token) || await reader.ReadAsync(token)) throw Fail("COMPILED_ROOT_NOT_UNIQUE");
+                if (!await reader.ReadAsync(token)) throw Fail(sourceRoot ? "SOURCE_ROOT_NOT_FOUND" : "COMPILED_ROOT_NOT_UNIQUE");
+                if (await reader.ReadAsync(token)) throw Fail(sourceRoot ? "SOURCE_ROOT_NOT_UNIQUE" : "COMPILED_ROOT_NOT_UNIQUE");
             }
-            await output.WriteLineAsync($"handlerStage=root-verified;rootIdentities=1;selection={(explicitRoot is null ? "retained-handler" : "exact-compiled-method")};no-scan;no-combine");
+            await output.WriteLineAsync($"handlerStage=root-verified;rootIdentities=1;selection={(explicitRoot is null ? "retained-handler" : sourceRoot ? "exact-source-method" : "exact-compiled-method")};no-scan;no-combine");
             var config = plan.Configuration;
             var budget = config.Budgets.Reports ?? new();
             WebFormsReviewPreflightCommand.ValidateReportBudgets(budget);
             RetainedMethodGraph? graphView = null;
-            var terminalScope = compiledOnly || surfaceName is not null ? "database-api" : "database-operations";
+            var terminalScope = httpClient ? "http-client" : compiledOnly || surfaceName is not null ? "database-api" : "database-operations";
             var options = new CombinedDependencyPathOptions(indexPath, destination, ToSurface: methodGraph ? null : terminalScope, SurfaceName: surfaceName, IncludeLegacyRoots: true,
                 MaxDepth: maxDepth ?? config.Budgets.GraphMaxDepth, MaxPaths: config.Budgets.GraphMaxPaths, MaxFrontier: budget.MaxFrontier)
             { ExactFromSymbol = true, CompiledOnly = compiledOnly, MaxTraversalWork = checked((int)config.Budgets.GraphMaxWork),
@@ -238,13 +247,14 @@ public static partial class WebFormsReviewExecutionCommand
                 artifacts.Add(new(name, artifact.Bytes, artifact.Sha256));
             }
             var receipt = new WebFormsHandlerRequeryReceipt("webforms-handler-requery.v1", HandlerRequeryRule, "local-only",
-                methodGraph ? "unfiltered-retained-method-graph-not-runtime-completeness" : explicitRoot is null ? "single-handler-retained-static-review-not-parity" : "single-compiled-method-retained-static-review-not-parity", generator.Sha256, "", grouped.GeneratorSha256,
+                methodGraph ? "unfiltered-retained-method-graph-not-runtime-completeness" : explicitRoot is null ? "single-handler-retained-static-review-not-parity" : sourceRoot ? "single-source-method-retained-static-review-not-parity" : "single-compiled-method-retained-static-review-not-parity", generator.Sha256, "", grouped.GeneratorSha256,
                 plan.RunId, Digest(planBytes), history.Sha256!, completed ? null : Digest(receiptBytes), index.Sha256, roots[0], paths.Query,
                 grouped.Chains.Count, grouped.Variants.Count, paths.Summary.Truncated, paths.Summary.TraversalWorkUnits, artifacts,
                 [completed ? "One exact source/scan/commit/symbol root was selected from the checkpointed completed report index."
                     : "One exact source/scan/commit/symbol root was selected from the verified recovered report index.",
                  "All admitted global competitors remain present; this requery repeats graph construction and traversal, not source scanning or combining.",
-                 "Independent single-root path/work bounds are not complete coverage, historical parity, runtime SQL or authenticated-build proof.",
+                 httpClient ? "Independent single-root path/work bounds are not complete coverage, historical parity, runtime HTTP execution or authenticated-build proof."
+                    : "Independent single-root path/work bounds are not complete coverage, historical parity, runtime SQL or authenticated-build proof.",
                  "Original checkpoints and report bundle remain unchanged. All identities and paths are private.",
                  "Graph observations count logical scratch fact payload reads and stage wall time, not physical disk I/O or runtime calls."])
                 { ReportVariant = methodGraph ? "method-graph" : "grouped-paths",
@@ -252,7 +262,7 @@ public static partial class WebFormsReviewExecutionCommand
                     PrimaryReport = methodGraph ? RetainedMethodGraphWriter.HtmlName : GroupedCompiledPathReportWriter.HtmlName,
                     PathEnumerationPerformed = !methodGraph,
                     ZeroPathDiagnosticReport = !methodGraph && graphView is not null ? RetainedMethodGraphWriter.JsonName : null,
-                    RootSelectionKind = explicitRoot is null ? null : "exact-compiled-method" };
+                    RootSelectionKind = explicitRoot is null ? null : sourceRoot ? "exact-source-method" : "exact-compiled-method" };
             receipt = receipt with { BoundedInputSha256 = HandlerRequeryHash(receipt) };
             failureStage = "receipt";
             await File.WriteAllTextAsync(Path.Combine(destination, HandlerRequeryName), JsonSerializer.Serialize(receipt, JsonOptions), token);

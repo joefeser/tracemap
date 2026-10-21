@@ -326,7 +326,12 @@ public static partial class CombinedDependencyPathReporter
                 from projected
             )
             select *, {{TextByteCountSql("fact_id", "scan_id", "repo", "commit_sha", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "properties_json", "version", "extractor_id")}}
-            from input order by fact_id collate binary;
+            from input order by case
+                when {{TextByteCountSql("fact_id", "scan_id", "repo", "commit_sha", "fact_type", "rule_id", "evidence_tier", "source_symbol", "target_symbol", "contract_element", "file_path", "properties_json", "version", "extractor_id")}} > {{ReportInputBudget.MaxRowTextBytes}}
+                    then ''
+                else representative_evidence_key(fact_type,rule_id,evidence_tier,file_path,
+                    start_line,end_line,source_symbol,target_symbol)
+                end collate representative_ordinal, fact_id collate binary;
             """;
     }
 
@@ -338,6 +343,9 @@ public static partial class CombinedDependencyPathReporter
         int maxFrontier = 10000,
         int maxTraversalWork = 100_000)
     {
+        // Compaction must choose the same display witness as the full reader
+        // before dropping redundant symbol-only rows.
+        RegisterRepresentativeEvidenceOrder(connection);
         var rows = new List<CombinedFactRow>();
         var symbols = new HashSet<string>(StringComparer.Ordinal);
         var retainedIds = new HashSet<string>(StringComparer.Ordinal);

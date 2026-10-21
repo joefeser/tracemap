@@ -1,5 +1,25 @@
 # Private exchange prompts
 
+When several work-machine checkouts and test runs make the accepted baseline
+unclear, start with [Locate the accepted work baseline](locate-accepted-work-baseline.md).
+This is bounded discovery only: no build, scan or requery. It keeps exact private
+references in a new local note and returns only a sanitized readiness summary.
+
+Once that inventory identifies the accepted inputs, run
+[Validate retained database and HTTP reporting](validate-retained-work-reporting.md).
+It verifies artifact hashes, builds once, compares one database requery, and
+separates H1 retained-fact verification from its first HTTP report. No rescan.
+
+If that run reports missing retained-index HTTP query support, use
+[Implement bounded retained HTTP reporting](implement-retained-http-reporting.md)
+in the public development environment. It requires synthetic tests and a separate
+work-machine acceptance prompt; it does not authorize another private scan.
+
+After HTTP selector support is built, use
+[Accept the first retained H1 HTTP report](accept-h1-http-baseline.md).
+It resolves the HTTP handler from H1 evidence, not the database query's root,
+and requires a real retained path rather than just a successful receipt.
+
 For the next gap-planning step, use
 [Inventory retained analysis gaps](inventory-retained-analysis-gaps.md).
 It reads the existing scan once with a bounded Python utility—no build, scan or
@@ -77,6 +97,31 @@ configuration, or secrets. Use its result before adding a launcher override to
 the TraceMap PowerShell handoff. A verified launcher can then be supplied with
 `Start-FocusedWebFormsClaudeReview.ps1 -ClaudeLauncherPath`.
 
+
+## Remaining retained HTTP groups
+
+[`validate-http-regressions-before-pr.md`](validate-http-regressions-before-pr.md)
+maps the acceptance fixes to public synthetic regressions and runs focused plus
+final-head full gates before a PR. It does not authorize opening or merging a PR.
+
+[`fresh-scan-h4-lifecycle-evidence.md`](fresh-scan-h4-lifecycle-evidence.md) authorizes
+one isolated fresh scan with the original scope/inputs after the old retained index
+was found to lack H4 lifecycle candidates. It preserves all accepted baselines and
+checks candidate extraction separately from path evidence and rendering.
+
+[`verify-h4-lifecycle-entry-inventory.md`](verify-h4-lifecycle-entry-inventory.md)
+checks lifecycle candidate visibility separately from H4's call path. It distinguishes
+missing retained evidence, index-to-report loss and HTML rendering loss, without
+claiming framework dispatch or authorizing a new scan.
+
+[`accept-h2-h3-http-entry.md`](accept-h2-h3-http-entry.md) corrects downstream-root
+selection by querying the verified event entry. It checks H2 and H3 independently
+and preserves truncation as an enumeration limitation, not an extraction verdict.
+
+[`investigate-retained-h2-h3-h4-http.md`](investigate-retained-h2-h3-h4-http.md)
+investigates the remaining three HTTP groups on the work machine without rescanning
+or changing accepted H1/database artifacts. It distinguishes method-only paths
+from entry-to-HTTP evidence and requests public-safe synthetic gap descriptions.
 
 ## SQL report comparison
 

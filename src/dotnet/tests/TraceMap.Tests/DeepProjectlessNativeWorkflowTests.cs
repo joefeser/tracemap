@@ -199,7 +199,7 @@ public sealed class DeepProjectlessNativeWorkflowTests
             var handoff = Path.Combine(bundle, "compiled", "compiled-paths.handoff.local.json");
             var grouped = JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(File.ReadAllBytes(handoff), JsonOptions)!;
             var original = GroupedCompiledPathHandoffBuilder.Restore(grouped);
-            Assert.Equal("1.9", original.Query.AlgorithmVersion);
+            Assert.Equal("1.10", original.Query.AlgorithmVersion);
             // Mixed source/publication/IL evidence can retain multiple witnesses
             // for one route. Pin its bounds and partial label, not an obsolete
             // pre-publication-bridge path count.
