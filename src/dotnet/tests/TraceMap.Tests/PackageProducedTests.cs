@@ -218,7 +218,7 @@ public sealed class PackageProducedTests
         Assert.Equal("Contoso.New", produced.PackageId); // MSBuild: later redefinition replaces
     }
 
-    // ---- SDK-default identity tiers (project-file/0.4.1) ------------------------------------------
+    // ---- SDK-default identity tiers (project-file/0.4.2) ------------------------------------------
 
     [Fact]
     public void ReadProducedPackages_interpolated_assemblyname_resolves_msbuildprojectname_from_the_file_itself()
@@ -650,7 +650,7 @@ public sealed class PackageProducedTests
         Assert.All(facts.Values, fact =>
         {
             Assert.Equal(ScannerVersions.ProjectFileExtractor, fact.Evidence.ExtractorVersion);
-            Assert.Equal("project-file/0.4.1", fact.Evidence.ExtractorVersion); // policy change: no cache may silently resume across it
+            Assert.Equal("project-file/0.4.2", fact.Evidence.ExtractorVersion); // policy change: no cache may silently resume across it
             Assert.Equal("build-file", fact.Properties["sourceKind"]);
             Assert.Equal(EvidenceTiers.Tier2Structural, fact.EvidenceTier);
         });
@@ -854,7 +854,87 @@ public sealed class PackageProducedTests
         Assert.NotEmpty(retained);
         Assert.Equal(40 - retained.Length, int.Parse(fact.Properties["packDependencyEvidenceOmittedCount"], System.Globalization.CultureInfo.InvariantCulture));
         Assert.Equal("partial", fact.Properties["packDependencyCoverage"]);
+        var omitted = scan.Facts.Where(f => f.Properties.GetValueOrDefault("gapKind") == "package-producer-dependency-evidence-omitted")
+            .OrderBy(f => f.Evidence.StartLine).ToArray();
+        Assert.Equal(40 - retained.Length, omitted.Length);
+        for (var index = 0; index < omitted.Length; index++)
+        {
+            var ordinal = retained.Length + index;
+            var id = $"Fixture.Dependency{ordinal:D2}";
+            Assert.Equal(ordinal + 3, omitted[index].Evidence.StartLine);
+            Assert.Equal($"{id}.csproj", omitted[index].Properties["targetProjectPath"]);
+            Assert.Equal(sameId ? "Shared" : id, omitted[index].Properties["targetPackageId"]);
+            Assert.Equal("declared", omitted[index].Properties["targetPackageIdProvenance"]);
+            Assert.Equal("PackageId", omitted[index].Properties["targetPackageIdSource"]);
+            Assert.Equal("1", omitted[index].Properties["targetStartLine"]);
+            Assert.Equal("1", omitted[index].Properties["targetEndLine"]);
+            Assert.Equal(FactFactory.Hash($"{id}.csproj", 64), omitted[index].Properties["includeHash"]);
+        }
         Assert.Single(scan.Facts, f => f.Properties.GetValueOrDefault("gapKind") == "package-producer-dependency-projection-limit");
+        Assert.Contains("Reduced", scan.Manifest.AnalysisLevel, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void Dependency_bounds_apply_before_retention_hashing_and_gap_materialization(bool resolved, bool semicolon)
+    {
+        using var temp = new TempDirectory();
+        Write(temp.Path, "Fixture.sln", Solution);
+        Write(temp.Path, "Target.csproj", "<Project><PropertyGroup><PackageId>Target</PackageId></PropertyGroup></Project>");
+        var paths = Enumerable.Range(0, 300).Select(i => resolved
+            ? string.Concat(Enumerable.Repeat("./", i)) + "Target.csproj" : $"Missing{i}.csproj").ToArray();
+        var references = semicolon ? $"<ProjectReference Include=\"{string.Join(';', paths)}\" />"
+            : string.Join('\n', paths.Select(path => $"<ProjectReference Include=\"{path}\" />"));
+        var project = "<Project><PropertyGroup><PackageId>Consumer</PackageId></PropertyGroup>\n<ItemGroup>\n" + references + "\n</ItemGroup></Project>";
+        Write(temp.Path, "Consumer.csproj", project);
+        var row = Assert.Single(ProjectFileReader.ReadProducedPackages(temp.Path,
+            [Project("Consumer.csproj", project)]));
+        Assert.Equal(256, row.DependencyEvidence.Count);
+        Assert.Equal(44, row.OmittedReferenceCount);
+        Assert.Equal(semicolon ? 3 : 259, row.ReferenceLimitLine);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"), SolutionPaths: ["Fixture.sln"]));
+        var fact = Assert.Single(scan.Facts, f => f.FactType == FactTypes.PackageProduced && f.TargetSymbol == "Consumer");
+        Assert.Equal("44", fact.Properties["packDependencyReferenceOmittedCount"]);
+        Assert.Equal("256", fact.Properties["packDependencyEvidenceCount"]);
+        Assert.Equal("partial", fact.Properties["packDependencyCoverage"]);
+        var gaps = scan.Facts.Where(f => f.FactType == FactTypes.AnalysisGap && f.ProjectPath == "Consumer.csproj").ToArray();
+        Assert.InRange(gaps.Length, 2, 258); // at most one per retained edge and two aggregate gaps
+        var limit = Assert.Single(gaps, f => f.Properties.GetValueOrDefault("gapKind") == "package-producer-reference-limit");
+        Assert.Equal("44", limit.Properties["omittedReferenceCount"]);
+        Assert.Equal(semicolon ? 3 : 259, limit.Evidence.StartLine);
+        var projected = System.Text.Json.JsonSerializer.Deserialize<PackDependencyEvidence[]>(fact.Properties["packDependencyEvidence"])!;
+        var details = gaps.Where(f => f.Properties.ContainsKey("includeHash")).ToArray();
+        Assert.Equal(resolved ? 256 - projected.Length : 256, details.Length);
+        var hashes = projected.Select(e => e.IncludeHash).Concat(details.Select(f => f.Properties["includeHash"])).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(paths.Take(256).Select(path => FactFactory.Hash(path, 64)).Order(), hashes.Order());
+        if (resolved) Assert.All(details, f => Assert.Equal("Target.csproj", f.Properties["targetProjectPath"]));
+        Assert.Contains("Reduced", scan.Manifest.AnalysisLevel, StringComparison.Ordinal);
+        var repeat = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"), SolutionPaths: ["Fixture.sln"]));
+        Assert.Equal(scan.Facts.Select(f => f.FactId), repeat.Facts.Select(f => f.FactId));
+    }
+
+    [Fact]
+    public void Producer_project_size_bound_is_checked_before_xml_materialization_and_reported()
+    {
+        using var temp = new TempDirectory();
+        Write(temp.Path, "Fixture.sln", Solution);
+        const string prefix = "<Project><PropertyGroup><PackageId>Bounded</PackageId></PropertyGroup><!--";
+        const string suffix = "--></Project>";
+        var project = prefix + new string('x', ProjectFileReader.MaxProducerProjectBytes - prefix.Length - suffix.Length) + suffix;
+        Write(temp.Path, "Bounded.csproj", project);
+        var gaps = new List<ProducedPackageReadGap>();
+        Assert.Single(ProjectFileReader.ReadProducedPackages(temp.Path, [Project("Bounded.csproj", project)], gaps));
+        Assert.Empty(gaps);
+        project += " ";
+        Write(temp.Path, "Bounded.csproj", project);
+        Assert.Empty(ProjectFileReader.ReadProducedPackages(temp.Path, [Project("Bounded.csproj", project)], gaps));
+        Assert.Equal("package-producer-project-unreadable-or-limit", Assert.Single(gaps).Kind);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"), SolutionPaths: ["Fixture.sln"]));
+        Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.PackageProduced);
+        Assert.Single(scan.Facts, f => f.Properties.GetValueOrDefault("gapKind") == "package-producer-project-unreadable-or-limit");
         Assert.Contains("Reduced", scan.Manifest.AnalysisLevel, StringComparison.Ordinal);
     }
 
