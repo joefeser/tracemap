@@ -218,7 +218,7 @@ public sealed class PackageProducedTests
         Assert.Equal("Contoso.New", produced.PackageId); // MSBuild: later redefinition replaces
     }
 
-    // ---- SDK-default identity tiers (project-file/0.4.0) ------------------------------------------
+    // ---- SDK-default identity tiers (project-file/0.4.1) ------------------------------------------
 
     [Fact]
     public void ReadProducedPackages_interpolated_assemblyname_resolves_msbuildprojectname_from_the_file_itself()
@@ -243,7 +243,7 @@ public sealed class PackageProducedTests
         Assert.Equal("Authors", produced.PackSignals); // the pack-intent gate names what carried it (naming alone is not packing)
         Assert.Null(produced.Version); // unevidenced: versions here are computed at build time
         Assert.Equal(3, produced.SpanStart);
-        Assert.Equal(3, produced.Line); // the span cites the AssemblyName itself
+        Assert.Equal(4, produced.Line); // identity and required Authors evidence
     }
 
     [Fact] // live 2026-10-21: AssemblyName=Prefix.$(MSBuildProjectName) on projects consumed in-solution
@@ -429,6 +429,10 @@ public sealed class PackageProducedTests
             Assert.Equal(["Fixture.Core"], sink.PackDependencies); // NuGet pack turns the ProjectReference into a dependency on core's id
             Assert.Equal(0, sink.UnresolvedPackDependencyCount); // a repeated reference collapses, never counts as unresolved
         }
+
+        var repeated = produced.Single(p => p.PackageId == "Fixture.Sink.Beta").DependencyEvidence;
+        Assert.Equal(new[] { 7, 8 }, repeated.Select(edge => edge.Line));
+        Assert.All(repeated, edge => Assert.Equal("src/Fixture.Core/Fixture.Core.csproj", edge.TargetProjectPath));
 
         // In-repo ProjectReferences are consumption of a sibling project, never NuGet package consumption.
         Assert.Empty(ProjectFileReader.ReadPackageReferences(temp.Path, inventory));
@@ -637,7 +641,7 @@ public sealed class PackageProducedTests
         Write(temp.Path, "src/Interpolated/Interpolated.csproj", interpolated);
         Write(temp.Path, "src/Fixture.Derived/Fixture.Derived.csproj", derived);
 
-        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")));
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"), SolutionPaths: ["Fixture.sln"]));
 
         var facts = scan.Facts
             .Where(fact => fact.FactType == FactTypes.PackageProduced)
@@ -646,7 +650,7 @@ public sealed class PackageProducedTests
         Assert.All(facts.Values, fact =>
         {
             Assert.Equal(ScannerVersions.ProjectFileExtractor, fact.Evidence.ExtractorVersion);
-            Assert.Equal("project-file/0.4.0", fact.Evidence.ExtractorVersion); // policy change: no cache may silently resume across it
+            Assert.Equal("project-file/0.4.1", fact.Evidence.ExtractorVersion); // policy change: no cache may silently resume across it
             Assert.Equal("build-file", fact.Properties["sourceKind"]);
             Assert.Equal(EvidenceTiers.Tier2Structural, fact.EvidenceTier);
         });
@@ -676,6 +680,182 @@ public sealed class PackageProducedTests
 
         // ProjectReferences never surface as package consumption.
         Assert.DoesNotContain(scan.Facts, fact => fact.FactType == FactTypes.PackageReferenced);
+    }
+
+    [Theory]
+    [InlineData("Authors")]
+    [InlineData("Description")]
+    [InlineData("Product")]
+    [InlineData("PackageTags")]
+    [InlineData("IsPackable")]
+    public void Signal_matrix_cites_both_sides_of_identity_and_clears_last_assignment(string signal)
+    {
+        using var temp = new TempDirectory();
+        foreach (var before in new[] { true, false })
+        foreach (var interpolated in new[] { true, false })
+        foreach (var cleared in new[] { true, false })
+        {
+            var assignment = $"<{signal}>true</{signal}>";
+            var identity = interpolated ? "<aSsemblyName>Prefix.$(MSBuildProjectName)</aSsemblyName>" : "";
+            var project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n<PropertyGroup>\n"
+                + (before ? assignment : identity) + "\n"
+                + (before ? identity : assignment) + "\n"
+                + (cleared ? $"<{signal.ToLowerInvariant()} />" : "") + "\n</PropertyGroup>\n</Project>";
+            Write(temp.Path, "Fixture.csproj", project);
+            var rows = ProjectFileReader.ReadProducedPackages(temp.Path, [Project("Fixture.csproj", project)]);
+            if (cleared) Assert.Empty(rows);
+            else
+            {
+                var row = Assert.Single(rows);
+                Assert.Equal(signal, row.PackSignals);
+                Assert.Equal(interpolated ? 3 : before ? 3 : 4, row.SpanStart);
+                Assert.Equal(interpolated ? 4 : before ? 3 : 4, row.Line);
+                Assert.Equal(interpolated ? "interpolated" : "derived-default", row.PackageIdProvenance);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("<Sdk Name=\"Microsoft.NET.Sdk\" />", true)]
+    [InlineData("<Import Project=\"Sdk.props\" Sdk=\"Microsoft.NET.Sdk\" />", true)]
+    [InlineData("<ImportGroup><Import Project=\"Sdk.props\" Sdk=\"Microsoft.NET.Sdk\" /></ImportGroup>", true)]
+    [InlineData("<Import Project=\"Sdk.props\" />", false)]
+    [InlineData("<Sdk Name=\"\" />", false)]
+    [InlineData("<ItemGroup><Sdk Name=\"Microsoft.NET.Sdk\" /></ItemGroup>", false)]
+    public void Sdk_declaration_matrix_preserves_intent_test_sdk_and_false_guards(string sdk, bool supported)
+    {
+        using var temp = new TempDirectory();
+        foreach (var identity in new[] { "", "<assemblyname>Prefix.$(MSBuildProjectName)</assemblyname>" })
+        foreach (var signal in new[] { "", "<authors>fixture</authors>", "<ispackable>true</ispackable>", "<Authors>fixture</Authors><ISPACKABLE>false</ISPACKABLE>" })
+        foreach (var testSdk in new[] { false, true })
+        {
+            var project = $"<Project>{sdk}<PropertyGroup>{identity}{signal}</PropertyGroup>"
+                + (testSdk ? "<ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" /></ItemGroup>" : "") + "</Project>";
+            Write(temp.Path, "Fixture.csproj", project);
+            var rows = ProjectFileReader.ReadProducedPackages(temp.Path, [Project("Fixture.csproj", project)]);
+            if (supported && signal.Length > 0 && !signal.Contains("false", StringComparison.Ordinal)
+                && (!testSdk || signal.Contains("true", StringComparison.Ordinal))) Assert.Single(rows);
+            else Assert.Empty(rows);
+        }
+    }
+
+    [Theory]
+    [InlineData("<packageid>Declared.Id</packageid>", "Declared.Id", true)]
+    [InlineData("<aSsemblyName>Assembly.Id</aSsemblyName>", "Assembly.Id", false)]
+    [InlineData("<packageid>$(Unknown)</packageid>", null, false)]
+    [InlineData("<assemblyname>$(Unknown)</assemblyname>", null, false)]
+    [InlineData("<PackageId>Old</PackageId><packageid />", null, false)]
+    [InlineData("<AssemblyName>Old</AssemblyName><assemblyname />", null, false)]
+    public void Mixed_case_and_cleared_identity_never_invent_filename(string identity, string? expected, bool explicitId)
+    {
+        using var temp = new TempDirectory();
+        var project = $"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup>{identity}<Description>fixture</Description></PropertyGroup></Project>";
+        Write(temp.Path, "WrongFilename.csproj", project);
+        var rows = ProjectFileReader.ReadProducedPackages(temp.Path, [Project("WrongFilename.csproj", project)]);
+        if (expected is null) Assert.Empty(rows);
+        else
+        {
+            var row = Assert.Single(rows);
+            Assert.Equal(expected, row.PackageId);
+            Assert.Equal(explicitId, row.ExplicitPackageId);
+            Assert.Equal("declared", row.PackageIdProvenance);
+        }
+    }
+
+    [Theory]
+    [InlineData("<vErSiOn>1.2.3</vErSiOn>", "1.2.3", 3)]
+    [InlineData("<Version>1.2.3</Version><VERSION />", null, 4)]
+    [InlineData("<Version>1.2.3</Version><packageversion>2.0.0</packageversion>", "2.0.0", 3)]
+    [InlineData("<Version>1.2.3</Version><PackageVersion>2.0.0</PackageVersion><PACKAGEVERSION />", null, 4)]
+    public void Version_matrix_preserves_empty_shadowing_and_pre_identity_evidence(string version, string? expected, int start)
+    {
+        using var temp = new TempDirectory();
+        var project = $"<Project Sdk=\"Microsoft.NET.Sdk\">\n<PropertyGroup>\n{version}\n<packageid>Fixture.Id</packageid>\n</PropertyGroup></Project>";
+        Write(temp.Path, "Fixture.csproj", project);
+        var row = Assert.Single(ProjectFileReader.ReadProducedPackages(temp.Path, [Project("Fixture.csproj", project)]));
+        Assert.Equal(expected, row.Version);
+        Assert.Equal(start, row.SpanStart);
+        Assert.Equal(4, row.Line);
+    }
+
+    [Fact]
+    public void Scan_retains_same_id_target_provenance_and_attributable_unresolved_gaps()
+    {
+        using var temp = new TempDirectory();
+        Write(temp.Path, "Fixture.sln", Solution); // empty trusted solution: never evaluate the project imports
+        Write(temp.Path, "declared/Target.csproj", "<Project><PropertyGroup><PackageId>Same</PackageId></PropertyGroup></Project>");
+        Write(temp.Path, "derived/Same.csproj", "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><Authors>fixture</Authors></PropertyGroup></Project>");
+        Write(temp.Path, "interpolated/Same.csproj", "<Project><PropertyGroup><PackageId>$(MSBuildProjectName)</PackageId></PropertyGroup></Project>");
+        var includes = new[] { "declared/Target.csproj", "derived/Same.csproj", "interpolated/Same.csproj", "Missing.csproj", "$(SecretRoot)/Target.csproj", "*.csproj", "../../private/Target.csproj", "/private/secret/Target.csproj" };
+        var project = "<Project><PropertyGroup><PackageId>Consumer</PackageId></PropertyGroup>\n<ItemGroup>\n"
+            + string.Join('\n', includes.Select(path => $"<ProjectReference Include=\"{path}\" />")) + "\n</ItemGroup></Project>";
+        Write(temp.Path, "Consumer.csproj", project);
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"), SolutionPaths: ["Fixture.sln"]));
+        var fact = Assert.Single(scan.Facts, f => f.FactType == FactTypes.PackageProduced && f.TargetSymbol == "Consumer");
+        Assert.Equal("Same", fact.Properties["packDependencies"]);
+        Assert.Equal("1", fact.Properties["packDependencyCount"]);
+        Assert.Equal("8", fact.Properties["packDependencyEvidenceCount"]);
+        Assert.Equal("5", fact.Properties["packDependencyUnresolvedCount"]);
+        Assert.Equal("partial", fact.Properties["packDependencyCoverage"]);
+        var edges = System.Text.Json.JsonSerializer.Deserialize<PackDependencyEvidence[]>(fact.Properties["packDependencyEvidence"])!;
+        Assert.Equal(new[] { "declared", "derived-default", "interpolated" }, edges.Take(3).Select(e => e.PackageIdProvenance));
+        Assert.Equal(includes.Take(3), edges.Take(3).Select(e => e.TargetProjectPath));
+        Assert.All(edges.Take(3), edge => { Assert.Equal(1, edge.TargetStartLine); Assert.Equal(1, edge.TargetEndLine); });
+        var gaps = scan.Facts.Where(f => f.Properties.GetValueOrDefault("gapKind") == "package-producer-dependency-unresolved").OrderBy(f => f.Evidence.StartLine).ToArray();
+        Assert.Equal(5, gaps.Length);
+        for (var i = 0; i < gaps.Length; i++)
+        {
+            Assert.Equal(i + 6, gaps[i].Evidence.StartLine);
+            Assert.Equal(FactFactory.Hash(includes[i + 3], 64), gaps[i].Properties["includeHash"]);
+            Assert.Equal(EvidenceTiers.Tier4Unknown, gaps[i].EvidenceTier);
+            Assert.Equal(RuleIds.ProjectFile, gaps[i].RuleId);
+        }
+        Assert.DoesNotContain("SecretRoot", System.Text.Json.JsonSerializer.Serialize(scan.Facts), StringComparison.Ordinal);
+        Assert.DoesNotContain("/private/secret", System.Text.Json.JsonSerializer.Serialize(scan.Facts), StringComparison.Ordinal);
+        Assert.Contains("Reduced", scan.Manifest.AnalysisLevel, StringComparison.Ordinal);
+        Assert.Contains(scan.Manifest.KnownGaps, gap => gap.Contains("Package producer dependency", StringComparison.Ordinal));
+        Assert.DoesNotContain(scan.Facts, f => f.FactType == FactTypes.PackageReferenced);
+        var repeat = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"), SolutionPaths: ["Fixture.sln"]));
+        Assert.Equal(scan.Facts.Select(f => f.FactId), repeat.Facts.Select(f => f.FactId));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Scan_marks_oversized_id_and_evidence_projections_without_losing_counts(bool sameId)
+    {
+        using var temp = new TempDirectory();
+        Write(temp.Path, "Fixture.sln", Solution);
+        var references = new List<string>();
+        for (var i = 0; i < 40; i++)
+        {
+            var id = $"Fixture.Dependency{i:D2}";
+            Write(temp.Path, $"{id}.csproj", $"<Project><PropertyGroup><PackageId>{(sameId ? "Shared" : id)}</PackageId></PropertyGroup></Project>");
+            references.Add($"<ProjectReference Include=\"{id}.csproj\" />");
+        }
+        Write(temp.Path, "Consumer.csproj", "<Project><PropertyGroup><PackageId>Consumer</PackageId></PropertyGroup>\n<ItemGroup>\n" + string.Join('\n', references) + "\n</ItemGroup></Project>");
+        var scan = ScanEngine.Scan(new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"), SolutionPaths: ["Fixture.sln"]));
+        var fact = Assert.Single(scan.Facts, f => f.FactType == FactTypes.PackageProduced && f.TargetSymbol == "Consumer");
+        Assert.Equal(sameId ? "1" : "40", fact.Properties["packDependencyCount"]);
+        if (sameId)
+        {
+            Assert.Equal("Shared", fact.Properties["packDependencies"]);
+            Assert.False(fact.Properties.ContainsKey("packDependenciesTruncated"));
+        }
+        else
+        {
+            Assert.Equal("40", fact.Properties["packDependenciesOmittedCount"]);
+            Assert.Equal("true", fact.Properties["packDependenciesTruncated"]);
+            Assert.False(fact.Properties.ContainsKey("packDependencies"));
+        }
+        var json = fact.Properties["packDependencyEvidence"];
+        Assert.True(json.Length <= 4096);
+        var retained = System.Text.Json.JsonSerializer.Deserialize<PackDependencyEvidence[]>(json)!;
+        Assert.NotEmpty(retained);
+        Assert.Equal(40 - retained.Length, int.Parse(fact.Properties["packDependencyEvidenceOmittedCount"], System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal("partial", fact.Properties["packDependencyCoverage"]);
+        Assert.Single(scan.Facts, f => f.Properties.GetValueOrDefault("gapKind") == "package-producer-dependency-projection-limit");
+        Assert.Contains("Reduced", scan.Manifest.AnalysisLevel, StringComparison.Ordinal);
     }
 
     private const string Solution = """

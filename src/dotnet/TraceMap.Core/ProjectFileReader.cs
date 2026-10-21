@@ -40,7 +40,7 @@ public sealed record NuGetLockfileReadResult(
 
 /// A package this repo PRODUCES (a packable project): its identity resolved through the MSBuild default
 /// chain PackageId <- AssemblyName <- MSBuildProjectName, with its Version/PackageVersion property.
-/// Line is the evidence span END (identity through version). Declaration evidence from the project
+/// Line is the evidence span END (identity, required signals and version). Declaration evidence from the project
 /// file only — no build, no restore, no publish proof (that remains producer-evidence.v0's
 /// publicationStatus sidecar). ExplicitPackageId is true only for a LITERAL PackageId declaration;
 /// PackageIdSource names the chain link that supplied the id and PackageIdProvenance how that link's
@@ -56,7 +56,13 @@ public sealed record ProducedPackageInfo(
     string PackageIdProvenance,
     string? PackSignals,
     IReadOnlyList<string> PackDependencies,
-    int UnresolvedPackDependencyCount);
+    int UnresolvedPackDependencyCount,
+    IReadOnlyList<PackDependencyEvidence> DependencyEvidence);
+
+// Includes stay hashed: arbitrary paths, tokens and private source text never enter facts.
+public sealed record PackDependencyEvidence(
+    int Line, string IncludeHash, string? TargetProjectPath, string? PackageId,
+    string? PackageIdSource, string? PackageIdProvenance, int? TargetStartLine, int? TargetEndLine);
 
 /// Which link of the MSBuild default chain supplied a produced package id.
 public static class PackageIdSources
@@ -160,7 +166,7 @@ public static class ProjectFileReader
     /// - NuGet pack turns each ProjectReference (unless PrivateAssets=all) into a dependency on the
     ///   referenced project's package id: references resolving to a produced package above are
     ///   recorded as pack dependencies, anything else (templated/wildcard path, outside the repo,
-    ///   not a produced package) is counted unresolved. ProjectReferences are never package
+    ///   not a produced package) retains attributable unresolved evidence. ProjectReferences are never package
     ///   references — in-repo consumption is not PackageReferenced evidence.
     public static IReadOnlyList<ProducedPackageInfo> ReadProducedPackages(string repoPath, IEnumerable<FileInventoryItem> inventory)
     {
@@ -180,7 +186,7 @@ public static class ProjectFileReader
         }
 
         // Pack dependencies resolve only against identities proven above: the referenced project's
-        // package id is whatever ITS tier established, and a reference to anything else stays a count.
+        // package id is whatever ITS tier established; every declaration retains its own provenance.
         var comparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
         var candidatesByPath = candidates
             .GroupBy(candidate => candidate.ProjectPath, comparer)
@@ -190,17 +196,21 @@ public static class ProjectFileReader
         {
             var dependencies = new SortedSet<string>(StringComparer.Ordinal);
             var unresolved = 0;
+            var evidence = new List<PackDependencyEvidence>();
             foreach (var reference in candidate.ProjectReferences)
             {
-                if (reference is not null
-                    && !comparer.Equals(reference, candidate.ProjectPath)
-                    && candidatesByPath.TryGetValue(reference, out var target))
+                if (reference.Path is not null
+                    && !comparer.Equals(reference.Path, candidate.ProjectPath)
+                    && candidatesByPath.TryGetValue(reference.Path, out var target))
                 {
                     dependencies.Add(target.PackageId);
+                    evidence.Add(new(reference.Line, reference.IncludeHash, target.ProjectPath, target.PackageId,
+                        target.PackageIdSource, target.PackageIdProvenance, target.SpanStart, target.Line));
                 }
                 else
                 {
                     unresolved++;
+                    evidence.Add(new(reference.Line, reference.IncludeHash, null, null, null, null, null, null));
                 }
             }
 
@@ -215,7 +225,7 @@ public static class ProjectFileReader
                 candidate.PackageIdProvenance,
                 candidate.PackSignals,
                 dependencies.ToArray(),
-                unresolved));
+                unresolved, evidence));
         }
 
         return results
@@ -223,6 +233,28 @@ public static class ProjectFileReader
             .ThenBy(item => item.PackageId, StringComparer.Ordinal)
             .ToArray();
     }
+
+    // Bounded additive supporting evidence; preserve declaration order, including same-ID targets.
+    internal static (string Json, int Omitted) ProjectDependencyEvidence(ProducedPackageInfo produced)
+    {
+        const int maxCharacters = 4096;
+        var rows = new List<string>();
+        var length = 2; // brackets
+        foreach (var edge in produced.DependencyEvidence)
+        {
+            var row = JsonSerializer.Serialize(edge);
+            var added = row.Length + (rows.Count == 0 ? 0 : 1);
+            if (length + added > maxCharacters) break;
+            rows.Add(row);
+            length += added;
+        }
+        return ("[" + string.Join(',', rows) + "]", produced.DependencyEvidence.Count - rows.Count);
+    }
+
+    internal static bool HasDependencyProjectionGap(ProducedPackageInfo produced) =>
+        produced.UnresolvedPackDependencyCount > 0
+        || string.Join(',', produced.PackDependencies).Length > 256
+        || ProjectDependencyEvidence(produced).Omitted > 0;
 
     private sealed record ProducedPackageCandidate(
         string ProjectPath,
@@ -234,7 +266,9 @@ public static class ProjectFileReader
         string PackageIdSource,
         string PackageIdProvenance,
         string? PackSignals,
-        IReadOnlyList<string?> ProjectReferences);
+        IReadOnlyList<ProducedProjectReference> ProjectReferences);
+
+    private sealed record ProducedProjectReference(string? Path, int Line, string IncludeHash);
 
     private static readonly string[] PackSignalProperties = ["Authors", "Description", "PackageTags", "Product"];
 
@@ -242,7 +276,12 @@ public static class ProjectFileReader
     {
         static bool IsProperty(XElement e) => e.Parent is { Name.LocalName: "PropertyGroup" };
         static bool IsItem(XElement e) => e.Parent is { Name.LocalName: "ItemGroup" };
-        var sdkStyle = document.Root?.Attribute("Sdk") is not null;
+        var sdkStyle = !string.IsNullOrWhiteSpace(document.Root?.Attribute("Sdk")?.Value)
+            || document.Root?.Elements().Any(element =>
+                element.Name.LocalName == "Sdk" && !string.IsNullOrWhiteSpace(element.Attribute("Name")?.Value)
+                || element.Name.LocalName == "Import" && !string.IsNullOrWhiteSpace(element.Attribute("Sdk")?.Value)
+                || element.Name.LocalName == "ImportGroup" && element.Elements().Any(import =>
+                    import.Name.LocalName == "Import" && !string.IsNullOrWhiteSpace(import.Attribute("Sdk")?.Value))) == true;
         // $(MSBuildProjectName) is reserved by MSBuild as the project file name without extension:
         // the file defines it, so evaluating it is reading, not guessing.
         var projectName = Path.GetFileNameWithoutExtension(relativePath);
@@ -259,23 +298,27 @@ public static class ProjectFileReader
         {
             var name = element.Name.LocalName;
             var value = element.Value.Trim();
-            if (value.Length == 0) continue;
-            switch (name)
+            switch (name.ToUpperInvariant())
             {
-                case "IsPackable": packable = !value.Equals("false", StringComparison.OrdinalIgnoreCase); packableLiteralTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase); packableLine = GetLine(element); break;
-                case "PackageId": packageId = value; packageIdLine = GetLine(element); break;
-                case "AssemblyName": assemblyName = value; assemblyNameLine = GetLine(element); break;
-                case "Version": plainVersion = value; plainVersionLine = GetLine(element); break;
-                case "PackageVersion": packageVersion = value; packageVersionLine = GetLine(element); break;
+                case "ISPACKABLE": packable = !value.Equals("false", StringComparison.OrdinalIgnoreCase); packableLiteralTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase); packableLine = GetLine(element); break;
+                case "PACKAGEID": packageId = value; packageIdLine = GetLine(element); break;
+                case "ASSEMBLYNAME": assemblyName = value; assemblyNameLine = GetLine(element); break;
+                case "VERSION": plainVersion = value; plainVersionLine = GetLine(element); break;
+                case "PACKAGEVERSION": packageVersion = value; packageVersionLine = GetLine(element); break;
                 default:
-                    if (PackSignalProperties.Contains(name, StringComparer.Ordinal)) packSignalLines[name] = GetLine(element);
+                    var signal = PackSignalProperties.FirstOrDefault(property => property.Equals(name, StringComparison.OrdinalIgnoreCase));
+                    if (signal is not null)
+                    {
+                        if (value.Length == 0) packSignalLines.Remove(signal);
+                        else packSignalLines[signal] = GetLine(element);
+                    }
                     break;
             }
         }
         if (packable == false) return null;
 
         var testSdkReferenced = false;
-        var projectReferences = new List<string?>();
+        var projectReferences = new List<ProducedProjectReference>();
         foreach (var element in document.Descendants().Where(IsItem))
         {
             switch (element.Name.LocalName)
@@ -288,7 +331,7 @@ public static class ProjectFileReader
                     var include = AttributeValue(element, "Include");
                     if (string.IsNullOrWhiteSpace(include) || IsPrivateAssetsAll(element)) break;
                     foreach (var target in include.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                        projectReferences.Add(ResolveProjectReferencePath(relativePath, target));
+                        projectReferences.Add(new(ResolveProjectReferencePath(relativePath, target), GetLine(element), FactFactory.Hash(target, 64)));
                     break;
             }
         }
@@ -342,7 +385,17 @@ public static class ProjectFileReader
         var version = packageVersion ?? plainVersion;
         var versionLine = version is null ? null : packageVersion is not null ? packageVersionLine : plainVersionLine;
         if (version is not null && !IsSafeNuGetResolvedVersion(version)) { version = null; versionLine = null; } // unevidenced, never projected
-        var spanEnd = versionLine is { } vl && version is not null ? Math.Max(idLine, vl) : idLine;
+        var spanEnd = idLine;
+        if (provenance == PackageIdProvenances.Interpolated && source == PackageIdSources.AssemblyName)
+        {
+            spanStart = Math.Min(spanStart, packSignalLines.Values.Min());
+            spanEnd = Math.Max(spanEnd, packSignalLines.Values.Max());
+        }
+        if (versionLine is { } vl)
+        {
+            spanStart = Math.Min(spanStart, vl);
+            spanEnd = Math.Max(spanEnd, vl);
+        }
         var packSignals = provenance == PackageIdProvenances.DerivedDefault
             || (source == PackageIdSources.AssemblyName && provenance == PackageIdProvenances.Interpolated)
             ? string.Join(',', packSignalLines.Keys) : null;
