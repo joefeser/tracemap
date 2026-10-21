@@ -10,6 +10,11 @@ Once that inventory identifies the accepted inputs, run
 It verifies artifact hashes, builds once, compares one database requery, and
 separates H1 retained-fact verification from its first HTTP report. No rescan.
 
+If that run reports missing retained-index HTTP query support, use
+[Implement bounded retained HTTP reporting](implement-retained-http-reporting.md)
+in the public development environment. It requires synthetic tests and a separate
+work-machine acceptance prompt; it does not authorize another private scan.
+
 For the next gap-planning step, use
 [Inventory retained analysis gaps](inventory-retained-analysis-gaps.md).
 It reads the existing scan once with a bounded Python utility—no build, scan or
