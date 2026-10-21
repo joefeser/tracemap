@@ -223,6 +223,16 @@ public sealed class HttpEntryBoundaryRegressionTests
             Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(typeof(CombinedDependencyPathReporter).Assembly.Location))), result.WebFormsEntries.GeneratorSha256);
             Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(result.WebFormsEntries.Relationships))), result.WebFormsEntries.BoundedInputSha256);
             Assert.Equal(JsonSerializer.Serialize(result.WebFormsEntries), JsonSerializer.Serialize(bounded.Report.WebFormsEntries));
+            if (type == "LifecycleWidget")
+            {
+                var packet = GroupedCompiledPathHandoffBuilder.Create(bounded.Report, new string('a', 64));
+                var output = await GroupedCompiledPathReportWriter.WriteAsync(packet, Path.Combine(temp.Path, "lifecycle-html"));
+                var html = await File.ReadAllTextAsync(output.HtmlPath);
+                Assert.Contains("framework-lifecycle-candidate", html);
+                Assert.Contains("legacy.webforms.entry-lifecycle.v1", html);
+                Assert.Contains("Framework dispatch, control construction and lifecycle execution are unproven.", html);
+                Assert.Contains("not traversed call edges", html);
+            }
             Assert.All(result.Paths.SelectMany(p => p.Edges), e => Assert.DoesNotContain(e.EdgeKind,
                 new[] { "control-containment", "declarative-property-reference", "framework-lifecycle-candidate" }));
             var repeat = await CombinedDependencyPathReporter.BuildReportAsync(options);

@@ -9,6 +9,44 @@ public sealed class GroupedCompiledPathHandoffTests
 {
     private static readonly string IndexHash = new('a', 64);
 
+    [Theory]
+    [InlineData("candidate")]
+    [InlineData("empty")]
+    [InlineData("unavailable")]
+    public async Task Entry_inventory_is_visible_without_becoming_a_call_edge(string scenario)
+    {
+        var original = Report();
+        WebFormsEntryRelation[] rows = scenario == "candidate" ? [new("entry-fact", "source", new string('b', 40),
+            "test/1", "legacy.webforms.entry-lifecycle.v1", "framework-lifecycle-candidate", "Tier2Structural",
+            "System.Web.UI.Control.CreateChildControls", "Widget.CreateChildControls<script>", "method-id", null, null, null,
+            "Widget.vb", 12, 14, ["override-fact", "declaration-fact"], "Framework dispatch remains unproven.")] : [];
+        var inventory = new WebFormsEntryInventory("webforms-entry-inventory.v1", "PartialStaticEvidence", new string('c', 64),
+            Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(rows))), rows);
+        var report = original with { WebFormsEntries = scenario == "unavailable" ? null : inventory };
+        var packet = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
+        var restored = GroupedCompiledPathHandoffBuilder.Restore(packet);
+        Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(restored));
+        Assert.Equal(JsonSerializer.Serialize(original.Paths), JsonSerializer.Serialize(restored.Paths));
+        Assert.Equal(original.Summary.Truncated, restored.Summary.Truncated);
+        using var temp = new TempDirectory();
+        var output = await GroupedCompiledPathReportWriter.WriteAsync(packet, temp.Path);
+        var html = await File.ReadAllTextAsync(output.HtmlPath);
+        Assert.Contains("separate from call paths", html);
+        Assert.Contains("not traversed call edges", html);
+        if (scenario == "candidate")
+        {
+            Assert.Contains("framework-lifecycle-candidate", html);
+            Assert.Contains("Tier2Structural", html);
+            Assert.Contains("override-fact, declaration-fact", html);
+            Assert.Contains("Widget.vb:12-14", html);
+            Assert.Contains("Framework dispatch remains unproven.", html);
+            Assert.Contains("Widget.CreateChildControls&lt;script&gt;", html);
+            Assert.DoesNotContain("Widget.CreateChildControls<script>", html);
+            Assert.Contains(inventory.BoundedInputSha256, html);
+        }
+        else Assert.Contains(scenario == "empty" ? "No entry relationships were retained" : "Entry relationship inventory unavailable", html);
+    }
+
     [Fact]
     public async Task Persistence_coverage_wording_is_correct_and_legacy_projection_remains_readable()
     {
