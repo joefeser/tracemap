@@ -38,17 +38,46 @@ public sealed record NuGetLockfileReadResult(
     IReadOnlyList<NuGetLockfileEntry> Entries,
     IReadOnlyList<NuGetLockfileGap> Gaps);
 
-/// A package this repo PRODUCES (a packable project): PackageId (or SDK-style AssemblyName fallback)
-/// with its Version/PackageVersion property. Line is the evidence span END (identity through version).
-/// Declaration evidence from the project file only — no build, no restore, no publish proof (that
-/// remains producer-evidence.v0's publicationStatus sidecar).
+/// A package this repo PRODUCES (a packable project): its identity resolved through the MSBuild default
+/// chain PackageId <- AssemblyName <- MSBuildProjectName, with its Version/PackageVersion property.
+/// Line is the evidence span END (identity through version). Declaration evidence from the project
+/// file only — no build, no restore, no publish proof (that remains producer-evidence.v0's
+/// publicationStatus sidecar). ExplicitPackageId is true only for a LITERAL PackageId declaration;
+/// PackageIdSource names the chain link that supplied the id and PackageIdProvenance how that link's
+/// value was obtained, so a derived default can never be presented as a declaration.
 public sealed record ProducedPackageInfo(
     string ProjectPath,
     string PackageId,
     string? Version,
     bool ExplicitPackageId,
     int Line,
-    int SpanStart);
+    int SpanStart,
+    string PackageIdSource,
+    string PackageIdProvenance,
+    string? PackSignals,
+    IReadOnlyList<string> PackDependencies,
+    int UnresolvedPackDependencyCount);
+
+/// Which link of the MSBuild default chain supplied a produced package id.
+public static class PackageIdSources
+{
+    public const string PackageId = "PackageId";
+    public const string AssemblyName = "AssemblyName";
+    public const string MSBuildProjectName = "MSBuildProjectName";
+}
+
+/// How the value of that link was obtained. The three tiers are deliberately distinct fact
+/// properties: a consumer must be able to weigh a derived default below an interpolated value
+/// and both below a literal declaration.
+public static class PackageIdProvenances
+{
+    /// A literal property value read from the project file.
+    public const string Declared = "declared";
+    /// A declared value whose only token was $(MSBuildProjectName), evaluated from the file's own name.
+    public const string Interpolated = "interpolated";
+    /// No identity property at all: the SDK default chain ends at the project file name.
+    public const string DerivedDefault = "derived-default";
+}
 
 /// A central NuGet version pin declared in an MSBuild props file (central package management):
 /// a PackageVersion item in Directory.Packages.props (or equivalent props file). The pin is a
@@ -112,15 +141,30 @@ public static class ProjectFileReader
     /// Reads packages this repo produces from packable projects. Evidence-only rules:
     /// - PROPERTY values only (PropertyGroup scope) — ItemGroup children never count;
     /// - IsPackable: LAST property value wins (MSBuild semantics); explicitly false => never emits;
-    /// - PackageId when present; else AssemblyName fallback for SDK-STYLE projects only, marked
-    ///   packageIdSource=AssemblyName (legacy non-SDK projects would invent packages from every
-    ///   AssemblyName — their ids are build artifacts, not package declarations);
+    /// - identity follows the MSBuild default chain, each link a distinct provenance tier:
+    ///   PackageId (declared) > AssemblyName for SDK-STYLE projects only (declared; legacy non-SDK
+    ///   projects would invent packages from every AssemblyName — their ids are build artifacts,
+    ///   not package declarations) > MSBuildProjectName, the project file name, for SDK-style
+    ///   projects that declare no identity but carry pack signals (Authors, Description, Product,
+    ///   PackageTags, or a literal IsPackable=true) — derived-default, never promoted to declared;
+    /// - $(MSBuildProjectName) is the ONE token evaluated inside PackageId/AssemblyName (the file
+    ///   defines it — interpolated); any other property, item, metadata or property-function token
+    ///   is unevidenced and the project is SKIPPED: a declared-but-unresolvable identity is never
+    ///   replaced by a default further down the chain;
+    /// - a Microsoft.NET.Test.Sdk reference defaults IsPackable to false (a known framework
+    ///   pattern), so the derived-default tier needs a literal IsPackable=true to apply there;
     /// - PackageVersion outranks Version (NuGet pack semantics: Version is the fallback); every property is last-wins;
     /// - unsafe ids skip the project; unsafe versions emit as unevidenced (null), never projected;
-    /// - the evidence span covers identity line through the version line when they differ.
+    /// - the evidence span covers identity line through the version line when they differ; a
+    ///   derived default has no identity line, so its span covers the pack signals instead;
+    /// - NuGet pack turns each ProjectReference (unless PrivateAssets=all) into a dependency on the
+    ///   referenced project's package id: references resolving to a produced package above are
+    ///   recorded as pack dependencies, anything else (templated/wildcard path, outside the repo,
+    ///   not a produced package) is counted unresolved. ProjectReferences are never package
+    ///   references — in-repo consumption is not PackageReferenced evidence.
     public static IReadOnlyList<ProducedPackageInfo> ReadProducedPackages(string repoPath, IEnumerable<FileInventoryItem> inventory)
     {
-        var results = new List<ProducedPackageInfo>();
+        var candidates = new List<ProducedPackageCandidate>();
         foreach (var project in inventory.Where(item => item.Kind is "Project" or "VisualBasicProject"))
         {
             var fullPath = Path.Combine(repoPath, project.RelativePath);
@@ -129,52 +173,221 @@ public static class ProjectFileReader
                 continue;
             }
 
-            static bool IsProperty(XElement e) => e.Parent is { Name.LocalName: "PropertyGroup" };
-            var sdkStyle = document.Root?.Attribute("Sdk") is not null;
-
-            // MSBuild evaluation order: property redefinitions REPLACE earlier values — every
-            // property here is LAST-wins, with its line tracked to the winning assignment.
-            bool? packable = null;
-            string? packageId = null;
-            string? assemblyName = null;
-            string? assemblyLine = null;
-            string? plainVersion = null; int? plainVersionLine = null;
-            string? packageVersion = null; int? packageVersionLine = null;
-            int idLine = 1;
-            foreach (var element in document.Descendants().Where(IsProperty))
+            if (ReadProducedPackageCandidate(project.RelativePath, document) is { } candidate)
             {
-                var name = element.Name.LocalName;
-                var value = element.Value.Trim();
-                if (value.Length == 0) continue;
-                switch (name)
+                candidates.Add(candidate);
+            }
+        }
+
+        // Pack dependencies resolve only against identities proven above: the referenced project's
+        // package id is whatever ITS tier established, and a reference to anything else stays a count.
+        var comparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
+        var candidatesByPath = candidates
+            .GroupBy(candidate => candidate.ProjectPath, comparer)
+            .ToDictionary(group => group.Key, group => group.First(), comparer);
+        var results = new List<ProducedPackageInfo>();
+        foreach (var candidate in candidates)
+        {
+            var dependencies = new SortedSet<string>(StringComparer.Ordinal);
+            var unresolved = 0;
+            foreach (var reference in candidate.ProjectReferences)
+            {
+                if (reference is not null
+                    && !comparer.Equals(reference, candidate.ProjectPath)
+                    && candidatesByPath.TryGetValue(reference, out var target))
                 {
-                    case "IsPackable": packable = !value.Equals("false", StringComparison.OrdinalIgnoreCase); break;
-                    case "PackageId": packageId = value; idLine = GetLine(element); break;
-                    case "AssemblyName": assemblyName = value; assemblyLine = GetLine(element).ToString(); break;
-                    case "Version": plainVersion = value; plainVersionLine = GetLine(element); break;
-                    case "PackageVersion": packageVersion = value; packageVersionLine = GetLine(element); break;
+                    dependencies.Add(target.PackageId);
+                }
+                else
+                {
+                    unresolved++;
                 }
             }
-            var explicitId = packageId is not null;
-            if (!explicitId && sdkStyle && assemblyName is not null)
-            {
-                packageId = assemblyName; // SDK-style fallback; the id line cites the AssemblyName itself
-                if (int.TryParse(assemblyLine, out var al)) idLine = al;
-            }
-            if (packable == false || packageId is null || !IsSafeNuGetPackageId(packageId)) continue;
-            // NuGet pack semantics: PackageVersion is the produced version; Version is its fallback.
-            // Each property is last-wins within itself; selection is by name, not XML order.
-            var version = packageVersion ?? plainVersion;
-            var versionLine = version is null ? null : packageVersion is not null ? packageVersionLine : plainVersionLine;
-            if (version is not null && !IsSafeNuGetResolvedVersion(version)) { version = null; versionLine = null; } // unevidenced, never projected
-            var spanEnd = versionLine is { } vl && version is not null ? Math.Max(idLine, vl) : idLine;
-            results.Add(new ProducedPackageInfo(project.RelativePath, packageId, version, explicitId, spanEnd, idLine));
+
+            results.Add(new ProducedPackageInfo(
+                candidate.ProjectPath,
+                candidate.PackageId,
+                candidate.Version,
+                candidate.ExplicitPackageId,
+                candidate.Line,
+                candidate.SpanStart,
+                candidate.PackageIdSource,
+                candidate.PackageIdProvenance,
+                candidate.PackSignals,
+                dependencies.ToArray(),
+                unresolved));
         }
 
         return results
             .OrderBy(item => item.ProjectPath, StringComparer.Ordinal)
             .ThenBy(item => item.PackageId, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    private sealed record ProducedPackageCandidate(
+        string ProjectPath,
+        string PackageId,
+        string? Version,
+        bool ExplicitPackageId,
+        int Line,
+        int SpanStart,
+        string PackageIdSource,
+        string PackageIdProvenance,
+        string? PackSignals,
+        IReadOnlyList<string?> ProjectReferences);
+
+    private static readonly string[] PackSignalProperties = ["Authors", "Description", "PackageTags", "Product"];
+
+    private static ProducedPackageCandidate? ReadProducedPackageCandidate(string relativePath, XDocument document)
+    {
+        static bool IsProperty(XElement e) => e.Parent is { Name.LocalName: "PropertyGroup" };
+        static bool IsItem(XElement e) => e.Parent is { Name.LocalName: "ItemGroup" };
+        var sdkStyle = document.Root?.Attribute("Sdk") is not null;
+        // $(MSBuildProjectName) is reserved by MSBuild as the project file name without extension:
+        // the file defines it, so evaluating it is reading, not guessing.
+        var projectName = Path.GetFileNameWithoutExtension(relativePath);
+
+        // MSBuild evaluation order: property redefinitions REPLACE earlier values — every
+        // property here is LAST-wins, with its line tracked to the winning assignment.
+        bool? packable = null; var packableLine = 1; var packableLiteralTrue = false;
+        string? packageId = null; var packageIdLine = 1;
+        string? assemblyName = null; var assemblyNameLine = 1;
+        string? plainVersion = null; int? plainVersionLine = null;
+        string? packageVersion = null; int? packageVersionLine = null;
+        var packSignalLines = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        foreach (var element in document.Descendants().Where(IsProperty))
+        {
+            var name = element.Name.LocalName;
+            var value = element.Value.Trim();
+            if (value.Length == 0) continue;
+            switch (name)
+            {
+                case "IsPackable": packable = !value.Equals("false", StringComparison.OrdinalIgnoreCase); packableLiteralTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase); packableLine = GetLine(element); break;
+                case "PackageId": packageId = value; packageIdLine = GetLine(element); break;
+                case "AssemblyName": assemblyName = value; assemblyNameLine = GetLine(element); break;
+                case "Version": plainVersion = value; plainVersionLine = GetLine(element); break;
+                case "PackageVersion": packageVersion = value; packageVersionLine = GetLine(element); break;
+                default:
+                    if (PackSignalProperties.Contains(name, StringComparer.Ordinal)) packSignalLines[name] = GetLine(element);
+                    break;
+            }
+        }
+        if (packable == false) return null;
+
+        var testSdkReferenced = false;
+        var projectReferences = new List<string?>();
+        foreach (var element in document.Descendants().Where(IsItem))
+        {
+            switch (element.Name.LocalName)
+            {
+                case "PackageReference":
+                    if (string.Equals(AttributeValue(element, "Include"), "Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase))
+                        testSdkReferenced = true;
+                    break;
+                case "ProjectReference":
+                    var include = AttributeValue(element, "Include");
+                    if (string.IsNullOrWhiteSpace(include) || IsPrivateAssetsAll(element)) break;
+                    foreach (var target in include.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        projectReferences.Add(ResolveProjectReferencePath(relativePath, target));
+                    break;
+            }
+        }
+
+        string id, source, provenance;
+        bool explicitId;
+        int spanStart, idLine;
+        if (packageId is not null)
+        {
+            if (EvaluateBoundedIdentity(packageId, projectName, out var interpolated) is not { } evaluated) return null;
+            (id, source, idLine) = (evaluated, PackageIdSources.PackageId, packageIdLine);
+            provenance = interpolated ? PackageIdProvenances.Interpolated : PackageIdProvenances.Declared;
+            explicitId = !interpolated;
+            spanStart = idLine;
+        }
+        else if (assemblyName is not null)
+        {
+            if (!sdkStyle) return null; // legacy non-SDK: AssemblyName is a build artifact, not a package declaration
+            if (EvaluateBoundedIdentity(assemblyName, projectName, out var interpolated) is not { } evaluated) return null;
+            (id, source, idLine) = (evaluated, PackageIdSources.AssemblyName, assemblyNameLine);
+            provenance = interpolated ? PackageIdProvenances.Interpolated : PackageIdProvenances.Declared;
+            explicitId = false;
+            spanStart = idLine;
+        }
+        else
+        {
+            // Derived default: the chain ends at the file name. Only an SDK-style project with pack
+            // signals qualifies — a literal IsPackable=true is itself a signal, and the only one that
+            // overrides the test SDK's packable=false default.
+            if (packableLiteralTrue) packSignalLines["IsPackable"] = packableLine;
+            if (!sdkStyle || packSignalLines.Count == 0 || (testSdkReferenced && !packableLiteralTrue)) return null;
+            (id, source, provenance, explicitId) = (projectName, PackageIdSources.MSBuildProjectName, PackageIdProvenances.DerivedDefault, false);
+            spanStart = packSignalLines.Values.Min();
+            idLine = packSignalLines.Values.Max();
+        }
+        if (!IsSafeNuGetPackageId(id)) return null;
+
+        // NuGet pack semantics: PackageVersion is the produced version; Version is its fallback.
+        // Each property is last-wins within itself; selection is by name, not XML order.
+        var version = packageVersion ?? plainVersion;
+        var versionLine = version is null ? null : packageVersion is not null ? packageVersionLine : plainVersionLine;
+        if (version is not null && !IsSafeNuGetResolvedVersion(version)) { version = null; versionLine = null; } // unevidenced, never projected
+        var spanEnd = versionLine is { } vl && version is not null ? Math.Max(idLine, vl) : idLine;
+        var packSignals = provenance == PackageIdProvenances.DerivedDefault ? string.Join(',', packSignalLines.Keys) : null;
+        return new ProducedPackageCandidate(relativePath, id, version, explicitId, spanEnd, spanStart, source, provenance, packSignals, projectReferences);
+    }
+
+    /// Bounded MSBuild evaluation for an identity property: a value without tokens is declared as-is;
+    /// a value whose ONLY tokens are $(MSBuildProjectName) resolves from the file's own name; any
+    /// other token — another property, @(items), %(metadata), or a property function such as
+    /// $(MSBuildProjectName.Replace(...)) — leaves the identity unevidenced (null). Never guessed.
+    internal static string? EvaluateBoundedIdentity(string value, string projectName, out bool interpolated)
+    {
+        interpolated = false;
+        if (!ContainsMsBuildToken(value)) return value;
+        var evaluated = value.Replace("$(MSBuildProjectName)", projectName, StringComparison.OrdinalIgnoreCase); // MSBuild property names are case-insensitive
+        if (ContainsMsBuildToken(evaluated)) return null;
+        interpolated = true;
+        return evaluated;
+    }
+
+    private static bool ContainsMsBuildToken(string value) =>
+        value.Contains("$(", StringComparison.Ordinal)
+        || value.Contains("@(", StringComparison.Ordinal)
+        || value.Contains("%(", StringComparison.Ordinal);
+
+    private static bool IsPrivateAssetsAll(XElement reference)
+    {
+        var privateAssets = AttributeValue(reference, "PrivateAssets")
+            ?? reference.Elements().FirstOrDefault(child => child.Name.LocalName == "PrivateAssets")?.Value.Trim();
+        return privateAssets is not null
+            && privateAssets.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(token => token.Equals("all", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// Resolves a ProjectReference Include against the referencing project's directory as a pure
+    /// repo-relative string: no filesystem probe, no token evaluation. MSBuild accepts '\' as a
+    /// separator on every platform, so both separators are normalized before resolution. Null when
+    /// the path carries MSBuild tokens or wildcards, is rooted, or climbs out of the repository.
+    internal static string? ResolveProjectReferencePath(string projectRelativePath, string include)
+    {
+        if (ContainsMsBuildToken(include) || include.IndexOfAny(['*', '?']) >= 0) return null;
+        var normalizedInclude = include.Replace('\\', '/');
+        var driveRooted = normalizedInclude.Length >= 2 && char.IsAsciiLetter(normalizedInclude[0]) && normalizedInclude[1] == ':';
+        if (normalizedInclude.StartsWith('/') || driveRooted) return null;
+        var directory = FileInventory.NormalizeRelativePath(Path.GetDirectoryName(projectRelativePath) ?? string.Empty);
+        var segments = new List<string>();
+        foreach (var segment in (directory + "/" + normalizedInclude).Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == ".") continue;
+            if (segment == "..")
+            {
+                if (segments.Count == 0) return null; // escapes the repository: not an in-repo reference
+                segments.RemoveAt(segments.Count - 1);
+                continue;
+            }
+            segments.Add(segment);
+        }
+        return segments.Count == 0 ? null : string.Join('/', segments);
     }
 
     /// Reads central package management version pins (PackageVersion items) from MSBuild props files.

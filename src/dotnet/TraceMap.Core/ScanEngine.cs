@@ -1110,8 +1110,20 @@ public static class ScanEngine
                 ["surfaceKind"] = "package-config",
                 ["targetFramework"] = string.Empty
             };
+            producedProperties["packageIdProvenance"] = produced.PackageIdProvenance; // declared | interpolated | derived-default — a derived default must never be presented as declared
             if (!produced.ExplicitPackageId)
-                producedProperties["packageIdSource"] = "AssemblyName"; // fallback id — a weaker claim, visible to consumers
+                producedProperties["packageIdSource"] = produced.PackageIdSource; // non-literal id — a weaker claim, visible to consumers
+            if (produced.PackSignals is not null)
+                producedProperties["packSignals"] = produced.PackSignals; // derived-default only: the pack signals that justified the producer claim
+            if (produced.PackDependencies.Count > 0)
+            {
+                producedProperties["packDependencyCount"] = produced.PackDependencies.Count.ToString();
+                var packDependencies = string.Join(',', produced.PackDependencies);
+                if (packDependencies.Length <= 256)
+                    producedProperties["packDependencies"] = packDependencies; // bounded like lockfile dependencyNames
+            }
+            if (produced.UnresolvedPackDependencyCount > 0)
+                producedProperties["packDependencyUnresolvedCount"] = produced.UnresolvedPackDependencyCount.ToString();
             if (produced.ProjectPath.EndsWith(".vbproj", StringComparison.OrdinalIgnoreCase))
                 producedProperties["manifestKind"] = "vbproj";
             AddSafeVersionProperties(producedProperties, produced.Version);
