@@ -2,6 +2,14 @@
 
 ## Retained handler HTTP reporting
 
+Pre-PR synthetic coverage and exact-head commands are in
+`prompts/validate-http-regressions-before-pr.md`. The compile-only
+`samples/http-entry-dual-terminal` fixture pins two independent terminals from a
+shared event/helper/constructor chain, cycle truncation, a downstream-root control,
+and a shallow-depth negative. Source-root receipts use
+`single-source-method-retained-static-review-not-parity`, not the compiled-method
+claim label. This changes labeling, not extraction or traversal tiers.
+
 Grouped HTML exposes the existing `header.webFormsEntries` inventory separately
 with or without `IncludeLegacyRoots`; root selection must not suppress this inventory.
 Shareable legacy views still omit the private inventory; their privacy boundary is unchanged.

@@ -100,6 +100,10 @@ the TraceMap PowerShell handoff. A verified launcher can then be supplied with
 
 ## Remaining retained HTTP groups
 
+[`validate-http-regressions-before-pr.md`](validate-http-regressions-before-pr.md)
+maps the acceptance fixes to public synthetic regressions and runs focused plus
+final-head full gates before a PR. It does not authorize opening or merging a PR.
+
 [`fresh-scan-h4-lifecycle-evidence.md`](fresh-scan-h4-lifecycle-evidence.md) authorizes
 one isolated fresh scan with the original scope/inputs after the old retained index
 was found to lack H4 lifecycle candidates. It preserves all accepted baselines and

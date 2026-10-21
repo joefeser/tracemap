@@ -17,6 +17,60 @@ namespace TraceMap.Tests;
 public sealed class HttpEntryBoundaryRegressionTests
 {
     [Fact]
+    public async Task Shared_event_entry_retains_two_independent_terminals_despite_cycle_truncation()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
+        Assert.NotNull(root);
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(root.FullName, "samples/http-entry-dual-terminal"), Path.Combine(temp.Path, "scan")));
+        Assert.Equal("Succeeded", scan.Manifest.BuildStatus);
+        var entry = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.Properties.GetValueOrDefault("name") == "RefreshChanged");
+        var helper = Assert.Single(scan.Facts, f => f.FactType == FactTypes.MethodDeclared && f.Properties.GetValueOrDefault("name") == "BeginQuery");
+        Assert.Contains(scan.Facts, f => f.FactType == FactTypes.VisualBasicEventBindingDeclared && f.EvidenceTier == EvidenceTiers.Tier1Semantic);
+        var terminals = scan.Facts.Where(f => f.FactType == FactTypes.HttpCallDetected).ToArray();
+        Assert.Equal(2, terminals.Length);
+        Assert.All(terminals, f => Assert.Equal(EvidenceTiers.Tier1Semantic, f.EvidenceTier));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var combined = Path.Combine(temp.Path, "combined.sqlite");
+        await CombinedIndexBuilder.CombineAsync(new CombineOptions([index], combined, ["webforms"]));
+        var options = new CombinedDependencyPathOptions(combined, temp.Path, FromSymbol: entry.TargetSymbol,
+            ToSurface: "http-client", MaxDepth: 20) { ExactFromSymbol = true, IncludeLegacyRoots = true };
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(options);
+        var bounded = await CombinedDependencyPathReporter.BuildBoundedCombinedIndexReportWithTraversalAsync(options,
+            new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
+        foreach (var result in new[] { report, bounded.Report })
+        {
+            Assert.True(result.Summary.Truncated);
+            Assert.Contains(result.Gaps, gap => gap.GapKind == "TruncatedByLimit" && gap.Reason == "cycle");
+            foreach (var terminal in terminals)
+                Assert.Contains(result.Paths, p => p.Nodes[^1].FilePath == terminal.Evidence.FilePath
+                    && p.Nodes[^1].StartLine == terminal.Evidence.StartLine && p.Nodes[^1].RuleId == terminal.RuleId);
+            Assert.All(result.Paths, p =>
+            {
+                Assert.Equal(entry.TargetSymbol, p.Nodes[0].SymbolId);
+                Assert.Contains(p.Nodes, node => node.SymbolId == helper.TargetSymbol);
+                Assert.Equal("http-client", p.Nodes[^1].SurfaceKind);
+                Assert.Equal(EvidenceTiers.Tier1Semantic, p.Nodes[^1].EvidenceTier);
+                Assert.NotEmpty(p.SupportingFactIds);
+                Assert.All(p.Edges, edge => Assert.Equal(EvidenceTiers.Tier1Semantic, edge.EvidenceTier));
+            });
+        }
+        var downstream = await CombinedDependencyPathReporter.BuildReportAsync(options with { FromSymbol = helper.TargetSymbol });
+        Assert.NotEmpty(downstream.Paths);
+        Assert.All(downstream.Paths, p => Assert.DoesNotContain(p.Nodes, node => node.SymbolId == entry.TargetSymbol));
+        var limited = await CombinedDependencyPathReporter.BuildReportAsync(options with { MaxDepth = 1 });
+        Assert.True(limited.Summary.Truncated);
+        Assert.True(limited.Paths.Select(p => p.Nodes[^1].StartLine).Distinct().Count()
+            < terminals.Select(f => f.Evidence.StartLine).Distinct().Count());
+        var packet = GroupedCompiledPathHandoffBuilder.Create(bounded.Report, new string('a', 64));
+        Assert.Equal(JsonSerializer.Serialize(bounded.Report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(packet)));
+        var output = await GroupedCompiledPathReportWriter.WriteAsync(packet, Path.Combine(temp.Path, "html"));
+        Assert.Contains("Enumeration incomplete: retained routes remain evidence", await File.ReadAllTextAsync(output.HtmlPath));
+    }
+
+    [Fact]
     public async Task Csharp_inheritance_fixture_records_current_declaration_and_entry_limits()
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
