@@ -15,6 +15,11 @@ If that run reports missing retained-index HTTP query support, use
 in the public development environment. It requires synthetic tests and a separate
 work-machine acceptance prompt; it does not authorize another private scan.
 
+After HTTP selector support is built, use
+[Accept the first retained H1 HTTP report](accept-h1-http-baseline.md).
+It resolves the HTTP handler from H1 evidence, not the database query's root,
+and requires a real retained path rather than just a successful receipt.
+
 For the next gap-planning step, use
 [Inventory retained analysis gaps](inventory-retained-analysis-gaps.md).
 It reads the existing scan once with a bounded Python utility—no build, scan or

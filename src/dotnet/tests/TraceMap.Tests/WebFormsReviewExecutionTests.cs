@@ -106,10 +106,12 @@ internal static class WebFormsReviewExecutionShared
             Config = Config with { PrimaryAssemblies = mutation == "undeclared-dll" ? ["Public.dll"] : ["bin/Public.dll"],
                 PageMaps = ["Pages/Lookup.aspx.compiled"], PublishReceiptRelativePath = "receipts/publish.json" };
         }
-        public void AddPublicEventFixture(string sourceFolder = "Pages")
+        public void AddPublicEventFixture(string sourceFolder = "Pages", bool http = false)
         {
             File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx"), "<%@ Page Language=\"VB\" CodeFile=\"Lookup.aspx.vb\" Inherits=\"Lookup\" %>\n<asp:DropDownList ID=\"Names\" runat=\"server\" OnInit=\"Names_Init\" />");
             File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx.vb"), "Public Class Lookup\n Protected Sub Names_Init(sender As Object, e As System.EventArgs)\n  System.Console.WriteLine(\"public fixture\")\n End Sub\nEnd Class\n");
+            if (http)
+                File.WriteAllText(Path.Combine(Source, "Pages", "Lookup.aspx.vb"), "Public Class Lookup\n Protected Sub Names_Init(sender As Object, e As System.EventArgs)\n  SendRequest()\n End Sub\n Private Sub SendRequest()\n  Dim client As New System.Net.WebClient()\n  client.UploadString(\"https://example.invalid/test\", \"public fixture\")\n End Sub\nEnd Class\n");
             if (sourceFolder != "Pages")
             {
                 Directory.Move(Path.Combine(Source, "Pages"), Path.Combine(Source, sourceFolder));
@@ -1178,6 +1180,84 @@ public sealed class WebFormsReviewExecutionTestsRelocation
             ["webforms-review", "relocate", "--run", fixture.Run, "--out", destination], TextWriter.Null, fixture.Error, cancellation.Token));
         Assert.False(Directory.Exists(destination));
         Assert.Equal(checkpointHash, Hash(Path.Combine(fixture.Run, "checkpoints", "0004.json")));
+    }
+}
+
+public sealed class WebFormsReviewExecutionTestsHandlerHttp
+{
+    [Theory]
+    [InlineData("--surface-name", "DbDataAdapter.Fill")]
+    [InlineData("--traversal-scope", "compiled-il")]
+    [InlineData("--view", "method-graph")]
+    [InlineData("--surface", "http-client")]
+    [InlineData("--surface", "unknown")]
+    public async Task Http_rejects_incompatible_or_duplicate_options(string key, string value)
+    {
+        using var error = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", Path.GetTempPath(),
+            "--bundle", Path.GetTempPath(), "--handler", "Handler", "--out", Path.GetTempPath(),
+            "--surface", "http-client", key, value], TextWriter.Null, error));
+        Assert.Contains("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID", error.ToString());
+    }
+
+    [Fact]
+    public async Task Http_rejects_compiled_root_before_opening_selector()
+    {
+        using var error = new StringWriter();
+        Assert.Equal(1, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", Path.GetTempPath(),
+            "--bundle", Path.GetTempPath(), "--compiled-root", "not-a-selector", "--out", Path.GetTempPath(),
+            "--surface", "http-client"], TextWriter.Null, error));
+        Assert.Contains("HANDLER_REQUERY_SURFACE_OR_SCOPE_INVALID", error.ToString());
+    }
+
+    [Fact]
+    public async Task Http_returns_retained_caller_to_terminal_path_without_upgrading_syntax_evidence()
+    {
+        using var fixture = new Fixture();
+        fixture.AddPublicEventFixture(http: true);
+        await fixture.Preflight();
+        Assert.True(await fixture.Execute("run", Scan) == 0, fixture.Error.ToString());
+        Assert.True(await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync) == 0, fixture.Error.ToString());
+        var bundle = Path.Combine(fixture.Run, fixture.LastCheckpoint().Reports!.ReportAttempt);
+        var before = Directory.GetFiles(fixture.Run, "*", SearchOption.AllDirectories).ToDictionary(path => path, Hash);
+        using var error = new StringWriter();
+        using var output = new StringWriter();
+        var destination = Path.Combine(fixture.Root, "http-query");
+        Assert.True(await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+            "--bundle", bundle, "--handler", "Names_Init", "--out", destination, "--surface", "http-client"], output, error) == 0, error.ToString());
+        var receipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(destination,
+            WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+        Assert.Equal("http-client", receipt.Query.ToSurface);
+        Assert.Null(receipt.Query.SurfaceName);
+        Assert.True(receipt.PathEnumerationPerformed);
+        Assert.True(receipt.ExactChains > 0);
+        Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);
+        var report = JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(File.ReadAllText(Path.Combine(destination,
+            GroupedCompiledPathReportWriter.HandoffName)), JsonOptions)!;
+        Assert.NotEmpty(report.Variants);
+        Assert.All(report.Variants, variant =>
+        {
+            var nodes = variant.NodeReferences.Select(id => report.Nodes[id]).ToArray();
+            Assert.Equal("http-client", nodes[^1].SurfaceKind);
+            Assert.Contains(nodes, node => node.SymbolId?.Contains("Names_Init", StringComparison.Ordinal) == true);
+            Assert.Contains(nodes, node => node.SymbolId?.Contains("SendRequest", StringComparison.Ordinal) == true);
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, nodes[^1].EvidenceTier);
+            Assert.Equal(RuleIds.VisualBasicSyntaxHttpCandidate, nodes[^1].RuleId);
+            Assert.Equal("Pages/Lookup.aspx.vb", nodes[^1].FilePath);
+            Assert.Equal(7, nodes[^1].StartLine);
+            Assert.NotEmpty(variant.Path.SupportingFactIds);
+            Assert.NotEmpty(variant.EdgeReferences);
+        });
+        var dbDestination = Path.Combine(fixture.Root, "database-query");
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["webforms-review", "requery-handler", "--run", fixture.Run,
+            "--bundle", bundle, "--handler", "Names_Init", "--out", dbDestination], output, error));
+        var db = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(dbDestination,
+            WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
+        Assert.Equal("database-operations", db.Query.ToSurface);
+        Assert.Equal(0, db.ExactChains);
+        Assert.Equal(receipt.CombinedIndexSha256, db.CombinedIndexSha256);
+        Assert.NotEqual(receipt.BoundedInputSha256, db.BoundedInputSha256);
+        foreach (var (path, hash) in before) Assert.Equal(hash, Hash(path));
     }
 }
 
