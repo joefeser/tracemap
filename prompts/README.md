@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+When several work-machine checkouts and test runs make the accepted baseline
+unclear, start with [Locate the accepted work baseline](locate-accepted-work-baseline.md).
+This is bounded discovery only: no build, scan or requery. It keeps exact private
+references in a new local note and returns only a sanitized readiness summary.
+
 For the next gap-planning step, use
 [Inventory retained analysis gaps](inventory-retained-analysis-gaps.md).
 It reads the existing scan once with a bounded Python utility—no build, scan or
