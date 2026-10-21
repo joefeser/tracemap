@@ -57,7 +57,10 @@ public sealed record ProducedPackageInfo(
     string? PackSignals,
     IReadOnlyList<string> PackDependencies,
     int UnresolvedPackDependencyCount,
-    IReadOnlyList<PackDependencyEvidence> DependencyEvidence);
+    IReadOnlyList<PackDependencyEvidence> DependencyEvidence,
+    int OmittedReferenceCount, int ReferenceLimitLine);
+
+public sealed record ProducedPackageReadGap(string ProjectPath, string Kind);
 
 // Includes stay hashed: arbitrary paths, tokens and private source text never enter facts.
 public sealed record PackDependencyEvidence(
@@ -98,6 +101,8 @@ public sealed record CentralPackageVersionInfo(
 
 public static class ProjectFileReader
 {
+    public const int MaxProducerProjectBytes = 1024 * 1024;
+    public const int MaxProducerReferences = 256;
     public static IReadOnlyList<TargetFrameworkInfo> ReadTargetFrameworks(string repoPath, IEnumerable<FileInventoryItem> inventory)
     {
         var results = new List<TargetFrameworkInfo>();
@@ -168,14 +173,15 @@ public static class ProjectFileReader
     ///   recorded as pack dependencies, anything else (templated/wildcard path, outside the repo,
     ///   not a produced package) retains attributable unresolved evidence. ProjectReferences are never package
     ///   references — in-repo consumption is not PackageReferenced evidence.
-    public static IReadOnlyList<ProducedPackageInfo> ReadProducedPackages(string repoPath, IEnumerable<FileInventoryItem> inventory)
+    public static IReadOnlyList<ProducedPackageInfo> ReadProducedPackages(string repoPath, IEnumerable<FileInventoryItem> inventory, ICollection<ProducedPackageReadGap>? gaps = null)
     {
         var candidates = new List<ProducedPackageCandidate>();
         foreach (var project in inventory.Where(item => item.Kind is "Project" or "VisualBasicProject"))
         {
             var fullPath = Path.Combine(repoPath, project.RelativePath);
-            if (!TryLoadXml(fullPath, out var document))
+            if (!TryLoadXml(fullPath, out var document, MaxProducerProjectBytes))
             {
+                gaps?.Add(new(project.RelativePath, "package-producer-project-unreadable-or-limit"));
                 continue;
             }
 
@@ -225,7 +231,7 @@ public static class ProjectFileReader
                 candidate.PackageIdProvenance,
                 candidate.PackSignals,
                 dependencies.ToArray(),
-                unresolved, evidence));
+                unresolved, evidence, candidate.OmittedReferenceCount, candidate.ReferenceLimitLine));
         }
 
         return results
@@ -253,6 +259,7 @@ public static class ProjectFileReader
 
     internal static bool HasDependencyProjectionGap(ProducedPackageInfo produced) =>
         produced.UnresolvedPackDependencyCount > 0
+        || produced.OmittedReferenceCount > 0
         || string.Join(',', produced.PackDependencies).Length > 256
         || ProjectDependencyEvidence(produced).Omitted > 0;
 
@@ -266,7 +273,8 @@ public static class ProjectFileReader
         string PackageIdSource,
         string PackageIdProvenance,
         string? PackSignals,
-        IReadOnlyList<ProducedProjectReference> ProjectReferences);
+        IReadOnlyList<ProducedProjectReference> ProjectReferences,
+        int OmittedReferenceCount, int ReferenceLimitLine);
 
     private sealed record ProducedProjectReference(string? Path, int Line, string IncludeHash);
 
@@ -319,6 +327,8 @@ public static class ProjectFileReader
 
         var testSdkReferenced = false;
         var projectReferences = new List<ProducedProjectReference>();
+        var omittedReferences = 0;
+        var referenceLimitLine = 1;
         foreach (var element in document.Descendants().Where(IsItem))
         {
             switch (element.Name.LocalName)
@@ -330,8 +340,20 @@ public static class ProjectFileReader
                 case "ProjectReference":
                     var include = AttributeValue(element, "Include");
                     if (string.IsNullOrWhiteSpace(include) || IsPrivateAssetsAll(element)) break;
-                    foreach (var target in include.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    // Count without allocating a Split array or retaining/hashing overflow tokens.
+                    foreach (var range in include.AsSpan().Split(';'))
+                    {
+                        var token = include.AsSpan()[range].Trim();
+                        if (token.IsEmpty) continue;
+                        if (projectReferences.Count == MaxProducerReferences)
+                        {
+                            if (omittedReferences == 0) referenceLimitLine = GetLine(element);
+                            omittedReferences++;
+                            continue;
+                        }
+                        var target = token.ToString();
                         projectReferences.Add(new(ResolveProjectReferencePath(relativePath, target), GetLine(element), FactFactory.Hash(target, 64)));
+                    }
                     break;
             }
         }
@@ -399,7 +421,7 @@ public static class ProjectFileReader
         var packSignals = provenance == PackageIdProvenances.DerivedDefault
             || (source == PackageIdSources.AssemblyName && provenance == PackageIdProvenances.Interpolated)
             ? string.Join(',', packSignalLines.Keys) : null;
-        return new ProducedPackageCandidate(relativePath, id, version, explicitId, spanEnd, spanStart, source, provenance, packSignals, projectReferences);
+        return new ProducedPackageCandidate(relativePath, id, version, explicitId, spanEnd, spanStart, source, provenance, packSignals, projectReferences, omittedReferences, referenceLimitLine);
     }
 
     /// Bounded MSBuild evaluation for an identity property: a value without tokens is declared as-is;
@@ -949,11 +971,27 @@ public static class ProjectFileReader
     private static readonly Regex SafeLockfileTargetFrameworkPattern = new("^[A-Za-z0-9][A-Za-z0-9._/+,-]{0,127}$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
     private static readonly Regex SafeNuGetResolvedVersionPattern = new("^[0-9]+(?:\\.[0-9]+){0,3}(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\\+[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$", RegexOptions.Compiled | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
 
-    private static bool TryLoadXml(string fullPath, out XDocument document)
+    private static bool TryLoadXml(string fullPath, out XDocument document, int? maxBytes = null)
     {
         try
         {
-            document = XDocument.Load(fullPath, LoadOptions.SetLineInfo);
+            if (maxBytes is { } limit)
+            {
+                using var stream = File.OpenRead(fullPath);
+                if (stream.Length > limit)
+                {
+                    document = new XDocument();
+                    return false;
+                }
+                using var reader = XmlReader.Create(stream, new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit,
+                    XmlResolver = null,
+                    MaxCharactersInDocument = limit
+                });
+                document = XDocument.Load(reader, LoadOptions.SetLineInfo);
+            }
+            else document = XDocument.Load(fullPath, LoadOptions.SetLineInfo);
             return true;
         }
         catch
