@@ -5,6 +5,11 @@ unclear, start with [Locate the accepted work baseline](locate-accepted-work-bas
 This is bounded discovery only: no build, scan or requery. It keeps exact private
 references in a new local note and returns only a sanitized readiness summary.
 
+Once that inventory identifies the accepted inputs, run
+[Validate retained database and HTTP reporting](validate-retained-work-reporting.md).
+It verifies artifact hashes, builds once, compares one database requery, and
+separates H1 retained-fact verification from its first HTTP report. No rescan.
+
 For the next gap-planning step, use
 [Inventory retained analysis gaps](inventory-retained-analysis-gaps.md).
 It reads the existing scan once with a bounded Python utility—no build, scan or
