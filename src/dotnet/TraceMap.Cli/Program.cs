@@ -66,6 +66,25 @@ public static class Program
         }
     }
 
+    internal static int RunVersions(TextWriter output)
+    {
+        // Stable extractor-version manifest (ordinal-sorted JSON). Consumers key scan caches on
+        // this set instead of binary identity, so reporting/export-only changes stop invalidating
+        // cached evidence. CONTRACT: any extractor behavior change MUST bump its ScannerVersions
+        // constant, or consumers will silently reuse stale evidence.
+        var fields = typeof(ScannerVersions).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+            .Select(f => (Name: f.Name, Value: (string)f.GetRawConstantValue()!))
+            .OrderBy(pair => pair.Name, StringComparer.Ordinal)
+            .ToList();
+        var sb = new StringBuilder().AppendLine("{");
+        for (var i = 0; i < fields.Count; i++)
+            sb.Append("  \"").Append(fields[i].Name).Append("\": \"").Append(fields[i].Value).Append("\"").AppendLine(i == fields.Count - 1 ? "" : ",");
+        sb.AppendLine("}");
+        output.Write(sb.ToString());
+        return 0;
+    }
+
     public static async Task<int> Main(string[] args)
     {
         return await TraceMapCommand.RunAsync(args, Console.Out, Console.Error);
@@ -124,7 +143,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -133,6 +152,7 @@ public static class TraceMapCommand
             var exitCode = command switch
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
+                "versions" => Program.RunVersions(output),
                 "version" => await RunVersionAsync(rest, output, error),
                 "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
