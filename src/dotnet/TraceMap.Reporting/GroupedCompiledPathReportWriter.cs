@@ -71,6 +71,25 @@ public static class GroupedCompiledPathReportWriter
                 W($"<li><a href=\"#chain-{index + 1}\">Chain {index + 1}: {H(path.Nodes.FirstOrDefault() is { } first ? Compact(first) : path.StartNodeId)}</a> — {group.VariantIndexes.Count} variants</li>");
             }
             W("</ul></nav>");
+            W("<section><h2>WebForms entry relationships (separate from call paths)</h2>");
+            W("<p>Method-to-terminal paths do not establish a page or framework entry. Containment is not execution, declarative references are not getter calls, and lifecycle candidates do not prove framework dispatch. Entry candidates never upgrade path tiers and are not traversed call edges.</p>");
+            if (report.WebFormsEntries is { } entries)
+            {
+                W($"<p>{H(entries.Coverage)}</p><p>Inventory generator SHA-256: {H(entries.GeneratorSha256)}; bounded input SHA-256: {H(entries.BoundedInputSha256)}.</p>");
+                if (entries.Relationships.Count == 0)
+                    W("<p>No entry relationships were retained in this report inventory. This is not proof that the application has no framework entry.</p>");
+                foreach (var entry in entries.Relationships)
+                {
+                    W($"<details><summary>{H(entry.EdgeKind)} — {H(entry.EvidenceTier)} — {H(entry.Target)}</summary>");
+                    W($"<p>Source: {H(entry.Source)}; target identity: {H(entry.TargetSymbolId)}; rule: {H(entry.RuleId)}.</p>");
+                    W($"<p>Evidence: {H(entry.SourceIndexId)} / {H(entry.FilePath)}:{entry.StartLine}-{entry.EndLine}; commit: {H(entry.CommitSha)}; extractor version: {H(entry.ExtractorVersion)}; combined fact: {H(entry.CombinedFactId)}.</p>");
+                    W($"<p>Supporting fact IDs (scoped to source index): {H(string.Join(", ", entry.SupportingFactIds))}.</p>");
+                    W($"<p>First unresolved boundary: {H(entry.FirstUnresolvedBoundary)}</p></details>");
+                }
+            }
+            else
+                W("<p>Entry relationship inventory unavailable in this retained report. Do not infer entry absence or framework dispatch from method names. Older retained inputs may lack this evidence; this rendering does not rescan or synthesize it.</p>");
+            W("</section>");
             // Restore already admitted the current or exact legacy projection.
             // Render current coverage wording without rewriting the retained packet.
             var backend = BackendExtractionInventoryBuilder.Create(handoff);

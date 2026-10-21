@@ -2,8 +2,19 @@
 
 ## Retained handler HTTP reporting
 
+Grouped HTML exposes the existing `header.webFormsEntries` inventory separately
+from call paths, including lifecycle candidates, their provenance and unresolved
+boundaries. Null and empty inventories are explicitly non-conclusive. Rendering
+does not derive new relationships, change tiers, or add framework dispatch edges.
+`GroupedCompiledPathHandoffTests.Entry_inventory_is_visible_without_becoming_a_call_edge`
+pins candidate/empty/unavailable output, HTML escaping and lossless path preservation.
+`HttpEntryBoundaryRegressionTests.Real_webforms_framework_keeps_override_body_and_host_entry_separate`
+also exercises the HTML against the public signed-framework VB fixture. Work-machine
+verification uses `prompts/verify-h4-lifecycle-entry-inventory.md`; old retained inputs
+may lack candidates, and no rescan is authorized by that prompt.
+
 `webforms-review requery-handler --surface http-client` selects outbound HTTP
-terminals in the same verified retained combined index. It requires `--handler`
+terminals in the same verified retained combined index. It requires `--handler` or `--source-root`
 and rejects compiled roots, compiled-only traversal, database surface-name filters
 and method-graph mode. Omitting the option preserves the database default. Input
 admission, root uniqueness, traversal limits, receipts and provenance checks are

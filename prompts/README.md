@@ -100,6 +100,11 @@ the TraceMap PowerShell handoff. A verified launcher can then be supplied with
 
 ## Remaining retained HTTP groups
 
+[`verify-h4-lifecycle-entry-inventory.md`](verify-h4-lifecycle-entry-inventory.md)
+checks lifecycle candidate visibility separately from H4's call path. It distinguishes
+missing retained evidence, index-to-report loss and HTML rendering loss, without
+claiming framework dispatch or authorizing a new scan.
+
 [`accept-h2-h3-http-entry.md`](accept-h2-h3-http-entry.md) corrects downstream-root
 selection by querying the verified event entry. It checks H2 and H3 independently
 and preserves truncation as an enumeration limitation, not an extraction verdict.
