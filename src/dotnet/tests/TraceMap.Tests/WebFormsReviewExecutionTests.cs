@@ -1242,6 +1242,8 @@ public sealed class WebFormsReviewExecutionTestsHandlerHttp
             Assert.True(receipt.ExactChains > 0);
             Assert.Equal("http-client", receipt.Query.ToSurface);
             Assert.Equal("single-source-method-retained-static-review-not-parity", receipt.ClaimLevel);
+            Assert.Equal("exact-source-method", receipt.RootSelectionKind);
+            Assert.Contains(receipt.Limitations, limitation => limitation.Contains("runtime HTTP execution", StringComparison.Ordinal));
             Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);
             var report = JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(File.ReadAllText(Path.Combine(destination,
                 GroupedCompiledPathReportWriter.HandoffName)), JsonOptions)!;
@@ -1696,6 +1698,7 @@ public sealed class WebFormsReviewExecutionTestsReportsAndRecovery
         var receipt = JsonSerializer.Deserialize<WebFormsHandlerRequeryReceipt>(File.ReadAllText(Path.Combine(destination,
             WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
         Assert.Equal(depth, receipt.Query.MaxDepth);
+        Assert.Null(receipt.RootSelectionKind);
         Assert.Equal("database-operations", receipt.Query.ToSurface);
         Assert.Equal(0, receipt.ExactChains);
         Assert.Equal(TraceMap.Reporting.RetainedMethodGraphWriter.JsonName, receipt.ZeroPathDiagnosticReport);

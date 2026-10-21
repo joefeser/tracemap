@@ -50,14 +50,21 @@ public static class GroupedCompiledPathReportWriter
             W("<h1>Grouped compiled method paths</h1>");
             if (report.Gaps.Any(gap => gap.GapKind == "ProjectlessPublishImportsNotBuildBound"))
                 W("<p class=\"notice\">Effective VB imports describe the current environment, not the published build. Source/configuration/provider hashes were checked during extraction, but these settings are not proven to have produced the DLLs. Source-to-compiled bridges remain Tier3 candidates, not authenticated build or runtime binding evidence.</p>");
-            W("<p class=\"notice\">LOCAL ONLY — review-only static candidates, not runtime execution or proof that SQL ran. Grouping is a display/index operation; no evidence variant was removed.</p>");
+            var httpClient = report.Query.ToSurface == "http-client";
+            W(httpClient
+                ? "<p class=\"notice\">LOCAL ONLY — review-only static candidates, not runtime execution or proof that an HTTP request was sent. Grouping is a display/index operation; no evidence variant was removed.</p>"
+                : "<p class=\"notice\">LOCAL ONLY — review-only static candidates, not runtime execution or proof that SQL ran. Grouping is a display/index operation; no evidence variant was removed.</p>");
             W($"<p>{handoff.Chains.Count} exact chains · {handoff.Variants.Count} retained variants · coverage {H(report.ReportCoverage)} · truncated {H(report.Summary.Truncated.ToString())}. <a href=\"{HandoffName}\">Lossless indexed handoff JSON</a></p>");
             if (report.Paths.Any(path => path.Edges.Any(edge => edge.EdgeKind == "compiled-il-framework-version-candidate")))
                 W("<p class=\"notice\">Framework-version candidate routes are present (Tier3). Declaring assembly identity remains exact, but embedded desktop framework type versions differ. Runtime binding and compatibility are unproven; argument and return-value propagation stop at this boundary. ‘Exact chains’ describes identity-based grouping, not exact runtime binding.</p>");
             if (handoff.Chains.Count == 0)
-                W("<p class=\"notice\">No terminal routes were retained by this path query. This is not evidence that the handler has no database dependencies. Inspect selector, traversal and coverage gaps below; a method graph is a separate diagnostic view, not a path report.</p>");
+                W(httpClient
+                    ? "<p class=\"notice\">No terminal routes were retained by this path query. This is not evidence that the handler has no outbound HTTP dependencies; outbound HTTP usage remains unproven. Inspect selector, traversal and coverage gaps below; a method graph is a separate diagnostic view, not a path report.</p>"
+                    : "<p class=\"notice\">No terminal routes were retained by this path query. This is not evidence that the handler has no database dependencies. Inspect selector, traversal and coverage gaps below; a method graph is a separate diagnostic view, not a path report.</p>");
             else
-                W("<p class=\"notice\">Static terminal routes were retained by this query. Each route is supported only at its recorded node and edge evidence tiers; the terminal's tier does not upgrade the whole route. This is not runtime execution, original-build correspondence, or proof of a specific SQL statement or stored procedure.</p>");
+                W(httpClient
+                    ? "<p class=\"notice\">Static terminal routes were retained by this query. Each route is supported only at its recorded node and edge evidence tiers; the terminal's tier does not upgrade the whole route. This is not runtime execution, original-build correspondence, or proof that an HTTP request was sent or a remote endpoint was reached.</p>"
+                    : "<p class=\"notice\">Static terminal routes were retained by this query. Each route is supported only at its recorded node and edge evidence tiers; the terminal's tier does not upgrade the whole route. This is not runtime execution, original-build correspondence, or proof of a specific SQL statement or stored procedure.</p>");
             if (report.Summary.Truncated)
             {
                 W("<p class=\"notice\">Enumeration incomplete: retained routes remain evidence, but counts are not exhaustive and unlisted routes are not proven absent. Exact-chain grouping happens after bounded variant enumeration; many variants can belong to the same chain. Grouping does not remove variants or clear truncation. Inspect the retained traversal gaps for the actual stopping reason.</p>");
@@ -175,7 +182,7 @@ public static class GroupedCompiledPathReportWriter
                 W("</ul></details></section>");
             }
             W($"<section><h2>Coverage and retained gaps</h2><p>{report.Gaps.Count} gap records remain in the indexed handoff. Gap absence is not proof of complete coverage.</p><ul>");
-            W("</ul><h3>Sampled root-to-cutoff prefixes</h3><p>At most three witnesses per depth/cycle reason and 64 edges per witness. These are traversal diagnostics, not database paths or runtime proof. Other gaps may have no retained witness.</p>");
+            W("</ul><h3>Sampled root-to-cutoff prefixes</h3><p>At most three witnesses per depth/cycle reason and 64 edges per witness. These are traversal diagnostics, not terminal routes or runtime proof. Other gaps may have no retained witness.</p>");
             var cutoffGaps = report.Gaps.Where(gap => gap.GapKind == "TruncatedByLimit").ToArray();
             var identityReturns = cutoffGaps.Count(gap => gap.CutoffCause == "candidate-identity-roundtrip");
             var terminalUncertainty = cutoffGaps.Count(gap => gap.CutoffCause == "terminal-route-not-found-within-depth-bound");

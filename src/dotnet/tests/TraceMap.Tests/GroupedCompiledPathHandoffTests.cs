@@ -546,15 +546,19 @@ public sealed class GroupedCompiledPathHandoffTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task Route_presence_is_separate_from_enumeration_completeness(bool hasPaths, bool truncated)
+    [InlineData(false, false, "database-api")]
+    [InlineData(false, true, "database-api")]
+    [InlineData(true, false, "database-api")]
+    [InlineData(true, true, "database-api")]
+    [InlineData(false, false, "http-client")]
+    [InlineData(false, true, "http-client")]
+    [InlineData(true, false, "http-client")]
+    [InlineData(true, true, "http-client")]
+    public async Task Route_presence_is_separate_from_enumeration_completeness(bool hasPaths, bool truncated, string surface)
     {
         using var temp = new TempDirectory();
         var original = Report();
-        var report = original with { Paths = hasPaths ? original.Paths : [],
+        var report = original with { Query = original.Query with { ToSurface = surface }, Paths = hasPaths ? original.Paths : [],
             Summary = original.Summary with { PathCount = hasPaths ? original.Paths.Count : 0, Truncated = truncated } };
         var handoff = GroupedCompiledPathHandoffBuilder.Create(report, IndexHash);
         var output = await GroupedCompiledPathReportWriter.WriteAsync(handoff, temp.Path);
@@ -564,6 +568,19 @@ public sealed class GroupedCompiledPathHandoffTests
         Assert.Equal(truncated, html.Contains("Enumeration incomplete:", StringComparison.Ordinal));
         if (hasPaths) Assert.Contains("terminal's tier does not upgrade the whole route", html);
         if (truncated) Assert.Contains("Exact-chain grouping happens after bounded variant enumeration", html);
+        if (surface == "http-client")
+        {
+            Assert.Contains("not runtime execution or proof that an HTTP request was sent", html);
+            Assert.Contains(hasPaths ? "or a remote endpoint was reached" : "outbound HTTP usage remains unproven", html);
+            Assert.DoesNotContain("no database dependencies", html);
+            Assert.DoesNotContain("proof that SQL ran", html);
+            Assert.DoesNotContain("proof of a specific SQL statement or stored procedure", html);
+        }
+        else
+        {
+            Assert.Contains("proof that SQL ran", html);
+            Assert.Contains(hasPaths ? "proof of a specific SQL statement or stored procedure" : "no database dependencies", html);
+        }
         Assert.Equal(JsonSerializer.Serialize(report), JsonSerializer.Serialize(GroupedCompiledPathHandoffBuilder.Restore(handoff)));
     }
 

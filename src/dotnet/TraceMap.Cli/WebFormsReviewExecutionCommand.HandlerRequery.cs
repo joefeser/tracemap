@@ -253,7 +253,8 @@ public static partial class WebFormsReviewExecutionCommand
                 [completed ? "One exact source/scan/commit/symbol root was selected from the checkpointed completed report index."
                     : "One exact source/scan/commit/symbol root was selected from the verified recovered report index.",
                  "All admitted global competitors remain present; this requery repeats graph construction and traversal, not source scanning or combining.",
-                 "Independent single-root path/work bounds are not complete coverage, historical parity, runtime SQL or authenticated-build proof.",
+                 httpClient ? "Independent single-root path/work bounds are not complete coverage, historical parity, runtime HTTP execution or authenticated-build proof."
+                    : "Independent single-root path/work bounds are not complete coverage, historical parity, runtime SQL or authenticated-build proof.",
                  "Original checkpoints and report bundle remain unchanged. All identities and paths are private.",
                  "Graph observations count logical scratch fact payload reads and stage wall time, not physical disk I/O or runtime calls."])
                 { ReportVariant = methodGraph ? "method-graph" : "grouped-paths",
@@ -261,7 +262,7 @@ public static partial class WebFormsReviewExecutionCommand
                     PrimaryReport = methodGraph ? RetainedMethodGraphWriter.HtmlName : GroupedCompiledPathReportWriter.HtmlName,
                     PathEnumerationPerformed = !methodGraph,
                     ZeroPathDiagnosticReport = !methodGraph && graphView is not null ? RetainedMethodGraphWriter.JsonName : null,
-                    RootSelectionKind = explicitRoot is null ? null : "exact-compiled-method" };
+                    RootSelectionKind = explicitRoot is null ? null : sourceRoot ? "exact-source-method" : "exact-compiled-method" };
             receipt = receipt with { BoundedInputSha256 = HandlerRequeryHash(receipt) };
             failureStage = "receipt";
             await File.WriteAllTextAsync(Path.Combine(destination, HandlerRequeryName), JsonSerializer.Serialize(receipt, JsonOptions), token);
