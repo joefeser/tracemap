@@ -1241,6 +1241,7 @@ public sealed class WebFormsReviewExecutionTestsHandlerHttp
                 WebFormsReviewExecutionCommand.HandlerRequeryName)), JsonOptions)!;
             Assert.True(receipt.ExactChains > 0);
             Assert.Equal("http-client", receipt.Query.ToSurface);
+            Assert.Equal("single-source-method-retained-static-review-not-parity", receipt.ClaimLevel);
             Assert.Equal(WebFormsReviewExecutionCommand.HandlerRequeryHash(receipt), receipt.BoundedInputSha256);
             var report = JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(File.ReadAllText(Path.Combine(destination,
                 GroupedCompiledPathReportWriter.HandoffName)), JsonOptions)!;

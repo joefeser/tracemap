@@ -247,7 +247,7 @@ public static partial class WebFormsReviewExecutionCommand
                 artifacts.Add(new(name, artifact.Bytes, artifact.Sha256));
             }
             var receipt = new WebFormsHandlerRequeryReceipt("webforms-handler-requery.v1", HandlerRequeryRule, "local-only",
-                methodGraph ? "unfiltered-retained-method-graph-not-runtime-completeness" : explicitRoot is null ? "single-handler-retained-static-review-not-parity" : "single-compiled-method-retained-static-review-not-parity", generator.Sha256, "", grouped.GeneratorSha256,
+                methodGraph ? "unfiltered-retained-method-graph-not-runtime-completeness" : explicitRoot is null ? "single-handler-retained-static-review-not-parity" : sourceRoot ? "single-source-method-retained-static-review-not-parity" : "single-compiled-method-retained-static-review-not-parity", generator.Sha256, "", grouped.GeneratorSha256,
                 plan.RunId, Digest(planBytes), history.Sha256!, completed ? null : Digest(receiptBytes), index.Sha256, roots[0], paths.Query,
                 grouped.Chains.Count, grouped.Variants.Count, paths.Summary.Truncated, paths.Summary.TraversalWorkUnits, artifacts,
                 [completed ? "One exact source/scan/commit/symbol root was selected from the checkpointed completed report index."
