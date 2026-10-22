@@ -17,7 +17,7 @@ dotnet run --project src/dotnet/TraceMap.Cli -- scan \
 The scan emits one `PackageProduced` fact with
 `sourceKind=ci-workflow`, `manifestKind=github-workflow`,
 `package=Contoso.Sample`, `version=0.1.0`, `workflowPath=.github/workflows/pack.yml`,
-rule `project.file.v1`, tier `Tier2Structural`, extractor `ci-workflow/0.1.0`,
+rule `project.file.v1`, tier `Tier2Structural`, extractor `ci-workflow/0.2.0`,
 and evidence lines pointing at the `dotnet pack` step. Without the flag the
 fact output is unchanged from a default scan.
 

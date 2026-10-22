@@ -16,6 +16,7 @@ with or without `IncludeLegacyRoots`; root selection must not suppress this inve
 Shareable legacy views still omit the private inventory; their privacy boundary is unchanged.
 The signed-framework regression covers both ordinary and bounded legacy-root readers,
 equal candidate inventories, actual HTTP paths and no synthetic candidate call edges.
+The completed isolated fresh-scan prompt is retired.
 
 The inventory is separate
 from call paths, including lifecycle candidates, their provenance and unresolved
@@ -24,7 +25,7 @@ does not derive new relationships, change tiers, or add framework dispatch edges
 `GroupedCompiledPathHandoffTests.Entry_inventory_is_visible_without_becoming_a_call_edge`
 pins candidate/empty/unavailable output, HTML escaping and lossless path preservation.
 `HttpEntryBoundaryRegressionTests.Real_webforms_framework_keeps_override_body_and_host_entry_separate`
-also exercises the HTML against the public signed-framework VB fixture.
+also exercises the HTML against the public signed-framework VB fixture. No rescan is authorized.
 
 `webforms-review requery-handler --surface http-client` selects outbound HTTP
 terminals in the same verified retained combined index. It requires `--handler` or `--source-root`

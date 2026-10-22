@@ -267,7 +267,7 @@ public static class ScanEngine
         var producerReadGaps = new List<ProducedPackageReadGap>();
         var producedPackages = ProjectFileReader.ReadProducedPackages(repoPath, inventory, producerReadGaps);
         var ciProducers = options.IndexCiProducers
-            ? CiWorkflowProducerExtractor.Read(options, producedPackages, cancellationToken)
+            ? CiWorkflowProducerExtractor.Read(options, producedPackages, inventory, cancellationToken)
             : null;
         var nugetLockfiles = ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory);
         var packageManifestGaps = nugetLockfiles.Gaps
@@ -558,6 +558,7 @@ public static class ScanEngine
             $"webformspublish={webFormsPublishBoundedInputSha256 ?? string.Empty}");
         if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonInputSignature}";
         if (options.IndexCiProducers) optionSignature += $"|ciproducers={ciProducersInputSignature}";
+        if (options.CiHintWorkflows is { Count: > 0 }) optionSignature += $"|cihints={FrameValues(options.CiHintWorkflows)}";
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }

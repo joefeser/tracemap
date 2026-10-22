@@ -11,6 +11,61 @@ namespace TraceMap.Cli;
 
 public static class Program
 {
+
+    internal const long MaxCiHintsBytes = 1_048_576;
+
+    /// ci-hints.v1: { "packWorkflows": [ { "uses": "<owner>/<repo>/.github/workflows/<file>" }, ... ] }.
+    /// A malformed or misspelled hints file fails the command instead of silently disabling hints
+    /// (a typo would otherwise be indistinguishable from "this estate has no hinted workflows").
+    internal static IReadOnlyList<string> ReadCiHints(string path)
+    {
+        if (!File.Exists(path)) throw new ArgumentException($"--ci-hints file not found: {path}");
+        if (new FileInfo(path).Length > MaxCiHintsBytes)
+            throw new ArgumentException($"--ci-hints file exceeds {MaxCiHintsBytes} bytes: {path}");
+        System.Text.Json.JsonDocument doc;
+        // Strict UTF-8 like the workflow reader: replacement-decoded bytes would pass validation and
+        // then never match a real uses: value — a publication assertion silently dropped (review).
+        string hintsText;
+        try { hintsText = new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(File.ReadAllBytes(path)); }
+        catch (System.Text.DecoderFallbackException ex) { throw new ArgumentException($"--ci-hints file is not valid UTF-8: {ex.Message}"); }
+        // A leading UTF-8 BOM is legal (PowerShell writes one by default): strict decoding keeps
+        // U+FEFF and JsonDocument rejects it — strip exactly one, never more (review: BOM regression).
+        if (hintsText.Length > 0 && hintsText[0] == '\uFEFF') hintsText = hintsText[1..];
+        try { doc = System.Text.Json.JsonDocument.Parse(hintsText); }
+        catch (System.Text.Json.JsonException ex) { throw new ArgumentException($"--ci-hints file is not valid JSON: {ex.Message}"); }
+        using (doc)
+        {
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+                throw new ArgumentException("--ci-hints file must be a ci-hints.v1 object with a packWorkflows array.");
+            // JsonDocument keeps duplicate property names and TryGetProperty picks one — a duplicated
+            // "packWorkflows" could silently select the last (empty) list and disable hints while the
+            // command exits 0. Duplicates at the root or in an entry are a typed refusal (review).
+            var seenRoot = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in doc.RootElement.EnumerateObject())
+                if (!seenRoot.Add(property.Name))
+                    throw new ArgumentException($"--ci-hints file has a duplicate property '{property.Name}' — each property may occur once.");
+            if (!doc.RootElement.TryGetProperty("packWorkflows", out var packWorkflows)
+                || packWorkflows.ValueKind != System.Text.Json.JsonValueKind.Array)
+                throw new ArgumentException("--ci-hints file must be a ci-hints.v1 object with a packWorkflows array.");
+            var hints = new List<string>();
+            foreach (var entry in packWorkflows.EnumerateArray())
+            {
+                if (entry.ValueKind != System.Text.Json.JsonValueKind.Object)
+                    throw new ArgumentException("--ci-hints packWorkflows entries must be objects with a non-empty string 'uses'.");
+                var seenEntry = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var property in entry.EnumerateObject())
+                    if (!seenEntry.Add(property.Name))
+                        throw new ArgumentException($"--ci-hints packWorkflows entry has a duplicate property '{property.Name}' — each property may occur once.");
+                if (!entry.TryGetProperty("uses", out var uses)
+                    || uses.ValueKind != System.Text.Json.JsonValueKind.String
+                    || string.IsNullOrWhiteSpace(uses.GetString()))
+                    throw new ArgumentException("--ci-hints packWorkflows entries must be objects with a non-empty string 'uses'.");
+                hints.Add(uses.GetString()!.Trim());
+            }
+            return hints;
+        }
+    }
+
     public static async Task<int> Main(string[] args)
     {
         return await TraceMapCommand.RunAsync(args, Console.Out, Console.Error);
@@ -439,6 +494,7 @@ public static class TraceMapCommand
         {
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
+            CiHintWorkflows = ReadCiHintsOption(values),
             WebFormsVbImportContextPath = values.GetValueOrDefault("--webforms-vb-import-context"),
             VisualBasicCompilationContextPath = values.GetValueOrDefault("--vb-compilation-context")
         };
@@ -2479,6 +2535,16 @@ public static class TraceMapCommand
         return new ParsedOptions(values, flags);
     }
 
+    private static IReadOnlyList<string>? ReadCiHintsOption(ParsedOptions values)
+    {
+        if (!values.TryGetValue("--ci-hints", out var raw) || raw is not { } path) return null;
+        // Hints are inputs to the CI producer lane only; accepting them with the lane off would
+        // silently ignore an operator assertion.
+        if (!values.HasFlag("--index-ci-producers"))
+            throw new ArgumentException("--ci-hints requires --index-ci-producers.");
+        return Program.ReadCiHints(path);
+    }
+
     private static int ParsePositiveInt(ParsedOptions values, string key, int defaultValue)
     {
         if (!values.TryGetValue(key, out var value))
@@ -2933,6 +2999,7 @@ public static class TraceMapCommand
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
               --index-deps-json        Read existing bin/**/*.deps.json as stale-qualified build-output evidence; does not build.
               --index-ci-producers     Read .github/workflows/*.yml|*.yaml dotnet pack definitions as ci-defined producer evidence.
+              --ci-hints <file>         Operator hints JSON (ci-hints.v1: packWorkflows[].uses) — a job-level reusable-workflow call to a hinted workflow means this repo publishes; unclaimed SDK projects become ci producers (derived ids).
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
               --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.
               --binlog-commit-sha <sha>
