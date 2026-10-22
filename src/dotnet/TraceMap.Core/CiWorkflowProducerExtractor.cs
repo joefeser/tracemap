@@ -129,7 +129,15 @@ internal static class CiWorkflowProducerExtractor
                 // absolute machine path never leaks into facts or index.sqlite
                 var relWorkflow = Path.GetRelativePath(root, matchedPath!).Replace('\\', '/');
                 observed.Add($"ci-hint:{hintMatch}");
-                foreach (var csproj in Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Take(MaxDiscoveryEntries))
+                var hintCandidates = Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Take(MaxDiscoveryEntries + 1).ToList();
+                if (hintCandidates.Count > MaxDiscoveryEntries)
+                {
+                    // enumeration-order-dependent truncation is silent undercounting — gap it, never pick a subset
+                    hintCandidates.RemoveAt(hintCandidates.Count - 1);
+                    gaps.Add(new(relWorkflow, "ci-hint-discovery-limit",
+                        $"more than {MaxDiscoveryEntries} .csproj files under the repository; hint sweep truncated"));
+                }
+                foreach (var csproj in hintCandidates)
                 {
                     var rel = Path.GetRelativePath(root, csproj).Replace('\\', '/');
                     if (producedPaths.Contains(rel)) continue; // the project lane already claims it — one fact per project, the stronger local evidence wins
@@ -137,29 +145,57 @@ internal static class CiWorkflowProducerExtractor
                     if (!ProjectFileReader.IsSafeNuGetPackageId(id)) continue;
                     // Bounded admission mirrors the project reader: size cap before any read; the
                     // caller's exclude globs apply to the sweep exactly as to the validated lanes
-                    FileInfo info;
-                    try { info = new FileInfo(csproj); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
-                    if (info.Length > MaxFileBytes) { observed.Add($"ci-hint-skip-oversize:{rel}"); continue; }
+                    // AllDirectories can descend directory symlinks; a project behind a reparse-point
+                    // ancestor is outside the repository snapshot — never evidence. Metadata reads are
+                    // guarded: a file vanishing mid-enumeration skips (observed), never aborts the sweep.
+                    var walksOutside = false;
+                    for (var dir = Path.GetDirectoryName(Path.GetFullPath(csproj)); dir is not null && !string.Equals(dir, root, StringComparison.Ordinal); dir = Path.GetDirectoryName(dir))
+                    {
+                        try { if (File.GetAttributes(dir).HasFlag(FileAttributes.ReparsePoint)) { walksOutside = true; break; } }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { walksOutside = true; break; }
+                    }
+                    if (walksOutside) { observed.Add($"ci-hint-skip-outside-snapshot:{rel}"); continue; }
+                    long length;
+                    try { length = new FileInfo(csproj).Length; }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { observed.Add($"ci-hint-skip-unreadable:{rel}"); continue; }
+                    if (length > MaxFileBytes) { observed.Add($"ci-hint-skip-oversize:{rel}"); continue; }
                     if (options.ExcludeGlobs is { Count: > 0 } && options.ExcludeGlobs.Any(g => ScanEngine.GlobMatches(rel, g, StringComparer.Ordinal)))
                     { observed.Add($"ci-hint-skip-excluded:{rel}"); continue; }
-                    string text;
-                    try { text = File.ReadAllText(csproj); }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { observed.Add($"ci-hint-skip-unreadable:{rel}"); continue; }
-                    // SDK-style is the identity-contract precondition for the filename default; an
-                    // explicit IsPackable=false opts out even under a hinted workflow; Test.Sdk
-                    // (case-insensitive, NuGet semantics) skips unless literal IsPackable=true —
-                    // live 2026-10-22: 27 *.Tests ghost producers on the real estate
-                    var sdkStyle = text.Contains("<Project Sdk=", StringComparison.Ordinal);
-                    var packableFalse = System.Text.RegularExpressions.Regex.IsMatch(text,
-                        @"<IsPackable\s*>\s*false\s*</IsPackable", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                    var packableTrue = System.Text.RegularExpressions.Regex.IsMatch(text,
-                        @"<IsPackable\s*>\s*true\s*</IsPackable", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                    var isTest = System.Text.RegularExpressions.Regex.IsMatch(text,
-                        @"<PackageReference\s+Include\s*=\s*[""']microsoft\.net\.test\.sdk[""']", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    // Parsed XML, not raw text: commented-out properties and reordered attributes
+                    // must not flip eligibility, and identity declarations must be honored — a project
+                    // that declares ANY identity (PackageId/AssemblyName) belongs to the project lane's
+                    // verdict on that identity; the hint never invents a second, filename-based id for it
+                    string? sdkStyleAttr = null; bool hasIdentity = false, packableFalse = false, packableTrue = false, isTest = false;
+                    try
+                    {
+                        using var fs = File.OpenRead(csproj);
+                        var doc = System.Xml.Linq.XDocument.Load(fs, System.Xml.Linq.LoadOptions.None);
+                        sdkStyleAttr = doc.Root?.Attribute("Sdk")?.Value;
+                        foreach (var e in doc.Descendants())
+                        {
+                            var name = e.Name.LocalName;
+                            if (e.Parent is { Name.LocalName: "PropertyGroup" })
+                            {
+                                if (name == "PackageId" || name == "AssemblyName") hasIdentity = true;
+                                if (name == "IsPackable")
+                                {
+                                    if (e.Value.Trim().Equals("true", StringComparison.OrdinalIgnoreCase)) packableTrue = true;
+                                    else if (e.Value.Trim().Equals("false", StringComparison.OrdinalIgnoreCase)) packableFalse = true;
+                                }
+                            }
+                            else if (name == "PackageReference")
+                            {
+                                var inc = (string?)e.Attribute("Include");
+                                if (inc is not null && inc.Equals("Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase)) isTest = true;
+                            }
+                        }
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Xml.XmlException) { observed.Add($"ci-hint-skip-unreadable:{rel}"); continue; }
+                    var sdkStyle = sdkStyleAttr is not null;
                     // the DECISION projection rides observed: editing a project to flip any predicate
                     // moves the bounded digest even when the emitted row set alone would not show it
-                    observed.Add($"ci-hint-project:{rel}:sdk={sdkStyle}:packFalse={packableFalse}:packTrue={packableTrue}:test={isTest}");
-                    if (!sdkStyle || packableFalse || (isTest && !packableTrue)) continue;
+                    observed.Add($"ci-hint-project:{rel}:sdk={sdkStyle}:identity={hasIdentity}:packFalse={packableFalse}:packTrue={packableTrue}:test={isTest}");
+                    if (!sdkStyle || hasIdentity || packableFalse || (isTest && !packableTrue)) continue;
                     rows.Add(new CiWorkflowProducerRow(relWorkflow, id, null, rel, 1, 1, "derived-default", "ci-hint-workflow"));
                     emitted++;
                 }
