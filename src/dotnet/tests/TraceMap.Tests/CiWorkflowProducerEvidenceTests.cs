@@ -1513,6 +1513,72 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Empty(result.Rows);
     }
 
+    [Fact] // review round-6 (Baz): a CONDITIONED IsPackable=false is unprovable — never the silent NotPackable skip
+    public void Conditioned_ispackable_false_is_unprovable_not_silent()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable Condition=\"'$(PackForReal)' == 'true'\">false</IsPackable>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/CondFalse.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/CondFalse.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("IsPackable", gap.Detail, StringComparison.Ordinal); // typed gap — NOT the silent NotPackable skip
+        Assert.Contains("CondFalse", gap.Detail, StringComparison.Ordinal); // the packed project is attributable (review round-6)
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review round-6 (Codex P1): Choose/When ancestors carry Conditions too — nested metadata is unprovable
+    public void Choose_when_conditioned_metadata_is_unprovable()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(IsTest)' == 'true'\">\n      <PropertyGroup>\n        <IsPackable>false</IsPackable>\n      </PropertyGroup>\n    </When>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Choose.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Choose.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("IsPackable", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review round-6 (Codex P1): a CONDITIONED identity branch is never a proven id — never publish the Release-only name
+    public void Conditioned_assemblyname_never_resolves()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName Condition=\"'$(Configuration)' == 'Release'\">Contoso.Release</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/CondId.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/CondId.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // neither Contoso.Release nor a filename guess
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("cannot resolve", gap.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact] // review round-6 (Codex P1): a direct pack of a declared-id project carries declared-id provenance + source, not a blanket derived-default
+    public void Direct_pack_declared_id_carries_provenance()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Direct</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Direct.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Direct.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Direct", row.Package);
+        Assert.Equal("declared-id", row.IdProvenance);
+        Assert.Equal("AssemblyName", row.IdSource);
+    }
+
     [Fact] // review round-5 (Baz): a CONDITIONED central Test.Sdk must leave a typed gap, not silently drop the producer (live estate: whole services vanished)
     public void Conditional_directory_build_test_sdk_leaves_a_gap_not_silence()
     {
