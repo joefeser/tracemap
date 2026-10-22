@@ -355,7 +355,7 @@ public sealed class CiWorkflowProducerEvidenceTests
         var result = Read(temp.Path);
 
         var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
-        Assert.Contains("imports", gap.Detail, StringComparison.Ordinal);
+        Assert.Contains("Import", gap.Detail, StringComparison.Ordinal); // 0.4.1: ANY Project import refuses, not just .props/.targets suffixes
         Assert.Empty(result.Rows);
     }
 
@@ -1445,6 +1445,105 @@ public sealed class CiWorkflowProducerEvidenceTests
             StringComparer.Ordinal, default, out var reverse));
         Assert.Equal("ci-workflow-file-limit", forward);
         Assert.Equal(forward, reverse);
+    }
+
+    [Fact] // review P1 (Codex + Baz): <IsPackable>$(PackEnabled)</IsPackable> is neither literal — never guessed packable
+    public void Non_literal_ispackable_refuses_to_derive()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable>$(PackEnabled)</IsPackable>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Dyn.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Dyn.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("non-literal", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review: an inherited non-literal IsPackable (nearest Directory.Build.props) is equally unprovable
+    public void Inherited_non_literal_ispackable_refuses_to_derive()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props", "<Project>\n  <PropertyGroup>\n    <IsPackable>$(PackEnabled)</IsPackable>\n  </PropertyGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("non-literal", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review P1 (Codex): a $(...) Import path bypassed the .props/.targets suffix guard
+    public void Expression_import_refuses_to_derive()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Import Project=\"$(IdentityImport)\" />\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/DynImport.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/DynImport.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("Import", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review P1 (Codex): a centralized Test.Sdk reference in Directory.Build.props makes every project a test project
+    public void Directory_build_test_sdk_marks_projects_test()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props", "<Project>\n  <ItemGroup>\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("Microsoft.NET.Test.Sdk", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review (Baz): changing an evaluated AssemblyName changes the emitted row — it must move the digest too
+    public void Bounded_digest_moves_with_the_resolved_identity()
+    {
+        const string projectA = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <AssemblyName>Contoso.Alpha</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string projectB = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <AssemblyName>Contoso.Beta</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Chain.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Chain.csproj", projectA);
+        var before = Read(temp.Path);
+        Assert.Single(before.Rows, row => row.Package == "Contoso.Alpha");
+
+        WriteProject(temp.Path, "src/Chain.csproj", projectB);
+        var after = Read(temp.Path);
+        Assert.Single(after.Rows, row => row.Package == "Contoso.Beta");
+        Assert.NotEqual(before.BoundedInputSha256, after.BoundedInputSha256);
+    }
+
+    [Fact] // review (Baz): duplicate JSON properties must not silently select one list — typed refusal
+    public void Duplicate_hints_properties_are_refused()
+    {
+        using var temp = new TempDirectory();
+        var dupRoot = Path.Combine(temp.Path, "dup-root.json");
+        File.WriteAllText(dupRoot, "{\"packWorkflows\":[{\"uses\":\"org/shared-ci/.github/workflows/release.yml\"}],\"packWorkflows\":[]}");
+        var exRoot = Assert.Throws<ArgumentException>(() => TraceMap.Cli.Program.ReadCiHints(dupRoot));
+        Assert.Contains("duplicate property 'packWorkflows'", exRoot.Message, StringComparison.Ordinal);
+
+        var dupEntry = Path.Combine(temp.Path, "dup-entry.json");
+        File.WriteAllText(dupEntry, "{\"packWorkflows\":[{\"uses\":\"org/shared-ci/.github/workflows/release.yml\",\"uses\":\"org/other/.github/workflows/release.yml\"}]}");
+        var exEntry = Assert.Throws<ArgumentException>(() => TraceMap.Cli.Program.ReadCiHints(dupEntry));
+        Assert.Contains("duplicate property 'uses'", exEntry.Message, StringComparison.Ordinal);
     }
 
     private static CiWorkflowResult Read(string root, ScanOptions? options = null) => CiWorkflowProducerExtractor.Read(
