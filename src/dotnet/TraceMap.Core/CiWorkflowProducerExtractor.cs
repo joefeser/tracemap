@@ -10,7 +10,8 @@ namespace TraceMap.Core;
 
 internal sealed record CiWorkflowProducerRow(
     string WorkflowPath, string Package, string? Version, string? ProjectPath, int StartLine, int EndLine,
-    string IdProvenance = "declared"); // declared (flag or explicit csproj id) | derived-default (filename chain — live 2026-10-22: an estate of ~100 packages where NOTHING declares id and one csproj sets IsPackable; the CI pack step is the pack INTENT, the filename default is the identity contract)
+    string IdProvenance = "declared",
+    string SignalsKind = "ci-pack-step"); // direct pack-step evidence | ci-hint-workflow (operator-asserted shared call) — serialized as packSignals, never conflated // declared (flag or explicit csproj id) | derived-default (filename chain — live 2026-10-22: an estate of ~100 packages where NOTHING declares id and one csproj sets IsPackable; the CI pack step is the pack INTENT, the filename default is the identity contract)
 internal sealed record CiWorkflowGap(string Path, string Kind, string? Detail = null, int Line = 1);
 internal sealed record CiWorkflowResult(
     IReadOnlyList<CiWorkflowProducerRow> Rows,
@@ -82,9 +83,11 @@ internal static class CiWorkflowProducerExtractor
         // default, marked derived-default — the hint is operator-asserted intent, the strongest ci form.
         if (options.CiHintWorkflows is { Count: > 0 } && Directory.Exists(workflows))
         {
-            // Matching: full normalized path OR path-boundary SUFFIX (an entry like
-            // "dotnet-release-library.yml" or "shared-repo/.github/workflows/x.yml" matches the full
-            // uses value) — live 2026-10-22: exact-match-only silently missed on the real estate.
+            // Operator hints (ci-hints.v1.json): a job-level `uses: <owner>/<repo>/.github/workflows/<file>@<ref>`
+            // of a hinted shared workflow asserts THIS REPO publishes packages (live shape: shared
+            // dotnet-release-library.yml@main called with nuget_publication_path). Guarded like the
+            // validated reader's own inputs — linked paths, size caps, exclude globs — and every project
+            // DECISION rides `observed` so the bounded digest moves when an emitted row changes.
             bool HintMatches(string normalizedUses, string hint)
             {
                 if (normalizedUses.Equals(hint, StringComparison.Ordinal)) return true;
@@ -98,7 +101,15 @@ internal static class CiWorkflowProducerExtractor
                          .Concat(Directory.EnumerateFiles(workflows, "*.yaml", SearchOption.TopDirectoryOnly))
                          .Take(MaxFiles))
             {
-                foreach (var rawLine in File.ReadLines(path))
+                // the same file-level admission the validated reader enforces: reparse points and
+                // oversized files are never hint evidence (a malformed file must drop ALL its rows)
+                FileInfo hintFileInfo;
+                try { hintFileInfo = new FileInfo(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+                if (hintFileInfo.Attributes.HasFlag(FileAttributes.ReparsePoint) || hintFileInfo.Length > MaxFileBytes) continue;
+                string rawHintText;
+                try { rawHintText = File.ReadAllText(path); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+                foreach (var rawLine in rawHintText.Split('\n'))
                 {
                     var trimmed = rawLine.Trim();
                     if (!trimmed.StartsWith("uses:", StringComparison.Ordinal)) continue;
@@ -110,36 +121,50 @@ internal static class CiWorkflowProducerExtractor
                 }
                 if (matched is not null) break;
             }
-            if (matched is { } hintMatch)
+        if (matched is { } hintMatch)
             {
                 var producedPaths = new HashSet<string>(producedByPath.Keys, StringComparer.Ordinal);
                 var emitted = 0;
+                // repo-relative, slash-normalized — the same path shape ordinary CI rows carry; an
+                // absolute machine path never leaks into facts or index.sqlite
+                var relWorkflow = Path.GetRelativePath(root, matchedPath!).Replace('\\', '/');
+                observed.Add($"ci-hint:{hintMatch}");
                 foreach (var csproj in Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories).Take(MaxDiscoveryEntries))
                 {
-                    var rel = Path.GetRelativePath(root, csproj);
+                    var rel = Path.GetRelativePath(root, csproj).Replace('\\', '/');
                     if (producedPaths.Contains(rel)) continue; // the project lane already claims it — one fact per project, the stronger local evidence wins
                     var id = Path.GetFileNameWithoutExtension(csproj);
                     if (!ProjectFileReader.IsSafeNuGetPackageId(id)) continue;
-                    // Test-project guard (live 2026-10-22: 27 *.Tests ghost producers on the real
-                    // estate): the solution-pack hint sweeps every SDK project, but test projects do
-                    // not ship — same rule as tier-3: Test.Sdk reference skips unless literal
-                    // IsPackable=true. Bounded read; unreadable files are skipped conservatively.
-                    try
-                    {
-                        var text = File.ReadAllText(csproj);
-                        var isTest = text.Contains("Microsoft.NET.Test.Sdk", StringComparison.Ordinal);
-                        var packableTrue = System.Text.RegularExpressions.Regex.IsMatch(text,
-                            @"<IsPackable\s*>true\s*</IsPackable", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                        if (isTest && !packableTrue) continue;
-                    }
-                    catch (IOException) { continue; }
-                    catch (UnauthorizedAccessException) { continue; }
-                    rows.Add(new CiWorkflowProducerRow(matchedPath!, id, null, rel, 1, 1, "derived-default"));
+                    // Bounded admission mirrors the project reader: size cap before any read; the
+                    // caller's exclude globs apply to the sweep exactly as to the validated lanes
+                    FileInfo info;
+                    try { info = new FileInfo(csproj); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { continue; }
+                    if (info.Length > MaxFileBytes) { observed.Add($"ci-hint-skip-oversize:{rel}"); continue; }
+                    if (options.ExcludeGlobs is { Count: > 0 } && options.ExcludeGlobs.Any(g => ScanEngine.GlobMatches(rel, g, StringComparer.Ordinal)))
+                    { observed.Add($"ci-hint-skip-excluded:{rel}"); continue; }
+                    string text;
+                    try { text = File.ReadAllText(csproj); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { observed.Add($"ci-hint-skip-unreadable:{rel}"); continue; }
+                    // SDK-style is the identity-contract precondition for the filename default; an
+                    // explicit IsPackable=false opts out even under a hinted workflow; Test.Sdk
+                    // (case-insensitive, NuGet semantics) skips unless literal IsPackable=true —
+                    // live 2026-10-22: 27 *.Tests ghost producers on the real estate
+                    var sdkStyle = text.Contains("<Project Sdk=", StringComparison.Ordinal);
+                    var packableFalse = System.Text.RegularExpressions.Regex.IsMatch(text,
+                        @"<IsPackable\s*>\s*false\s*</IsPackable", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    var packableTrue = System.Text.RegularExpressions.Regex.IsMatch(text,
+                        @"<IsPackable\s*>\s*true\s*</IsPackable", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    var isTest = System.Text.RegularExpressions.Regex.IsMatch(text,
+                        @"<PackageReference\s+Include\s*=\s*[""']microsoft\.net\.test\.sdk[""']", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    // the DECISION projection rides observed: editing a project to flip any predicate
+                    // moves the bounded digest even when the emitted row set alone would not show it
+                    observed.Add($"ci-hint-project:{rel}:sdk={sdkStyle}:packFalse={packableFalse}:packTrue={packableTrue}:test={isTest}");
+                    if (!sdkStyle || packableFalse || (isTest && !packableTrue)) continue;
+                    rows.Add(new CiWorkflowProducerRow(relWorkflow, id, null, rel, 1, 1, "derived-default", "ci-hint-workflow"));
                     emitted++;
                 }
-                observed.Add($"ci-hint:{hintMatch}");
                 if (emitted == 0)
-                    gaps.Add(new(matchedPath!, "ci-hint-no-projects",
+                    gaps.Add(new(relWorkflow, "ci-hint-no-projects",
                         "hinted shared workflow called but no unclaimed packable project found in the repo"));
             }
         }
@@ -405,7 +430,7 @@ internal static class CiWorkflowProducerExtractor
             {
                 properties["packageIdProvenance"] = "derived-default"; // ci evidence + filename-chain id — never presented as declared
                 properties["packageIdSource"] = "MSBuildProjectName";
-                properties["packSignals"] = "ci-hint-workflow"; // operator-asserted shared workflow (stronger than a local pack step)
+                properties["packSignals"] = row.SignalsKind; // ci-pack-step (a direct dotnet pack command) | ci-hint-workflow (operator-asserted shared call)
             }
             // Unresolvable versions are omitted entirely (never empty, never guessed) — the
             // consuming registry renders them as unevidenced.
