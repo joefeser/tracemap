@@ -35,15 +35,28 @@ public static class Program
         catch (System.Text.Json.JsonException ex) { throw new ArgumentException($"--ci-hints file is not valid JSON: {ex.Message}"); }
         using (doc)
         {
-            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object
-                || !doc.RootElement.TryGetProperty("packWorkflows", out var packWorkflows)
+            if (doc.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+                throw new ArgumentException("--ci-hints file must be a ci-hints.v1 object with a packWorkflows array.");
+            // JsonDocument keeps duplicate property names and TryGetProperty picks one — a duplicated
+            // "packWorkflows" could silently select the last (empty) list and disable hints while the
+            // command exits 0. Duplicates at the root or in an entry are a typed refusal (review).
+            var seenRoot = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in doc.RootElement.EnumerateObject())
+                if (!seenRoot.Add(property.Name))
+                    throw new ArgumentException($"--ci-hints file has a duplicate property '{property.Name}' — each property may occur once.");
+            if (!doc.RootElement.TryGetProperty("packWorkflows", out var packWorkflows)
                 || packWorkflows.ValueKind != System.Text.Json.JsonValueKind.Array)
                 throw new ArgumentException("--ci-hints file must be a ci-hints.v1 object with a packWorkflows array.");
             var hints = new List<string>();
             foreach (var entry in packWorkflows.EnumerateArray())
             {
-                if (entry.ValueKind != System.Text.Json.JsonValueKind.Object
-                    || !entry.TryGetProperty("uses", out var uses)
+                if (entry.ValueKind != System.Text.Json.JsonValueKind.Object)
+                    throw new ArgumentException("--ci-hints packWorkflows entries must be objects with a non-empty string 'uses'.");
+                var seenEntry = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var property in entry.EnumerateObject())
+                    if (!seenEntry.Add(property.Name))
+                        throw new ArgumentException($"--ci-hints packWorkflows entry has a duplicate property '{property.Name}' — each property may occur once.");
+                if (!entry.TryGetProperty("uses", out var uses)
                     || uses.ValueKind != System.Text.Json.JsonValueKind.String
                     || string.IsNullOrWhiteSpace(uses.GetString()))
                     throw new ArgumentException("--ci-hints packWorkflows entries must be objects with a non-empty string 'uses'.");

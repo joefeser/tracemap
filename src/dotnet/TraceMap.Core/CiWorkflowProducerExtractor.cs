@@ -130,7 +130,12 @@ internal static class CiWorkflowProducerExtractor
         var decision = context.InventoryProjects.Contains(relativeProject)
             ? ProjectFileReader.ReadCiDerivedIdentity(context.Root, relativeProject)
             : new ProjectFileReader.CiDerivedIdentity(NotInInventoryDecision, null);
-        context.Observed.Add("ci-derived-identity\0" + relativeProject + "\0" + decision.Decision);
+        // The resolved id and its source ride the digest too: changing an evaluated
+        // AssemblyName changes the emitted row, so it must move the bounded digest
+        // (review: digest omitted the identity value). Explicit null markers keep
+        // null/empty/changed values unambiguous and deterministic.
+        context.Observed.Add("ci-derived-identity\0" + relativeProject + "\0" + decision.Decision
+            + "\0" + (decision.PackageId ?? "\0null") + "\0" + (decision.IdSource ?? "\0null"));
         return decision;
     }
 
@@ -138,10 +143,11 @@ internal static class CiWorkflowProducerExtractor
     {
         ProjectFileReader.CiDerivedIdentityDecisions.NotSdkStyle => "packed project is not SDK-style; its package identity is not the filename default",
         ProjectFileReader.CiDerivedIdentityDecisions.NotPackable => "packed project is IsPackable=false",
-        ProjectFileReader.CiDerivedIdentityDecisions.TestProject => "packed project references Microsoft.NET.Test.Sdk without a literal IsPackable=true",
+        ProjectFileReader.CiDerivedIdentityDecisions.UnprovablePackable => "packed project's IsPackable is a non-literal expression (neither literal true nor false) the bounded evaluator cannot resolve; never guessed",
+        ProjectFileReader.CiDerivedIdentityDecisions.TestProject => "packed project references Microsoft.NET.Test.Sdk (directly or via the nearest Directory.Build) without a literal IsPackable=true",
         ProjectFileReader.CiDerivedIdentityDecisions.DeclaresIdentity => "packed project declares a PackageId/AssemblyName whose value the bounded evaluator cannot resolve (tokens beyond $(MSBuildProjectName)) or which is not a safe package id; never guessed",
         ProjectFileReader.CiDerivedIdentityDecisions.InheritedIdentity => "the nearest Directory.Build.props/.targets declares a package identity, is linked, or is unreadable; the filename default is not provable",
-        ProjectFileReader.CiDerivedIdentityDecisions.CustomImports => "packed project imports a .props/.targets file; an import can set identity or packability, so the filename default is not provable",
+        ProjectFileReader.CiDerivedIdentityDecisions.CustomImports => "packed project has a project-level Import (any Project attribute, including unevaluated expressions); an import can set identity or packability, so the filename default is not provable",
         ProjectFileReader.CiDerivedIdentityDecisions.DeclaredId => "unreachable: a provable declared id emits a row, never a gap",
         ProjectFileReader.CiDerivedIdentityDecisions.UnsafeFileName => "packed project declares no explicit PackageId and its filename is not a safe package id",
         NotInInventoryDecision => "packed project is not in the scanned project inventory",

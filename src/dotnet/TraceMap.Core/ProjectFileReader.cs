@@ -302,6 +302,7 @@ public static class ProjectFileReader
         public const string Unreadable = "unreadable-or-limit";
         public const string UnsafeFileName = "unsafe-filename";
         public const string CustomImports = "custom-imports";
+        public const string UnprovablePackable = "unprovable-packable";
 
         public static bool IsNonProducer(string decision) =>
             decision is NotSdkStyle or NotPackable or TestProject;
@@ -312,11 +313,13 @@ public static class ProjectFileReader
     /// The MSBuild filename default (PackageId &lt;- AssemblyName &lt;- MSBuildProjectName) is the
     /// package id ONLY when nothing in the bounded view can override it: the project is readable,
     /// SDK-style, declares neither PackageId nor AssemblyName (property names case-insensitive, as
-    /// MSBuild), is not IsPackable=false (last wins), is not a Microsoft.NET.Test.Sdk project without
-    /// a literal IsPackable=true, and the NEAREST Directory.Build.props/.targets (walking up to the
-    /// repository root, the file MSBuild auto-imports) declares no PackageId/AssemblyName. Imports
-    /// inside those files are not followed — a documented residual. Never guessed: a project that
-    /// declares any identity gets an unevidenced decision, not a second filename-based id.
+    /// MSBuild), is not IsPackable=false (last wins), has no non-literal IsPackable the bounded view
+    /// cannot evaluate, is not a Microsoft.NET.Test.Sdk project (directly or via the nearest
+    /// Directory.Build) without a literal IsPackable=true, and the NEAREST Directory.Build.props/.targets
+    /// (walking up to the repository root, the file MSBuild auto-imports) declares no
+    /// PackageId/AssemblyName. Imports inside those files are not followed — a documented residual.
+    /// Never guessed: a project that declares any identity gets an unevidenced decision, not a
+    /// second filename-based id.
     internal static CiDerivedIdentity ReadCiDerivedIdentity(string repoPath, string relativePath)
     {
         var root = Path.GetFullPath(repoPath);
@@ -325,23 +328,26 @@ public static class ProjectFileReader
         if (!IsUnderRoot(fullPath, root) || !TryLoadXml(fullPath, out var document, MaxProducerProjectBytes))
             return new(CiDerivedIdentityDecisions.Unreadable, null);
         if (!IsSdkStyle(document)) return new(CiDerivedIdentityDecisions.NotSdkStyle, null);
-        // A project-level Import of a .props/.targets file can set PackageId/AssemblyName/IsPackable
-        // after the project body; the bounded view cannot evaluate it, so the filename default is not
-        // provable — an unevidenced decision, never a guessed id (review P1: custom imports).
+        // A project-level Import can set PackageId/AssemblyName/IsPackable after the project body; the
+        // bounded view cannot evaluate it, so the filename default is not provable — an unevidenced
+        // decision, never a guessed id (review P1: custom imports). ANY Import with a Project attribute
+        // refuses: a textual .props/.targets suffix check is bypassed by $(...) expression imports.
         foreach (var import in document.Descendants().Where(e => e.Name.LocalName == "Import"))
         {
-            var imported = AttributeValue(import, "Project");
-            if (imported is not null && (imported.EndsWith(".props", StringComparison.OrdinalIgnoreCase) || imported.EndsWith(".targets", StringComparison.OrdinalIgnoreCase)))
+            if (AttributeValue(import, "Project") is not null)
                 return new(CiDerivedIdentityDecisions.CustomImports, null);
         }
 
-        bool? packable = null; var packableLiteralTrue = false;
+        bool? packable = null; var packableLiteralTrue = false; var packableUnprovable = false;
         string? packageIdValue = null; string? assemblyNameValue = null; // last-wins raw values — the CI chain evaluates them below
         var inherited = InspectNearestDirectoryBuildFiles(root, Path.GetDirectoryName(fullPath));
         if (inherited.Unreadable) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
         if (inherited.Packable is { } inheritedPackable)
+        {
             (packable, packableLiteralTrue) = (inheritedPackable, inherited.PackableLiteralTrue);
-        var testSdkReferenced = false;
+            packableUnprovable = inherited.PackableUnprovable;
+        }
+        var testSdkReferenced = inherited.TestSdkReferenced; // a centralized Directory.Build reference makes every project a test project
         foreach (var element in document.Descendants())
         {
             if (element.Parent is { Name.LocalName: "PropertyGroup" })
@@ -352,8 +358,11 @@ public static class ProjectFileReader
                     case "ASSEMBLYNAME": assemblyNameValue = element.Value.Trim(); break;
                     case "ISPACKABLE":
                         var value = element.Value.Trim();
-                        packable = !value.Equals("false", StringComparison.OrdinalIgnoreCase);
-                        packableLiteralTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
+                        var literalTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        packable = !literalFalse; // provisional; an unresolved expression is refused below
+                        packableLiteralTrue = literalTrue;
+                        packableUnprovable = !literalFalse && !literalTrue; // $(PackEnabled) etc.: never guessed (review P1)
                         break;
                 }
             }
@@ -364,8 +373,12 @@ public static class ProjectFileReader
         }
         // Directory.Build.targets is imported AFTER the project body: its identity/packability wins.
         if (inherited.TargetsPackable is { } targetsPackable)
+        {
             (packable, packableLiteralTrue) = (targetsPackable, inherited.TargetsPackableLiteralTrue);
+            packableUnprovable = inherited.TargetsPackableUnprovable;
+        }
         if (packable == false) return new(CiDerivedIdentityDecisions.NotPackable, null);
+        if (packableUnprovable) return new(CiDerivedIdentityDecisions.UnprovablePackable, null);
         if (testSdkReferenced && !packableLiteralTrue) return new(CiDerivedIdentityDecisions.TestProject, null);
         // FULL MSBuild chain, in order: PackageId <- AssemblyName <- MSBuildProjectName(filename).
         // A DECLARED identity is the id when pack intent is proven by the CI lane (a pack step or a
@@ -391,14 +404,16 @@ public static class ProjectFileReader
 
     private sealed record InheritedProjectView(
         bool Unreadable, bool DeclaresIdentity,
-        bool? Packable, bool PackableLiteralTrue,
-        bool? TargetsPackable, bool TargetsPackableLiteralTrue);
+        bool? Packable, bool PackableLiteralTrue, bool PackableUnprovable,
+        bool? TargetsPackable, bool TargetsPackableLiteralTrue, bool TargetsPackableUnprovable,
+        bool TestSdkReferenced);
 
     private static InheritedProjectView InspectNearestDirectoryBuildFiles(string root, string? projectDirectory)
     {
-        var unreadable = false; var declaresIdentity = false;
+        var unreadable = false; var declaresIdentity = false; var testSdkReferenced = false;
         bool? propsPackable = null, targetsPackable = null;
         bool propsLiteralTrue = false, targetsLiteralTrue = false;
+        var propsUnprovable = false; var targetsUnprovable = false;
         foreach (var fileName in new[] { "Directory.Build.props", "Directory.Build.targets" })
         {
             for (var dir = projectDirectory; dir is not null && IsUnderRoot(dir, root); dir = Path.GetDirectoryName(dir))
@@ -412,26 +427,34 @@ public static class ProjectFileReader
                     try { if (File.GetAttributes(candidate).HasFlag(FileAttributes.ReparsePoint)) { unreadable = true; break; } }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { unreadable = true; break; }
                     if (!TryLoadXml(candidate, out var document, MaxProducerProjectBytes)) { unreadable = true; break; }
-                    foreach (var element in document.Descendants().Where(e => e.Parent is { Name.LocalName: "PropertyGroup" }))
+                    foreach (var element in document.Descendants())
                     {
-                        switch (element.Name.LocalName.ToUpperInvariant())
+                        if (element.Parent is { Name.LocalName: "PropertyGroup" })
                         {
-                            case "PACKAGEID" or "ASSEMBLYNAME": declaresIdentity = true; break;
-                            case "ISPACKABLE":
-                                var value = element.Value.Trim();
-                                var isPackable = !value.Equals("false", StringComparison.OrdinalIgnoreCase);
-                                var literalTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
-                                if (fileName == "Directory.Build.props") (propsPackable, propsLiteralTrue) = (isPackable, literalTrue);
-                                else (targetsPackable, targetsLiteralTrue) = (isPackable, literalTrue);
-                                break;
+                            switch (element.Name.LocalName.ToUpperInvariant())
+                            {
+                                case "PACKAGEID" or "ASSEMBLYNAME": declaresIdentity = true; break;
+                                case "ISPACKABLE":
+                                    var value = element.Value.Trim();
+                                    var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
+                                    var literalTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                                    var isPackable = !literalFalse; // provisional; non-literal refused by the caller
+                                    if (fileName == "Directory.Build.props") (propsPackable, propsLiteralTrue, propsUnprovable) = (isPackable, literalTrue, !literalFalse && !literalTrue);
+                                    else (targetsPackable, targetsLiteralTrue, targetsUnprovable) = (isPackable, literalTrue, !literalFalse && !literalTrue);
+                                    break;
+                            }
                         }
+                        else if (element.Parent is { Name.LocalName: "ItemGroup" }
+                            && element.Name.LocalName == "PackageReference"
+                            && string.Equals(AttributeValue(element, "Include"), "Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase))
+                            testSdkReferenced = true; // centralized test SDK: every project under it is a test project (review P1)
                     }
                     break; // MSBuild auto-imports only the nearest file of each name
                 }
                 if (string.Equals(dir.TrimEnd(Path.DirectorySeparatorChar), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.Ordinal)) break;
             }
         }
-        return new(unreadable, declaresIdentity, propsPackable, propsLiteralTrue, targetsPackable, targetsLiteralTrue);
+        return new(unreadable, declaresIdentity, propsPackable, propsLiteralTrue, propsUnprovable, targetsPackable, targetsLiteralTrue, targetsUnprovable, testSdkReferenced);
     }
 
     private static bool IsUnderRoot(string fullPath, string root)
