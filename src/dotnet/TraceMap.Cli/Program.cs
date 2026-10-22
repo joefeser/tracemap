@@ -28,6 +28,9 @@ public static class Program
         string hintsText;
         try { hintsText = new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(File.ReadAllBytes(path)); }
         catch (System.Text.DecoderFallbackException ex) { throw new ArgumentException($"--ci-hints file is not valid UTF-8: {ex.Message}"); }
+        // A leading UTF-8 BOM is legal (PowerShell writes one by default): strict decoding keeps
+        // U+FEFF and JsonDocument rejects it — strip exactly one, never more (review: BOM regression).
+        if (hintsText.Length > 0 && hintsText[0] == '\uFEFF') hintsText = hintsText[1..];
         try { doc = System.Text.Json.JsonDocument.Parse(hintsText); }
         catch (System.Text.Json.JsonException ex) { throw new ArgumentException($"--ci-hints file is not valid JSON: {ex.Message}"); }
         using (doc)
