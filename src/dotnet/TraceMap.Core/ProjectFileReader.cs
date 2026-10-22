@@ -300,6 +300,7 @@ public static class ProjectFileReader
         public const string InheritedIdentity = "inherited-identity";
         public const string Unreadable = "unreadable-or-limit";
         public const string UnsafeFileName = "unsafe-filename";
+        public const string CustomImports = "custom-imports";
 
         public static bool IsNonProducer(string decision) =>
             decision is NotSdkStyle or NotPackable or TestProject;
@@ -323,6 +324,15 @@ public static class ProjectFileReader
         if (!IsUnderRoot(fullPath, root) || !TryLoadXml(fullPath, out var document, MaxProducerProjectBytes))
             return new(CiDerivedIdentityDecisions.Unreadable, null);
         if (!IsSdkStyle(document)) return new(CiDerivedIdentityDecisions.NotSdkStyle, null);
+        // A project-level Import of a .props/.targets file can set PackageId/AssemblyName/IsPackable
+        // after the project body; the bounded view cannot evaluate it, so the filename default is not
+        // provable — an unevidenced decision, never a guessed id (review P1: custom imports).
+        foreach (var import in document.Descendants().Where(e => e.Name.LocalName == "Import"))
+        {
+            var imported = AttributeValue(import, "Project");
+            if (imported is not null && (imported.EndsWith(".props", StringComparison.OrdinalIgnoreCase) || imported.EndsWith(".targets", StringComparison.OrdinalIgnoreCase)))
+                return new(CiDerivedIdentityDecisions.CustomImports, null);
+        }
 
         bool? packable = null; var packableLiteralTrue = false; var declaresIdentity = false;
         var inherited = InspectNearestDirectoryBuildFiles(root, Path.GetDirectoryName(fullPath));
@@ -377,6 +387,11 @@ public static class ProjectFileReader
                 var candidate = Path.Combine(dir, fileName);
                 if (File.Exists(candidate))
                 {
+                    // A linked Directory.Build file is outside the admitted inventory even though
+                    // Exists/Load follow it — an external target must never steer derived identity
+                    // (review: linked metadata). Treated as unreadable: identity not provable.
+                    try { if (File.GetAttributes(candidate).HasFlag(FileAttributes.ReparsePoint)) { unreadable = true; break; } }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { unreadable = true; break; }
                     if (!TryLoadXml(candidate, out var document, MaxProducerProjectBytes)) { unreadable = true; break; }
                     foreach (var element in document.Descendants().Where(e => e.Parent is { Name.LocalName: "PropertyGroup" }))
                     {

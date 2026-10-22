@@ -139,7 +139,8 @@ internal static class CiWorkflowProducerExtractor
         ProjectFileReader.CiDerivedIdentityDecisions.NotPackable => "packed project is IsPackable=false",
         ProjectFileReader.CiDerivedIdentityDecisions.TestProject => "packed project references Microsoft.NET.Test.Sdk without a literal IsPackable=true",
         ProjectFileReader.CiDerivedIdentityDecisions.DeclaresIdentity => "packed project declares no literal PackageId but declares an AssemblyName or non-literal PackageId; the filename default is not its package id",
-        ProjectFileReader.CiDerivedIdentityDecisions.InheritedIdentity => "the nearest Directory.Build.props/.targets declares a package identity or is unreadable; the filename default is not provable",
+        ProjectFileReader.CiDerivedIdentityDecisions.InheritedIdentity => "the nearest Directory.Build.props/.targets declares a package identity, is linked, or is unreadable; the filename default is not provable",
+        ProjectFileReader.CiDerivedIdentityDecisions.CustomImports => "packed project imports a .props/.targets file; an import can set identity or packability, so the filename default is not provable",
         ProjectFileReader.CiDerivedIdentityDecisions.UnsafeFileName => "packed project declares no explicit PackageId and its filename is not a safe package id",
         NotInInventoryDecision => "packed project is not in the scanned project inventory",
         _ => "packed project is unreadable or exceeds the producer byte limit"
@@ -194,7 +195,10 @@ internal static class CiWorkflowProducerExtractor
             else if (!ProjectFileReader.CiDerivedIdentityDecisions.IsNonProducer(identity.Decision))
             {
                 // The hint asserts publication but the id is not provable: partial, never silent.
-                gaps.Add(new(project, "ci-hint-id-unevidenced", DerivedIdentityGapDetail(identity.Decision)));
+                // Anchored to the cited uses: call — the assertion that fired and the workflow file
+                // that carries it (review: gaps cited the project at a fabricated line 1).
+                gaps.Add(new(call.WorkflowPath, "ci-hint-id-unevidenced",
+                    $"{project}: {DerivedIdentityGapDetail(identity.Decision)}", call.Line));
             }
         }
         if (emitted == 0)

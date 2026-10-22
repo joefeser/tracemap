@@ -23,7 +23,12 @@ public static class Program
         if (new FileInfo(path).Length > MaxCiHintsBytes)
             throw new ArgumentException($"--ci-hints file exceeds {MaxCiHintsBytes} bytes: {path}");
         System.Text.Json.JsonDocument doc;
-        try { doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(path)); }
+        // Strict UTF-8 like the workflow reader: replacement-decoded bytes would pass validation and
+        // then never match a real uses: value — a publication assertion silently dropped (review).
+        string hintsText;
+        try { hintsText = new UTF8Encoding(false, throwOnInvalidBytes: true).GetString(File.ReadAllBytes(path)); }
+        catch (System.Text.DecoderFallbackException ex) { throw new ArgumentException($"--ci-hints file is not valid UTF-8: {ex.Message}"); }
+        try { doc = System.Text.Json.JsonDocument.Parse(hintsText); }
         catch (System.Text.Json.JsonException ex) { throw new ArgumentException($"--ci-hints file is not valid JSON: {ex.Message}"); }
         using (doc)
         {
