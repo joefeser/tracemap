@@ -1,5 +1,11 @@
 # Private exchange prompts
 
+For post-PR #901 HTTP readiness, use
+[Verify work-machine HTTP readiness](verify-work-machine-http-readiness.md).
+Its verification-only follow-up checks existing receipts against their preserved
+CLI/reporting binaries with no build, scan, or requery. The older HTTP prompts
+below are historical troubleshooting steps, not prerequisites for this check.
+
 When several work-machine checkouts and test runs make the accepted baseline
 unclear, start with [Locate the accepted work baseline](locate-accepted-work-baseline.md).
 This is bounded discovery only: no build, scan or requery. It keeps exact private

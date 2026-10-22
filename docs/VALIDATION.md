@@ -5187,6 +5187,25 @@ endurance pattern (TRACEMAP_PARITY_ILASM) later.
 
 ## Explicit retained HTTP source roots
 
+### HTTP reporting binary identity check
+
+`python3 scripts/verify-http-report-provenance.py --receipt <handler-requery.local.json> --cli-dll <invoked-cli.dll>`
+requires Python 3.11+ and reads only the receipt, its fixed-name grouped handoff,
+the selected CLI DLL, and adjacent `TraceMap.Reporting.dll`. It checks the two
+distinct generator hashes, handoff byte length/hash membership, index identity,
+and stable binary bytes before/after. Duplicate JSON keys, missing fields,
+unsupported schemas/surfaces, missing binaries, and mismatches fail closed.
+No artifacts are written and diagnostics omit private paths, hashes, and content.
+
+This check is not authentication, source-to-binary provenance, bounded-input hash
+recomputation, nested inventory validation, HTML verification, or runtime proof.
+Use preserved producer binaries for old receipts; a rebuild is not a substitute.
+Run synthetic tests with
+`python3 -m unittest discover -s scripts/validation -p test_http_report_provenance.py -v`.
+See `prompts/verify-work-machine-http-readiness.md` for the bounded operator handoff.
+
+### Source root selection
+
 `webforms-review requery-handler --source-root <private-selector.json> --surface http-client`
 selects a source method independently of a previous report's root roster. The existing
 run/bundle receipt and index hash remain mandatory. The selector's `sourceIndexId`,
