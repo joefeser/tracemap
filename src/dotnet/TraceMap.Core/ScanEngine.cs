@@ -267,7 +267,7 @@ public static class ScanEngine
         var producerReadGaps = new List<ProducedPackageReadGap>();
         var producedPackages = ProjectFileReader.ReadProducedPackages(repoPath, inventory, producerReadGaps);
         var ciProducers = options.IndexCiProducers
-            ? CiWorkflowProducerExtractor.Read(options, producedPackages, cancellationToken)
+            ? CiWorkflowProducerExtractor.Read(options, producedPackages, inventory, cancellationToken)
             : null;
         var nugetLockfiles = ProjectFileReader.ReadNuGetLockfiles(repoPath, inventory);
         var packageManifestGaps = nugetLockfiles.Gaps
