@@ -1513,6 +1513,75 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Empty(result.Rows);
     }
 
+    [Fact] // review round-5 (Baz): a CONDITIONED central Test.Sdk must leave a typed gap, not silently drop the producer (live estate: whole services vanished)
+    public void Conditional_directory_build_test_sdk_leaves_a_gap_not_silence()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("CONDITIONED", gap.Detail, StringComparison.Ordinal); // typed, visible — never a silent skip
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review round-5 (Baz): a CONDITIONED central Test.Sdk with a literal IsPackable=true still emits (literal true is provable)
+    public void Conditional_test_sdk_with_literal_ispackable_true_still_emits()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable>true</IsPackable>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Pack.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Pack.csproj", project);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Pack", row.Package);
+    }
+
+    [Fact] // review round-5 (Baz): a CONDITIONED inherited IsPackable=false is unprovable, never a definitive NotPackable skip
+    public void Conditional_inherited_ispackable_is_unprovable_not_a_skip()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup Condition=\"'$(PackForReal)' == 'true'\">\n    <IsPackable>false</IsPackable>\n  </PropertyGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("IsPackable", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review round-5: a CONDITIONED body IsPackable is unprovable too
+    public void Conditional_body_ispackable_is_unprovable()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable Condition=\"'$(Configuration)' == 'Release'\">true</IsPackable>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Cond.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Cond.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("IsPackable", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
     [Fact] // review (Baz): changing an evaluated AssemblyName changes the emitted row — it must move the digest too
     public void Bounded_digest_moves_with_the_resolved_identity()
     {

@@ -303,6 +303,13 @@ public static class ProjectFileReader
         public const string UnsafeFileName = "unsafe-filename";
         public const string CustomImports = "custom-imports";
         public const string UnprovablePackable = "unprovable-packable";
+        public const string ConditionalTestSdk = "conditional-test-sdk";
+
+        // A Condition on the element or its direct PropertyGroup/ItemGroup makes an assignment
+        // unprovable in the bounded view — never definitive (review: conditioned inherited
+        // IsPackable skipped producers; conditioned central Test.Sdk silently dropped them).
+        internal static bool IsConditioned(XElement element) =>
+            element.Attribute("Condition") is not null || element.Parent?.Attribute("Condition") is not null;
 
         public static bool IsNonProducer(string decision) =>
             decision is NotSdkStyle or NotPackable or TestProject;
@@ -347,7 +354,9 @@ public static class ProjectFileReader
             (packable, packableLiteralTrue) = (inheritedPackable, inherited.PackableLiteralTrue);
             packableUnprovable = inherited.PackableUnprovable;
         }
+        else packableUnprovable |= inherited.PackableUnprovable; // a conditioned inherited IsPackable proves nothing either way (review)
         var testSdkReferenced = inherited.TestSdkReferenced; // a centralized Directory.Build reference makes every project a test project
+        var conditionalTestSdkReferenced = inherited.ConditionalTestSdk; // conditioned reference: unprovable, never a silent skip (review)
         foreach (var element in document.Descendants())
         {
             if (element.Parent is { Name.LocalName: "PropertyGroup" })
@@ -360,16 +369,20 @@ public static class ProjectFileReader
                         var value = element.Value.Trim();
                         var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
                         var literalTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
-                        packable = !literalFalse; // provisional; an unresolved expression is refused below
-                        packableLiteralTrue = literalTrue;
-                        packableUnprovable = !literalFalse && !literalTrue; // $(PackEnabled) etc.: never guessed (review P1)
+                        var conditioned = CiDerivedIdentityDecisions.IsConditioned(element);
+                        packable = !literalFalse; // provisional; an unresolved expression or Condition is refused below
+                        packableLiteralTrue = literalTrue && !conditioned; // a Conditioned literal true is not provable
+                        packableUnprovable = conditioned || (!literalFalse && !literalTrue); // $(PackEnabled), Condition=...: never guessed (review P1 + round-5)
                         break;
                 }
             }
             else if (element.Parent is { Name.LocalName: "ItemGroup" }
                 && element.Name.LocalName == "PackageReference"
                 && string.Equals(AttributeValue(element, "Include"), "Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase))
-                testSdkReferenced = true;
+            {
+                if (CiDerivedIdentityDecisions.IsConditioned(element)) conditionalTestSdkReferenced = true;
+                else testSdkReferenced = true;
+            }
         }
         // Directory.Build.targets is imported AFTER the project body: its identity/packability wins.
         if (inherited.TargetsPackable is { } targetsPackable)
@@ -377,9 +390,13 @@ public static class ProjectFileReader
             (packable, packableLiteralTrue) = (targetsPackable, inherited.TargetsPackableLiteralTrue);
             packableUnprovable = inherited.TargetsPackableUnprovable;
         }
+        else packableUnprovable |= inherited.TargetsPackableUnprovable; // conditioned targets-side IsPackable: unprovable (review)
         if (packable == false) return new(CiDerivedIdentityDecisions.NotPackable, null);
         if (packableUnprovable) return new(CiDerivedIdentityDecisions.UnprovablePackable, null);
-        if (testSdkReferenced && !packableLiteralTrue) return new(CiDerivedIdentityDecisions.TestProject, null);
+        if ((testSdkReferenced || conditionalTestSdkReferenced) && !packableLiteralTrue)
+            // unconditional reference = test project (silent non-producer by design); a CONDITIONED
+            // reference is unprovable either way — a typed gap, never a silent drop (review round-5)
+            return new(testSdkReferenced ? CiDerivedIdentityDecisions.TestProject : CiDerivedIdentityDecisions.ConditionalTestSdk, null);
         // FULL MSBuild chain, in order: PackageId <- AssemblyName <- MSBuildProjectName(filename).
         // A DECLARED identity is the id when pack intent is proven by the CI lane (a pack step or a
         // hinted shared workflow) — "dotnet pack ships AssemblyName" is exactly what MSBuild does.
@@ -406,11 +423,11 @@ public static class ProjectFileReader
         bool Unreadable, bool DeclaresIdentity,
         bool? Packable, bool PackableLiteralTrue, bool PackableUnprovable,
         bool? TargetsPackable, bool TargetsPackableLiteralTrue, bool TargetsPackableUnprovable,
-        bool TestSdkReferenced);
+        bool TestSdkReferenced, bool ConditionalTestSdk);
 
     private static InheritedProjectView InspectNearestDirectoryBuildFiles(string root, string? projectDirectory)
     {
-        var unreadable = false; var declaresIdentity = false; var testSdkReferenced = false;
+        var unreadable = false; var declaresIdentity = false; var testSdkReferenced = false; var conditionalTestSdk = false;
         bool? propsPackable = null, targetsPackable = null;
         bool propsLiteralTrue = false, targetsLiteralTrue = false;
         var propsUnprovable = false; var targetsUnprovable = false;
@@ -438,6 +455,14 @@ public static class ProjectFileReader
                                     var value = element.Value.Trim();
                                     var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
                                     var literalTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                                    if (CiDerivedIdentityDecisions.IsConditioned(element))
+                                    {
+                                        // A Conditioned assignment is neither true nor false in the bounded
+                                        // view — unprovable, never a definitive skip (review round-5).
+                                        if (fileName == "Directory.Build.props") propsUnprovable = true;
+                                        else targetsUnprovable = true;
+                                        break;
+                                    }
                                     var isPackable = !literalFalse; // provisional; non-literal refused by the caller
                                     if (fileName == "Directory.Build.props") (propsPackable, propsLiteralTrue, propsUnprovable) = (isPackable, literalTrue, !literalFalse && !literalTrue);
                                     else (targetsPackable, targetsLiteralTrue, targetsUnprovable) = (isPackable, literalTrue, !literalFalse && !literalTrue);
@@ -447,14 +472,19 @@ public static class ProjectFileReader
                         else if (element.Parent is { Name.LocalName: "ItemGroup" }
                             && element.Name.LocalName == "PackageReference"
                             && string.Equals(AttributeValue(element, "Include"), "Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase))
-                            testSdkReferenced = true; // centralized test SDK: every project under it is a test project (review P1)
+                        {
+                            // unconditional: every project under it is a test project (review P1);
+                            // conditioned: unprovable either way, the caller gaps it (review round-5)
+                            if (CiDerivedIdentityDecisions.IsConditioned(element)) conditionalTestSdk = true;
+                            else testSdkReferenced = true;
+                        }
                     }
                     break; // MSBuild auto-imports only the nearest file of each name
                 }
                 if (string.Equals(dir.TrimEnd(Path.DirectorySeparatorChar), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.Ordinal)) break;
             }
         }
-        return new(unreadable, declaresIdentity, propsPackable, propsLiteralTrue, propsUnprovable, targetsPackable, targetsLiteralTrue, targetsUnprovable, testSdkReferenced);
+        return new(unreadable, declaresIdentity, propsPackable, propsLiteralTrue, propsUnprovable, targetsPackable, targetsLiteralTrue, targetsUnprovable, testSdkReferenced, conditionalTestSdk);
     }
 
     private static bool IsUnderRoot(string fullPath, string root)
