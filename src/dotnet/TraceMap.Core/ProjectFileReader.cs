@@ -311,7 +311,9 @@ public static class ProjectFileReader
         // Choose/When ancestors carry Conditions too).
         internal static bool IsConditioned(XElement element) =>
             element.Attribute("Condition") is not null
-            || element.Ancestors().Any(ancestor => ancestor.Attribute("Condition") is not null);
+            || element.Ancestors().Any(ancestor => ancestor.Attribute("Condition") is not null
+                // an Otherwise branch fires only when no When matched — conditional without a Condition (review round-7)
+                || string.Equals(ancestor.Name.LocalName, "Otherwise", StringComparison.Ordinal));
 
         public static bool IsNonProducer(string decision) =>
             decision is NotSdkStyle or NotPackable or TestProject;
@@ -408,6 +410,10 @@ public static class ProjectFileReader
         // id (review round-6: a Release-only AssemblyName is not a Debug build's identity). Inherited
         // Directory.Build identity and any declared value the bounded evaluator cannot resolve remain
         // typed gaps — the previous guards' honesty is preserved; only the provable chain is followed.
+        // Inherited identity is consulted BEFORE the chain: a props-side PackageId outranks a body
+        // AssemblyName and a targets-side declaration overrides both — mixed cases conservatively
+        // refuse rather than guess which assignment wins (review round-7).
+        if (inherited.DeclaresIdentity) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
         var chainSource = packageIdValue is not null ? "PackageId" : assemblyNameValue is not null ? "AssemblyName" : null;
         var chainValue = packageIdValue ?? assemblyNameValue;
         var chainConditioned = packageIdValue is not null ? packageIdConditioned : assemblyNameConditioned;
@@ -419,7 +425,6 @@ public static class ProjectFileReader
                 return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
             return new(CiDerivedIdentityDecisions.DeclaredId, evaluated, chainSource!);
         }
-        if (inherited.DeclaresIdentity) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
         if (!IsSafeNuGetPackageId(projectName)) return new(CiDerivedIdentityDecisions.UnsafeFileName, null);
         return new(CiDerivedIdentityDecisions.Derived, projectName, "MSBuildProjectName");
     }
