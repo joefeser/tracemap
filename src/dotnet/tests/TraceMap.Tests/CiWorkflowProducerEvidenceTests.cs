@@ -305,14 +305,16 @@ public sealed class CiWorkflowProducerEvidenceTests
         // from its filename: MSBuild's PackageId default is $(AssemblyName), so `dotnet pack` would
         // produce Contoso.Fallback, never "Fallback". The filename default applies only when the
         // bounded view proves nothing overrides the chain (see the zero-signal derived test).
-        var declared = Assert.Single(result.Rows);
-        Assert.Equal("declared", declared.IdProvenance);
+        Assert.Equal(2, result.Rows.Count); // FULL CHAIN (0.4.0): the AssemblyName project ships its AssemblyName
+        var declared = Assert.Single(result.Rows, row => row.IdProvenance == "declared");
         Assert.Equal("Contoso.Declared", declared.Package);
         Assert.Null(declared.Version); // no CI version override: the version stays unevidenced
-        Assert.DoesNotContain(result.Rows, row => row.Package == "Fallback");
+        var viaChain = Assert.Single(result.Rows, row => row.Package == "Contoso.Fallback");
+        Assert.True(viaChain.IdProvenance is "declared-id" or "derived-default");
+        Assert.DoesNotContain(result.Rows, row => row.Package == "Fallback"); // the bare filename never ships
         var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-producer-id-unevidenced").ToArray();
-        Assert.Equal(3, unevidenced.Length); // AssemblyName + sln + bare-target: no provable single id
-        Assert.Contains(unevidenced, gap => gap.Detail!.Contains("AssemblyName", StringComparison.Ordinal));
+        Assert.Equal(2, unevidenced.Length); // sln + bare-target only: the AssemblyName case graduated to a row
+        Assert.DoesNotContain(unevidenced, gap => gap.Detail!.Contains("AssemblyName", StringComparison.Ordinal));
         Assert.Contains(unevidenced, gap => gap.Detail!.Contains("solution packs", StringComparison.Ordinal));
         Assert.Contains(unevidenced, gap => gap.Detail!.Contains("no explicit project target", StringComparison.Ordinal));
     }
@@ -504,14 +506,20 @@ public sealed class CiWorkflowProducerEvidenceTests
 
         var result = ReadHinted(temp.Path, null, "dotnet-release-library.yml");
 
-        Assert.Equal("Lib", Assert.Single(result.Rows).Package);
+        // FULL CHAIN (0.4.0): Interp declares AssemblyName=Contoso.Interp -> a declared-id ROW
+        // (the live estate's 88-producer recovery), not a gap; only Inherited (Directory.Build
+        // identity outside the provable chain) stays unevidenced
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Contains(result.Rows, row => row.Package == "Lib" && row.IdProvenance == "derived-default");
+        var interp = Assert.Single(result.Rows, row => row.Package == "Contoso.Interp");
+        Assert.Equal("declared-id", interp.IdProvenance);
+        Assert.Equal("AssemblyName", interp.IdSource);
         var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").Select(gap => gap.Path).Order(StringComparer.Ordinal).ToArray();
         // gaps anchor to the uses: CALL SITE (the workflow + line carrying the assertion); the
         // affected project rides the DETAIL — a gap at <project>:1-1 was a fabricated location
         Assert.All(unevidenced, gapPath => Assert.Equal(".github/workflows/release.yml", gapPath));
         var details = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").Select(gap => gap.Detail).ToList();
         Assert.Contains(details, detail => detail!.StartsWith("lib/Inherited.csproj:"));
-        Assert.Contains(details, detail => detail!.StartsWith("src/Interp.csproj:"));
         Assert.DoesNotContain(result.Gaps, gap => gap.Path is "tools/Tool.csproj" or "legacy/Legacy.csproj");
     }
 

@@ -293,6 +293,7 @@ public static class ProjectFileReader
     internal static class CiDerivedIdentityDecisions
     {
         public const string Derived = "derived";
+        public const string DeclaredId = "declared-id";
         public const string NotSdkStyle = "not-sdk-style";
         public const string NotPackable = "not-packable";
         public const string TestProject = "test-project";
@@ -306,7 +307,7 @@ public static class ProjectFileReader
             decision is NotSdkStyle or NotPackable or TestProject;
     }
 
-    internal sealed record CiDerivedIdentity(string Decision, string? PackageId);
+    internal sealed record CiDerivedIdentity(string Decision, string? PackageId, string? IdSource = null);
 
     /// The MSBuild filename default (PackageId &lt;- AssemblyName &lt;- MSBuildProjectName) is the
     /// package id ONLY when nothing in the bounded view can override it: the project is readable,
@@ -334,7 +335,8 @@ public static class ProjectFileReader
                 return new(CiDerivedIdentityDecisions.CustomImports, null);
         }
 
-        bool? packable = null; var packableLiteralTrue = false; var declaresIdentity = false;
+        bool? packable = null; var packableLiteralTrue = false;
+        string? packageIdValue = null; string? assemblyNameValue = null; // last-wins raw values — the CI chain evaluates them below
         var inherited = InspectNearestDirectoryBuildFiles(root, Path.GetDirectoryName(fullPath));
         if (inherited.Unreadable) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
         if (inherited.Packable is { } inheritedPackable)
@@ -346,7 +348,8 @@ public static class ProjectFileReader
             {
                 switch (element.Name.LocalName.ToUpperInvariant())
                 {
-                    case "PACKAGEID" or "ASSEMBLYNAME": declaresIdentity = true; break;
+                    case "PACKAGEID": packageIdValue = element.Value.Trim(); break;
+                    case "ASSEMBLYNAME": assemblyNameValue = element.Value.Trim(); break;
                     case "ISPACKABLE":
                         var value = element.Value.Trim();
                         packable = !value.Equals("false", StringComparison.OrdinalIgnoreCase);
@@ -364,10 +367,26 @@ public static class ProjectFileReader
             (packable, packableLiteralTrue) = (targetsPackable, inherited.TargetsPackableLiteralTrue);
         if (packable == false) return new(CiDerivedIdentityDecisions.NotPackable, null);
         if (testSdkReferenced && !packableLiteralTrue) return new(CiDerivedIdentityDecisions.TestProject, null);
-        if (declaresIdentity) return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
+        // FULL MSBuild chain, in order: PackageId <- AssemblyName <- MSBuildProjectName(filename).
+        // A DECLARED identity is the id when pack intent is proven by the CI lane (a pack step or a
+        // hinted shared workflow) — "dotnet pack ships AssemblyName" is exactly what MSBuild does.
+        // Bounded evaluation only: $(MSBuildProjectName) resolves from the file's own name; any other
+        // token stays unevidenced (never guessed). Inherited Directory.Build identity and any declared
+        // value the bounded evaluator cannot resolve remain typed gaps — the previous guards' honesty
+        // is preserved; only the provable chain is followed (live estate finding: 88 producers whose
+        // AssemblyName IS their package id were dropped to gaps by the filename-only guard).
+        var chainSource = packageIdValue is not null ? "PackageId" : assemblyNameValue is not null ? "AssemblyName" : null;
+        var chainValue = packageIdValue ?? assemblyNameValue;
+        if (chainValue is not null)
+        {
+            if (EvaluateBoundedIdentity(chainValue, projectName, out var _) is not { } evaluated
+                || !IsSafeNuGetPackageId(evaluated))
+                return new(packageIdValue is not null ? CiDerivedIdentityDecisions.DeclaresIdentity : CiDerivedIdentityDecisions.DeclaresIdentity, null);
+            return new(CiDerivedIdentityDecisions.DeclaredId, evaluated, chainSource!);
+        }
         if (inherited.DeclaresIdentity) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
         if (!IsSafeNuGetPackageId(projectName)) return new(CiDerivedIdentityDecisions.UnsafeFileName, null);
-        return new(CiDerivedIdentityDecisions.Derived, projectName);
+        return new(CiDerivedIdentityDecisions.Derived, projectName, "MSBuildProjectName");
     }
 
     private sealed record InheritedProjectView(

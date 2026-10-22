@@ -11,7 +11,8 @@ namespace TraceMap.Core;
 internal sealed record CiWorkflowProducerRow(
     string WorkflowPath, string Package, string? Version, string? ProjectPath, int StartLine, int EndLine,
     string IdProvenance = "declared",
-    string SignalsKind = "ci-pack-step"); // direct pack-step evidence | ci-hint-workflow (operator-asserted shared call) — serialized as packSignals, never conflated // declared (flag or explicit csproj id) | derived-default (filename chain — live 2026-10-22: an estate of ~100 packages where NOTHING declares id and one csproj sets IsPackable; the CI pack step is the pack INTENT, the filename default is the identity contract)
+    string SignalsKind = "ci-pack-step",
+    string? IdSource = null); // PackageId | AssemblyName (declared-id rows); null = filename chain // direct pack-step evidence | ci-hint-workflow (operator-asserted shared call) — serialized as packSignals, never conflated // declared (flag or explicit csproj id) | derived-default (filename chain — live 2026-10-22: an estate of ~100 packages where NOTHING declares id and one csproj sets IsPackable; the CI pack step is the pack INTENT, the filename default is the identity contract)
 internal sealed record CiWorkflowGap(string Path, string Kind, string? Detail = null, int Line = 1);
 /// A literal job-level `uses:` captured by the bounded structural parser of an admitted workflow file.
 internal sealed record CiWorkflowJobCall(string WorkflowPath, string Uses, int Line);
@@ -138,9 +139,10 @@ internal static class CiWorkflowProducerExtractor
         ProjectFileReader.CiDerivedIdentityDecisions.NotSdkStyle => "packed project is not SDK-style; its package identity is not the filename default",
         ProjectFileReader.CiDerivedIdentityDecisions.NotPackable => "packed project is IsPackable=false",
         ProjectFileReader.CiDerivedIdentityDecisions.TestProject => "packed project references Microsoft.NET.Test.Sdk without a literal IsPackable=true",
-        ProjectFileReader.CiDerivedIdentityDecisions.DeclaresIdentity => "packed project declares no literal PackageId but declares an AssemblyName or non-literal PackageId; the filename default is not its package id",
+        ProjectFileReader.CiDerivedIdentityDecisions.DeclaresIdentity => "packed project declares a PackageId/AssemblyName whose value the bounded evaluator cannot resolve (tokens beyond $(MSBuildProjectName)) or which is not a safe package id; never guessed",
         ProjectFileReader.CiDerivedIdentityDecisions.InheritedIdentity => "the nearest Directory.Build.props/.targets declares a package identity, is linked, or is unreadable; the filename default is not provable",
         ProjectFileReader.CiDerivedIdentityDecisions.CustomImports => "packed project imports a .props/.targets file; an import can set identity or packability, so the filename default is not provable",
+        ProjectFileReader.CiDerivedIdentityDecisions.DeclaredId => "unreachable: a provable declared id emits a row, never a gap",
         ProjectFileReader.CiDerivedIdentityDecisions.UnsafeFileName => "packed project declares no explicit PackageId and its filename is not a safe package id",
         NotInInventoryDecision => "packed project is not in the scanned project inventory",
         _ => "packed project is unreadable or exceeds the producer byte limit"
@@ -188,8 +190,13 @@ internal static class CiWorkflowProducerExtractor
             var identity = DeriveCiIdentity(context, project);
             if (identity.PackageId is { } id)
             {
+                // declared-id: the chain resolved a DECLARED identity (PackageId/AssemblyName, bounded
+                // evaluation) under CI pack intent — a stronger claim than derived-default, never weaker
+                var provenance = identity.Decision == ProjectFileReader.CiDerivedIdentityDecisions.DeclaredId
+                    ? "declared-id"
+                    : "derived-default";
                 rows.Add(new CiWorkflowProducerRow(call.WorkflowPath, id, null, project, call.Line, call.Line,
-                    "derived-default", "ci-hint-workflow"));
+                    provenance, "ci-hint-workflow", identity.IdSource));
                 emitted++;
             }
             else if (!ProjectFileReader.CiDerivedIdentityDecisions.IsNonProducer(identity.Decision))
@@ -446,10 +453,12 @@ internal static class CiWorkflowProducerExtractor
                 ["workflowPath"] = row.WorkflowPath
             };
             if (row.ProjectPath is not null) properties["projectPath"] = row.ProjectPath;
-            if (row.IdProvenance == "derived-default")
+            if (row.IdProvenance is "derived-default" or "declared-id")
             {
-                properties["packageIdProvenance"] = "derived-default"; // ci evidence + filename-chain id — never presented as declared
-                properties["packageIdSource"] = "MSBuildProjectName";
+                properties["packageIdProvenance"] = row.IdProvenance; // declared-id (a declared identity the chain resolved) | derived-default (filename chain) — the CI lane's own honesty tiers
+                properties["packageIdSource"] = row.IdProvenance == "declared-id" && row.IdSource is not null
+                    ? row.IdSource
+                    : "MSBuildProjectName";
                 properties["packSignals"] = row.SignalsKind; // ci-pack-step (a direct dotnet pack command) | ci-hint-workflow (operator-asserted shared call)
             }
             // Unresolvable versions are omitted entirely (never empty, never guessed) — the
