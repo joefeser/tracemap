@@ -151,6 +151,10 @@ public sealed class ScanReceiptRecorder
         // A scan with an opt-in evidence lane enabled must never reuse an authorized scope
         // fingerprint from a disabled-lane scan (and vice versa); both-off keeps the legacy
         // v1 hash byte-for-byte.
+        // CiHintWorkflows participates whenever the ci lane is on: different hint CONTENT is a
+        // different scan scope (it changes emitted producer facts), so two same-commit scans with
+        // different --ci-hints can never share a receipt fingerprint. Ordinal-sorted, both-off keeps
+        // the legacy v1 hash byte-for-byte.
         scopeFingerprint = !options.IndexDepsJson && !options.IndexCiProducers
             ? Hash(scope)
             : Hash(JsonSerializer.Serialize(new
@@ -158,7 +162,10 @@ public sealed class ScanReceiptRecorder
                 baseScopeSha256 = Hash(scope),
                 indexDepsJson = options.IndexDepsJson,
                 depsJsonLimits = options.IndexDepsJson ? options.DepsJsonLimits ?? new DepsJsonLimits() : null,
-                indexCiProducers = options.IndexCiProducers
+                indexCiProducers = options.IndexCiProducers,
+                ciHintWorkflows = options.IndexCiProducers && options.CiHintWorkflows is { Count: > 0 }
+                    ? options.CiHintWorkflows.Order(StringComparer.Ordinal).ToArray()
+                    : null
             }));
         if (!string.IsNullOrWhiteSpace(options.WebFormsVbImportContextPath))
             scopeFingerprint = Hash(JsonSerializer.Serialize(new

@@ -301,15 +301,297 @@ public sealed class CiWorkflowProducerEvidenceTests
         var result = Read(temp.Path);
 
         // Effective id after CI overrides: the flag wins; without a flag the packed project's
-        // explicit declaration is the evidence. Weaker fallback ids are never promoted here.
-        var declared = Assert.Single(result.Rows);
+        // explicit declaration is the evidence. A project declaring AssemblyName does NOT derive
+        // from its filename: MSBuild's PackageId default is $(AssemblyName), so `dotnet pack` would
+        // produce Contoso.Fallback, never "Fallback". The filename default applies only when the
+        // bounded view proves nothing overrides the chain (see the zero-signal derived test).
+        Assert.Equal(2, result.Rows.Count); // FULL CHAIN (0.4.0): the AssemblyName project ships its AssemblyName
+        var declared = Assert.Single(result.Rows, row => row.IdProvenance == "declared");
         Assert.Equal("Contoso.Declared", declared.Package);
         Assert.Null(declared.Version); // no CI version override: the version stays unevidenced
+        var viaChain = Assert.Single(result.Rows, row => row.Package == "Contoso.Fallback");
+        Assert.True(viaChain.IdProvenance is "declared-id" or "derived-default");
+        Assert.DoesNotContain(result.Rows, row => row.Package == "Fallback"); // the bare filename never ships
         var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-producer-id-unevidenced").ToArray();
-        Assert.Equal(3, unevidenced.Length);
-        Assert.Contains(unevidenced, gap => gap.Detail!.Contains("no explicit PackageId", StringComparison.Ordinal));
+        Assert.Equal(2, unevidenced.Length); // sln + bare-target only: the AssemblyName case graduated to a row
+        Assert.DoesNotContain(unevidenced, gap => gap.Detail!.Contains("AssemblyName", StringComparison.Ordinal));
         Assert.Contains(unevidenced, gap => gap.Detail!.Contains("solution packs", StringComparison.Ordinal));
         Assert.Contains(unevidenced, gap => gap.Detail!.Contains("no explicit project target", StringComparison.Ordinal));
+    }
+
+
+
+    [Fact] // 2026-10-22 live: 27 *.Tests ghost producers on the real estate — hint-swept test projects must not ship
+    public void Hint_lane_skips_test_projects_unless_literal_ispackable()
+    {
+        const string testProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>";
+        const string packedTestProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable>true</IsPackable>\n  </PropertyGroup>\n  <ItemGroup>\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>";
+        const string libProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "on:\n  workflow_dispatch:\njobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", workflow);
+        WriteProject(temp.Path, "src/Lib.csproj", libProject);
+        WriteProject(temp.Path, "src/Lib.Tests.csproj", testProject);
+        WriteProject(temp.Path, "src/Lib.PackedTests.csproj", packedTestProject);
+
+        var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")) { IndexCiProducers = true, CiHintWorkflows = new[] { "org/shared-ci/.github/workflows/dotnet-release-library.yml" } };
+        var result = CiWorkflowProducerExtractor.Read(options, [], InventProjects(temp.Path), CancellationToken.None);
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Contains(result.Rows, row => row.Package == "Lib");
+        Assert.Contains(result.Rows, row => row.Package == "Lib.PackedTests"); // literal IsPackable=true ships even as a test project
+        Assert.DoesNotContain(result.Rows, row => row.Package == "Lib.Tests"); // plain test project: never ships
+    }
+
+    [Fact] // review: a project-level Import can set identity/packability after the body — no derive
+    public void Custom_import_project_never_derives_a_filename_id()
+    {
+        const string importingProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Import Project=\"..\\build\\identity.props\" />\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Importing.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Importing.csproj", importingProject);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("Import", gap.Detail, StringComparison.Ordinal); // 0.4.1: ANY Project import refuses, not just .props/.targets suffixes
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // 2026-10-22 live shape: shared dotnet-release-library.yml@main called with nuget_publication_path —
+    // the hint says this repo publishes; ZERO-SIGNAL projects become ci producers with derived ids
+    public void Hinted_shared_workflow_call_makes_unclaimed_projects_ci_producers()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "on:\n  workflow_dispatch:\njobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main\n    with:\n      nuget_publication_path: 'Some/Path/'";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+
+        var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")) { IndexCiProducers = true, CiHintWorkflows = new[] { "org/shared-ci/.github/workflows/dotnet-release-library.yml" } };
+        var result = CiWorkflowProducerExtractor.Read(options, [], InventProjects(temp.Path), CancellationToken.None);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Bare", row.Package);
+        Assert.Equal("derived-default", row.IdProvenance);
+        Assert.Equal("src/Bare.csproj", row.ProjectPath);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-hint-no-projects");
+    }
+
+    [Fact] // 2026-10-22: the zero-signal producer - NOTHING in the csproj, only the CI pack step
+    public void Zero_signal_project_packs_by_ci_step_alone_as_derived_default()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Bare", row.Package);
+        Assert.Equal("derived-default", row.IdProvenance);
+        Assert.Equal("src/Bare.csproj", row.ProjectPath);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    private const string BareSdkProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+    private const string HintedReleaseWorkflow = "on:\n  workflow_dispatch:\njobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main\n    with:\n      nuget_publication_path: 'Some/Path/'";
+
+    private static CiWorkflowResult ReadHinted(string root, IEnumerable<FileInventoryItem>? inventory = null, params string[] hints)
+    {
+        var options = new ScanOptions(root, Path.Combine(root, ".tracemap")) { IndexCiProducers = true, CiHintWorkflows = hints };
+        var scoped = (inventory ?? InventProjects(root)).ToArray();
+        return CiWorkflowProducerExtractor.Read(options, ProjectFileReader.ReadProducedPackages(root, scoped), scoped, CancellationToken.None);
+    }
+
+    [Fact]
+    public void Hint_suffix_match_respects_path_boundaries_and_cites_the_uses_line()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+
+        // a bare filename hint is a path-boundary suffix of the full uses value
+        var row = Assert.Single(ReadHinted(temp.Path, null, "dotnet-release-library.yml").Rows);
+        Assert.Equal(".github/workflows/release.yml", row.WorkflowPath);
+        Assert.Equal(5, row.StartLine); // the job-level `uses:` line, not line 1
+        Assert.Equal("ci-hint-workflow", row.SignalsKind);
+        // a suffix that is not on a '/' boundary never matches
+        Assert.Empty(ReadHinted(temp.Path, null, "release-library.yml").Rows);
+    }
+
+    [Fact]
+    public void Hint_call_in_a_rejected_workflow_contributes_nothing()
+    {
+        using var temp = new TempDirectory();
+        // duplicate job key: the validated reader drops the whole file, so the call is not evidence either
+        WriteWorkflow(temp.Path, "release.yml",
+            "jobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main\n    uses: org/other/.github/workflows/x.yml@main");
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+
+        var result = ReadHinted(temp.Path, null, "org/shared-ci/.github/workflows/dotnet-release-library.yml");
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-invalid");
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-hint-no-projects");
+    }
+
+    [Fact]
+    public void Uses_text_outside_a_job_level_key_is_not_a_hinted_call()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "build.yml", """
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                env:
+                  NOTE: |
+                    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main
+                steps:
+                  - name: checkout
+                    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main
+            """);
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+
+        var result = ReadHinted(temp.Path, null, "org/shared-ci/.github/workflows/dotnet-release-library.yml");
+
+        Assert.Empty(result.Rows);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind.StartsWith("ci-hint", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Hint_sweep_uses_the_scanned_inventory_and_never_relabels_direct_pack_rows()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Packed.csproj");
+        WriteProject(temp.Path, "src/Lib.csproj", BareSdkProject);
+        WriteProject(temp.Path, "src/Packed.csproj", BareSdkProject);
+        WriteProject(temp.Path, "src/OutOfScope.csproj", BareSdkProject);
+        var scoped = InventProjects(temp.Path).Where(item => !item.RelativePath.EndsWith("OutOfScope.csproj", StringComparison.Ordinal));
+
+        var result = ReadHinted(temp.Path, scoped, "dotnet-release-library.yml");
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("ci-hint-workflow", Assert.Single(result.Rows, row => row.Package == "Lib").SignalsKind);
+        var packed = Assert.Single(result.Rows, row => row.Package == "Packed");
+        Assert.Equal("ci-pack-step", packed.SignalsKind); // direct evidence outranks the operator assertion
+        Assert.Equal(".github/workflows/pack.yml", packed.WorkflowPath);
+        Assert.DoesNotContain(result.Rows, row => row.Package == "OutOfScope"); // excluded from the scan scope
+    }
+
+    [Fact]
+    public void Hint_sweep_gaps_unprovable_identities_and_skips_non_producers()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+        WriteProject(temp.Path, "src/Lib.csproj", BareSdkProject);
+        // interpolated AssemblyName without pack signals: the project lane does not promote it,
+        // and the filename default is NOT its id — a typed gap, never a filename guess
+        WriteProject(temp.Path, "src/Interp.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <AssemblyName>Contoso.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>");
+        // the nearest Directory.Build.props overrides the identity chain for everything under lib/
+        WriteProject(temp.Path, "lib/Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.$(MSBuildProjectName)</PackageId>\n  </PropertyGroup>\n</Project>");
+        WriteProject(temp.Path, "lib/Inherited.csproj", BareSdkProject);
+        // inherited IsPackable=false and legacy non-SDK projects are not producers at all
+        WriteProject(temp.Path, "tools/Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <IsPackable>false</IsPackable>\n  </PropertyGroup>\n</Project>");
+        WriteProject(temp.Path, "tools/Tool.csproj", BareSdkProject);
+        WriteProject(temp.Path, "legacy/Legacy.csproj",
+            "<Project ToolsVersion=\"15.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n  <PropertyGroup>\n    <OutputType>Library</OutputType>\n  </PropertyGroup>\n</Project>");
+
+        var result = ReadHinted(temp.Path, null, "dotnet-release-library.yml");
+
+        // FULL CHAIN (0.4.0): Interp declares AssemblyName=Contoso.Interp -> a declared-id ROW
+        // (the live estate's 88-producer recovery), not a gap; only Inherited (Directory.Build
+        // identity outside the provable chain) stays unevidenced
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Contains(result.Rows, row => row.Package == "Lib" && row.IdProvenance == "derived-default");
+        var interp = Assert.Single(result.Rows, row => row.Package == "Contoso.Interp");
+        Assert.Equal("declared-id", interp.IdProvenance);
+        Assert.Equal("AssemblyName", interp.IdSource);
+        var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").Select(gap => gap.Path).Order(StringComparer.Ordinal).ToArray();
+        // gaps anchor to the uses: CALL SITE (the workflow + line carrying the assertion); the
+        // affected project rides the DETAIL — a gap at <project>:1-1 was a fabricated location
+        Assert.All(unevidenced, gapPath => Assert.Equal(".github/workflows/release.yml", gapPath));
+        var details = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").Select(gap => gap.Detail).ToList();
+        Assert.Contains(details, detail => detail!.StartsWith("lib/Inherited.csproj:"));
+        Assert.DoesNotContain(result.Gaps, gap => gap.Path is "tools/Tool.csproj" or "legacy/Legacy.csproj");
+    }
+
+    [Fact]
+    public void Direct_pack_derivation_honors_directory_build_identity_overrides()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj");
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <AssemblyName>Contoso.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>");
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        var gap = Assert.Single(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("Directory.Build", gap.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Derived_identity_decisions_move_the_bounded_digest()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj");
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+        var before = Read(temp.Path);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.$(MSBuildProjectName)</PackageId>\n  </PropertyGroup>\n</Project>");
+        var after = Read(temp.Path);
+
+        Assert.Single(before.Rows);
+        Assert.Empty(after.Rows);
+        Assert.NotEqual(before.BoundedInputSha256, after.BoundedInputSha256);
+    }
+
+    [Theory]
+    [InlineData("{\"packWorkflow\": [{\"uses\": \"x.yml\"}]}")] // misspelled key
+    [InlineData("{\"packWorkflows\": [{\"uses\": 3}]}")]
+    [InlineData("{\"packWorkflows\": [")]
+    public async Task Cli_rejects_malformed_ci_hints_instead_of_silently_disabling_them(string hints)
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        WriteProject(repo, "src/Core.csproj", PureCiProject);
+        WriteWorkflow(repo, "pack.yml", PureCiWorkflow);
+        InitGit(repo);
+        var hintsPath = Path.Combine(temp.Path, "ci-hints.v1.json");
+        File.WriteAllText(hintsPath, hints);
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.NotEqual(0, await TraceMapCommand.RunAsync(
+            ["scan", "--repo", repo, "--out", Path.Combine(temp.Path, "out"), "--index-ci-producers", "--ci-hints", hintsPath],
+            output, error));
+        Assert.Contains("--ci-hints", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Cli_rejects_ci_hints_without_the_ci_lane()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        WriteProject(repo, "src/Core.csproj", PureCiProject);
+        InitGit(repo);
+        var hintsPath = Path.Combine(temp.Path, "ci-hints.v1.json");
+        File.WriteAllText(hintsPath, "{\"packWorkflows\": [{\"uses\": \"dotnet-release-library.yml\"}]}");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.NotEqual(0, await TraceMapCommand.RunAsync(
+            ["scan", "--repo", repo, "--out", Path.Combine(temp.Path, "out"), "--ci-hints", hintsPath], output, error));
+        Assert.Contains("--index-ci-producers", error.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -879,7 +1161,7 @@ public sealed class CiWorkflowProducerEvidenceTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(() => CiWorkflowProducerExtractor.Read(
-            new ScanOptions(temp.Path, temp.Path + "-out"), [], cancellation.Token));
+            new ScanOptions(temp.Path, temp.Path + "-out"), [], [], cancellation.Token));
     }
 
     [Fact]
@@ -1165,9 +1447,277 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Equal(forward, reverse);
     }
 
+    [Fact] // review P1 (Codex + Baz): <IsPackable>$(PackEnabled)</IsPackable> is neither literal — never guessed packable
+    public void Non_literal_ispackable_refuses_to_derive()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable>$(PackEnabled)</IsPackable>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Dyn.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Dyn.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("non-literal", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review: an inherited non-literal IsPackable (nearest Directory.Build.props) is equally unprovable
+    public void Inherited_non_literal_ispackable_refuses_to_derive()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props", "<Project>\n  <PropertyGroup>\n    <IsPackable>$(PackEnabled)</IsPackable>\n  </PropertyGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("non-literal", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review P1 (Codex): a $(...) Import path bypassed the .props/.targets suffix guard
+    public void Expression_import_refuses_to_derive()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Import Project=\"$(IdentityImport)\" />\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/DynImport.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/DynImport.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("Import", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review P1 (Codex): a centralized Test.Sdk reference in Directory.Build.props makes every project a test project
+    public void Directory_build_test_sdk_marks_projects_test()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props", "<Project>\n  <ItemGroup>\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("Microsoft.NET.Test.Sdk", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review round-7 (Codex P1): props-side PackageId outranks a body AssemblyName — mixed identity conservatively refuses
+    public void Inherited_identity_beats_body_declaration()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Body</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Mixed.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Mixed.csproj", project);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.Inherited</PackageId>\n  </PropertyGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // neither Contoso.Body nor Contoso.Inherited — never guess which wins
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("Directory.Build", gap.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact] // review round-7 (Codex P1): an Otherwise branch is conditional WITHOUT a Condition attribute
+    public void Otherwise_branch_metadata_is_unprovable()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(IsTest)' == 'true'\">\n      <PropertyGroup>\n        <IsPackable>false</IsPackable>\n      </PropertyGroup>\n    </When>\n    <Otherwise>\n      <PropertyGroup>\n        <AssemblyName>Contoso.Fallback</AssemblyName>\n      </PropertyGroup>\n    </Otherwise>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Otherwise.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Otherwise.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // never the fallback identity nor a filename guess
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("cannot resolve", gap.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact] // review round-6 (Baz): a CONDITIONED IsPackable=false is unprovable — never the silent NotPackable skip
+    public void Conditioned_ispackable_false_is_unprovable_not_silent()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable Condition=\"'$(PackForReal)' == 'true'\">false</IsPackable>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/CondFalse.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/CondFalse.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("IsPackable", gap.Detail, StringComparison.Ordinal); // typed gap — NOT the silent NotPackable skip
+        Assert.Contains("CondFalse", gap.Detail, StringComparison.Ordinal); // the packed project is attributable (review round-6)
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review round-6 (Codex P1): Choose/When ancestors carry Conditions too — nested metadata is unprovable
+    public void Choose_when_conditioned_metadata_is_unprovable()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(IsTest)' == 'true'\">\n      <PropertyGroup>\n        <IsPackable>false</IsPackable>\n      </PropertyGroup>\n    </When>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Choose.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Choose.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("IsPackable", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review round-6 (Codex P1): a CONDITIONED identity branch is never a proven id — never publish the Release-only name
+    public void Conditioned_assemblyname_never_resolves()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName Condition=\"'$(Configuration)' == 'Release'\">Contoso.Release</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/CondId.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/CondId.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // neither Contoso.Release nor a filename guess
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("cannot resolve", gap.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact] // review round-6 (Codex P1): a direct pack of a declared-id project carries declared-id provenance + source, not a blanket derived-default
+    public void Direct_pack_declared_id_carries_provenance()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Direct</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Direct.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Direct.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Direct", row.Package);
+        Assert.Equal("declared-id", row.IdProvenance);
+        Assert.Equal("AssemblyName", row.IdSource);
+    }
+
+    [Fact] // review round-5 (Baz): a CONDITIONED central Test.Sdk must leave a typed gap, not silently drop the producer (live estate: whole services vanished)
+    public void Conditional_directory_build_test_sdk_leaves_a_gap_not_silence()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("CONDITIONED", gap.Detail, StringComparison.Ordinal); // typed, visible — never a silent skip
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review round-5 (Baz): a CONDITIONED central Test.Sdk with a literal IsPackable=true still emits (literal true is provable)
+    public void Conditional_test_sdk_with_literal_ispackable_true_still_emits()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable>true</IsPackable>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Pack.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Pack.csproj", project);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <ItemGroup Condition=\"'$(Configuration)' == 'Debug'\">\n    <PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"17.0.0\" />\n  </ItemGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Pack", row.Package);
+    }
+
+    [Fact] // review round-5 (Baz): a CONDITIONED inherited IsPackable=false is unprovable, never a definitive NotPackable skip
+    public void Conditional_inherited_ispackable_is_unprovable_not_a_skip()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup Condition=\"'$(PackForReal)' == 'true'\">\n    <IsPackable>false</IsPackable>\n  </PropertyGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("IsPackable", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review round-5: a CONDITIONED body IsPackable is unprovable too
+    public void Conditional_body_ispackable_is_unprovable()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <IsPackable Condition=\"'$(Configuration)' == 'Release'\">true</IsPackable>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Cond.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Cond.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("IsPackable", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
+    [Fact] // review (Baz): changing an evaluated AssemblyName changes the emitted row — it must move the digest too
+    public void Bounded_digest_moves_with_the_resolved_identity()
+    {
+        const string projectA = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <AssemblyName>Contoso.Alpha</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string projectB = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <AssemblyName>Contoso.Beta</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Chain.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Chain.csproj", projectA);
+        var before = Read(temp.Path);
+        Assert.Single(before.Rows, row => row.Package == "Contoso.Alpha");
+
+        WriteProject(temp.Path, "src/Chain.csproj", projectB);
+        var after = Read(temp.Path);
+        Assert.Single(after.Rows, row => row.Package == "Contoso.Beta");
+        Assert.NotEqual(before.BoundedInputSha256, after.BoundedInputSha256);
+    }
+
+    [Fact] // review (Baz): duplicate JSON properties must not silently select one list — typed refusal
+    public void Duplicate_hints_properties_are_refused()
+    {
+        using var temp = new TempDirectory();
+        var dupRoot = Path.Combine(temp.Path, "dup-root.json");
+        File.WriteAllText(dupRoot, "{\"packWorkflows\":[{\"uses\":\"org/shared-ci/.github/workflows/release.yml\"}],\"packWorkflows\":[]}");
+        var exRoot = Assert.Throws<ArgumentException>(() => TraceMap.Cli.Program.ReadCiHints(dupRoot));
+        Assert.Contains("duplicate property 'packWorkflows'", exRoot.Message, StringComparison.Ordinal);
+
+        var dupEntry = Path.Combine(temp.Path, "dup-entry.json");
+        File.WriteAllText(dupEntry, "{\"packWorkflows\":[{\"uses\":\"org/shared-ci/.github/workflows/release.yml\",\"uses\":\"org/other/.github/workflows/release.yml\"}]}");
+        var exEntry = Assert.Throws<ArgumentException>(() => TraceMap.Cli.Program.ReadCiHints(dupEntry));
+        Assert.Contains("duplicate property 'uses'", exEntry.Message, StringComparison.Ordinal);
+    }
+
     private static CiWorkflowResult Read(string root, ScanOptions? options = null) => CiWorkflowProducerExtractor.Read(
         options ?? new ScanOptions(root, Path.Combine(root, "out")),
-        ProjectFileReader.ReadProducedPackages(root, InventProjects(root)), default);
+        ProjectFileReader.ReadProducedPackages(root, InventProjects(root)), InventProjects(root), default);
 
     private static IEnumerable<FileInventoryItem> InventProjects(string root) =>
         Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories)

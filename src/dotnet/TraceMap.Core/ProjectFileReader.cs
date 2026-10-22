@@ -280,16 +280,235 @@ public static class ProjectFileReader
 
     private static readonly string[] PackSignalProperties = ["Authors", "Description", "PackageTags", "Product"];
 
+    private static bool IsSdkStyle(XDocument document) =>
+        !string.IsNullOrWhiteSpace(document.Root?.Attribute("Sdk")?.Value)
+        || document.Root?.Elements().Any(element =>
+            element.Name.LocalName == "Sdk" && !string.IsNullOrWhiteSpace(element.Attribute("Name")?.Value)
+            || element.Name.LocalName == "Import" && !string.IsNullOrWhiteSpace(element.Attribute("Sdk")?.Value)
+            || element.Name.LocalName == "ImportGroup" && element.Elements().Any(import =>
+                import.Name.LocalName == "Import" && !string.IsNullOrWhiteSpace(import.Attribute("Sdk")?.Value))) == true;
+
+    /// Decisions for <see cref="ReadCiDerivedIdentity"/>. Only <see cref="Derived"/> yields an id;
+    /// the "not a producer" decisions are expected non-packages, the rest are unevidenced identities.
+    internal static class CiDerivedIdentityDecisions
+    {
+        public const string Derived = "derived";
+        public const string DeclaredId = "declared-id";
+        public const string NotSdkStyle = "not-sdk-style";
+        public const string NotPackable = "not-packable";
+        public const string TestProject = "test-project";
+        public const string DeclaresIdentity = "declares-identity";
+        public const string InheritedIdentity = "inherited-identity";
+        public const string Unreadable = "unreadable-or-limit";
+        public const string UnsafeFileName = "unsafe-filename";
+        public const string CustomImports = "custom-imports";
+        public const string UnprovablePackable = "unprovable-packable";
+        public const string ConditionalTestSdk = "conditional-test-sdk";
+
+        // A Condition anywhere on the path (element, its group, or a Choose/When ancestor) makes an
+        // assignment unprovable in the bounded view — never definitive (review: conditioned inherited
+        // IsPackable skipped producers; conditioned central Test.Sdk silently dropped them; Codex:
+        // Choose/When ancestors carry Conditions too).
+        internal static bool IsConditioned(XElement element) =>
+            element.Attribute("Condition") is not null
+            || element.Ancestors().Any(ancestor => ancestor.Attribute("Condition") is not null
+                // an Otherwise branch fires only when no When matched — conditional without a Condition (review round-7)
+                || string.Equals(ancestor.Name.LocalName, "Otherwise", StringComparison.Ordinal));
+
+        public static bool IsNonProducer(string decision) =>
+            decision is NotSdkStyle or NotPackable or TestProject;
+    }
+
+    internal sealed record CiDerivedIdentity(string Decision, string? PackageId, string? IdSource = null);
+
+    /// The MSBuild filename default (PackageId &lt;- AssemblyName &lt;- MSBuildProjectName) is the
+    /// package id ONLY when nothing in the bounded view can override it: the project is readable,
+    /// SDK-style, declares neither PackageId nor AssemblyName (property names case-insensitive, as
+    /// MSBuild), is not IsPackable=false (last wins), has no non-literal IsPackable the bounded view
+    /// cannot evaluate, is not a Microsoft.NET.Test.Sdk project (directly or via the nearest
+    /// Directory.Build) without a literal IsPackable=true, and the NEAREST Directory.Build.props/.targets
+    /// (walking up to the repository root, the file MSBuild auto-imports) declares no
+    /// PackageId/AssemblyName. Imports inside those files are not followed — a documented residual.
+    /// Never guessed: a project that declares any identity gets an unevidenced decision, not a
+    /// second filename-based id.
+    internal static CiDerivedIdentity ReadCiDerivedIdentity(string repoPath, string relativePath)
+    {
+        var root = Path.GetFullPath(repoPath);
+        var projectName = Path.GetFileNameWithoutExtension(relativePath);
+        var fullPath = Path.GetFullPath(Path.Combine(root, relativePath));
+        if (!IsUnderRoot(fullPath, root) || !TryLoadXml(fullPath, out var document, MaxProducerProjectBytes))
+            return new(CiDerivedIdentityDecisions.Unreadable, null);
+        if (!IsSdkStyle(document)) return new(CiDerivedIdentityDecisions.NotSdkStyle, null);
+        // A project-level Import can set PackageId/AssemblyName/IsPackable after the project body; the
+        // bounded view cannot evaluate it, so the filename default is not provable — an unevidenced
+        // decision, never a guessed id (review P1: custom imports). ANY Import with a Project attribute
+        // refuses: a textual .props/.targets suffix check is bypassed by $(...) expression imports.
+        foreach (var import in document.Descendants().Where(e => e.Name.LocalName == "Import"))
+        {
+            if (AttributeValue(import, "Project") is not null)
+                return new(CiDerivedIdentityDecisions.CustomImports, null);
+        }
+
+        bool? packable = null; var packableLiteralTrue = false; var packableUnprovable = false;
+        string? packageIdValue = null; string? assemblyNameValue = null; // last-wins raw values — the CI chain evaluates them below
+        var packageIdConditioned = false; var assemblyNameConditioned = false; // last-wins Condition state (review: a conditioned identity branch is never a proven id)
+        var inherited = InspectNearestDirectoryBuildFiles(root, Path.GetDirectoryName(fullPath));
+        if (inherited.Unreadable) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
+        if (inherited.Packable is { } inheritedPackable)
+        {
+            (packable, packableLiteralTrue) = (inheritedPackable, inherited.PackableLiteralTrue);
+            packableUnprovable = inherited.PackableUnprovable;
+        }
+        else packableUnprovable |= inherited.PackableUnprovable; // a conditioned inherited IsPackable proves nothing either way (review)
+        var testSdkReferenced = inherited.TestSdkReferenced; // a centralized Directory.Build reference makes every project a test project
+        var conditionalTestSdkReferenced = inherited.ConditionalTestSdk; // conditioned reference: unprovable, never a silent skip (review)
+        foreach (var element in document.Descendants())
+        {
+            if (element.Parent is { Name.LocalName: "PropertyGroup" })
+            {
+                switch (element.Name.LocalName.ToUpperInvariant())
+                {
+                    case "PACKAGEID": packageIdValue = element.Value.Trim(); packageIdConditioned = CiDerivedIdentityDecisions.IsConditioned(element); break;
+                    case "ASSEMBLYNAME": assemblyNameValue = element.Value.Trim(); assemblyNameConditioned = CiDerivedIdentityDecisions.IsConditioned(element); break;
+                    case "ISPACKABLE":
+                        var value = element.Value.Trim();
+                        var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
+                        var literalTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        var conditioned = CiDerivedIdentityDecisions.IsConditioned(element);
+                        packable = !literalFalse; // provisional; an unresolved expression or Condition is refused below
+                        packableLiteralTrue = literalTrue && !conditioned; // a Conditioned literal true is not provable
+                        packableUnprovable = conditioned || (!literalFalse && !literalTrue); // $(PackEnabled), Condition=...: never guessed (review P1 + round-5)
+                        break;
+                }
+            }
+            else if (element.Parent is { Name.LocalName: "ItemGroup" }
+                && element.Name.LocalName == "PackageReference"
+                && string.Equals(AttributeValue(element, "Include"), "Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase))
+            {
+                if (CiDerivedIdentityDecisions.IsConditioned(element)) conditionalTestSdkReferenced = true;
+                else testSdkReferenced = true;
+            }
+        }
+        // Directory.Build.targets is imported AFTER the project body: its identity/packability wins.
+        if (inherited.TargetsPackable is { } targetsPackable)
+        {
+            (packable, packableLiteralTrue) = (targetsPackable, inherited.TargetsPackableLiteralTrue);
+            packableUnprovable = inherited.TargetsPackableUnprovable;
+        }
+        else packableUnprovable |= inherited.TargetsPackableUnprovable; // conditioned targets-side IsPackable: unprovable (review)
+        if (packableUnprovable) return new(CiDerivedIdentityDecisions.UnprovablePackable, null); // BEFORE NotPackable: a conditioned false is unprovable, never a silent skip (review round-6)
+        if (packable == false) return new(CiDerivedIdentityDecisions.NotPackable, null);
+        if ((testSdkReferenced || conditionalTestSdkReferenced) && !packableLiteralTrue)
+            // unconditional reference = test project (silent non-producer by design); a CONDITIONED
+            // reference is unprovable either way — a typed gap, never a silent drop (review round-5)
+            return new(testSdkReferenced ? CiDerivedIdentityDecisions.TestProject : CiDerivedIdentityDecisions.ConditionalTestSdk, null);
+        // FULL MSBuild chain, in order: PackageId <- AssemblyName <- MSBuildProjectName(filename).
+        // A DECLARED identity is the id when pack intent is proven by the CI lane (a pack step or a
+        // hinted shared workflow) — "dotnet pack ships AssemblyName" is exactly what MSBuild does.
+        // Bounded evaluation only: $(MSBuildProjectName) resolves from the file's own name; any other
+        // token stays unevidenced (never guessed). A CONDITIONED assignment's branch is never a proven
+        // id (review round-6: a Release-only AssemblyName is not a Debug build's identity). Inherited
+        // Directory.Build identity and any declared value the bounded evaluator cannot resolve remain
+        // typed gaps — the previous guards' honesty is preserved; only the provable chain is followed.
+        // Inherited identity is consulted BEFORE the chain: a props-side PackageId outranks a body
+        // AssemblyName and a targets-side declaration overrides both — mixed cases conservatively
+        // refuse rather than guess which assignment wins (review round-7).
+        if (inherited.DeclaresIdentity) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
+        var chainSource = packageIdValue is not null ? "PackageId" : assemblyNameValue is not null ? "AssemblyName" : null;
+        var chainValue = packageIdValue ?? assemblyNameValue;
+        var chainConditioned = packageIdValue is not null ? packageIdConditioned : assemblyNameConditioned;
+        if (chainValue is not null)
+        {
+            if (chainConditioned
+                || EvaluateBoundedIdentity(chainValue, projectName, out var _) is not { } evaluated
+                || !IsSafeNuGetPackageId(evaluated))
+                return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
+            return new(CiDerivedIdentityDecisions.DeclaredId, evaluated, chainSource!);
+        }
+        if (!IsSafeNuGetPackageId(projectName)) return new(CiDerivedIdentityDecisions.UnsafeFileName, null);
+        return new(CiDerivedIdentityDecisions.Derived, projectName, "MSBuildProjectName");
+    }
+
+    private sealed record InheritedProjectView(
+        bool Unreadable, bool DeclaresIdentity,
+        bool? Packable, bool PackableLiteralTrue, bool PackableUnprovable,
+        bool? TargetsPackable, bool TargetsPackableLiteralTrue, bool TargetsPackableUnprovable,
+        bool TestSdkReferenced, bool ConditionalTestSdk);
+
+    private static InheritedProjectView InspectNearestDirectoryBuildFiles(string root, string? projectDirectory)
+    {
+        var unreadable = false; var declaresIdentity = false; var testSdkReferenced = false; var conditionalTestSdk = false;
+        bool? propsPackable = null, targetsPackable = null;
+        bool propsLiteralTrue = false, targetsLiteralTrue = false;
+        var propsUnprovable = false; var targetsUnprovable = false;
+        foreach (var fileName in new[] { "Directory.Build.props", "Directory.Build.targets" })
+        {
+            for (var dir = projectDirectory; dir is not null && IsUnderRoot(dir, root); dir = Path.GetDirectoryName(dir))
+            {
+                var candidate = Path.Combine(dir, fileName);
+                if (File.Exists(candidate))
+                {
+                    // A linked Directory.Build file is outside the admitted inventory even though
+                    // Exists/Load follow it — an external target must never steer derived identity
+                    // (review: linked metadata). Treated as unreadable: identity not provable.
+                    try { if (File.GetAttributes(candidate).HasFlag(FileAttributes.ReparsePoint)) { unreadable = true; break; } }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { unreadable = true; break; }
+                    if (!TryLoadXml(candidate, out var document, MaxProducerProjectBytes)) { unreadable = true; break; }
+                    foreach (var element in document.Descendants())
+                    {
+                        if (element.Parent is { Name.LocalName: "PropertyGroup" })
+                        {
+                            switch (element.Name.LocalName.ToUpperInvariant())
+                            {
+                                case "PACKAGEID" or "ASSEMBLYNAME": declaresIdentity = true; break;
+                                case "ISPACKABLE":
+                                    var value = element.Value.Trim();
+                                    var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
+                                    var literalTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                                    if (CiDerivedIdentityDecisions.IsConditioned(element))
+                                    {
+                                        // A Conditioned assignment is neither true nor false in the bounded
+                                        // view — unprovable, never a definitive skip (review round-5).
+                                        if (fileName == "Directory.Build.props") propsUnprovable = true;
+                                        else targetsUnprovable = true;
+                                        break;
+                                    }
+                                    var isPackable = !literalFalse; // provisional; non-literal refused by the caller
+                                    if (fileName == "Directory.Build.props") (propsPackable, propsLiteralTrue, propsUnprovable) = (isPackable, literalTrue, !literalFalse && !literalTrue);
+                                    else (targetsPackable, targetsLiteralTrue, targetsUnprovable) = (isPackable, literalTrue, !literalFalse && !literalTrue);
+                                    break;
+                            }
+                        }
+                        else if (element.Parent is { Name.LocalName: "ItemGroup" }
+                            && element.Name.LocalName == "PackageReference"
+                            && string.Equals(AttributeValue(element, "Include"), "Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // unconditional: every project under it is a test project (review P1);
+                            // conditioned: unprovable either way, the caller gaps it (review round-5)
+                            if (CiDerivedIdentityDecisions.IsConditioned(element)) conditionalTestSdk = true;
+                            else testSdkReferenced = true;
+                        }
+                    }
+                    break; // MSBuild auto-imports only the nearest file of each name
+                }
+                if (string.Equals(dir.TrimEnd(Path.DirectorySeparatorChar), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.Ordinal)) break;
+            }
+        }
+        return new(unreadable, declaresIdentity, propsPackable, propsLiteralTrue, propsUnprovable, targetsPackable, targetsLiteralTrue, targetsUnprovable, testSdkReferenced, conditionalTestSdk);
+    }
+
+    private static bool IsUnderRoot(string fullPath, string root)
+    {
+        var normalizedRoot = root.TrimEnd(Path.DirectorySeparatorChar);
+        return string.Equals(fullPath.TrimEnd(Path.DirectorySeparatorChar), normalizedRoot, StringComparison.Ordinal)
+            || fullPath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal);
+    }
+
     private static ProducedPackageCandidate? ReadProducedPackageCandidate(string relativePath, XDocument document)
     {
         static bool IsProperty(XElement e) => e.Parent is { Name.LocalName: "PropertyGroup" };
         static bool IsItem(XElement e) => e.Parent is { Name.LocalName: "ItemGroup" };
-        var sdkStyle = !string.IsNullOrWhiteSpace(document.Root?.Attribute("Sdk")?.Value)
-            || document.Root?.Elements().Any(element =>
-                element.Name.LocalName == "Sdk" && !string.IsNullOrWhiteSpace(element.Attribute("Name")?.Value)
-                || element.Name.LocalName == "Import" && !string.IsNullOrWhiteSpace(element.Attribute("Sdk")?.Value)
-                || element.Name.LocalName == "ImportGroup" && element.Elements().Any(import =>
-                    import.Name.LocalName == "Import" && !string.IsNullOrWhiteSpace(import.Attribute("Sdk")?.Value))) == true;
+        var sdkStyle = IsSdkStyle(document);
         // $(MSBuildProjectName) is reserved by MSBuild as the project file name without extension:
         // the file defines it, so evaluating it is reading, not guessing.
         var projectName = Path.GetFileNameWithoutExtension(relativePath);
