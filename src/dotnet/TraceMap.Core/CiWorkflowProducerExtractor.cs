@@ -143,7 +143,8 @@ internal static class CiWorkflowProducerExtractor
     {
         ProjectFileReader.CiDerivedIdentityDecisions.NotSdkStyle => "packed project is not SDK-style; its package identity is not the filename default",
         ProjectFileReader.CiDerivedIdentityDecisions.NotPackable => "packed project is IsPackable=false",
-        ProjectFileReader.CiDerivedIdentityDecisions.UnprovablePackable => "packed project's IsPackable is a non-literal expression (neither literal true nor false) the bounded evaluator cannot resolve; never guessed",
+        ProjectFileReader.CiDerivedIdentityDecisions.UnprovablePackable => "packed project's IsPackable is a non-literal or Conditioned assignment the bounded evaluator cannot resolve; never guessed",
+        ProjectFileReader.CiDerivedIdentityDecisions.ConditionalTestSdk => "a CONDITIONED Microsoft.NET.Test.Sdk reference (directly or via the nearest Directory.Build) cannot be evaluated in the bounded view — test-project status is unprovable, never silently skipped",
         ProjectFileReader.CiDerivedIdentityDecisions.TestProject => "packed project references Microsoft.NET.Test.Sdk (directly or via the nearest Directory.Build) without a literal IsPackable=true",
         ProjectFileReader.CiDerivedIdentityDecisions.DeclaresIdentity => "packed project declares a PackageId/AssemblyName whose value the bounded evaluator cannot resolve (tokens beyond $(MSBuildProjectName)) or which is not a safe package id; never guessed",
         ProjectFileReader.CiDerivedIdentityDecisions.InheritedIdentity => "the nearest Directory.Build.props/.targets declares a package identity, is linked, or is unreadable; the filename default is not provable",
