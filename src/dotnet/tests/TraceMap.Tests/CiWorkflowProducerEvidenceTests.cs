@@ -1513,6 +1513,40 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Empty(result.Rows);
     }
 
+    [Fact] // review round-7 (Codex P1): props-side PackageId outranks a body AssemblyName — mixed identity conservatively refuses
+    public void Inherited_identity_beats_body_declaration()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Body</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Mixed.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Mixed.csproj", project);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.Inherited</PackageId>\n  </PropertyGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // neither Contoso.Body nor Contoso.Inherited — never guess which wins
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("Directory.Build", gap.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact] // review round-7 (Codex P1): an Otherwise branch is conditional WITHOUT a Condition attribute
+    public void Otherwise_branch_metadata_is_unprovable()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(IsTest)' == 'true'\">\n      <PropertyGroup>\n        <IsPackable>false</IsPackable>\n      </PropertyGroup>\n    </When>\n    <Otherwise>\n      <PropertyGroup>\n        <AssemblyName>Contoso.Fallback</AssemblyName>\n      </PropertyGroup>\n    </Otherwise>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Otherwise.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Otherwise.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // never the fallback identity nor a filename guess
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("cannot resolve", gap.Detail, StringComparison.Ordinal);
+    }
+
     [Fact] // review round-6 (Baz): a CONDITIONED IsPackable=false is unprovable — never the silent NotPackable skip
     public void Conditioned_ispackable_false_is_unprovable_not_silent()
     {
