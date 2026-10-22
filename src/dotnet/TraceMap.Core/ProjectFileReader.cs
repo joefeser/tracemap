@@ -305,11 +305,13 @@ public static class ProjectFileReader
         public const string UnprovablePackable = "unprovable-packable";
         public const string ConditionalTestSdk = "conditional-test-sdk";
 
-        // A Condition on the element or its direct PropertyGroup/ItemGroup makes an assignment
-        // unprovable in the bounded view — never definitive (review: conditioned inherited
-        // IsPackable skipped producers; conditioned central Test.Sdk silently dropped them).
+        // A Condition anywhere on the path (element, its group, or a Choose/When ancestor) makes an
+        // assignment unprovable in the bounded view — never definitive (review: conditioned inherited
+        // IsPackable skipped producers; conditioned central Test.Sdk silently dropped them; Codex:
+        // Choose/When ancestors carry Conditions too).
         internal static bool IsConditioned(XElement element) =>
-            element.Attribute("Condition") is not null || element.Parent?.Attribute("Condition") is not null;
+            element.Attribute("Condition") is not null
+            || element.Ancestors().Any(ancestor => ancestor.Attribute("Condition") is not null);
 
         public static bool IsNonProducer(string decision) =>
             decision is NotSdkStyle or NotPackable or TestProject;
@@ -347,6 +349,7 @@ public static class ProjectFileReader
 
         bool? packable = null; var packableLiteralTrue = false; var packableUnprovable = false;
         string? packageIdValue = null; string? assemblyNameValue = null; // last-wins raw values — the CI chain evaluates them below
+        var packageIdConditioned = false; var assemblyNameConditioned = false; // last-wins Condition state (review: a conditioned identity branch is never a proven id)
         var inherited = InspectNearestDirectoryBuildFiles(root, Path.GetDirectoryName(fullPath));
         if (inherited.Unreadable) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
         if (inherited.Packable is { } inheritedPackable)
@@ -363,8 +366,8 @@ public static class ProjectFileReader
             {
                 switch (element.Name.LocalName.ToUpperInvariant())
                 {
-                    case "PACKAGEID": packageIdValue = element.Value.Trim(); break;
-                    case "ASSEMBLYNAME": assemblyNameValue = element.Value.Trim(); break;
+                    case "PACKAGEID": packageIdValue = element.Value.Trim(); packageIdConditioned = CiDerivedIdentityDecisions.IsConditioned(element); break;
+                    case "ASSEMBLYNAME": assemblyNameValue = element.Value.Trim(); assemblyNameConditioned = CiDerivedIdentityDecisions.IsConditioned(element); break;
                     case "ISPACKABLE":
                         var value = element.Value.Trim();
                         var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
@@ -391,8 +394,8 @@ public static class ProjectFileReader
             packableUnprovable = inherited.TargetsPackableUnprovable;
         }
         else packableUnprovable |= inherited.TargetsPackableUnprovable; // conditioned targets-side IsPackable: unprovable (review)
+        if (packableUnprovable) return new(CiDerivedIdentityDecisions.UnprovablePackable, null); // BEFORE NotPackable: a conditioned false is unprovable, never a silent skip (review round-6)
         if (packable == false) return new(CiDerivedIdentityDecisions.NotPackable, null);
-        if (packableUnprovable) return new(CiDerivedIdentityDecisions.UnprovablePackable, null);
         if ((testSdkReferenced || conditionalTestSdkReferenced) && !packableLiteralTrue)
             // unconditional reference = test project (silent non-producer by design); a CONDITIONED
             // reference is unprovable either way — a typed gap, never a silent drop (review round-5)
@@ -401,17 +404,19 @@ public static class ProjectFileReader
         // A DECLARED identity is the id when pack intent is proven by the CI lane (a pack step or a
         // hinted shared workflow) — "dotnet pack ships AssemblyName" is exactly what MSBuild does.
         // Bounded evaluation only: $(MSBuildProjectName) resolves from the file's own name; any other
-        // token stays unevidenced (never guessed). Inherited Directory.Build identity and any declared
-        // value the bounded evaluator cannot resolve remain typed gaps — the previous guards' honesty
-        // is preserved; only the provable chain is followed (live estate finding: 88 producers whose
-        // AssemblyName IS their package id were dropped to gaps by the filename-only guard).
+        // token stays unevidenced (never guessed). A CONDITIONED assignment's branch is never a proven
+        // id (review round-6: a Release-only AssemblyName is not a Debug build's identity). Inherited
+        // Directory.Build identity and any declared value the bounded evaluator cannot resolve remain
+        // typed gaps — the previous guards' honesty is preserved; only the provable chain is followed.
         var chainSource = packageIdValue is not null ? "PackageId" : assemblyNameValue is not null ? "AssemblyName" : null;
         var chainValue = packageIdValue ?? assemblyNameValue;
+        var chainConditioned = packageIdValue is not null ? packageIdConditioned : assemblyNameConditioned;
         if (chainValue is not null)
         {
-            if (EvaluateBoundedIdentity(chainValue, projectName, out var _) is not { } evaluated
+            if (chainConditioned
+                || EvaluateBoundedIdentity(chainValue, projectName, out var _) is not { } evaluated
                 || !IsSafeNuGetPackageId(evaluated))
-                return new(packageIdValue is not null ? CiDerivedIdentityDecisions.DeclaresIdentity : CiDerivedIdentityDecisions.DeclaresIdentity, null);
+                return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
             return new(CiDerivedIdentityDecisions.DeclaredId, evaluated, chainSource!);
         }
         if (inherited.DeclaresIdentity) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);

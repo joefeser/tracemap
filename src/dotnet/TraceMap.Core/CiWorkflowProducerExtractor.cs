@@ -1479,6 +1479,8 @@ internal static class CiWorkflowProducerExtractor
     {
         string? packageId = null;
         var derivedId = false;
+        string? derivedProvenance = null; // direct packs carry the decision's provenance, never a blanket derived-default (review round-6)
+        string? derivedIdSource = null;
         if (occurrence.RawPackageId is { } rawId)
         {
             // Effective id AFTER CI overrides: the flag wins; anything unevidenced is skipped.
@@ -1510,12 +1512,15 @@ internal static class CiWorkflowProducerExtractor
             if (derived.PackageId is { } fileDerived)
             {
                 packageId = fileDerived;
-                derivedId = true;
+                derivedId = derived.Decision != ProjectFileReader.CiDerivedIdentityDecisions.DeclaredId;
+                derivedProvenance = derivedId ? "derived-default" : "declared-id";
+                derivedIdSource = derived.IdSource;
             }
             else
             {
+                // the packed project rides the gap detail so consumers can attribute it without re-reading the workflow (review round-6)
                 gaps.Add(new(occurrence.WorkflowPath, "ci-producer-id-unevidenced",
-                    DerivedIdentityGapDetail(derived.Decision), occurrence.StartLine));
+                    $"{fileTarget}: {DerivedIdentityGapDetail(derived.Decision)}", occurrence.StartLine));
             }
         }
         else if (occurrence.TargetUnresolvable)
@@ -1559,7 +1564,9 @@ internal static class CiWorkflowProducerExtractor
                 ? attributed
                 : null,
             occurrence.StartLine, occurrence.EndLine,
-            derivedId ? "derived-default" : "declared"));
+            derivedProvenance ?? (derivedId ? "derived-default" : "declared"),
+            "ci-pack-step",
+            derivedIdSource));
     }
 
     /// Resolves a flag value that is exactly one ${{ env.NAME }} expression against the
