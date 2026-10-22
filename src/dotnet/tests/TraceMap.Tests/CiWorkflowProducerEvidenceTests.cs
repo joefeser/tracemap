@@ -301,18 +301,18 @@ public sealed class CiWorkflowProducerEvidenceTests
         var result = Read(temp.Path);
 
         // Effective id after CI overrides: the flag wins; without a flag the packed project's
-        // explicit declaration is the evidence. Since 2026-10-22 (live estate: ~100 packages, ONE
-        // IsPackable in-repo, ids never declared), a packed project with no explicit id DERIVES from
-        // the MSBuild filename default - the CI pack step is stronger intent than tier-3 metadata,
-        // and the row is marked derived-default so no consumer mistakes it for declared.
-        Assert.Equal(2, result.Rows.Count);
-        var declared = Assert.Single(result.Rows, row => row.IdProvenance == "declared");
+        // explicit declaration is the evidence. A project declaring AssemblyName does NOT derive
+        // from its filename: MSBuild's PackageId default is $(AssemblyName), so `dotnet pack` would
+        // produce Contoso.Fallback, never "Fallback". The filename default applies only when the
+        // bounded view proves nothing overrides the chain (see the zero-signal derived test).
+        var declared = Assert.Single(result.Rows);
+        Assert.Equal("declared", declared.IdProvenance);
         Assert.Equal("Contoso.Declared", declared.Package);
         Assert.Null(declared.Version); // no CI version override: the version stays unevidenced
-        var derived = Assert.Single(result.Rows, row => row.IdProvenance == "derived-default");
-        Assert.Equal("Fallback", derived.Package); // filename default - NOT the AssemblyName (CI reads the file it packs)
+        Assert.DoesNotContain(result.Rows, row => row.Package == "Fallback");
         var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-producer-id-unevidenced").ToArray();
-        Assert.Equal(2, unevidenced.Length); // sln + bare-target stay gaps: no single id is attributable
+        Assert.Equal(3, unevidenced.Length); // AssemblyName + sln + bare-target: no provable single id
+        Assert.Contains(unevidenced, gap => gap.Detail!.Contains("AssemblyName", StringComparison.Ordinal));
         Assert.Contains(unevidenced, gap => gap.Detail!.Contains("solution packs", StringComparison.Ordinal));
         Assert.Contains(unevidenced, gap => gap.Detail!.Contains("no explicit project target", StringComparison.Ordinal));
     }
@@ -333,7 +333,7 @@ public sealed class CiWorkflowProducerEvidenceTests
         WriteProject(temp.Path, "src/Lib.PackedTests.csproj", packedTestProject);
 
         var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")) { IndexCiProducers = true, CiHintWorkflows = new[] { "org/shared-ci/.github/workflows/dotnet-release-library.yml" } };
-        var result = CiWorkflowProducerExtractor.Read(options, [], CancellationToken.None);
+        var result = CiWorkflowProducerExtractor.Read(options, [], InventProjects(temp.Path), CancellationToken.None);
 
         Assert.Equal(2, result.Rows.Count);
         Assert.Contains(result.Rows, row => row.Package == "Lib");
@@ -352,7 +352,7 @@ public sealed class CiWorkflowProducerEvidenceTests
         WriteProject(temp.Path, "src/Bare.csproj", bareProject);
 
         var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")) { IndexCiProducers = true, CiHintWorkflows = new[] { "org/shared-ci/.github/workflows/dotnet-release-library.yml" } };
-        var result = CiWorkflowProducerExtractor.Read(options, [], CancellationToken.None);
+        var result = CiWorkflowProducerExtractor.Read(options, [], InventProjects(temp.Path), CancellationToken.None);
 
         var row = Assert.Single(result.Rows);
         Assert.Equal("Bare", row.Package);
@@ -377,6 +377,192 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Equal("derived-default", row.IdProvenance);
         Assert.Equal("src/Bare.csproj", row.ProjectPath);
         Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    private const string BareSdkProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+    private const string HintedReleaseWorkflow = "on:\n  workflow_dispatch:\njobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main\n    with:\n      nuget_publication_path: 'Some/Path/'";
+
+    private static CiWorkflowResult ReadHinted(string root, IEnumerable<FileInventoryItem>? inventory = null, params string[] hints)
+    {
+        var options = new ScanOptions(root, Path.Combine(root, ".tracemap")) { IndexCiProducers = true, CiHintWorkflows = hints };
+        var scoped = (inventory ?? InventProjects(root)).ToArray();
+        return CiWorkflowProducerExtractor.Read(options, ProjectFileReader.ReadProducedPackages(root, scoped), scoped, CancellationToken.None);
+    }
+
+    [Fact]
+    public void Hint_suffix_match_respects_path_boundaries_and_cites_the_uses_line()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+
+        // a bare filename hint is a path-boundary suffix of the full uses value
+        var row = Assert.Single(ReadHinted(temp.Path, null, "dotnet-release-library.yml").Rows);
+        Assert.Equal(".github/workflows/release.yml", row.WorkflowPath);
+        Assert.Equal(5, row.StartLine); // the job-level `uses:` line, not line 1
+        Assert.Equal("ci-hint-workflow", row.SignalsKind);
+        // a suffix that is not on a '/' boundary never matches
+        Assert.Empty(ReadHinted(temp.Path, null, "release-library.yml").Rows);
+    }
+
+    [Fact]
+    public void Hint_call_in_a_rejected_workflow_contributes_nothing()
+    {
+        using var temp = new TempDirectory();
+        // duplicate job key: the validated reader drops the whole file, so the call is not evidence either
+        WriteWorkflow(temp.Path, "release.yml",
+            "jobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main\n    uses: org/other/.github/workflows/x.yml@main");
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+
+        var result = ReadHinted(temp.Path, null, "org/shared-ci/.github/workflows/dotnet-release-library.yml");
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-workflow-invalid");
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-hint-no-projects");
+    }
+
+    [Fact]
+    public void Uses_text_outside_a_job_level_key_is_not_a_hinted_call()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "build.yml", """
+            jobs:
+              build:
+                runs-on: ubuntu-latest
+                env:
+                  NOTE: |
+                    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main
+                steps:
+                  - name: checkout
+                    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main
+            """);
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+
+        var result = ReadHinted(temp.Path, null, "org/shared-ci/.github/workflows/dotnet-release-library.yml");
+
+        Assert.Empty(result.Rows);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind.StartsWith("ci-hint", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Hint_sweep_uses_the_scanned_inventory_and_never_relabels_direct_pack_rows()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Packed.csproj");
+        WriteProject(temp.Path, "src/Lib.csproj", BareSdkProject);
+        WriteProject(temp.Path, "src/Packed.csproj", BareSdkProject);
+        WriteProject(temp.Path, "src/OutOfScope.csproj", BareSdkProject);
+        var scoped = InventProjects(temp.Path).Where(item => !item.RelativePath.EndsWith("OutOfScope.csproj", StringComparison.Ordinal));
+
+        var result = ReadHinted(temp.Path, scoped, "dotnet-release-library.yml");
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.Equal("ci-hint-workflow", Assert.Single(result.Rows, row => row.Package == "Lib").SignalsKind);
+        var packed = Assert.Single(result.Rows, row => row.Package == "Packed");
+        Assert.Equal("ci-pack-step", packed.SignalsKind); // direct evidence outranks the operator assertion
+        Assert.Equal(".github/workflows/pack.yml", packed.WorkflowPath);
+        Assert.DoesNotContain(result.Rows, row => row.Package == "OutOfScope"); // excluded from the scan scope
+    }
+
+    [Fact]
+    public void Hint_sweep_gaps_unprovable_identities_and_skips_non_producers()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+        WriteProject(temp.Path, "src/Lib.csproj", BareSdkProject);
+        // interpolated AssemblyName without pack signals: the project lane does not promote it,
+        // and the filename default is NOT its id — a typed gap, never a filename guess
+        WriteProject(temp.Path, "src/Interp.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <AssemblyName>Contoso.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>");
+        // the nearest Directory.Build.props overrides the identity chain for everything under lib/
+        WriteProject(temp.Path, "lib/Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.$(MSBuildProjectName)</PackageId>\n  </PropertyGroup>\n</Project>");
+        WriteProject(temp.Path, "lib/Inherited.csproj", BareSdkProject);
+        // inherited IsPackable=false and legacy non-SDK projects are not producers at all
+        WriteProject(temp.Path, "tools/Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <IsPackable>false</IsPackable>\n  </PropertyGroup>\n</Project>");
+        WriteProject(temp.Path, "tools/Tool.csproj", BareSdkProject);
+        WriteProject(temp.Path, "legacy/Legacy.csproj",
+            "<Project ToolsVersion=\"15.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n  <PropertyGroup>\n    <OutputType>Library</OutputType>\n  </PropertyGroup>\n</Project>");
+
+        var result = ReadHinted(temp.Path, null, "dotnet-release-library.yml");
+
+        Assert.Equal("Lib", Assert.Single(result.Rows).Package);
+        var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").Select(gap => gap.Path).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(["lib/Inherited.csproj", "src/Interp.csproj"], unevidenced);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Path is "tools/Tool.csproj" or "legacy/Legacy.csproj");
+    }
+
+    [Fact]
+    public void Direct_pack_derivation_honors_directory_build_identity_overrides()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj");
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <AssemblyName>Contoso.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>");
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        var gap = Assert.Single(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("Directory.Build", gap.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Derived_identity_decisions_move_the_bounded_digest()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj");
+        WriteProject(temp.Path, "src/Bare.csproj", BareSdkProject);
+        var before = Read(temp.Path);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.$(MSBuildProjectName)</PackageId>\n  </PropertyGroup>\n</Project>");
+        var after = Read(temp.Path);
+
+        Assert.Single(before.Rows);
+        Assert.Empty(after.Rows);
+        Assert.NotEqual(before.BoundedInputSha256, after.BoundedInputSha256);
+    }
+
+    [Theory]
+    [InlineData("{\"packWorkflow\": [{\"uses\": \"x.yml\"}]}")] // misspelled key
+    [InlineData("{\"packWorkflows\": [{\"uses\": 3}]}")]
+    [InlineData("{\"packWorkflows\": [")]
+    public async Task Cli_rejects_malformed_ci_hints_instead_of_silently_disabling_them(string hints)
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        WriteProject(repo, "src/Core.csproj", PureCiProject);
+        WriteWorkflow(repo, "pack.yml", PureCiWorkflow);
+        InitGit(repo);
+        var hintsPath = Path.Combine(temp.Path, "ci-hints.v1.json");
+        File.WriteAllText(hintsPath, hints);
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.NotEqual(0, await TraceMapCommand.RunAsync(
+            ["scan", "--repo", repo, "--out", Path.Combine(temp.Path, "out"), "--index-ci-producers", "--ci-hints", hintsPath],
+            output, error));
+        Assert.Contains("--ci-hints", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Cli_rejects_ci_hints_without_the_ci_lane()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        WriteProject(repo, "src/Core.csproj", PureCiProject);
+        InitGit(repo);
+        var hintsPath = Path.Combine(temp.Path, "ci-hints.v1.json");
+        File.WriteAllText(hintsPath, "{\"packWorkflows\": [{\"uses\": \"dotnet-release-library.yml\"}]}");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.NotEqual(0, await TraceMapCommand.RunAsync(
+            ["scan", "--repo", repo, "--out", Path.Combine(temp.Path, "out"), "--ci-hints", hintsPath], output, error));
+        Assert.Contains("--index-ci-producers", error.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -946,7 +1132,7 @@ public sealed class CiWorkflowProducerEvidenceTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(() => CiWorkflowProducerExtractor.Read(
-            new ScanOptions(temp.Path, temp.Path + "-out"), [], cancellation.Token));
+            new ScanOptions(temp.Path, temp.Path + "-out"), [], [], cancellation.Token));
     }
 
     [Fact]
@@ -1234,7 +1420,7 @@ public sealed class CiWorkflowProducerEvidenceTests
 
     private static CiWorkflowResult Read(string root, ScanOptions? options = null) => CiWorkflowProducerExtractor.Read(
         options ?? new ScanOptions(root, Path.Combine(root, "out")),
-        ProjectFileReader.ReadProducedPackages(root, InventProjects(root)), default);
+        ProjectFileReader.ReadProducedPackages(root, InventProjects(root)), InventProjects(root), default);
 
     private static IEnumerable<FileInventoryItem> InventProjects(string root) =>
         Directory.EnumerateFiles(root, "*.csproj", SearchOption.AllDirectories)
