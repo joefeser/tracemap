@@ -341,6 +341,22 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.DoesNotContain(result.Rows, row => row.Package == "Lib.Tests"); // plain test project: never ships
     }
 
+    [Fact] // review: a project-level Import can set identity/packability after the body — no derive
+    public void Custom_import_project_never_derives_a_filename_id()
+    {
+        const string importingProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Import Project=\"..\\build\\identity.props\" />\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Importing.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Importing.csproj", importingProject);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+        Assert.Contains("imports", gap.Detail, StringComparison.Ordinal);
+        Assert.Empty(result.Rows);
+    }
+
     [Fact] // 2026-10-22 live shape: shared dotnet-release-library.yml@main called with nuget_publication_path —
     // the hint says this repo publishes; ZERO-SIGNAL projects become ci producers with derived ids
     public void Hinted_shared_workflow_call_makes_unclaimed_projects_ci_producers()
@@ -490,7 +506,12 @@ public sealed class CiWorkflowProducerEvidenceTests
 
         Assert.Equal("Lib", Assert.Single(result.Rows).Package);
         var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").Select(gap => gap.Path).Order(StringComparer.Ordinal).ToArray();
-        Assert.Equal(["lib/Inherited.csproj", "src/Interp.csproj"], unevidenced);
+        // gaps anchor to the uses: CALL SITE (the workflow + line carrying the assertion); the
+        // affected project rides the DETAIL — a gap at <project>:1-1 was a fabricated location
+        Assert.All(unevidenced, gapPath => Assert.Equal(".github/workflows/release.yml", gapPath));
+        var details = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").Select(gap => gap.Detail).ToList();
+        Assert.Contains(details, detail => detail!.StartsWith("lib/Inherited.csproj:"));
+        Assert.Contains(details, detail => detail!.StartsWith("src/Interp.csproj:"));
         Assert.DoesNotContain(result.Gaps, gap => gap.Path is "tools/Tool.csproj" or "legacy/Legacy.csproj");
     }
 
