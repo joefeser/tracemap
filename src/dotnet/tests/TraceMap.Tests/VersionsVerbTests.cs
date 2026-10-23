@@ -67,4 +67,15 @@ public class VersionsVerbTests
         var expected = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(generator!))).ToLowerInvariant();
         Assert.Equal(expected, doc.RootElement.GetProperty("generatorSha256").GetString());
     }
+
+    [Fact] // review: a misspelled option must FAIL, never silently print the manifest (automation cannot detect typos)
+    public static async Task Unexpected_arguments_fail_without_printing_the_manifest()
+    {
+        var output = new StringWriter();
+        var error = new StringWriter();
+        var exit = await TraceMapCommand.RunAsync(["versions", "--json"], output, error);
+        Assert.Equal(1, exit);
+        Assert.Equal("", output.ToString()); // nothing printed to stdout — no manifest for a bad invocation
+        Assert.Contains("unsupported versions option", error.ToString(), StringComparison.Ordinal);
+    }
 }
