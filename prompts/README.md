@@ -4,6 +4,8 @@ Start with [Verify work-machine HTTP readiness](verify-work-machine-http-readine
 after merged PR #901. This is the current Claude prompt: one build, at most three
 retained HTTP requeries, no rescan, and a sanitized H1–H4 readiness matrix.
 Use the accepted fresh H4 index for lifecycle inventory; preserve old baselines.
+Its verification-only follow-up checks existing receipts against their preserved
+CLI/reporting binaries with no build, scan, or requery.
 
 If the accepted inventory is unclear, [Locate the accepted work baseline](locate-accepted-work-baseline.md)
 remains available for read-only discovery. The completed one-off HTTP debugging,

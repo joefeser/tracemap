@@ -4,6 +4,11 @@ Determine whether this machine has the tool and retained evidence needed for the
 accepted static HTTP review scope. Verify; do not restart the debugging campaign.
 Historical acceptance is a lead, not a substitute for checking local artifacts.
 
+Read this entire prompt before acting. Choose the mode first: for the already
+successful readiness run, use **verification-only follow-up** in the final section.
+That mode performs no build or requery and does not certify the newer checkout.
+Only use sections 1–3 for a separately requested fresh current-tool readiness run.
+
 ## Safety and bounds
 
 20 minutes, one TraceMap CLI build, at most three HTTP requeries (H1, the shared
@@ -47,6 +52,20 @@ queries, verify HEAD stayed unchanged, and match each receipt's GeneratorSha256
 to that DLL. Verify other native generator hashes against their own assemblies,
 not the CLI by assumption. If no committed verifier exists for a hash contract,
 report NOT VERIFIED; do not invent a verification claim or a new helper.
+
+HARD STOP: a nonzero build exit, warnings promoted to errors, or unverifiable
+invoked-binary identity means BUILD BLOCKED / BINARY PROVENANCE UNVERIFIED.
+Do not run any requery using an existing DLL after a failed build, even if the
+compiler emitted a DLL or the diagnostic appears unrelated to HTTP. Retained
+historical evidence may still be useful, but it cannot qualify the current tool.
+Preserve the prior note and add a correction; never silently rewrite its verdict.
+
+If a local governance wrapper rejects `exact-source-method`, identify whether it
+is committed tooling or a private runner. Keep source-method, compiled-method and
+named-handler selection kinds distinct. Do not relabel a source receipt as compiled
+to appease a wrapper. Report RUNNER CONTRACT MISMATCH separately; do not modify the
+runner. Direct native CLI verification below is permitted only after the build and
+binary identity gates pass, and does not certify wrapper compatibility.
 
 ## 2. Verify roots and generate bounded current-tool reports
 
@@ -103,6 +122,45 @@ binary verification yes/no, baseline unchanged yes/no and elapsed time.
 
 Overall verdict: READY FOR ACCEPTED STATIC HTTP REVIEW / READY WITH RECORDED
 LIMITATIONS / BLOCKED BY MISSING INPUT / TOOL UPDATE REQUIRED / REGRESSION SUSPECTED /
-TIME LIMIT. Truncation and unproven H4 dispatch must remain explicit even when ready.
+TIME LIMIT / BUILD BLOCKED / BINARY PROVENANCE UNVERIFIED. A failed build or unverified
+binary forbids either READY verdict. Truncation and unproven H4 dispatch must remain explicit even when ready.
 If blocked, name the smallest operator action; do not execute it. No exhaustive
 HTTP coverage, runtime behavior, SQL validity or migration-readiness claim.
+
+## Committed reporting-component verification
+
+Verification-only follow-up: when the operator already has a successful readiness
+run and its original invoked binaries, skip the build and all requeries. Run only
+the verifier below for those three receipts against those preserved binaries.
+Do not compare old receipts to newly rebuilt DLLs. Retain the prior tool revision
+and readiness verdict, and append a separate component-verification note; this
+does not qualify a newer checkout. Stop if the original binaries are unavailable.
+
+For each of the three selected native HTTP receipts, run the read-only verifier using
+an already installed Python 3.11+ (do not install dependencies). Check the available
+`python`, `python3`, or Windows `py -3` executable's version; select one reporting
+3.11 or newer. Substitute that executable (and launcher arguments, if needed)
+below and record the selected invocation in the private note:
+
+```text
+<selected-python> scripts/verify-http-report-provenance.py --receipt <selected-private-output>/handler-requery.local.json --cli-dll <actual-invoked-cli-dll>
+```
+
+Require exit 0 and CLI_AND_REPORTING_BYTES_MATCH; HANDOFF_LINK_MATCH. The verifier
+compares CLI and reporting hashes separately, uses TraceMap.Reporting.dll beside
+the selected CLI, checks the grouped handoff hash/size against its receipt entry,
+and checks the handoff reporting-generator and index identity. It does not execute
+assemblies or read source/index contents, and writes no files. Its output deliberately
+contains no private paths or hashes. Run within the existing 20-minute budget.
+
+A nonzero exit is PROVENANCE_NOT_VERIFIED and forbids READY. Missing Python is
+VERIFIER UNAVAILABLE: stop, do not install or invent a helper. Keep all existing
+artifacts unchanged. Record this result separately from the successful build.
+This is byte identity against operator-selected binaries, not authenticated build
+provenance, a recomputation of boundedInputSha256, complete report validation,
+verification of nested inventory generators, or runtime proof.
+
+For verification-only mode, return COMPONENT BYTE IDENTITY VERIFIED for the
+original producer revision, or COMPONENT BYTE IDENTITY NOT VERIFIED with the
+smallest missing input. Do not replace or upgrade the earlier readiness verdict.
+Do not post private receipt content, file paths, selectors, or hashes to a PR.

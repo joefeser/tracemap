@@ -5187,6 +5187,47 @@ endurance pattern (TRACEMAP_PARITY_ILASM) later.
 
 ## Explicit retained HTTP source roots
 
+### HTTP reporting binary identity check
+
+`python3 scripts/verify-http-report-provenance.py --receipt <handler-requery.local.json> --cli-dll <invoked-cli.dll>`
+requires Python 3.11+ and reads only the receipt, its fixed-name grouped handoff,
+the selected CLI DLL, and adjacent `TraceMap.Reporting.dll`. It checks the two
+distinct generator hashes, handoff byte length/hash membership, index identity,
+and stable binary, receipt, and handoff bytes before/after. Both receipt and
+handoff must select the HTTP surface. Missing `reportVariant` follows the legacy
+`grouped-paths` default; explicit unsupported values remain rejected.
+Duplicate JSON keys, missing required fields,
+unsupported schemas/surfaces, missing binaries, and mismatches fail closed.
+No artifacts are written and diagnostics omit private paths, hashes, and content.
+
+This check is not authentication, source-to-binary provenance, bounded-input hash
+recomputation, nested inventory validation, HTML verification, or runtime proof.
+Use preserved producer binaries for old receipts; a rebuild is not a substitute.
+Run synthetic tests with
+`python3 -m unittest discover -s scripts/validation -p test_http_report_provenance.py -v`.
+See `prompts/verify-work-machine-http-readiness.md` for the bounded operator handoff.
+
+The verifier caps receipts at 4 MiB, handoffs at 32 MiB, and each binary at
+256 MiB; non-regular inputs and non-standard JSON constants are rejected.
+JSON object expansion can exceed raw byte size; this is not a hard process-memory
+limit. Python `MemoryError` fails closed, but OS termination cannot be caught.
+An over-budget handoff remains unverified; do not trim an accepted artifact.
+It assumes an operator-controlled local filesystem, not an adversarial process
+continuously swapping files. Its success is a byte comparison, not proof that
+the selected adjacent assembly was loaded by a historic process.
+
+The `HTTP report provenance` workflow runs synthetic cases and native CLI
+interoperability on Windows and Linux. The latter builds public disposable
+WebForms samples with and without an HTTP path, generates real native receipts
+and grouped handoffs, checks verification is read-only, and rejects a changed
+reporting hash. No fixture HTTP method is executed. To run locally, set
+`TRACEMAP_PROVENANCE_PYTHON` to an installed Python executable and run:
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --filter FullyQualifiedName~HttpReportProvenanceInteropTests`.
+Without that explicit executable the .NET-only suite reports these two cases
+as skipped; it does not claim the cross-language check ran.
+
+### Source root selection
+
 `webforms-review requery-handler --source-root <private-selector.json> --surface http-client`
 selects a source method independently of a previous report's root roster. The existing
 run/bundle receipt and index hash remain mandatory. The selector's `sourceIndexId`,
