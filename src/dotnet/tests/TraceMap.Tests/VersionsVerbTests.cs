@@ -55,7 +55,7 @@ public class VersionsVerbTests
         var setJson = "{\n" + string.Join(",\n", fields) + "\n}";
         var expected = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(setJson))).ToLowerInvariant();
         Assert.Equal(expected, doc.RootElement.GetProperty("setSha256").GetString());
-        Assert.Equal(text.Contains("\"ci-workflow/"), true); // the manifest carries the live extractor set
+        Assert.True(text.Contains("\"ci-workflow/")); // the manifest carries the live extractor set
     }
 
     [Fact]
