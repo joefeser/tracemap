@@ -551,7 +551,7 @@ internal static class CiWorkflowProducerExtractor
                             target, project?.PackageId, project?.ExplicitPackageId
                         }));
                     }
-                    ResolveOccurrence(occurrence, producedByPath, context, rows, gaps);
+                    ResolveOccurrence(occurrence, context, rows, gaps);
                 }
             }
             // Published only after the whole file parsed: a file-level gap contributes no call.
@@ -1472,7 +1472,6 @@ internal static class CiWorkflowProducerExtractor
 
     private static void ResolveOccurrence(
         PackOccurrence occurrence,
-        IReadOnlyDictionary<string, ProducedPackageInfo> producedByPath,
         CiDerivationContext context,
         List<CiWorkflowProducerRow> rows,
         List<CiWorkflowGap> gaps)
@@ -1497,9 +1496,7 @@ internal static class CiWorkflowProducerExtractor
             && !occurrence.TargetUnresolvable)
         {
             // Derivation FIRST, always: the effective identity includes the nearest Directory.Build
-            // targets override, which a raw project-lane PackageId shortcut would miss (review:
-            // targets PackageId ignored). The project lane's explicit-id knowledge rides only the
-            // refusal detail — never a shortcut around precedence.
+            // targets override, which a raw project-lane PackageId shortcut would miss.
             // DERIVED (2026-10-22 live finding): the CI pack step is pack intent; when the packed
             // project's bounded view proves nothing overrides the MSBuild default chain (no
             // PackageId/AssemblyName in the project or its nearest Directory.Build.props/.targets,
@@ -1512,14 +1509,6 @@ internal static class CiWorkflowProducerExtractor
                 derivedId = derived.Decision != ProjectFileReader.CiDerivedIdentityDecisions.DeclaredId;
                 derivedProvenance = derivedId ? "derived-default" : "declared-id";
                 derivedIdSource = derived.IdSource;
-            }
-            else if (producedByPath.TryGetValue(fileTarget, out var produced)
-                && produced.ExplicitPackageId
-                && derived.Decision == ProjectFileReader.CiDerivedIdentityDecisions.NotSdkStyle)
-            {
-                // an EXPLICIT PackageId in a legacy project is still declared evidence — only the
-                // filename-derivation lanes refuse non-SDK projects (review: legacy explicit ids)
-                packageId = produced.PackageId;
             }
             else
             {
