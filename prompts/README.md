@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+For the explicitly requested fresh check after #904/#905, run
+[Check current work-machine HTTP readiness](check-current-work-http-readiness.md).
+It selects fresh current-tool mode, verifies the new receipts, and asks what is
+still missing before implementation; no application scan or execution is authorized.
+
 Start with [Verify work-machine HTTP readiness](verify-work-machine-http-readiness.md)
 after merged PR #901. This is the current Claude prompt: one build, at most three
 retained HTTP requeries, no rescan, and a sanitized H1–H4 readiness matrix.
