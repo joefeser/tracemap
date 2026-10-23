@@ -47,7 +47,11 @@ public static class Program
             if (!doc.RootElement.TryGetProperty("packWorkflows", out var packWorkflows))
                 throw new ArgumentException("--ci-hints file must be a ci-hints.v1 object; the packWorkflows property is MISSING.");
             if (packWorkflows.ValueKind != System.Text.Json.JsonValueKind.Array)
-                throw new ArgumentException($"--ci-hints packWorkflows must be an ARRAY; found {packWorkflows.ValueKind}. A single object here is the PowerShell single-element collapse — rebuild the file with the runbook census block.");
+            {
+                if (packWorkflows.ValueKind == System.Text.Json.JsonValueKind.Object)
+                    throw new ArgumentException("--ci-hints packWorkflows must be an ARRAY; found a single object — the PowerShell single-element collapse. Rebuild the file with the runbook census block.");
+                throw new ArgumentException($"--ci-hints packWorkflows must be an ARRAY; found {packWorkflows.ValueKind}.");
+            }
             var hints = new List<string>();
             foreach (var entry in packWorkflows.EnumerateArray())
             {

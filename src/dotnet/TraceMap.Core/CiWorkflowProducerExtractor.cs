@@ -1492,17 +1492,14 @@ internal static class CiWorkflowProducerExtractor
                     "unsafe PackageId", occurrence.StartLine));
             else packageId = rawId;
         }
-        else if (occurrence.ProjectTarget is { } target
-            && !target.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
-            && producedByPath.TryGetValue(target, out var produced)
-            && produced.ExplicitPackageId)
-        {
-            packageId = produced.PackageId; // CI packs the project: its explicit declaration is the id evidence
-        }
         else if (occurrence.ProjectTarget is { } fileTarget
             && !fileTarget.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
             && !occurrence.TargetUnresolvable)
         {
+            // Derivation FIRST, always: the effective identity includes the nearest Directory.Build
+            // targets override, which a raw project-lane PackageId shortcut would miss (review:
+            // targets PackageId ignored). The project lane's explicit-id knowledge rides only the
+            // refusal detail — never a shortcut around precedence.
             // DERIVED (2026-10-22 live finding): the CI pack step is pack intent; when the packed
             // project's bounded view proves nothing overrides the MSBuild default chain (no
             // PackageId/AssemblyName in the project or its nearest Directory.Build.props/.targets,
@@ -1515,6 +1512,14 @@ internal static class CiWorkflowProducerExtractor
                 derivedId = derived.Decision != ProjectFileReader.CiDerivedIdentityDecisions.DeclaredId;
                 derivedProvenance = derivedId ? "derived-default" : "declared-id";
                 derivedIdSource = derived.IdSource;
+            }
+            else if (producedByPath.TryGetValue(fileTarget, out var produced)
+                && produced.ExplicitPackageId
+                && derived.Decision == ProjectFileReader.CiDerivedIdentityDecisions.NotSdkStyle)
+            {
+                // an EXPLICIT PackageId in a legacy project is still declared evidence — only the
+                // filename-derivation lanes refuse non-SDK projects (review: legacy explicit ids)
+                packageId = produced.PackageId;
             }
             else
             {
