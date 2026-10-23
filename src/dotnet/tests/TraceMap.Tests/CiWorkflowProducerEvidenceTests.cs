@@ -1523,6 +1523,42 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Empty(result.Rows);
     }
 
+    [Fact] // review round-2 (Codex P1 + Baz): a TARGETS-side Import overrides any earlier winner — the props identity is unprovable
+    public void Targets_import_refuses_props_identity()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.Props</PackageId>\n  </PropertyGroup>\n</Project>");
+        WriteProject(temp.Path, "Directory.Build.targets",
+            "<Project>\n  <Import Project=\"late.targets\" />\n</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // the late import can reassign — never emit the props value
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review round-2 (Codex P1): target-scope uncertainty SURVIVES later last-wins overwrites
+    public void Target_scoped_uncertainty_survives_later_declarations()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <PackageId>Contoso.LaterWins</PackageId>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Sticky.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Sticky.csproj", project);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <Target Name=\"SetId\" BeforeTargets=\"GenerateNuspec\">\n    <PropertyGroup>\n      <PackageId>Contoso.PackTime</PackageId>\n    </PropertyGroup>\n  </Target>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // the pack-time Target can replace the body's value — unprovable, never proven
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
     [Fact] // review (Sourcery High): a direct pack honors a targets-side PackageId over the body's explicit one
     public void Direct_pack_uses_targets_package_id_over_body()
     {

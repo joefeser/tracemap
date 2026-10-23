@@ -366,8 +366,14 @@ public static class ProjectFileReader
             {
                 switch (element.Name.LocalName.ToUpperInvariant())
                 {
-                    case "PACKAGEID": packageIdValue = element.Value.Trim(); packageIdConditioned = CiDerivedIdentityDecisions.IsConditioned(element) || element.Ancestors().Any(a => a.Name.LocalName == "Target"); break;
-                    case "ASSEMBLYNAME": assemblyNameValue = element.Value.Trim(); assemblyNameConditioned = CiDerivedIdentityDecisions.IsConditioned(element) || element.Ancestors().Any(a => a.Name.LocalName == "Target"); break;
+                    case "PACKAGEID":
+                        packageIdValue = element.Value.Trim();
+                        packageIdConditioned |= CiDerivedIdentityDecisions.IsConditioned(element) || element.Ancestors().Any(a => a.Name.LocalName == "Target"); // sticky: a pack-time Target can replace even a later value
+                        break;
+                    case "ASSEMBLYNAME":
+                        assemblyNameValue = element.Value.Trim();
+                        assemblyNameConditioned |= CiDerivedIdentityDecisions.IsConditioned(element) || element.Ancestors().Any(a => a.Name.LocalName == "Target");
+                        break;
                     case "ISPACKABLE":
                         var value = element.Value.Trim();
                         var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
@@ -410,24 +416,29 @@ public static class ProjectFileReader
         // A CONDITIONED winning assignment's branch is never a proven id (round-6: a Release-only
         // AssemblyName is not a Debug build's identity); a winning value the bounded evaluator
         // cannot resolve remains a typed gap — the guards' honesty is preserved.
-        string? finalPackageId = inherited.PropsPackageId; var finalPackageIdConditioned = inherited.PropsPackageIdConditioned;
-        string? finalAssemblyName = inherited.PropsAssemblyName; var finalAssemblyNameConditioned = inherited.PropsAssemblyNameConditioned;
-        var finalPackageIdFromProps = finalPackageId is not null; var finalAssemblyNameFromProps = finalAssemblyName is not null;
-        if (packageIdValue is not null) { finalPackageId = packageIdValue; finalPackageIdConditioned = packageIdConditioned; finalPackageIdFromProps = false; }
-        if (assemblyNameValue is not null) { finalAssemblyName = assemblyNameValue; finalAssemblyNameConditioned = assemblyNameConditioned; finalAssemblyNameFromProps = false; }
-        // targets is imported AFTER the body: its assignments win (review: targets PackageId ignored)
-        if (inherited.TargetsPackageId is not null) { finalPackageId = inherited.TargetsPackageId; finalPackageIdConditioned = inherited.TargetsPackageIdConditioned; finalPackageIdFromProps = false; }
-        if (inherited.TargetsAssemblyName is not null) { finalAssemblyName = inherited.TargetsAssemblyName; finalAssemblyNameConditioned = inherited.TargetsAssemblyNameConditioned; finalAssemblyNameFromProps = false; }
+        var packageIdConditionedAnyPhase = inherited.PropsPackageIdConditioned | packageIdConditioned | inherited.TargetsPackageIdConditioned;
+        var assemblyNameConditionedAnyPhase = inherited.PropsAssemblyNameConditioned | assemblyNameConditioned | inherited.TargetsAssemblyNameConditioned;
+        string? finalPackageId = inherited.PropsPackageId;
+        if (packageIdValue is not null) finalPackageId = packageIdValue;
+        if (inherited.TargetsPackageId is not null) finalPackageId = inherited.TargetsPackageId; // targets is imported AFTER the body: its assignments win (review: targets PackageId ignored)
+        string? finalAssemblyName = inherited.PropsAssemblyName;
+        if (assemblyNameValue is not null) finalAssemblyName = assemblyNameValue;
+        if (inherited.TargetsAssemblyName is not null) finalAssemblyName = inherited.TargetsAssemblyName;
         var chainSource = finalPackageId is not null ? "PackageId" : finalAssemblyName is not null ? "AssemblyName" : null;
         var chainValue = finalPackageId ?? finalAssemblyName;
-        var chainConditioned = finalPackageId is not null ? finalPackageIdConditioned : finalAssemblyNameConditioned;
-        // The winning assignment's SOURCE FILE must not carry imports or Target-nested metadata:
-        // an import inside that file can reassign the value after it (MSBuild packs the imported
-        // value), and a Target-scoped assignment only applies when the target runs (review: import
-        // check + target-scoped identity). Body-file imports were already refused (custom-imports).
-        var winnerFromProps = finalPackageId is not null ? finalPackageIdFromProps : finalAssemblyNameFromProps;
-        var winnerImportsPresent = winnerFromProps ? inherited.PropsImports : inherited.TargetsImports;
-        if (winnerImportsPresent) return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
+        // Sticky uncertainty: a Target-scoped or Conditioned assignment in ANY phase can be the
+        // pack-time winner (BeforeTargets=GenerateNuspec runs AFTER evaluation and can replace even
+        // a later evaluation-time value) — never proven while any phase's assignment was conditioned
+        var chainConditioned = finalPackageId is not null ? packageIdConditionedAnyPhase : assemblyNameConditionedAnyPhase;
+        // Imports: body-file imports were already refused (custom-imports). A props import can
+        // override a props winner; a TARGETS import runs LAST and can override ANY earlier winner
+        // (review: later-phase imports). Conservative: any targets import, or a props import when
+        // the winner came from props, refuses the identity.
+        var packageIdFromPropsOnly = packageIdValue is null && inherited.TargetsPackageId is null && inherited.PropsPackageId is not null;
+        var assemblyNameFromPropsOnly = assemblyNameValue is null && inherited.TargetsAssemblyName is null && inherited.PropsAssemblyName is not null;
+        var winnerFromProps = finalPackageId is not null ? packageIdFromPropsOnly : assemblyNameFromPropsOnly;
+        if (inherited.TargetsImports || (winnerFromProps && inherited.PropsImports))
+            return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
         if (chainValue is not null)
         {
             if (chainConditioned
@@ -494,13 +505,13 @@ public static class ProjectFileReader
                                         || element.Ancestors().Any(a => a.Name.LocalName == "Target");
                                     if (fileName == "Directory.Build.props")
                                     {
-                                        if (element.Name.LocalName.ToUpperInvariant() == "PACKAGEID") { propsPackageId = element.Value.Trim(); propsPackageIdConditioned = identityConditioned; }
-                                        else { propsAssemblyName = element.Value.Trim(); propsAssemblyNameConditioned = identityConditioned; }
+                                        if (element.Name.LocalName.ToUpperInvariant() == "PACKAGEID") { propsPackageId = element.Value.Trim(); propsPackageIdConditioned |= identityConditioned; }
+                                        else { propsAssemblyName = element.Value.Trim(); propsAssemblyNameConditioned |= identityConditioned; }
                                     }
                                     else
                                     {
-                                        if (element.Name.LocalName.ToUpperInvariant() == "PACKAGEID") { targetsPackageId = element.Value.Trim(); targetsPackageIdConditioned = identityConditioned; }
-                                        else { targetsAssemblyName = element.Value.Trim(); targetsAssemblyNameConditioned = identityConditioned; }
+                                        if (element.Name.LocalName.ToUpperInvariant() == "PACKAGEID") { targetsPackageId = element.Value.Trim(); targetsPackageIdConditioned |= identityConditioned; }
+                                        else { targetsAssemblyName = element.Value.Trim(); targetsAssemblyNameConditioned |= identityConditioned; }
                                     }
                                     break;
                                 case "ISPACKABLE":
