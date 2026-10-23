@@ -1523,6 +1523,77 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Empty(result.Rows);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("<AssemblyName>Contoso.Body</AssemblyName>")]
+    [InlineData("<PackageId>Contoso.Body</PackageId>")]
+    public void Props_import_cannot_prove_body_or_default_identity(string identity)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj");
+        WriteProject(temp.Path, "src/Bare.csproj",
+            $"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup>{identity}</PropertyGroup></Project>");
+        WriteProject(temp.Path, "Directory.Build.props", "<Project><Import Project=\"extra.props\" /></Project>");
+        WriteProject(temp.Path, "extra.props", "<Project><Target Name=\"SetId\" BeforeTargets=\"GenerateNuspec\"><PropertyGroup><PackageId>Contoso.Imported</PackageId></PropertyGroup></Target></Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Theory]
+    [InlineData("body", false)]
+    [InlineData("body", true)]
+    [InlineData("Directory.Build.props", false)]
+    [InlineData("Directory.Build.props", true)]
+    [InlineData("Directory.Build.targets", false)]
+    [InlineData("Directory.Build.targets", true)]
+    public void Target_scoped_packability_cannot_be_erased(string phase, bool laterAssignment)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj");
+        const string target = "<Target Name=\"SetPackable\" BeforeTargets=\"GenerateNuspec\"><PropertyGroup><IsPackable>false</IsPackable></PropertyGroup></Target>";
+        var later = laterAssignment ? "<PropertyGroup><IsPackable>true</IsPackable></PropertyGroup>" : "";
+        WriteProject(temp.Path, "src/Bare.csproj",
+            $"<Project Sdk=\"Microsoft.NET.Sdk\">{(phase == "body" ? target : "")}{later}</Project>");
+        if (phase != "body") WriteProject(temp.Path, phase, $"<Project>{target}{later}</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced" && g.Detail!.Contains("IsPackable"));
+    }
+
+    [Theory]
+    [InlineData("<PackageId Condition=\"'$(Configuration)' == 'Release'\">Contoso.Release</PackageId>")]
+    [InlineData("<PackageId>Contoso.Body</PackageId></PropertyGroup><Import Project=\"custom.targets\"/><PropertyGroup>")]
+    public void Legacy_explicit_id_must_pass_bounded_guards(string properties)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Legacy.csproj");
+        WriteProject(temp.Path, "src/Legacy.csproj", $"<Project><PropertyGroup>{properties}</PropertyGroup></Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact]
+    public void Legacy_unconditional_explicit_id_remains_declared()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Legacy.csproj");
+        WriteProject(temp.Path, "src/Legacy.csproj", "<Project><PropertyGroup><PackageId>Contoso.Legacy</PackageId></PropertyGroup></Project>");
+
+        var row = Assert.Single(Read(temp.Path).Rows);
+
+        Assert.Equal("Contoso.Legacy", row.Package);
+        Assert.Equal("declared-id", row.IdProvenance);
+        Assert.Equal("PackageId", row.IdSource);
+    }
+
     [Fact] // review round-2 (Codex P1 + Baz): a TARGETS-side Import overrides any earlier winner — the props identity is unprovable
     public void Targets_import_refuses_props_identity()
     {

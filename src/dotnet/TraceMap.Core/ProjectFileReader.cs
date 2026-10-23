@@ -325,7 +325,7 @@ public static class ProjectFileReader
     /// Directory.Build.targets, per-property last-wins): the winning PackageId/AssemblyName is the
     /// packed id, bounded-evaluated ($(MSBuildProjectName) only). The filename default
     /// (MSBuildProjectName) applies only when no phase assigns identity. Never guessed: Conditioned
-    /// or Target-scoped winning assignments, winners from import-bearing Directory.Build files,
+    /// or Target-scoped winning assignments, imports in either nearest Directory.Build file,
     /// unreadable/linked files, conditioned or non-literal IsPackable, and Microsoft.NET.Test.Sdk
     /// projects (directly or via Directory.Build; conditioned references gap) without a literal
     /// IsPackable=true all yield typed unevidenced decisions — a gap, never a wrong id.
@@ -336,7 +336,11 @@ public static class ProjectFileReader
         var fullPath = Path.GetFullPath(Path.Combine(root, relativePath));
         if (!IsUnderRoot(fullPath, root) || !TryLoadXml(fullPath, out var document, MaxProducerProjectBytes))
             return new(CiDerivedIdentityDecisions.Unreadable, null);
-        if (!IsSdkStyle(document)) return new(CiDerivedIdentityDecisions.NotSdkStyle, null);
+        var sdkStyle = IsSdkStyle(document);
+        // Legacy projects may prove an explicit PackageId, but must pass the same guards.
+        if (!sdkStyle && !document.Descendants().Any(e => e.Parent is { Name.LocalName: "PropertyGroup" }
+            && e.Name.LocalName.Equals("PackageId", StringComparison.OrdinalIgnoreCase)))
+            return new(CiDerivedIdentityDecisions.NotSdkStyle, null);
         // A project-level Import can set PackageId/AssemblyName/IsPackable after the project body; the
         // bounded view cannot evaluate it, so the filename default is not provable — an unevidenced
         // decision, never a guessed id (review P1: custom imports). ANY Import with a Project attribute
@@ -349,9 +353,14 @@ public static class ProjectFileReader
 
         bool? packable = null; var packableLiteralTrue = false; var packableUnprovable = false;
         string? packageIdValue = null; string? assemblyNameValue = null; // last-wins raw values — the CI chain evaluates them below
-        var packageIdConditioned = false; var assemblyNameConditioned = false; // last-wins Condition state (review: a conditioned identity branch is never a proven id)
+        var packageIdConditioned = false; var assemblyNameConditioned = false;
         var inherited = InspectNearestDirectoryBuildFiles(root, Path.GetDirectoryName(fullPath));
         if (inherited.Unreadable) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
+        // Imports can introduce higher-priority properties or pack-time targets, regardless
+        // of which visible phase supplies the selected identity or packability.
+        if (inherited.PropsImports || inherited.TargetsImports)
+            return new(CiDerivedIdentityDecisions.CustomImports, null);
+        var targetScopedPackable = inherited.TargetScopedPackable;
         if (inherited.Packable is { } inheritedPackable)
         {
             (packable, packableLiteralTrue) = (inheritedPackable, inherited.PackableLiteralTrue);
@@ -378,8 +387,10 @@ public static class ProjectFileReader
                         var value = element.Value.Trim();
                         var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
                         var literalTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
+                        var inTarget = element.Ancestors().Any(a => a.Name.LocalName == "Target");
+                        targetScopedPackable |= inTarget;
                         var conditioned = CiDerivedIdentityDecisions.IsConditioned(element)
-                            || element.Ancestors().Any(a => a.Name.LocalName == "Target"); // target-scoped: runs-when-run (review)
+                            || inTarget; // target-scoped: runs-when-run (review)
                         packable = !literalFalse; // provisional; an unresolved expression, Condition, or Target scope is refused below
                         packableLiteralTrue = literalTrue && !conditioned; // a Conditioned literal true is not provable
                         packableUnprovable = conditioned || (!literalFalse && !literalTrue); // $(PackEnabled), Condition=..., Target-scoped: never guessed (review P1 + round-5)
@@ -401,7 +412,7 @@ public static class ProjectFileReader
             packableUnprovable = inherited.TargetsPackableUnprovable;
         }
         else packableUnprovable |= inherited.TargetsPackableUnprovable; // conditioned targets-side IsPackable: unprovable (review)
-        if (packableUnprovable) return new(CiDerivedIdentityDecisions.UnprovablePackable, null); // BEFORE NotPackable: a conditioned false is unprovable, never a silent skip (review round-6)
+        if (targetScopedPackable || packableUnprovable) return new(CiDerivedIdentityDecisions.UnprovablePackable, null); // BEFORE NotPackable: a conditioned false is unprovable, never a silent skip (review round-6)
         if (packable == false) return new(CiDerivedIdentityDecisions.NotPackable, null);
         if ((testSdkReferenced || conditionalTestSdkReferenced) && !packableLiteralTrue)
             // unconditional reference = test project (silent non-producer by design); a CONDITIONED
@@ -430,15 +441,7 @@ public static class ProjectFileReader
         // pack-time winner (BeforeTargets=GenerateNuspec runs AFTER evaluation and can replace even
         // a later evaluation-time value) — never proven while any phase's assignment was conditioned
         var chainConditioned = finalPackageId is not null ? packageIdConditionedAnyPhase : assemblyNameConditionedAnyPhase;
-        // Imports: body-file imports were already refused (custom-imports). A props import can
-        // override a props winner; a TARGETS import runs LAST and can override ANY earlier winner
-        // (review: later-phase imports). Conservative: any targets import, or a props import when
-        // the winner came from props, refuses the identity.
-        var packageIdFromPropsOnly = packageIdValue is null && inherited.TargetsPackageId is null && inherited.PropsPackageId is not null;
-        var assemblyNameFromPropsOnly = assemblyNameValue is null && inherited.TargetsAssemblyName is null && inherited.PropsAssemblyName is not null;
-        var winnerFromProps = finalPackageId is not null ? packageIdFromPropsOnly : assemblyNameFromPropsOnly;
-        if (inherited.TargetsImports || (winnerFromProps && inherited.PropsImports))
-            return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
+        if (!sdkStyle && finalPackageId is null) return new(CiDerivedIdentityDecisions.NotSdkStyle, null);
         if (chainValue is not null)
         {
             if (chainConditioned
@@ -460,7 +463,7 @@ public static class ProjectFileReader
         string? PropsAssemblyName, bool PropsAssemblyNameConditioned,
         string? TargetsPackageId, bool TargetsPackageIdConditioned,
         string? TargetsAssemblyName, bool TargetsAssemblyNameConditioned,
-        bool PropsImports, bool TargetsImports);
+        bool PropsImports, bool TargetsImports, bool TargetScopedPackable);
 
     private static InheritedProjectView InspectNearestDirectoryBuildFiles(string root, string? projectDirectory)
     {
@@ -471,7 +474,7 @@ public static class ProjectFileReader
         string? propsPackageId = null, propsAssemblyName = null, targetsPackageId = null, targetsAssemblyName = null;
         var propsPackageIdConditioned = false; var propsAssemblyNameConditioned = false;
         var targetsPackageIdConditioned = false; var targetsAssemblyNameConditioned = false;
-        var propsImports = false; var targetsImports = false;
+        var propsImports = false; var targetsImports = false; var targetScopedPackable = false;
         foreach (var fileName in new[] { "Directory.Build.props", "Directory.Build.targets" })
         {
             for (var dir = projectDirectory; dir is not null && IsUnderRoot(dir, root); dir = Path.GetDirectoryName(dir))
@@ -485,8 +488,7 @@ public static class ProjectFileReader
                     try { if (File.GetAttributes(candidate).HasFlag(FileAttributes.ReparsePoint)) { unreadable = true; break; } }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { unreadable = true; break; }
                     if (!TryLoadXml(candidate, out var document, MaxProducerProjectBytes)) { unreadable = true; break; }
-                    // an Import inside the file can reassign anything the file declares — the caller
-                    // refuses identity won from an import-bearing file (review: import check)
+                    // Unfollowed imports can introduce properties or execution-time targets.
                     if (document.Descendants().Any(e => e.Name.LocalName == "Import" && AttributeValue(e, "Project") is not null))
                     {
                         if (fileName == "Directory.Build.props") propsImports = true; else targetsImports = true;
@@ -515,6 +517,7 @@ public static class ProjectFileReader
                                     }
                                     break;
                                 case "ISPACKABLE":
+                                    targetScopedPackable |= element.Ancestors().Any(a => a.Name.LocalName == "Target");
                                     var value = element.Value.Trim();
                                     var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
                                     var literalTrue = value.Equals("true", StringComparison.OrdinalIgnoreCase);
@@ -549,7 +552,7 @@ public static class ProjectFileReader
         }
         return new(unreadable, propsPackable, propsLiteralTrue, propsUnprovable, targetsPackable, targetsLiteralTrue, targetsUnprovable, testSdkReferenced, conditionalTestSdk,
             propsPackageId, propsPackageIdConditioned, propsAssemblyName, propsAssemblyNameConditioned, targetsPackageId, targetsPackageIdConditioned, targetsAssemblyName, targetsAssemblyNameConditioned,
-            propsImports, targetsImports);
+            propsImports, targetsImports, targetScopedPackable);
     }
 
     private static bool IsUnderRoot(string fullPath, string root)
