@@ -160,7 +160,9 @@ public static class TraceMapCommand
             var exitCode = command switch
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
-                "versions" => Program.RunVersions(output),
+                "versions" => rest.Length == 0
+                    ? Program.RunVersions(output)
+                    : await RejectVersionsArguments(rest, error),
                 "version" => await RunVersionAsync(rest, output, error),
                 "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
@@ -244,6 +246,14 @@ public static class TraceMapCommand
                 : $"error: {ex.Message} ({snapshotDetail})");
             return 1;
         }
+    }
+
+    private static async Task<int> RejectVersionsArguments(string[] args, TextWriter error)
+    {
+        // versions takes NO options — a misspelled flag must fail, never silently print the
+        // manifest (review: automation cannot detect typos otherwise; the version-command rule)
+        await error.WriteLineAsync($"error: unsupported versions option(s): {string.Join(", ", args)}.");
+        return 1;
     }
 
     private static async Task<int> RunVersionAsync(string[] args, TextWriter output, TextWriter error)
