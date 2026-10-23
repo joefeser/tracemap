@@ -5204,6 +5204,22 @@ Run synthetic tests with
 `python3 -m unittest discover -s scripts/validation -p test_http_report_provenance.py -v`.
 See `prompts/verify-work-machine-http-readiness.md` for the bounded operator handoff.
 
+The verifier caps receipts at 4 MiB, handoffs at 512 MiB, and each binary at
+256 MiB; non-regular inputs and non-standard JSON constants are rejected.
+It assumes an operator-controlled local filesystem, not an adversarial process
+continuously swapping files. Its success is a byte comparison, not proof that
+the selected adjacent assembly was loaded by a historic process.
+
+The `HTTP report provenance` workflow runs synthetic cases and native CLI
+interoperability on Windows and Linux. The latter builds public disposable
+WebForms samples with and without an HTTP path, generates real native receipts
+and grouped handoffs, checks verification is read-only, and rejects a changed
+reporting hash. No fixture HTTP method is executed. To run locally, set
+`TRACEMAP_PROVENANCE_PYTHON` to an installed Python executable and run:
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --filter FullyQualifiedName~HttpReportProvenanceInteropTests`.
+Without that explicit executable the .NET-only suite reports these two cases
+as skipped; it does not claim the cross-language check ran.
+
 ### Source root selection
 
 `webforms-review requery-handler --source-root <private-selector.json> --surface http-client`

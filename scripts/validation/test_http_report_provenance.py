@@ -4,6 +4,8 @@ import io
 import json
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -116,6 +118,76 @@ class ProvenanceTests(unittest.TestCase):
             self.save()
             self.assertEqual(1, self.run_check())
             self.data[field] = old
+
+    def test_invalid_json_and_shapes_fail_without_leaking_input(self):
+        for text in ('{', '[]', 'null', '{"private-secret": NaN}',
+                     '{"nested":{"same":1,"same":2}}', '\ufeffnot-json'):
+            with self.subTest(text=text):
+                self.receipt.write_text(text, encoding="utf-8")
+                self.assertEqual(1, self.run_check())
+        self.receipt.write_bytes(b'\xff\xfe\xff')
+        self.assertEqual(1, self.run_check())
+
+    def test_missing_hash_keys(self):
+        for key in ("generatorSha256", "reportingGeneratorSha256", "combinedIndexSha256"):
+            saved = self.data.pop(key)
+            self.save()
+            self.assertEqual(1, self.run_check())
+            self.data[key] = saved
+
+    def test_artifact_length_and_paths_cannot_redirect_reads(self):
+        original = self.data["artifacts"][0].copy()
+        for field, value in (("bytes", True), ("bytes", -1), ("bytes", original["bytes"] + 1),
+                             ("relativePath", "../private-secret.json"), ("sha256", "0" * 64)):
+            self.data["artifacts"] = [dict(original, **{field: value})]
+            self.save()
+            self.assertEqual(1, self.run_check())
+
+    def test_input_budgets(self):
+        with patch.object(verifier, "MAX_RECEIPT", 8):
+            self.assertEqual(1, self.run_check())
+        with patch.object(verifier, "MAX_BINARY", 8):
+            self.assertEqual(1, self.run_check())
+        with self.assertRaises(ValueError):
+            verifier.read_json(self.handoff, limit=8)
+
+    def test_missing_and_directory_inputs(self):
+        self.handoff.unlink()
+        self.assertEqual(1, self.run_check())
+        self.handoff.mkdir()
+        self.assertEqual(1, self.run_check())
+
+    def test_arbitrary_json_shapes(self):
+        for key in ("query", "artifacts"):
+            original = self.data[key]
+            for value in (None, 42, "private-secret", [None], {"unexpected": True}):
+                self.data[key] = value
+                self.save()
+                self.assertEqual(1, self.run_check())
+            self.data[key] = original
+
+    def test_subprocess_paths_with_spaces_and_exit_codes(self):
+        # Temporary root is renamed to cover shell-free Windows/Unix argument handling.
+        new_root = self.root / "public sample # percent %"
+        new_root.mkdir()
+        for path in (self.cli, self.reporting, self.handoff, self.receipt):
+            (new_root / path.name).write_bytes(path.read_bytes())
+        command = [sys.executable, str(Path(verifier.__file__)), "--receipt",
+                   str(new_root / self.receipt.name), "--cli-dll", str(new_root / self.cli.name)]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, result.returncode, result.stderr)
+        (new_root / self.reporting.name).unlink()
+        result = subprocess.run(command, capture_output=True, text=True, timeout=10)
+        self.assertEqual(1, result.returncode)
+        self.assertEqual("PROVENANCE_NOT_VERIFIED", result.stderr.strip())
+        self.assertNotIn(str(new_root), result.stdout + result.stderr)
+
+    def test_argument_errors_do_not_echo_private_values(self):
+        result = subprocess.run([sys.executable, verifier.__file__, "--unexpected-private-path"],
+                                capture_output=True, text=True, timeout=10)
+        self.assertEqual(2, result.returncode)
+        self.assertEqual("PROVENANCE_ARGUMENTS_INVALID", result.stderr.strip())
+        self.assertEqual("", result.stdout)
 
 
 if __name__ == "__main__":

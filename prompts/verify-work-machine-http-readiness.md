@@ -4,6 +4,11 @@ Determine whether this machine has the tool and retained evidence needed for the
 accepted static HTTP review scope. Verify; do not restart the debugging campaign.
 Historical acceptance is a lead, not a substitute for checking local artifacts.
 
+Read this entire prompt before acting. Choose the mode first: for the already
+successful readiness run, use **verification-only follow-up** in the final section.
+That mode performs no build or requery and does not certify the newer checkout.
+Only use sections 1–3 for a separately requested fresh current-tool readiness run.
+
 ## Safety and bounds
 
 20 minutes, one TraceMap CLI build, at most three HTTP requeries (H1, the shared
@@ -131,11 +136,11 @@ Do not compare old receipts to newly rebuilt DLLs. Retain the prior tool revisio
 and readiness verdict, and append a separate component-verification note; this
 does not qualify a newer checkout. Stop if the original binaries are unavailable.
 
-For each of the three new native HTTP receipts, run the read-only verifier using
+For each of the three selected native HTTP receipts, run the read-only verifier using
 an already installed Python 3.11+ (do not install dependencies):
 
 ```text
-python scripts/verify-http-report-provenance.py --receipt <new-private-output>/handler-requery.local.json --cli-dll <actual-invoked-cli-dll>
+python scripts/verify-http-report-provenance.py --receipt <selected-private-output>/handler-requery.local.json --cli-dll <actual-invoked-cli-dll>
 ```
 
 Require exit 0 and CLI_AND_REPORTING_BYTES_MATCH; HANDOFF_LINK_MATCH. The verifier
@@ -151,3 +156,8 @@ artifacts unchanged. Record this result separately from the successful build.
 This is byte identity against operator-selected binaries, not authenticated build
 provenance, a recomputation of boundedInputSha256, complete report validation,
 verification of nested inventory generators, or runtime proof.
+
+For verification-only mode, return COMPONENT BYTE IDENTITY VERIFIED for the
+original producer revision, or COMPONENT BYTE IDENTITY NOT VERIFIED with the
+smallest missing input. Do not replace or upgrade the earlier readiness verdict.
+Do not post private receipt content, file paths, selectors, or hashes to a PR.
