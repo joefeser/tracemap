@@ -119,7 +119,14 @@ internal static class CiWorkflowProducerExtractor
             && normalizedUses[^(hint.Length + 1)] == '/');
 
     /// Shared state for CI identity derivation: the scoped inventory and the bounded digest sink.
-    private sealed record CiDerivationContext(string Root, ISet<string> InventoryProjects, List<string> Observed);
+    private sealed record CiDerivationContext(
+        string Root, ISet<string> InventoryProjects, List<string> Observed)
+    {
+        // repeated pack occurrences of one project must not reparse it and its Directory.Build files
+        // (review: unbounded CPU/IO by occurrence count). Behavior-neutral: only the parse is cached;
+        // the per-call observation below still records, so bounded digests are byte-identical.
+        public Dictionary<string, ProjectFileReader.CiDerivedIdentity> IdentityCache { get; } = new(StringComparer.Ordinal);
+    }
 
     private const string NotInInventoryDecision = "not-in-scanned-inventory";
 
@@ -127,9 +134,13 @@ internal static class CiWorkflowProducerExtractor
     /// bounded digest so editing a project/Directory.Build file that flips the decision moves it.
     private static ProjectFileReader.CiDerivedIdentity DeriveCiIdentity(CiDerivationContext context, string relativeProject)
     {
-        var decision = context.InventoryProjects.Contains(relativeProject)
-            ? ProjectFileReader.ReadCiDerivedIdentity(context.Root, relativeProject)
-            : new ProjectFileReader.CiDerivedIdentity(NotInInventoryDecision, null);
+        if (!context.IdentityCache.TryGetValue(relativeProject, out var decision))
+        {
+            decision = context.InventoryProjects.Contains(relativeProject)
+                ? ProjectFileReader.ReadCiDerivedIdentity(context.Root, relativeProject)
+                : new ProjectFileReader.CiDerivedIdentity(NotInInventoryDecision, null);
+            context.IdentityCache[relativeProject] = decision;
+        }
         // The resolved id and its source ride the digest too: changing an evaluated
         // AssemblyName changes the emitted row, so it must move the bounded digest
         // (review: digest omitted the identity value). Explicit null markers keep
