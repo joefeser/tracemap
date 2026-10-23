@@ -44,9 +44,10 @@ public static class Program
             foreach (var property in doc.RootElement.EnumerateObject())
                 if (!seenRoot.Add(property.Name))
                     throw new ArgumentException($"--ci-hints file has a duplicate property '{property.Name}' — each property may occur once.");
-            if (!doc.RootElement.TryGetProperty("packWorkflows", out var packWorkflows)
-                || packWorkflows.ValueKind != System.Text.Json.JsonValueKind.Array)
-                throw new ArgumentException("--ci-hints file must be a ci-hints.v1 object with a packWorkflows array.");
+            if (!doc.RootElement.TryGetProperty("packWorkflows", out var packWorkflows))
+                throw new ArgumentException("--ci-hints file must be a ci-hints.v1 object; the packWorkflows property is MISSING.");
+            if (packWorkflows.ValueKind != System.Text.Json.JsonValueKind.Array)
+                throw new ArgumentException($"--ci-hints packWorkflows must be an ARRAY; found {packWorkflows.ValueKind}. A single object here is the PowerShell single-element collapse — rebuild the file with the runbook census block.");
             var hints = new List<string>();
             foreach (var entry in packWorkflows.EnumerateArray())
             {

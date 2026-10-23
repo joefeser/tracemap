@@ -402,21 +402,24 @@ public static class ProjectFileReader
             // unconditional reference = test project (silent non-producer by design); a CONDITIONED
             // reference is unprovable either way — a typed gap, never a silent drop (review round-5)
             return new(testSdkReferenced ? CiDerivedIdentityDecisions.TestProject : CiDerivedIdentityDecisions.ConditionalTestSdk, null);
-        // FULL MSBuild chain, in order: PackageId <- AssemblyName <- MSBuildProjectName(filename).
-        // A DECLARED identity is the id when pack intent is proven by the CI lane (a pack step or a
-        // hinted shared workflow) — "dotnet pack ships AssemblyName" is exactly what MSBuild does.
-        // Bounded evaluation only: $(MSBuildProjectName) resolves from the file's own name; any other
-        // token stays unevidenced (never guessed). A CONDITIONED assignment's branch is never a proven
-        // id (review round-6: a Release-only AssemblyName is not a Debug build's identity). Inherited
-        // Directory.Build identity and any declared value the bounded evaluator cannot resolve remain
-        // typed gaps — the previous guards' honesty is preserved; only the provable chain is followed.
-        // Inherited identity is consulted BEFORE the chain: a props-side PackageId outranks a body
-        // AssemblyName and a targets-side declaration overrides both — mixed cases conservatively
-        // refuse rather than guess which assignment wins (review round-7).
-        if (inherited.DeclaresIdentity) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
-        var chainSource = packageIdValue is not null ? "PackageId" : assemblyNameValue is not null ? "AssemblyName" : null;
-        var chainValue = packageIdValue ?? assemblyNameValue;
-        var chainConditioned = packageIdValue is not null ? packageIdConditioned : assemblyNameConditioned;
+        // FULL MSBuild chain with three-phase PRECEDENCE (props -> body -> targets, per-property
+        // last-wins): a props-side PackageId IS the id over a body AssemblyName (PackageId is the
+        // chain head wherever it is assigned); a body PackageId overrides a props AssemblyName;
+        // a targets-side assignment (imported AFTER the body) overrides both — precise, replacing
+        // round-7's conservative mixed-refusal. Bounded evaluation only: $(MSBuildProjectName)
+        // resolves from the file's own name; any other token stays unevidenced (never guessed).
+        // A CONDITIONED winning assignment's branch is never a proven id (round-6: a Release-only
+        // AssemblyName is not a Debug build's identity); a winning value the bounded evaluator
+        // cannot resolve remains a typed gap — the guards' honesty is preserved.
+        string? finalPackageId = inherited.PropsPackageId; var finalPackageIdConditioned = inherited.PropsPackageIdConditioned;
+        string? finalAssemblyName = inherited.PropsAssemblyName; var finalAssemblyNameConditioned = inherited.PropsAssemblyNameConditioned;
+        if (packageIdValue is not null) { finalPackageId = packageIdValue; finalPackageIdConditioned = packageIdConditioned; }
+        if (assemblyNameValue is not null) { finalAssemblyName = assemblyNameValue; finalAssemblyNameConditioned = assemblyNameConditioned; }
+        if (inherited.TargetsPackageId is not null) { finalPackageId = inherited.TargetsPackageId; finalPackageIdConditioned = inherited.TargetsPackageIdConditioned; }
+        if (inherited.TargetsAssemblyName is not null) { finalAssemblyName = inherited.TargetsAssemblyName; finalAssemblyNameConditioned = inherited.TargetsAssemblyNameConditioned; }
+        var chainSource = finalPackageId is not null ? "PackageId" : finalAssemblyName is not null ? "AssemblyName" : null;
+        var chainValue = finalPackageId ?? finalAssemblyName;
+        var chainConditioned = finalPackageId is not null ? finalPackageIdConditioned : finalAssemblyNameConditioned;
         if (chainValue is not null)
         {
             if (chainConditioned
@@ -430,17 +433,24 @@ public static class ProjectFileReader
     }
 
     private sealed record InheritedProjectView(
-        bool Unreadable, bool DeclaresIdentity,
+        bool Unreadable,
         bool? Packable, bool PackableLiteralTrue, bool PackableUnprovable,
         bool? TargetsPackable, bool TargetsPackableLiteralTrue, bool TargetsPackableUnprovable,
-        bool TestSdkReferenced, bool ConditionalTestSdk);
+        bool TestSdkReferenced, bool ConditionalTestSdk,
+        string? PropsPackageId, bool PropsPackageIdConditioned,
+        string? PropsAssemblyName, bool PropsAssemblyNameConditioned,
+        string? TargetsPackageId, bool TargetsPackageIdConditioned,
+        string? TargetsAssemblyName, bool TargetsAssemblyNameConditioned);
 
     private static InheritedProjectView InspectNearestDirectoryBuildFiles(string root, string? projectDirectory)
     {
-        var unreadable = false; var declaresIdentity = false; var testSdkReferenced = false; var conditionalTestSdk = false;
+        var unreadable = false; var testSdkReferenced = false; var conditionalTestSdk = false;
         bool? propsPackable = null, targetsPackable = null;
         bool propsLiteralTrue = false, targetsLiteralTrue = false;
         var propsUnprovable = false; var targetsUnprovable = false;
+        string? propsPackageId = null, propsAssemblyName = null, targetsPackageId = null, targetsAssemblyName = null;
+        var propsPackageIdConditioned = false; var propsAssemblyNameConditioned = false;
+        var targetsPackageIdConditioned = false; var targetsAssemblyNameConditioned = false;
         foreach (var fileName in new[] { "Directory.Build.props", "Directory.Build.targets" })
         {
             for (var dir = projectDirectory; dir is not null && IsUnderRoot(dir, root); dir = Path.GetDirectoryName(dir))
@@ -460,7 +470,21 @@ public static class ProjectFileReader
                         {
                             switch (element.Name.LocalName.ToUpperInvariant())
                             {
-                                case "PACKAGEID" or "ASSEMBLYNAME": declaresIdentity = true; break;
+                                case "PACKAGEID" or "ASSEMBLYNAME":
+                                    // per-property, per-file capture (last-wins within the file) — the
+                                    // caller resolves the three-phase MSBuild precedence precisely
+                                    var identityConditioned = CiDerivedIdentityDecisions.IsConditioned(element);
+                                    if (fileName == "Directory.Build.props")
+                                    {
+                                        if (element.Name.LocalName.ToUpperInvariant() == "PACKAGEID") { propsPackageId = element.Value.Trim(); propsPackageIdConditioned = identityConditioned; }
+                                        else { propsAssemblyName = element.Value.Trim(); propsAssemblyNameConditioned = identityConditioned; }
+                                    }
+                                    else
+                                    {
+                                        if (element.Name.LocalName.ToUpperInvariant() == "PACKAGEID") { targetsPackageId = element.Value.Trim(); targetsPackageIdConditioned = identityConditioned; }
+                                        else { targetsAssemblyName = element.Value.Trim(); targetsAssemblyNameConditioned = identityConditioned; }
+                                    }
+                                    break;
                                 case "ISPACKABLE":
                                     var value = element.Value.Trim();
                                     var literalFalse = value.Equals("false", StringComparison.OrdinalIgnoreCase);
@@ -494,7 +518,8 @@ public static class ProjectFileReader
                 if (string.Equals(dir.TrimEnd(Path.DirectorySeparatorChar), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.Ordinal)) break;
             }
         }
-        return new(unreadable, declaresIdentity, propsPackable, propsLiteralTrue, propsUnprovable, targetsPackable, targetsLiteralTrue, targetsUnprovable, testSdkReferenced, conditionalTestSdk);
+        return new(unreadable, propsPackable, propsLiteralTrue, propsUnprovable, targetsPackable, targetsLiteralTrue, targetsUnprovable, testSdkReferenced, conditionalTestSdk,
+            propsPackageId, propsPackageIdConditioned, propsAssemblyName, propsAssemblyNameConditioned, targetsPackageId, targetsPackageIdConditioned, targetsAssemblyName, targetsAssemblyNameConditioned);
     }
 
     private static bool IsUnderRoot(string fullPath, string root)
