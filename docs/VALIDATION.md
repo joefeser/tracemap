@@ -15,8 +15,8 @@ with or without `IncludeLegacyRoots`; root selection must not suppress this inve
 Shareable legacy views still omit the private inventory; their privacy boundary is unchanged.
 The signed-framework regression covers both ordinary and bounded legacy-root readers,
 equal candidate inventories, actual HTTP paths and no synthetic candidate call edges.
-The explicitly authorized isolated fresh-scan workflow is
-`prompts/fresh-scan-h4-lifecycle-evidence.md`.
+The completed isolated fresh-scan prompt is retired. Current work-machine readiness
+uses `prompts/verify-work-machine-http-readiness.md` and does not authorize a scan.
 
 The inventory is separate
 from call paths, including lifecycle candidates, their provenance and unresolved
@@ -26,8 +26,8 @@ does not derive new relationships, change tiers, or add framework dispatch edges
 pins candidate/empty/unavailable output, HTML escaping and lossless path preservation.
 `HttpEntryBoundaryRegressionTests.Real_webforms_framework_keeps_override_body_and_host_entry_separate`
 also exercises the HTML against the public signed-framework VB fixture. Work-machine
-verification uses `prompts/verify-h4-lifecycle-entry-inventory.md`; old retained inputs
-may lack candidates, and no rescan is authorized by that prompt.
+verification uses `prompts/verify-work-machine-http-readiness.md`; old retained inputs
+may lack candidates, so H4 uses the accepted fresh index. No rescan is authorized.
 
 `webforms-review requery-handler --surface http-client` selects outbound HTTP
 terminals in the same verified retained combined index. It requires `--handler` or `--source-root`
@@ -42,7 +42,7 @@ synthetic projectless VB handler through a helper to an HTTP terminal, including
 the retained syntax rule, tier, source line and supporting evidence, plus selector
 rejections and database-default isolation. This is static candidate evidence, not
 proof that a request ran. The full Debug suite with `-warnaserror` is required for
-this CLI change. Private acceptance uses `prompts/accept-h1-http-baseline.md` and
+this CLI change. Private readiness uses `prompts/verify-work-machine-http-readiness.md` and
 does not require another scan. Select the actual HTTP handler, not a database root.
 
 ## Package producer repair gate (#900)
