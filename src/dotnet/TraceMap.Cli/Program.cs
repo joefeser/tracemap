@@ -77,9 +77,16 @@ public static class Program
             .Select(f => (Name: f.Name, Value: (string)f.GetRawConstantValue()!))
             .OrderBy(pair => pair.Name, StringComparer.Ordinal)
             .ToList();
+        var setJson = "{\n" + string.Join(",\n", fields.Select(f => $"  \"{f.Name}\": \"{f.Value}\"")) + "\n}";
+        var generator = "tracemap-versions-manifest/1";
+        var setSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(setJson))).ToLowerInvariant();
+        var generatorSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(generator))).ToLowerInvariant();
         var sb = new StringBuilder().AppendLine("{");
         for (var i = 0; i < fields.Count; i++)
-            sb.Append("  \"").Append(fields[i].Name).Append("\": \"").Append(fields[i].Value).Append("\"").AppendLine(i == fields.Count - 1 ? "" : ",");
+            sb.Append("  \"").Append(fields[i].Name).Append("\": \"").Append(fields[i].Value).AppendLine("\",");
+        sb.Append("  \"generator\": \"").Append(generator).AppendLine("\",");
+        sb.Append("  \"generatorSha256\": \"").Append(generatorSha256).AppendLine("\",");
+        sb.Append("  \"setSha256\": \"").Append(setSha256).AppendLine("\"");
         sb.AppendLine("}");
         output.Write(sb.ToString());
         return 0;
@@ -110,6 +117,7 @@ public static class TraceMapCommand
             {
                 "scan" => ScanHelp(),
                 "version" => VersionHelp(),
+                "versions" => "tracemap versions — prints the ScannerVersions extractor set as stable ordinal JSON (cache-key manifest; contract: extractor behavior changes bump their ScannerVersions constant)",
                 "validate-index" => "tracemap validate-index --index <path> --commit <sha> --facts <count>",
                 "local-review" => LocalReviewHelp(),
                 "webforms-review" => rest.FirstOrDefault() == "wizard" ? WebFormsWizardCommand.Help : WebFormsReviewPreflightCommand.Help,
@@ -2875,6 +2883,7 @@ public static class TraceMapCommand
 
             Usage:
               tracemap version [--json]
+              tracemap versions
               tracemap local-review run --repo <path> --out <new-output-root> [--webforms-modernization] [--explorer]
               tracemap webforms-review preflight --config <private-json> --out <new-run-root>
               tracemap scan --repo <path> --out <path>
