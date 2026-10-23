@@ -66,6 +66,32 @@ public static class Program
         }
     }
 
+    internal static int RunVersions(TextWriter output)
+    {
+        // Stable extractor-version manifest (ordinal-sorted JSON). Consumers key scan caches on
+        // this set instead of binary identity, so reporting/export-only changes stop invalidating
+        // cached evidence. CONTRACT: any extractor behavior change MUST bump its ScannerVersions
+        // constant, or consumers will silently reuse stale evidence.
+        var fields = typeof(ScannerVersions).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+            .Select(f => (Name: f.Name, Value: (string)f.GetRawConstantValue()!))
+            .OrderBy(pair => pair.Name, StringComparer.Ordinal)
+            .ToList();
+        var setJson = "{\n" + string.Join(",\n", fields.Select(f => $"  \"{f.Name}\": \"{f.Value}\"")) + "\n}";
+        var generator = "tracemap-versions-manifest/1";
+        var setSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(setJson))).ToLowerInvariant();
+        var generatorSha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(generator))).ToLowerInvariant();
+        var sb = new StringBuilder().AppendLine("{");
+        for (var i = 0; i < fields.Count; i++)
+            sb.Append("  \"").Append(fields[i].Name).Append("\": \"").Append(fields[i].Value).AppendLine("\",");
+        sb.Append("  \"generator\": \"").Append(generator).AppendLine("\",");
+        sb.Append("  \"generatorSha256\": \"").Append(generatorSha256).AppendLine("\",");
+        sb.Append("  \"setSha256\": \"").Append(setSha256).AppendLine("\"");
+        sb.AppendLine("}");
+        output.Write(sb.ToString());
+        return 0;
+    }
+
     public static async Task<int> Main(string[] args)
     {
         return await TraceMapCommand.RunAsync(args, Console.Out, Console.Error);
@@ -91,6 +117,7 @@ public static class TraceMapCommand
             {
                 "scan" => ScanHelp(),
                 "version" => VersionHelp(),
+                "versions" => "tracemap versions — prints the ScannerVersions extractor set as stable ordinal JSON (cache-key manifest; contract: extractor behavior changes bump their ScannerVersions constant)",
                 "validate-index" => "tracemap validate-index --index <path> --commit <sha> --facts <count>",
                 "local-review" => LocalReviewHelp(),
                 "webforms-review" => rest.FirstOrDefault() == "wizard" ? WebFormsWizardCommand.Help : WebFormsReviewPreflightCommand.Help,
@@ -124,7 +151,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -133,6 +160,9 @@ public static class TraceMapCommand
             var exitCode = command switch
             {
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
+                "versions" => rest.Length == 0
+                    ? Program.RunVersions(output)
+                    : await RejectVersionsArguments(rest, error),
                 "version" => await RunVersionAsync(rest, output, error),
                 "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
@@ -216,6 +246,14 @@ public static class TraceMapCommand
                 : $"error: {ex.Message} ({snapshotDetail})");
             return 1;
         }
+    }
+
+    private static async Task<int> RejectVersionsArguments(string[] args, TextWriter error)
+    {
+        // versions takes NO options — a misspelled flag must fail, never silently print the
+        // manifest (review: automation cannot detect typos otherwise; the version-command rule)
+        await error.WriteLineAsync($"error: unsupported versions option(s): {string.Join(", ", args)}.");
+        return 1;
     }
 
     private static async Task<int> RunVersionAsync(string[] args, TextWriter output, TextWriter error)
@@ -2855,6 +2893,7 @@ public static class TraceMapCommand
 
             Usage:
               tracemap version [--json]
+              tracemap versions
               tracemap local-review run --repo <path> --out <new-output-root> [--webforms-modernization] [--explorer]
               tracemap webforms-review preflight --config <private-json> --out <new-run-root>
               tracemap scan --repo <path> --out <path>
