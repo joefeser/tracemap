@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+After a successful current-tool HTTP check, use
+[Prepare implementation evidence](prepare-work-implementation-evidence.md) to
+assemble a private H1–H4 packet and reconcile retained SQL acceptance separately.
+This is read-only planning, not application implementation or SQL execution.
+
 For the explicitly requested fresh check after #904/#905, run
 [Check current work-machine HTTP readiness](check-current-work-http-readiness.md).
 It selects fresh current-tool mode, verifies the new receipts, and asks what is
