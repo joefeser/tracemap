@@ -5,10 +5,13 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import stat
 import sys
 
 HANDOFF = "compiled-paths.handoff.local.json"
 MAX_JSON = 512 * 1024 * 1024
+MAX_RECEIPT = 4 * 1024 * 1024
+MAX_BINARY = 256 * 1024 * 1024
 
 
 def require(condition):
@@ -24,18 +27,35 @@ def unique_object(pairs):
     return result
 
 
-def read_json(path):
+def regular_file(path, limit):
+    info = path.stat()
+    require(stat.S_ISREG(info.st_mode) and info.st_size <= limit)
+
+
+def invalid_constant(_):
+    raise ValueError("PROVENANCE_NOT_VERIFIED")
+
+
+def read_json(path, limit=MAX_JSON):
+    regular_file(path, limit)
     with path.open("rb") as stream:
-        data = stream.read(MAX_JSON + 1)
-    require(len(data) <= MAX_JSON)
-    value = json.loads(data, object_pairs_hook=unique_object)
+        data = stream.read(limit + 1)
+    require(len(data) <= limit)
+    value = json.loads(data, object_pairs_hook=unique_object, parse_constant=invalid_constant)
     require(isinstance(value, dict))
     return value, data
 
 
 def digest(path):
+    regular_file(path, MAX_BINARY)
     with path.open("rb") as stream:
-        return hashlib.file_digest(stream, "sha256").hexdigest()
+        result = hashlib.sha256()
+        total = 0
+        while chunk := stream.read(1024 * 1024):
+            total += len(chunk)
+            require(total <= MAX_BINARY)
+            result.update(chunk)
+        return result.hexdigest()
 
 
 def hash_field(obj, key):
@@ -49,7 +69,7 @@ def verify(receipt_path, cli_dll):
     # never select a different assembly using untrusted receipt paths.
     reporting_dll = cli_dll.parent / "TraceMap.Reporting.dll"
     before = (digest(cli_dll), digest(reporting_dll))
-    receipt, _ = read_json(receipt_path)
+    receipt, _ = read_json(receipt_path, MAX_RECEIPT)
     require(receipt.get("schemaVersion") == "webforms-handler-requery.v1")
     require(receipt.get("ruleId") == "workflow.webforms.retained-handler-requery.v1")
     require(receipt.get("reportVariant") == "grouped-paths")
@@ -71,7 +91,11 @@ def verify(receipt_path, cli_dll):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    class PrivateArgumentParser(argparse.ArgumentParser):
+        def error(self, message):
+            self.exit(2, "PROVENANCE_ARGUMENTS_INVALID\n")
+
+    parser = PrivateArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--cli-dll", type=Path, required=True)
     args = parser.parse_args(argv)
