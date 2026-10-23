@@ -68,6 +68,13 @@ For each relevant SQL contract, distinguish:
    a specific retained acceptance record proves its exact scope; otherwise UNVERIFIED.
 5. Artifact identity now matches its recorded comparator, or cannot be checked.
 
+Procedure definitions do not establish the client's CommandType or parameter
+constructor/overload behavior. Those require separate source or retained compiled
+evidence from the caller/wrapper. A supplied definition can inform result and write
+contracts, but cannot by itself prove deployed identity, runtime success, or that
+all write-path tests are unblocked. Missing historical hashes cannot be repaired
+retroactively by recording a new hash today.
+
 Classify as PREVIOUSLY ACCEPTED STATIC EVIDENCE RETAINED, PARTIAL CONTRACT EVIDENCE,
 MISSING INPUT, or INPUT DRIFT. Do not collapse these into "SQL works." The successful
 HTTP check does not validate SQL, and retained old reports do not qualify the new

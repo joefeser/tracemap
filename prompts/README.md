@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+After the implementation evidence packet, use
+[Close bounded HTTP/SQL evidence gaps](close-work-http-sql-evidence-gaps.md).
+It separates SQL definitions from client-wrapper behavior and inspects existing
+source without scans, database access, execution, or application changes.
+
 After a successful current-tool HTTP check, use
 [Prepare implementation evidence](prepare-work-implementation-evidence.md) to
 assemble a private H1–H4 packet and reconcile retained SQL acceptance separately.
