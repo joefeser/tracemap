@@ -9,7 +9,7 @@ import stat
 import sys
 
 HANDOFF = "compiled-paths.handoff.local.json"
-MAX_JSON = 512 * 1024 * 1024
+MAX_JSON = 32 * 1024 * 1024
 MAX_RECEIPT = 4 * 1024 * 1024
 MAX_BINARY = 256 * 1024 * 1024
 
@@ -36,11 +36,16 @@ def invalid_constant(_):
     raise ValueError("PROVENANCE_NOT_VERIFIED")
 
 
-def read_json(path, limit=MAX_JSON):
+def read_bytes(path, limit):
     regular_file(path, limit)
     with path.open("rb") as stream:
         data = stream.read(limit + 1)
     require(len(data) <= limit)
+    return data
+
+
+def read_json(path, limit=MAX_JSON):
+    data = read_bytes(path, limit)
     value = json.loads(data, object_pairs_hook=unique_object, parse_constant=invalid_constant)
     require(isinstance(value, dict))
     return value, data
@@ -69,16 +74,17 @@ def verify(receipt_path, cli_dll):
     # never select a different assembly using untrusted receipt paths.
     reporting_dll = cli_dll.parent / "TraceMap.Reporting.dll"
     before = (digest(cli_dll), digest(reporting_dll))
-    receipt, _ = read_json(receipt_path, MAX_RECEIPT)
+    receipt, receipt_raw = read_json(receipt_path, MAX_RECEIPT)
     require(receipt.get("schemaVersion") == "webforms-handler-requery.v1")
     require(receipt.get("ruleId") == "workflow.webforms.retained-handler-requery.v1")
-    require(receipt.get("reportVariant") == "grouped-paths")
+    require(receipt.get("reportVariant", "grouped-paths") == "grouped-paths")
     require(receipt.get("query", {}).get("toSurface") == "http-client")
     require(hash_field(receipt, "generatorSha256") == before[0])
     require(hash_field(receipt, "reportingGeneratorSha256") == before[1])
     handoff, raw = read_json(receipt_path.parent / HANDOFF)
     require(handoff.get("schemaVersion") == "webforms-compiled-grouped-handoff.v1")
     require(handoff.get("ruleId") == "workflow.webforms.compiled-grouped-handoff.v1")
+    require(handoff.get("header", {}).get("query", {}).get("toSurface") == "http-client")
     require(hash_field(handoff, "generatorSha256") == before[1])
     require(hash_field(handoff, "inputIndexSha256") == hash_field(receipt, "combinedIndexSha256"))
     artifacts = receipt.get("artifacts")
@@ -88,6 +94,8 @@ def verify(receipt_path, cli_dll):
     require(type(matches[0].get("bytes")) is int and matches[0]["bytes"] == len(raw))
     require(hash_field(matches[0], "sha256") == hashlib.sha256(raw).hexdigest())
     require(before == (digest(cli_dll), digest(reporting_dll)))
+    require(read_bytes(receipt_path, MAX_RECEIPT) == receipt_raw)
+    require(read_bytes(receipt_path.parent / HANDOFF, MAX_JSON) == raw)
 
 
 def main(argv=None):
@@ -101,7 +109,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         verify(args.receipt, args.cli_dll)
-    except (OSError, ValueError, TypeError, AttributeError, RecursionError):
+    except (OSError, ValueError, TypeError, AttributeError, RecursionError, MemoryError):
         # Never leak private paths, JSON contents, symbols, or hashes.
         print("PROVENANCE_NOT_VERIFIED", file=sys.stderr)
         return 1

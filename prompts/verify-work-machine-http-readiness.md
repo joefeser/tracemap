@@ -137,10 +137,13 @@ and readiness verdict, and append a separate component-verification note; this
 does not qualify a newer checkout. Stop if the original binaries are unavailable.
 
 For each of the three selected native HTTP receipts, run the read-only verifier using
-an already installed Python 3.11+ (do not install dependencies):
+an already installed Python 3.11+ (do not install dependencies). Check the available
+`python`, `python3`, or Windows `py -3` executable's version; select one reporting
+3.11 or newer. Substitute that executable (and launcher arguments, if needed)
+below and record the selected invocation in the private note:
 
 ```text
-python scripts/verify-http-report-provenance.py --receipt <selected-private-output>/handler-requery.local.json --cli-dll <actual-invoked-cli-dll>
+<selected-python> scripts/verify-http-report-provenance.py --receipt <selected-private-output>/handler-requery.local.json --cli-dll <actual-invoked-cli-dll>
 ```
 
 Require exit 0 and CLI_AND_REPORTING_BYTES_MATCH; HANDOFF_LINK_MATCH. The verifier

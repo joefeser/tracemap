@@ -27,6 +27,7 @@ class ProvenanceTests(unittest.TestCase):
         self.handoff.write_text(json.dumps({
             "schemaVersion": "webforms-compiled-grouped-handoff.v1",
             "ruleId": "workflow.webforms.compiled-grouped-handoff.v1",
+            "header": {"query": {"toSurface": "http-client"}},
             "generatorSha256": verifier.digest(self.reporting), "inputIndexSha256": "a" * 64}))
         self.receipt = self.root / "handler-requery.local.json"
         self.data = dict(schemaVersion="webforms-handler-requery.v1",
@@ -54,6 +55,48 @@ class ProvenanceTests(unittest.TestCase):
         before = {p: p.read_bytes() for p in self.root.iterdir()}
         self.assertEqual(0, self.run_check())
         self.assertEqual(before, {p: p.read_bytes() for p in self.root.iterdir()})
+
+    def test_legacy_missing_variant_is_grouped_but_explicit_invalid_is_rejected(self):
+        del self.data["reportVariant"]
+        self.save()
+        self.assertEqual(0, self.run_check())
+        for value in (None, "", "method-graph", 0, {}):
+            self.data["reportVariant"] = value
+            self.save()
+            self.assertEqual(1, self.run_check())
+
+    def test_handoff_surface_must_be_http_even_with_valid_artifact_link(self):
+        original = json.loads(self.handoff.read_text())
+        for header in (None, {}, [], {"query": None}, {"query": {}},
+                       {"query": {"toSurface": "database-api"}}):
+            with self.subTest(header=header):
+                self.handoff.write_text(json.dumps(dict(original, header=header)))
+                self.data["artifacts"][0].update(bytes=self.handoff.stat().st_size,
+                                               sha256=verifier.digest(self.handoff))
+                self.save()
+                self.assertEqual(1, self.run_check())
+
+    def test_inputs_changed_after_initial_read_fail(self):
+        real_digest = verifier.digest
+        for target in (self.receipt, self.handoff):
+            original = target.read_bytes()
+            calls = 0
+
+            def changed(path):
+                nonlocal calls
+                calls += 1
+                if calls == 3:
+                    target.write_bytes(original + b" ")
+                return real_digest(path)
+
+            with self.subTest(target=target.name), patch.object(verifier, "digest", side_effect=changed):
+                self.assertEqual(1, self.run_check())
+            target.write_bytes(original)
+
+    def test_memory_exhaustion_is_private_fail_closed(self):
+        for operation in ("read_bytes", "unique_object"):
+            with self.subTest(operation=operation), patch.object(verifier, operation, side_effect=MemoryError):
+                self.assertEqual(1, self.run_check())
 
     def test_missing_malformed_and_mismatched_hashes(self):
         original = self.data.copy()

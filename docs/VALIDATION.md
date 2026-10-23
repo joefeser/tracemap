@@ -5193,7 +5193,10 @@ endurance pattern (TRACEMAP_PARITY_ILASM) later.
 requires Python 3.11+ and reads only the receipt, its fixed-name grouped handoff,
 the selected CLI DLL, and adjacent `TraceMap.Reporting.dll`. It checks the two
 distinct generator hashes, handoff byte length/hash membership, index identity,
-and stable binary bytes before/after. Duplicate JSON keys, missing fields,
+and stable binary, receipt, and handoff bytes before/after. Both receipt and
+handoff must select the HTTP surface. Missing `reportVariant` follows the legacy
+`grouped-paths` default; explicit unsupported values remain rejected.
+Duplicate JSON keys, missing required fields,
 unsupported schemas/surfaces, missing binaries, and mismatches fail closed.
 No artifacts are written and diagnostics omit private paths, hashes, and content.
 
@@ -5204,8 +5207,11 @@ Run synthetic tests with
 `python3 -m unittest discover -s scripts/validation -p test_http_report_provenance.py -v`.
 See `prompts/verify-work-machine-http-readiness.md` for the bounded operator handoff.
 
-The verifier caps receipts at 4 MiB, handoffs at 512 MiB, and each binary at
+The verifier caps receipts at 4 MiB, handoffs at 32 MiB, and each binary at
 256 MiB; non-regular inputs and non-standard JSON constants are rejected.
+JSON object expansion can exceed raw byte size; this is not a hard process-memory
+limit. Python `MemoryError` fails closed, but OS termination cannot be caught.
+An over-budget handoff remains unverified; do not trim an accepted artifact.
 It assumes an operator-controlled local filesystem, not an adversarial process
 continuously swapping files. Its success is a byte comparison, not proof that
 the selected adjacent assembly was loaded by a historic process.
