@@ -119,7 +119,14 @@ internal static class CiWorkflowProducerExtractor
             && normalizedUses[^(hint.Length + 1)] == '/');
 
     /// Shared state for CI identity derivation: the scoped inventory and the bounded digest sink.
-    private sealed record CiDerivationContext(string Root, ISet<string> InventoryProjects, List<string> Observed);
+    private sealed record CiDerivationContext(
+        string Root, ISet<string> InventoryProjects, List<string> Observed)
+    {
+        // repeated pack occurrences of one project must not reparse it and its Directory.Build files
+        // (review: unbounded CPU/IO by occurrence count). Behavior-neutral: only the parse is cached;
+        // the per-call observation below still records, so bounded digests are byte-identical.
+        public Dictionary<string, ProjectFileReader.CiDerivedIdentity> IdentityCache { get; } = new(StringComparer.Ordinal);
+    }
 
     private const string NotInInventoryDecision = "not-in-scanned-inventory";
 
@@ -127,9 +134,13 @@ internal static class CiWorkflowProducerExtractor
     /// bounded digest so editing a project/Directory.Build file that flips the decision moves it.
     private static ProjectFileReader.CiDerivedIdentity DeriveCiIdentity(CiDerivationContext context, string relativeProject)
     {
-        var decision = context.InventoryProjects.Contains(relativeProject)
-            ? ProjectFileReader.ReadCiDerivedIdentity(context.Root, relativeProject)
-            : new ProjectFileReader.CiDerivedIdentity(NotInInventoryDecision, null);
+        if (!context.IdentityCache.TryGetValue(relativeProject, out var decision))
+        {
+            decision = context.InventoryProjects.Contains(relativeProject)
+                ? ProjectFileReader.ReadCiDerivedIdentity(context.Root, relativeProject)
+                : new ProjectFileReader.CiDerivedIdentity(NotInInventoryDecision, null);
+            context.IdentityCache[relativeProject] = decision;
+        }
         // The resolved id and its source ride the digest too: changing an evaluated
         // AssemblyName changes the emitted row, so it must move the bounded digest
         // (review: digest omitted the identity value). Explicit null markers keep
@@ -551,7 +562,7 @@ internal static class CiWorkflowProducerExtractor
                             target, project?.PackageId, project?.ExplicitPackageId
                         }));
                     }
-                    ResolveOccurrence(occurrence, producedByPath, context, rows, gaps);
+                    ResolveOccurrence(occurrence, context, rows, gaps);
                 }
             }
             // Published only after the whole file parsed: a file-level gap contributes no call.
@@ -1472,7 +1483,6 @@ internal static class CiWorkflowProducerExtractor
 
     private static void ResolveOccurrence(
         PackOccurrence occurrence,
-        IReadOnlyDictionary<string, ProducedPackageInfo> producedByPath,
         CiDerivationContext context,
         List<CiWorkflowProducerRow> rows,
         List<CiWorkflowGap> gaps)
@@ -1492,17 +1502,12 @@ internal static class CiWorkflowProducerExtractor
                     "unsafe PackageId", occurrence.StartLine));
             else packageId = rawId;
         }
-        else if (occurrence.ProjectTarget is { } target
-            && !target.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
-            && producedByPath.TryGetValue(target, out var produced)
-            && produced.ExplicitPackageId)
-        {
-            packageId = produced.PackageId; // CI packs the project: its explicit declaration is the id evidence
-        }
         else if (occurrence.ProjectTarget is { } fileTarget
             && !fileTarget.EndsWith(".sln", StringComparison.OrdinalIgnoreCase)
             && !occurrence.TargetUnresolvable)
         {
+            // Derivation FIRST, always: the effective identity includes the nearest Directory.Build
+            // targets override, which a raw project-lane PackageId shortcut would miss.
             // DERIVED (2026-10-22 live finding): the CI pack step is pack intent; when the packed
             // project's bounded view proves nothing overrides the MSBuild default chain (no
             // PackageId/AssemblyName in the project or its nearest Directory.Build.props/.targets,

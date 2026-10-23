@@ -306,8 +306,9 @@ public sealed class CiWorkflowProducerEvidenceTests
         // produce Contoso.Fallback, never "Fallback". The filename default applies only when the
         // bounded view proves nothing overrides the chain (see the zero-signal derived test).
         Assert.Equal(2, result.Rows.Count); // FULL CHAIN (0.4.0): the AssemblyName project ships its AssemblyName
-        var declared = Assert.Single(result.Rows, row => row.IdProvenance == "declared");
+        var declared = Assert.Single(result.Rows, row => row.IdProvenance == "declared-id" && row.IdSource == "PackageId"); // 0.4.5 derivation-first: the body's explicit id rides the chain (was "declared" via the shortcut)
         Assert.Equal("Contoso.Declared", declared.Package);
+        Assert.Equal("PackageId", declared.IdSource);
         Assert.Null(declared.Version); // no CI version override: the version stays unevidenced
         var viaChain = Assert.Single(result.Rows, row => row.Package == "Contoso.Fallback");
         Assert.True(viaChain.IdProvenance is "declared-id" or "derived-default");
@@ -503,28 +504,35 @@ public sealed class CiWorkflowProducerEvidenceTests
         WriteProject(temp.Path, "tools/Tool.csproj", BareSdkProject);
         WriteProject(temp.Path, "legacy/Legacy.csproj",
             "<Project ToolsVersion=\"15.0\" xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">\n  <PropertyGroup>\n    <OutputType>Library</OutputType>\n  </PropertyGroup>\n</Project>");
+        // unresolvable identity: the sweep MUST gap this one (review: the assertion set was vacuous)
+        WriteProject(temp.Path, "src/Unresolvable.csproj",
+            "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <AssemblyName>Contoso.$(OtherProperty)</AssemblyName>\n  </PropertyGroup>\n</Project>");
 
         var result = ReadHinted(temp.Path, null, "dotnet-release-library.yml");
 
-        // FULL CHAIN (0.4.0): Interp declares AssemblyName=Contoso.Interp -> a declared-id ROW
-        // (the live estate's 88-producer recovery), not a gap; only Inherited (Directory.Build
-        // identity outside the provable chain) stays unevidenced
-        Assert.Equal(2, result.Rows.Count);
+        // FULL CHAIN (0.4.0) + three-phase precedence (0.4.5): Interp's body AssemblyName AND the
+        // lib/ Directory.Build PackageId both resolve to declared-id ROWS — the nearest Directory.Build
+        // identity is no longer an automatic gap; it participates in props->body->targets precedence
+        Assert.Equal(3, result.Rows.Count);
         Assert.Contains(result.Rows, row => row.Package == "Lib" && row.IdProvenance == "derived-default");
         var interp = Assert.Single(result.Rows, row => row.Package == "Contoso.Interp");
         Assert.Equal("declared-id", interp.IdProvenance);
         Assert.Equal("AssemblyName", interp.IdSource);
-        var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").Select(gap => gap.Path).Order(StringComparer.Ordinal).ToArray();
+        var inherited = Assert.Single(result.Rows, row => row.Package == "Contoso.Inherited");
+        Assert.Equal("declared-id", inherited.IdProvenance);
+        Assert.Equal("PackageId", inherited.IdSource); // props-side PackageId is the chain head
+        var unevidenced = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").ToArray();
+        Assert.NotEmpty(unevidenced); // NOT vacuous: Unresolvable must gap (review)
         // gaps anchor to the uses: CALL SITE (the workflow + line carrying the assertion); the
         // affected project rides the DETAIL — a gap at <project>:1-1 was a fabricated location
-        Assert.All(unevidenced, gapPath => Assert.Equal(".github/workflows/release.yml", gapPath));
-        var details = result.Gaps.Where(gap => gap.Kind == "ci-hint-id-unevidenced").Select(gap => gap.Detail).ToList();
-        Assert.Contains(details, detail => detail!.StartsWith("lib/Inherited.csproj:"));
+        Assert.All(unevidenced, gap => Assert.Equal(".github/workflows/release.yml", gap.Path));
+        Assert.Contains(unevidenced, gap => gap.Detail!.StartsWith("src/Unresolvable.csproj:"));
         Assert.DoesNotContain(result.Gaps, gap => gap.Path is "tools/Tool.csproj" or "legacy/Legacy.csproj");
     }
 
-    [Fact]
-    public void Direct_pack_derivation_honors_directory_build_identity_overrides()
+    [Fact] // 0.4.5 three-phase precedence: a props-side AssemblyName participates in the chain —
+    // bounded-evaluated against the project's own name, it IS the packed id (was: automatic gap)
+    public void Direct_pack_resolves_props_side_assemblyname()
     {
         using var temp = new TempDirectory();
         WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj");
@@ -534,9 +542,10 @@ public sealed class CiWorkflowProducerEvidenceTests
 
         var result = Read(temp.Path);
 
-        Assert.Empty(result.Rows);
-        var gap = Assert.Single(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
-        Assert.Contains("Directory.Build", gap.Detail, StringComparison.Ordinal);
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Bare", row.Package);
+        Assert.Equal("declared-id", row.IdProvenance);
+        Assert.Equal("AssemblyName", row.IdSource);
     }
 
     [Fact]
@@ -550,8 +559,9 @@ public sealed class CiWorkflowProducerEvidenceTests
             "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.$(MSBuildProjectName)</PackageId>\n  </PropertyGroup>\n</Project>");
         var after = Read(temp.Path);
 
-        Assert.Single(before.Rows);
-        Assert.Empty(after.Rows);
+        Assert.Single(before.Rows); // Bare — filename default
+        var afterRow = Assert.Single(after.Rows); // props PackageId resolves under three-phase precedence
+        Assert.Equal("Contoso.Bare", afterRow.Package);
         Assert.NotEqual(before.BoundedInputSha256, after.BoundedInputSha256);
     }
 
@@ -1513,8 +1523,167 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Empty(result.Rows);
     }
 
-    [Fact] // review round-7 (Codex P1): props-side PackageId outranks a body AssemblyName — mixed identity conservatively refuses
-    public void Inherited_identity_beats_body_declaration()
+    [Theory]
+    [InlineData("")]
+    [InlineData("<AssemblyName>Contoso.Body</AssemblyName>")]
+    [InlineData("<PackageId>Contoso.Body</PackageId>")]
+    public void Props_import_cannot_prove_body_or_default_identity(string identity)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj");
+        WriteProject(temp.Path, "src/Bare.csproj",
+            $"<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup>{identity}</PropertyGroup></Project>");
+        WriteProject(temp.Path, "Directory.Build.props", "<Project><Import Project=\"extra.props\" /></Project>");
+        WriteProject(temp.Path, "extra.props", "<Project><Target Name=\"SetId\" BeforeTargets=\"GenerateNuspec\"><PropertyGroup><PackageId>Contoso.Imported</PackageId></PropertyGroup></Target></Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Theory]
+    [InlineData("body", false)]
+    [InlineData("body", true)]
+    [InlineData("Directory.Build.props", false)]
+    [InlineData("Directory.Build.props", true)]
+    [InlineData("Directory.Build.targets", false)]
+    [InlineData("Directory.Build.targets", true)]
+    public void Target_scoped_packability_cannot_be_erased(string phase, bool laterAssignment)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj");
+        const string target = "<Target Name=\"SetPackable\" BeforeTargets=\"GenerateNuspec\"><PropertyGroup><IsPackable>false</IsPackable></PropertyGroup></Target>";
+        var later = laterAssignment ? "<PropertyGroup><IsPackable>true</IsPackable></PropertyGroup>" : "";
+        WriteProject(temp.Path, "src/Bare.csproj",
+            $"<Project Sdk=\"Microsoft.NET.Sdk\">{(phase == "body" ? target : "")}{later}</Project>");
+        if (phase != "body") WriteProject(temp.Path, phase, $"<Project>{target}{later}</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced" && g.Detail!.Contains("IsPackable"));
+    }
+
+    [Theory]
+    [InlineData("<PackageId Condition=\"'$(Configuration)' == 'Release'\">Contoso.Release</PackageId>")]
+    [InlineData("<PackageId>Contoso.Body</PackageId></PropertyGroup><Import Project=\"custom.targets\"/><PropertyGroup>")]
+    public void Legacy_explicit_id_must_pass_bounded_guards(string properties)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Legacy.csproj");
+        WriteProject(temp.Path, "src/Legacy.csproj", $"<Project><PropertyGroup>{properties}</PropertyGroup></Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact]
+    public void Legacy_unconditional_explicit_id_remains_declared()
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Legacy.csproj");
+        WriteProject(temp.Path, "src/Legacy.csproj", "<Project><PropertyGroup><PackageId>Contoso.Legacy</PackageId></PropertyGroup></Project>");
+
+        var row = Assert.Single(Read(temp.Path).Rows);
+
+        Assert.Equal("Contoso.Legacy", row.Package);
+        Assert.Equal("declared-id", row.IdProvenance);
+        Assert.Equal("PackageId", row.IdSource);
+    }
+
+    [Fact] // review round-2 (Codex P1 + Baz): a TARGETS-side Import overrides any earlier winner — the props identity is unprovable
+    public void Targets_import_refuses_props_identity()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.Props</PackageId>\n  </PropertyGroup>\n</Project>");
+        WriteProject(temp.Path, "Directory.Build.targets",
+            "<Project>\n  <Import Project=\"late.targets\" />\n</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // the late import can reassign — never emit the props value
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review round-2 (Codex P1): target-scope uncertainty SURVIVES later last-wins overwrites
+    public void Target_scoped_uncertainty_survives_later_declarations()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <PackageId>Contoso.LaterWins</PackageId>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Sticky.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Sticky.csproj", project);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <Target Name=\"SetId\" BeforeTargets=\"GenerateNuspec\">\n    <PropertyGroup>\n      <PackageId>Contoso.PackTime</PackageId>\n    </PropertyGroup>\n  </Target>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // the pack-time Target can replace the body's value — unprovable, never proven
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review (Sourcery High): a direct pack honors a targets-side PackageId over the body's explicit one
+    public void Direct_pack_uses_targets_package_id_over_body()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <PackageId>Contoso.BodyId</PackageId>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Id.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Id.csproj", project);
+        WriteProject(temp.Path, "Directory.Build.targets",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.TargetsId</PackageId>\n  </PropertyGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.TargetsId", row.Package); // the effective id, not the body's explicit one
+    }
+
+    [Fact] // review (Baz + Sourcery): an import-bearing Directory.Build file cannot supply a provable identity
+    public void Directory_build_with_import_refuses_identity()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <PropertyGroup>\n    <PackageId>Contoso.MaybeOverridden</PackageId>\n  </PropertyGroup>\n  <Import Project=\"other.props\" />\n</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // the import can reassign the value — never emit it
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review (Sourcery): identity assigned inside a <Target> applies only when the target runs — unprovable
+    public void Target_scoped_identity_is_unprovable()
+    {
+        const string bareProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Bare.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Bare.csproj", bareProject);
+        WriteProject(temp.Path, "Directory.Build.props",
+            "<Project>\n  <Target Name=\"SetId\">\n    <PropertyGroup>\n      <PackageId>Contoso.MaybeNever</PackageId>\n    </PropertyGroup>\n  </Target>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // neither the maybe-id nor a filename guess
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // 0.4.5 precise precedence (was round-7 conservative refusal): a props-side PackageId IS
+    // the id over a body AssemblyName — PackageId is the chain head wherever it is assigned
+    public void Props_package_id_beats_body_assemblyname()
     {
         const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Body</AssemblyName>\n  </PropertyGroup>\n</Project>";
         const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/Mixed.csproj";
@@ -1526,9 +1695,28 @@ public sealed class CiWorkflowProducerEvidenceTests
 
         var result = Read(temp.Path);
 
-        Assert.Empty(result.Rows); // neither Contoso.Body nor Contoso.Inherited — never guess which wins
-        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-id-unevidenced");
-        Assert.Contains("Directory.Build", gap.Detail, StringComparison.Ordinal);
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Inherited", row.Package); // the props PackageId, not the body AssemblyName
+        Assert.Equal("declared-id", row.IdProvenance);
+        Assert.Equal("PackageId", row.IdSource);
+    }
+
+    [Fact] // 0.4.5 three-phase: a targets-side identity overrides the body (targets import AFTER the body)
+    public void Targets_identity_overrides_body()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Body</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/T.csproj";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/T.csproj", project);
+        WriteProject(temp.Path, "Directory.Build.targets",
+            "<Project>\n  <PropertyGroup>\n    <AssemblyName>Contoso.Targets</AssemblyName>\n  </PropertyGroup>\n</Project>");
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Targets", row.Package); // targets wins over the body declaration
+        Assert.Equal("AssemblyName", row.IdSource);
     }
 
     [Fact] // review round-7 (Codex P1): an Otherwise branch is conditional WITHOUT a Condition attribute
