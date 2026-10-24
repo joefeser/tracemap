@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Read public registry manifest/config metadata only; never pull image layers."""
 import argparse
-import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -40,7 +39,6 @@ def resolve():
     projection = dict(registry=REGISTRY, tag=TAG, manifestDigest=declared,
         configDigest=config_digest, os=config['os'], architecture=config['architecture'])
     return dict(**projection, image='mcr.microsoft.com/mssql/server@' + declared,
-        resolvedAt=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         generatorSha256=digest(Path(__file__).read_bytes()),
         boundedInputSha256=digest(json.dumps(projection, sort_keys=True, separators=(',', ':')).encode()),
         status='registry metadata verified; image NOT PULLED; live SQL NOT RUN', testedVersion=None)

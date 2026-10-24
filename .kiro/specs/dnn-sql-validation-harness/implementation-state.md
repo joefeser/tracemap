@@ -2,7 +2,7 @@
 
 Branch: `codex/dnn-sql-validation-908`
 Base: freshly fetched `origin/dev` `b4494b01ef7b8b06a5b1ed10b787033469fdd0b9`.
-Status: bounded implementation committed and pushed. No PR, merge, container activation or SQL execution.
+Status: PR #909 open; bounded review corrections applied. No merge, container activation or SQL execution.
 Implementation commit: `22cdda9ee44e8621b191123a58c6372d98a0c766`. This final note is a documentation-only follow-up.
 
 ## Inputs and decisions
@@ -46,6 +46,15 @@ Mocked lifecycle tests do not establish live compatibility.
 
 ## Validation so far
 
+- PR #909 review batch: validate exactly one four-part server version scalar;
+  omit wall-clock metadata from deterministic registry receipts; reject extra,
+  missing or linked slice files and mismatched native inventory counts.
+  All 17 Python guards pass, and the existing public-slice static check passes.
+  Registry metadata was reverified and the deterministic receipt matches the
+  updated resolver output. No layers pulled or SQL executed. These Python-only
+  corrections use the touched lane; the earlier full .NET result below is not
+  claimed as a new-head rerun.
+
 - Final focused DnnSqlValidationTests: 4 passed, including 12-site per-language
   denominator, SQLite/grouped path readback and shallow-query truncation.
   Full Debug -warnaserror solution suite: 4,586 passed, 0 failed, 3 skipped;
@@ -61,14 +70,14 @@ Mocked lifecycle tests do not establish live compatibility.
 - Offline defaults manually checked: no fetch/resolution/activation.
 - Final staged private-path guard and whitespace checks passed.
 - Implementation and consolidated follow-up prompt pushed to origin on the named
-  branch; no pull request opened. No production scanner defect fix is claimed.
+  branch; PR #909 subsequently opened. No production scanner defect fix is claimed.
 - Initial reduced lane was intentionally interrupted after test ProjectReferences
   made the full lane mandatory; no reduced-lane pass is claimed.
 
 ## Deferred/prerequisites
 
 No private inputs or work-machine access. No host/SSH/Docker daemon calls,
-provisioning, pull, SQL, IIS, PR or merge. Live lane remains NOT RUN. Consolidated
+provisioning, pull, SQL, IIS or merge. Live lane remains NOT RUN. Consolidated
 host/resources/EULA/credentials/network/disposable cleanup approvals and separate
 schema-comparison scope decision are in docs/validation/DNN_SQL_VALIDATION.md and
 prompts/continue-dnn-sql-validation-harness.md. sqlcmd verifies a row and distinct

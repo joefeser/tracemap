@@ -10,7 +10,75 @@ h = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(h)
 
 
+def load_script(name):
+    spec = importlib.util.spec_from_file_location(name, SCRIPT.parent / (name + '.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class HarnessTests(unittest.TestCase):
+    def test_version_requires_one_four_part_scalar(self):
+        self.assertEqual('16.0.4205.1', h.parse_version(' \r\n16.0.4205.1 \r\n'))
+        for output in ('', 'NULL', '16.0.1', '16.0.1.2\n16.0.1.2',
+                       'ProductVersion\n----\n16.0.1.2\n(1 rows affected)',
+                       '16.0.1.2\n(1 rows affected)', 'warning\n16.0.1.2'):
+            with self.subTest(output=output), self.assertRaises(ValueError):
+                h.parse_version(output)
+
+    def test_registry_resolution_is_byte_repeatable_for_identical_metadata(self):
+        import json
+        from unittest.mock import Mock
+        resolver = load_script('resolve_image')
+        config = h.canonical({'os': 'linux', 'architecture': 'amd64'})
+        manifest = h.canonical({'mediaType': 'application/vnd.docker.distribution.manifest.v2+json',
+                               'config': {'digest': 'sha256:' + h.sha(config)}})
+        def response(url, **kwargs):
+            result = Mock()
+            result.__enter__ = Mock(return_value=result)
+            result.__exit__ = Mock(return_value=False)
+            result.read.return_value = config if isinstance(url, str) else manifest
+            result.headers = {'Docker-Content-Digest': 'sha256:' + h.sha(manifest)}
+            return result
+        with patch.object(resolver.urllib.request, 'urlopen', side_effect=response):
+            first, second = resolver.resolve(), resolver.resolve()
+        self.assertEqual(json.dumps(first), json.dumps(second))
+        self.assertNotIn('resolvedAt', first)
+
+    def test_slice_inventory_rejects_extra_missing_and_renamed_files(self):
+        static = load_script('validate_slice')
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name in [*static.FILES, 'public-slice.json', '.git/config']:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text('synthetic')
+            self.assertEqual(10, static.verify_inventory(root))
+            for name in ('extra.cs', 'nested/extra.sql', 'extra.json', '.hidden.cs'):
+                extra = root / name
+                extra.parent.mkdir(parents=True, exist_ok=True)
+                extra.write_text('')
+                with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'inventory'):
+                    static.verify_inventory(root)
+                extra.unlink()
+            original = root / static.FILES[0]
+            original.rename(root / 'renamed')
+            with self.assertRaisesRegex(ValueError, 'inventory'):
+                static.verify_inventory(root)
+            (root / 'renamed').unlink()
+            with self.assertRaisesRegex(ValueError, 'inventory'):
+                static.verify_inventory(root)
+
+    def test_native_inventory_requires_unique_matching_count_and_revision(self):
+        static = load_script('validate_slice')
+        fact = {'factType': 'RepoScanned', 'commitSha': static.PIN, 'properties': {'fileCount': '10'}}
+        static.verify_scan_inventory([fact], 10)
+        for facts in ([], [fact, fact], [dict(fact, commitSha='wrong')],
+                      [dict(fact, properties={'fileCount': '11'})],
+                      [dict(fact, properties={})]):
+            with self.subTest(facts=facts), self.assertRaisesRegex(ValueError, 'inventory'):
+                static.verify_scan_inventory(facts, 10)
+
     def test_default_never_calls_docker_or_network(self):
         with patch.object(h.subprocess, 'run', side_effect=AssertionError('external effect')), patch('builtins.print'):
             self.assertEqual(0, h.main([]))
@@ -98,6 +166,7 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual(h.sha(h.canonical(projection)), receipt['boundedInputSha256'])
         self.assertEqual(h.IMAGE, receipt['image'])
         self.assertIsNone(receipt['testedVersion'])
+        self.assertNotIn('resolvedAt', receipt)
 
     def test_mocked_activation_keeps_sql_phases_and_owned_cleanup_separate(self):
         from unittest.mock import Mock
@@ -118,6 +187,12 @@ class HarnessTests(unittest.TestCase):
             if args[0] == 'inspect':
                 return owner
             if args[0] == 'exec':
+                if kwargs.get('input', '').startswith('SET NOCOUNT ON;\nSELECT CONVERT(nvarchar(128),SERVERPROPERTY('):
+                    self.assertIn('-h', args)
+                    self.assertIn('-1', args)
+                    self.assertIn('-W', args)
+                    self.assertIn('SET NOCOUNT ON;', kwargs['input'])
+                    return '16.0.4205.1'
                 return 'synthetic-mock-result'
             return ''
         fake.run.side_effect = respond
@@ -127,6 +202,7 @@ class HarnessTests(unittest.TestCase):
             receipt = json.loads((output / 'receipt.json').read_text())
             self.assertEqual('owned-container-removed', receipt['cleanup'])
             self.assertEqual('completed', receipt['metadataDescription'])
+            self.assertEqual('16.0.4205.1', receipt['testedVersion'])
             self.assertTrue((output / 'metadata.sql.log').exists())
             self.assertTrue((output / 'execution.sql.log').exists())
             self.assertEqual(h.provenance(), receipt['provenance'])
