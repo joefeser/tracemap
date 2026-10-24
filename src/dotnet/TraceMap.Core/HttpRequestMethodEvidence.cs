@@ -39,7 +39,28 @@ internal static class HttpRequestMethodEvidence
         // A loop or jump can revisit the terminal with a different instance/state.
         // Refuse instead of guessing dominance across control-flow edges.
         var all = root.DescendantsAndSelf().Take(20_001).ToArray();
-        if (all.Length > 20_000 || all.Any(o => o is ILoopOperation or IBranchOperation or IInvalidOperation)) return false;
+        if (all.Length > 20_000 || all.Any(o => o is ILoopOperation or IBranchOperation)) return false;
+        foreach (var invalid in all.OfType<IInvalidOperation>())
+        {
+            // Tolerate only isolated statements whose syntax cannot mention the
+            // request. Do not trust missing local-reference operations under an
+            // invalid node: inspect identifier syntax as well as bound uses below.
+            IOperation? isolated = invalid;
+            while (isolated is not null && isolated is not IExpressionStatementOperation
+                       && isolated is not IVariableDeclarationGroupOperation)
+                isolated = isolated.Parent;
+            if (isolated?.Parent is not IBlockOperation) return false;
+            var comparison = call.Syntax.Language == LanguageNames.VisualBasic
+                ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            if (isolated.Syntax.DescendantNodesAndSelf().Any(n => n switch
+                {
+                    Microsoft.CodeAnalysis.CSharp.Syntax.IdentifierNameSyntax id =>
+                        string.Equals(id.Identifier.ValueText, receiver.Local.Name, comparison),
+                    Microsoft.CodeAnalysis.VisualBasic.Syntax.IdentifierNameSyntax id =>
+                        string.Equals(id.Identifier.ValueText, receiver.Local.Name, comparison),
+                    _ => false
+                })) return false;
+        }
         // VB unstructured error handling can continue after a failed setter.
         if (root.Syntax.DescendantNodesAndSelf().Any(n => n.GetType().Name is
             "OnErrorGoToStatementSyntax" or "OnErrorResumeNextStatementSyntax" or "ResumeStatementSyntax")) return false;
