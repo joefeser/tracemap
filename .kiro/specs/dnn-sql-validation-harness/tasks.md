@@ -11,7 +11,7 @@
 - [x] Add one consolidated operator/follow-up prompt and document the absent
       production schema-admission/comparison seam.
 - [x] Complete final full Debug -warnaserror suite and CLI smoke; record results.
-- [ ] Commit and push the bounded implementation without merge or activation.
+- [x] Commit and push the bounded implementation without merge or activation.
 
 Later acceptance, outside this implementation authorization:
 

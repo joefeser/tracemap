@@ -2,7 +2,8 @@
 
 Branch: `codex/dnn-sql-validation-908`
 Base: freshly fetched `origin/dev` `b4494b01ef7b8b06a5b1ed10b787033469fdd0b9`.
-Status: static validation passed; commit/push pending. No PR, merge, container activation or SQL execution.
+Status: bounded implementation committed and pushed. No PR, merge, container activation or SQL execution.
+Implementation commit: `22cdda9ee44e8621b191123a58c6372d98a0c766`. This final note is a documentation-only follow-up.
 
 ## Inputs and decisions
 
@@ -53,11 +54,14 @@ Mocked lifecycle tests do not establish live compatibility.
 - Python harness guards/provenance/mocked lifecycle: 13 passed.
 - Both fixture projects built successfully with Debug -warnaserror, no warnings.
 - Native synthetic CLI scan succeeded: 525 facts, Level1SemanticAnalysis, all five
-  required artifacts. Final-head smoke still to run after commit.
+  required artifacts. Committed implementation-head smoke also passed at
+  `22cdda9ee44e8621b191123a58c6372d98a0c766` with build Succeeded and all five artifacts; manifest SHA verified.
 - Public slice fetch/scan and offline DNN expectation/observation check passed
   without evaluating upstream projects; missing/wrong source input guards pass.
 - Offline defaults manually checked: no fetch/resolution/activation.
-- Private-path guard and whitespace checks passed.
+- Final staged private-path guard and whitespace checks passed.
+- Implementation and consolidated follow-up prompt pushed to origin on the named
+  branch; no pull request opened. No production scanner defect fix is claimed.
 - Initial reduced lane was intentionally interrupted after test ProjectReferences
   made the full lane mandatory; no reduced-lane pass is claimed.
 
