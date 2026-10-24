@@ -20,7 +20,7 @@ URLs, payloads, hashes and business identifiers private. Return only sanitized r
 Use the operator-prepared checkout of this branch (or its merged descendant).
 Record live full HEAD and dirty state. Stop on build-affecting modifications; do
 not pull or switch branches. Confirm the bounded method helper and semantic
-extractor versions csharp-semantic/0.22.5 and vb-semantic/0.10.8 (or documented
+extractor versions csharp-semantic/0.22.6 and vb-semantic/0.10.9 (or documented
 successors) are present. Build once:
 
 ```text
@@ -51,6 +51,16 @@ escape, reassignment, capture, loop/jump or unsupported use. Ordinary trusted
 ContentType/Headers/ContentLength preparation and GetRequestStream are supported.
 This is deliberately not general constant propagation. A syntactically present
 POST assignment alone does not establish eligibility.
+
+This revision tolerates invalid operations only in isolated expression/declaration
+statements that cannot mention the request local. Unrelated unresolved logging or
+serialization need not block an otherwise bound request chain. Invalid request
+uses, invalid control-flow conditions, missing factory/property/terminal binding,
+and unsupported shapes still refuse inference. Do not demand zero diagnostics for
+the entire application; preserve every compiler gap and the reduced coverage label.
+If UNKNOWN remains, distinguish request-related invalid binding from unsupported
+control flow or unrelated isolated errors. A gap category alone does not prove
+which operation caused refusal. Inspect locally, return only the sanitized category.
 
 For an eligible shape require httpMethod=POST, httpMethodEvidence=
 same-block-local-property-assignment, accurate httpMethodAssignmentStartLine and
@@ -89,6 +99,11 @@ Write a new private local note. Return public tool revision; build result; extra
 versions; fresh extraction completed yes/no; baseline unchanged yes/no; old/new H3
 verb; assignment provenance verified yes/no; index/handoff/HTML agreement; binary
 verification; truncation/gaps; elapsed time; and the smallest remaining blocker.
+Report assignment evidence separately from binary provenance: assignment evidence
+requires the new fact's method marker and accurate assignment line fields checked
+against source. CLI_AND_REPORTING_BYTES_MATCH and HANDOFF_LINK_MATCH alone do not
+verify an assignment. If UNKNOWN persists without those fields, report assignment
+evidence NOT ESTABLISHED even when binary verification succeeds.
 Verdict: BOUNDED METHOD EVIDENCE VERIFIED / UNSUPPORTED SHAPE REMAINS UNKNOWN /
 FRESH_EXTRACTION_REQUIRED / BUILD BLOCKED / PROVENANCE NOT VERIFIED / TIME LIMIT /
 REGRESSION SUSPECTED. Distinguish extraction from projection failures.

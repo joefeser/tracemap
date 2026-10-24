@@ -12,12 +12,20 @@ POST preservation. Samples are compile/scan-only: never execute their requests.
 Run the focused HttpRequestMethodEvidenceTests, OutboundHttpCoverageTests,
 OutboundHttpLegacyCoverageTests and ProjectlessVisualBasicHttpTests, followed by
 the full Debug solution suite with `-warnaserror`. This source extraction change
-requires csharp-semantic/0.22.5 or vb-semantic/0.10.8 and a fresh scan; an old index
+requires csharp-semantic/0.22.6 or vb-semantic/0.10.9 and a fresh scan; an old index
 cannot acquire assignment evidence by requery. The existing HTTP rule and tiers
 remain unchanged. Assignment lines are additive provenance, not runtime proof.
 The method-body operation walk refuses inputs over 20,000 operations and any
 loop/jump; unsupported shapes remain UNKNOWN rather than attempting general
 control-flow or interprocedural inference. EndGetResponse is not inferred.
+
+Invalid operations are tolerated only inside isolated expression/declaration
+statements directly owned by a block, whose identifier syntax does not mention
+the request local (case-insensitive for VB). Invalid request uses, unresolved
+conditions and unsupported structure still refuse inference. Syntax checking is
+required because invalid binding can omit local-reference operations. Compiler
+diagnostics and partial coverage remain reported; this does not certify a clean
+application build. Synthetic partial scans pin this separation in both languages.
 
 `prompts/validate-work-http-request-method.md` is the separate, explicitly bounded
 fresh-extraction validation workflow. It does not expand the older no-scan
