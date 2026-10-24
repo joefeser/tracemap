@@ -1,2 +1,4 @@
 # Provenance binds the exact generator bytes, including line endings.
 site/scripts/generate-webforms-source-compiled-proof.mjs text eol=lf
+# Recorded DNN image-resolution receipt hashes the exact resolver bytes.
+scripts/dnn-sql-validation/resolve_image.py text eol=lf
