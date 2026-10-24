@@ -1,0 +1,13 @@
+{
+  "registry": "https://mcr.microsoft.com/v2/mssql/server",
+  "tag": "2022-CU20-ubuntu-22.04",
+  "manifestDigest": "sha256:7c29dfbac885ad7519e219c7fe4aee0e67283e21a10e9c252d13b0fbde1866f8",
+  "configDigest": "sha256:00ba1b9b25cb254d31590c6fbd3ba6368780a1a1e245bc923e4ff1593619ddcd",
+  "os": "linux",
+  "architecture": "amd64",
+  "image": "mcr.microsoft.com/mssql/server@sha256:7c29dfbac885ad7519e219c7fe4aee0e67283e21a10e9c252d13b0fbde1866f8",
+  "generatorSha256": "10f9f18744f3119aa6156bc686875c861934442d6bed00ca8ab89a606456f4c9",
+  "boundedInputSha256": "536caa91329fa4b39c83028fe2ee917cdcfdbd3c4cd2afa6e3538068147d0524",
+  "status": "registry metadata verified; image NOT PULLED; live SQL NOT RUN",
+  "testedVersion": null
+}
