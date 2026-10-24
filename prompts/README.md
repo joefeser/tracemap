@@ -1,5 +1,11 @@
 # Private exchange prompts
 
+For the next H4 step, use
+[Prepare bounded H4 lifecycle validation](prepare-h4-lifecycle-validation.md).
+It prepares a targeted actual-page observation plan without running the private
+application. Runtime testing requires explicit environment and side-effect
+approval; SQL remains deferred. A synthetic harness is not actual H4 acceptance.
+
 Start with [Verify work-machine HTTP readiness](verify-work-machine-http-readiness.md)
 after merged PR #901. This is the current Claude prompt: one build, at most three
 retained HTTP requeries, no rescan, and a sanitized H1–H4 readiness matrix.
