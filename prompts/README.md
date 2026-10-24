@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+After a partial one-slice SQL assessment, use
+[Complete retained SQL evidence](complete-work-sql-one-slice-evidence.md) to inspect
+existing wrapper evidence, connection initialization and immediate result consumers.
+This is read-only evidence completion, not another scan or database operation.
+
 After accepted HTTP review, use
 [Assess retained work-machine SQL readiness](assess-work-sql-retained-readiness.md)
 for one read-only SQL evidence slice. No scan, build, database connection or
