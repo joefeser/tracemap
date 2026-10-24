@@ -640,7 +640,23 @@ public sealed class HttpEntryBoundaryRegressionTests
         var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")) { VisualBasicCompilationContextPath = context });
         Assert.DoesNotContain(scan.Facts, f => f.RuleId == RuleIds.WebFormsEntryLifecycle);
         var diagnostics = scan.Facts.Where(f => f.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic").ToArray();
-        if (mode is "invalid-write" or "unresolved-framework") Assert.NotEmpty(diagnostics);
+        if (mode == "unresolved-framework")
+        {
+            var unresolvedTypes = diagnostics.Where(f => f.Properties.GetValueOrDefault("diagnosticId") == "BC30002")
+                .OrderBy(f => f.Evidence.StartLine).ToArray();
+            Assert.Equal(new[] { 41, 50 }, unresolvedTypes.Select(f => f.Evidence.StartLine));
+            Assert.All(unresolvedTypes, gap =>
+            {
+                Assert.Equal(FactTypes.AnalysisGap, gap.FactType);
+                Assert.Equal(RuleIds.VisualBasicSemanticWorkspace, gap.RuleId);
+                Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+                Assert.Equal("App_Code/Widgets.vb", gap.Evidence.FilePath);
+                Assert.Equal(gap.Evidence.StartLine, gap.Evidence.EndLine);
+                Assert.Equal("VisualBasicSemanticExtractor", gap.Evidence.ExtractorId);
+                Assert.Equal(ScannerVersions.VisualBasicSemanticExtractor, gap.Evidence.ExtractorVersion);
+            });
+        }
+        else if (mode == "invalid-write") Assert.NotEmpty(diagnostics);
         else Assert.True(diagnostics.Length == 0, JsonSerializer.Serialize(diagnostics.Select(f => new { f.Evidence.StartLine, f.Properties })));
         var http = scan.Facts.Where(f => f.FactType == FactTypes.HttpCallDetected && f.EvidenceTier == EvidenceTiers.Tier1Semantic).ToArray();
         Assert.Equal(2, http.Length);
