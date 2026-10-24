@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+For public local development (not the work machine), use
+[Build the DNN SQL validation harness](build-dnn-sql-validation-harness.md), issue
+#908. Static corpus/tests come first; the optional SQL Server container lane is
+prepared but requires separate activation approval.
+
 Start with [Verify work-machine HTTP readiness](verify-work-machine-http-readiness.md)
 after merged PR #901. This is the current Claude prompt: one build, at most three
 retained HTTP requeries, no rescan, and a sanitized H1–H4 readiness matrix.
