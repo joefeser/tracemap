@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+After accepted HTTP review, use
+[Assess retained work-machine SQL readiness](assess-work-sql-retained-readiness.md)
+for one read-only SQL evidence slice. No scan, build, database connection or
+execution; missing schema is kept separate from application-side evidence gaps.
+
 Start with [Verify work-machine HTTP readiness](verify-work-machine-http-readiness.md)
 after merged PR #901. This is the current Claude prompt: one build, at most three
 retained HTTP requeries, no rescan, and a sanitized H1–H4 readiness matrix.
