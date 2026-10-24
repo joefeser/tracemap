@@ -91,5 +91,15 @@ End Class
 
 Public Class SameNameWidget
     Public Sub CreateChildControls()
+        RemoteService.Fetch()
     End Sub
+End Class
+
+' An actual override, but not a supported WebForms lifecycle member.
+Public Class UnrelatedOverrideWidget
+    Inherits UserControl
+    Public Overrides Function ToString() As String
+        RemoteService.Fetch()
+        Return "synthetic-widget"
+    End Function
 End Class
