@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Deterministic>true</Deterministic>
+    <IsPackable>false</IsPackable>
+    <Nullable>disable</Nullable>
+    <!-- Compile-only legacy API evidence; fixture methods are never executed. -->
+    <NoWarn>SYSLIB0014</NoWarn>
+  </PropertyGroup>
+</Project>
