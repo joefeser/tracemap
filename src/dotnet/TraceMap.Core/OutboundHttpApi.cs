@@ -84,6 +84,14 @@ internal static class OutboundHttpApi
         properties["urlKind"] = "unavailable";
         properties["protocolKind"] = family == "WebClient" ? "unproven-address-protocol" : "framework-http-api";
         if (operation is null) return;
+        if (family == "WebRequest" && HttpRequestMethodEvidence.TryResolve(operation, out var resolvedVerb, out var assignment))
+        {
+            properties["httpMethod"] = resolvedVerb;
+            properties["httpMethodEvidence"] = "same-block-local-property-assignment";
+            var span = assignment!.Syntax.GetLocation().GetLineSpan();
+            properties["httpMethodAssignmentStartLine"] = (span.StartLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            properties["httpMethodAssignmentEndLine"] = (span.EndLinePosition.Line + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
         properties["targetAssemblyName"] = operation.TargetMethod.ContainingAssembly.Identity.Name;
         properties["targetAssemblyPublicKeyToken"] = Convert.ToHexStringLower(operation.TargetMethod.ContainingAssembly.Identity.PublicKeyToken.ToArray());
         var arguments = operation.Arguments.ToList();
