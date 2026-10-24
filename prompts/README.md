@@ -1,5 +1,10 @@
 # Private exchange prompts
 
+For bounded H4 acceptance after merged PR #907, use
+[Validate work-machine H4 lifecycle/HTTP evidence](validate-work-h4-lifecycle-http.md).
+Run it on the private Windows work machine: one tool build and one retained H4
+requery, no rescan, application execution or SQL work.
+
 Start with [Verify work-machine HTTP readiness](verify-work-machine-http-readiness.md)
 after merged PR #901. This is the current Claude prompt: one build, at most three
 retained HTTP requeries, no rescan, and a sanitized H1–H4 readiness matrix.
