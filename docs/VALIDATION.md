@@ -1,5 +1,28 @@
 # TraceMap Validation Guide
 
+## Bounded WebRequest method evidence
+
+`HttpRequestMethodEvidenceTests` covers C# and VB fresh-local constant Method
+assignments, content/header/stream preparation, structured try blocks, and
+fail-closed controls for aliases, escapes, overwrites, conditional writes, loops,
+captures, parameter receivers, dynamic/custom verbs and VB unstructured error
+handling. Native sample scans pin deterministic facts, SQLite and grouped-handoff
+POST preservation. Samples are compile/scan-only: never execute their requests.
+
+Run the focused HttpRequestMethodEvidenceTests, OutboundHttpCoverageTests,
+OutboundHttpLegacyCoverageTests and ProjectlessVisualBasicHttpTests, followed by
+the full Debug solution suite with `-warnaserror`. This source extraction change
+requires csharp-semantic/0.22.5 or vb-semantic/0.10.8 and a fresh scan; an old index
+cannot acquire assignment evidence by requery. The existing HTTP rule and tiers
+remain unchanged. Assignment lines are additive provenance, not runtime proof.
+The method-body operation walk refuses inputs over 20,000 operations and any
+loop/jump; unsupported shapes remain UNKNOWN rather than attempting general
+control-flow or interprocedural inference. EndGetResponse is not inferred.
+
+`prompts/validate-work-http-request-method.md` is the separate, explicitly bounded
+fresh-extraction validation workflow. It does not expand the older no-scan
+readiness prompt or authorize SQL/database operations.
+
 ## Retained handler HTTP reporting
 
 Pre-PR synthetic coverage and exact-head commands are in
