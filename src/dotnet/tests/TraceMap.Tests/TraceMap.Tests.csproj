@@ -101,6 +101,8 @@
     <ProjectReference Include="../../../../samples/sql-database-matrix/wrapper-build/SyntheticWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../../../../samples/http-entry-boundaries/HttpEntryBoundaries.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../../../../samples/http-entry-dual-terminal/HttpEntryDualTerminal.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/http-request-method-evidence/csharp/RequestMethod.CSharp.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/http-request-method-evidence/vb/RequestMethod.VB.vbproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TraceMap.Oracle\TraceMap.Oracle.csproj" />
