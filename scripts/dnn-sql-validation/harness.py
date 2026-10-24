@@ -30,6 +30,13 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
 
 
+def parse_version(output):
+    version = output.strip()
+    if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+', version):
+        raise ValueError('expected exactly one SQL Server ProductVersion scalar')
+    return version
+
+
 def provenance(payloads=None):
     # Only public fixed fixture bytes are in this bounded input projection.
     payloads = payloads if payloads is not None else {name: (SQL / name).read_bytes() for name in FILES}
@@ -129,10 +136,11 @@ def run(args):
         receipt.update(containerId=container, cleanup='required')
         (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
         docker.run('start', container)
-        def sql(text, readiness=False):
+        def sql(text, readiness=False, scalar=False):
             return docker.run('exec', '-i', '-e', 'SQLCMDPASSWORD', container,
                 '/opt/mssql-tools18/bin/sqlcmd', '-S', 'localhost', '-U', 'sa', '-C',
                 '-b', '-l', '3' if readiness else '5', '-t', '3' if readiness else '20',
+                *(['-h', '-1', '-W'] if scalar else []),
                 input=text, timeout=10 if readiness else 45)
         receipt['phase'] = 'readiness'
         ready = False
@@ -152,7 +160,8 @@ def run(args):
             receipt['phase'] = phase
             result = sql(prefix + payloads[phase].decode('utf-8'))
             (output / (phase + '.log')).write_text(result + '\n')
-        version = sql("SELECT CONVERT(nvarchar(128),SERVERPROPERTY('ProductVersion'));\nGO\n")
+        receipt['phase'] = 'server-version'
+        version = parse_version(sql("SET NOCOUNT ON;\nSELECT CONVERT(nvarchar(128),SERVERPROPERTY('ProductVersion'));\nGO\n", scalar=True))
         receipt.update(status='PASSED synthetic SQL checks', testedVersion=version,
                        metadataDescription='completed', syntheticExecution='completed')
     finally:

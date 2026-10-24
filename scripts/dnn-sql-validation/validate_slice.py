@@ -45,6 +45,39 @@ def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
 
 
+def verify_inventory(slice_root):
+    # Only the root Git metadata directory and setup receipt are non-source inputs.
+    # Do not follow links or silently ignore additional source/metadata files.
+    actual = set()
+    pending = [slice_root]
+    while pending:
+        for path in pending.pop().iterdir():
+            relative = path.relative_to(slice_root).as_posix()
+            if path.is_symlink():
+                raise ValueError('public slice inventory contains a symbolic link')
+            if relative == '.git' and path.is_dir():
+                continue
+            if path.is_dir():
+                pending.append(path)
+            elif path.is_file():
+                actual.add(relative)
+            else:
+                raise ValueError('public slice inventory contains a non-regular file')
+    if actual != set(FILES) | {'public-slice.json'}:
+        raise ValueError('public slice inventory has missing or unexpected files')
+    # This pinned slice has nine .cs files plus the setup JSON in native inventory.
+    # LICENSE/NOTICE and the unchanged .SqlDataProvider extension are not included.
+    return sum(Path(name).suffix == '.cs' for name in actual) + 1
+
+
+def verify_scan_inventory(facts, expected_count):
+    scanned = [fact for fact in facts if fact.get('factType') == 'RepoScanned']
+    if (len(scanned) != 1
+            or scanned[0].get('commitSha') != PIN
+            or scanned[0].get('properties', {}).get('fileCount') != str(expected_count)):
+        raise ValueError('native scan inventory count or identity mismatch')
+
+
 def verify(slice_root, scan_root):
     setup = json.loads((slice_root / 'public-slice.json').read_text())
     if (setup.get('upstream'), setup.get('revision'), setup.get('release')) != (UPSTREAM, PIN, RELEASE):
@@ -54,6 +87,7 @@ def verify(slice_root, scan_root):
         raise ValueError('public slice generator mismatch')
     if setup.get('boundedInputSha256') != sha(canonical(projection)) or set(setup['files']) != set(FILES):
         raise ValueError('public slice bounded input mismatch')
+    expected_count = verify_inventory(slice_root)
     for name in FILES:
         if sha((slice_root / name).read_bytes()) != setup['files'][name]:
             raise ValueError('public slice bytes changed')
@@ -85,6 +119,7 @@ def verify(slice_root, scan_root):
     if manifest.get('buildStatus') != 'NotRun' or manifest.get('analysisLevel') != 'Level3SyntaxAnalysis':
         raise ValueError('expected partial projectless coverage changed; inspect before updating baseline')
     facts = [json.loads(line) for line in (scan_root / 'facts.ndjson').read_text().splitlines()]
+    verify_scan_inventory(facts, expected_count)
     calls = [f for f in facts if f.get('factType') == 'DatabaseOperationCandidate']
     expected_calls = {
         (prefix + 'Data/PetaPoco/PetaPocoHelper.cs', 80),

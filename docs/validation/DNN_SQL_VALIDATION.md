@@ -40,6 +40,11 @@ The extra receipt is untracked setup metadata, not an upstream source change.
 Default unit tests do not fetch DNN or access the network.
 The offline `validate_slice.py` check verifies setup provenance, independent
 source markers and the documented native partial observations. It passes only
+after exact file-set verification (excluding only root `.git` metadata and
+accounting for `public-slice.json`). Links and extra files are rejected. The
+unique native `RepoScanned` inventory must contain 10 files: nine C# files and
+the setup JSON; LICENSE, NOTICE and `.SqlDataProvider` are outside that inventory.
+This check passes only
 this bounded static baseline; missing inputs fail, and a changed extractor result
 requires source inspection before updating the baseline. It is not authentication
 of an upstream checkout or a complete route/SQL validation verdict.
