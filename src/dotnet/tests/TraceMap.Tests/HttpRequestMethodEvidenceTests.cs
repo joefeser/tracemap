@@ -21,7 +21,7 @@ public sealed class HttpRequestMethodEvidenceTests
         using var temp = new TempDirectory();
         var source = Path.Combine(temp.Path, "source");
         Directory.CreateDirectory(source);
-        var fixture = Path.Combine(root.FullName, "samples/outbound-http-coverage", language);
+        var fixture = Path.Combine(root.FullName, "samples/http-request-method-evidence", language);
         foreach (var file in Directory.GetFiles(fixture).Where(f => f.EndsWith("proj", StringComparison.Ordinal)
                      || Path.GetFileNameWithoutExtension(f) == "RequestMethodEvidence"))
         {
@@ -55,7 +55,7 @@ public sealed class HttpRequestMethodEvidenceTests
         while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
         Assert.NotNull(root);
         using var temp = new TempDirectory();
-        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(root.FullName, "samples/outbound-http-coverage", language), Path.Combine(temp.Path, "scan")));
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(root.FullName, "samples/http-request-method-evidence", language), Path.Combine(temp.Path, "scan")));
         Assert.Equal("Succeeded", scan.Manifest.BuildStatus);
         var fact = Assert.Single(scan.Facts, f => f.FactType == FactTypes.HttpCallDetected
             && f.SourceSymbol?.Contains("RequestMethodEvidence.Proven(", StringComparison.Ordinal) == true);
@@ -74,7 +74,7 @@ public sealed class HttpRequestMethodEvidenceTests
         var handoff = GroupedCompiledPathHandoffBuilder.Create(report,
             Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(await File.ReadAllBytesAsync(index))));
         Assert.Contains(handoff.Nodes.Values, n => n.HttpMethod == "POST");
-        var repeat = ScanEngine.Scan(new ScanOptions(Path.Combine(root.FullName, "samples/outbound-http-coverage", language), Path.Combine(temp.Path, "repeat")));
+        var repeat = ScanEngine.Scan(new ScanOptions(Path.Combine(root.FullName, "samples/http-request-method-evidence", language), Path.Combine(temp.Path, "repeat")));
         Assert.Equal(scan.Facts.Select(f => System.Text.Json.JsonSerializer.Serialize(f)), repeat.Facts.Select(f => System.Text.Json.JsonSerializer.Serialize(f)));
     }
 

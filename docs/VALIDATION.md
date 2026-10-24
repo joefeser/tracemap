@@ -7,7 +7,9 @@ assignments, content/header/stream preparation, structured try blocks, and
 fail-closed controls for aliases, escapes, overwrites, conditional writes, loops,
 captures, parameter receivers, dynamic/custom verbs and VB unstructured error
 handling. Native sample scans pin deterministic facts, SQLite and grouped-handoff
-POST preservation. Samples are compile/scan-only: never execute their requests.
+POST preservation. The dedicated `samples/http-request-method-evidence` projects
+are separate from the closed overload inventory in `samples/outbound-http-coverage`.
+Samples are compile/scan-only: never execute their requests.
 
 Run the focused HttpRequestMethodEvidenceTests, OutboundHttpCoverageTests,
 OutboundHttpLegacyCoverageTests and ProjectlessVisualBasicHttpTests, followed by
