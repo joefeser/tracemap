@@ -5,6 +5,27 @@ not a personal Mac/Windows checkout containing only TraceMap. When the operator
 asks you to run this prompt, perform the bounded static acceptance below.
 Read AGENTS.md. SQL remains deferred; this is not a runtime lifecycle test.
 
+## Routing correction: H4 only, not another H3 validation
+
+If the previous session returned a Bounded WebRequest Method Evidence validation,
+preserve that H3 result and its artifacts. Do not repeat its extraction or follow
+`prompts/validate-work-http-request-method.md` for this task. A verified H3 POST
+assignment is not H4 acceptance, even when both use the same tool revision.
+
+Before executing commands, state: "This run validates the retained H4 override
+HTTP path and separate lifecycle candidate; it does not rescan H3 or prove runtime
+framework dispatch." Follow this file's bounds rather than historical prompt
+instructions. If a proposed command would scan source, stop before executing it.
+
+Use the already accepted fresh H4 index containing the lifecycle candidate.
+Here "fresh H4 index" names that retained baseline; it is not an instruction to
+create a fresh index now. A later H3 scan is not automatically an accepted H4
+baseline. Missing H4 inputs require a precise blocker, not another extraction.
+
+Title the returned matrix "H4 Retained Static Acceptance" and include the H4
+root/terminal checks and separate candidate visibility in index, handoff JSON and
+HTML. An H3 verb/assignment table alone does not satisfy this prompt.
+
 ## Bounds
 
 20 minutes total, including at most five minutes of discovery, one TraceMap CLI
