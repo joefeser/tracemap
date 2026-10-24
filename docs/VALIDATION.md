@@ -1,5 +1,54 @@
 # TraceMap Validation Guide
 
+## Public synthetic H4 lifecycle/HTTP regression
+
+`HttpEntryBoundaryRegressionTests` reuses `samples/http-entry-boundaries` and
+its real signed net48 System.Web metadata. The lifecycle override retains a
+Tier1Semantic helper-to-HTTP path; the independent Tier2Structural
+framework-lifecycle-candidate survives grouped handoff JSON and HTML without
+becoming a traversed edge. A shallow query preserves explicit truncation/gaps.
+HTTP-bearing same-name and unrelated-override controls receive no lifecycle
+candidate. The projectless unresolved-framework case retains independently
+resolved HTTP paths, compiler diagnostics and reduced coverage, with no lifecycle
+claim. Existing source harness cases remain non-framework controls.
+
+For this fixture/test/docs-only slice, run the focused HttpEntryBoundaryRegression,
+GroupedCompiledPathHandoff and WebFormsReviewExecutionTestsHandlerHttp gate with
+Debug `-warnaserror`, then the reduced leaf lane selected by
+`scripts/select_dotnet_test_lane.py`. The latter is partial: OutboundHttp,
+SqlDatabaseMatrix and WebFormsReview families are excluded (the focused gate
+separately includes HandlerHttp). Run a synthetic CLI scan and exact override
+HTTP query; never execute the sample. Shared-core fixes would require the full
+Debug suite. No extractor/reporting algorithm or schema change is intended.
+
+Prerequisite: restore Microsoft.NETFramework.ReferenceAssemblies.net48 1.0.3;
+modern .NET is not System.Web. Unresolved identity is partial evidence, never
+an equivalent semantic lifecycle positive. SQL, actual HTTP requests, runtime
+dispatch, IIS hosting and private-application acceptance remain unproven.
+`prompts/validate-work-h4-lifecycle-http.md` is a separate later acceptance prompt,
+not authorization to access or rescan work-machine data in this task.
+
+Validation receipt for this synthetic slice (macOS, SDK 10.0.302; base freshly
+fetched origin/dev `0411d0c4bd1c77b579e77bea01cecb06a25a663d`):
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --nologo --filter 'FullyQualifiedName~HttpEntryBoundaryRegressionTests|FullyQualifiedName~GroupedCompiledPathHandoffTests|FullyQualifiedName~WebFormsReviewExecutionTestsHandlerHttp'
+# 83 passed, 0 failed, 0 skipped; 41 seconds.
+dotnet test src/dotnet/TraceMap.sln -c Debug -warnaserror --nologo --filter 'FullyQualifiedName!~WebFormsReview&FullyQualifiedName!~SqlDatabaseMatrixTests&FullyQualifiedName!~OutboundHttp'
+# Partial reduced lane: 4223 passed, 0 failed, 3 skipped; 13m 51s.
+```
+
+Existing skips: opt-in full golden sweep, Python provenance interoperability
+(`TRACEMAP_PROVENANCE_PYTHON` unset), Windows deep ASP.NET corpus. No private
+corpus was accessed. The public CLI scan retained 192 facts; the exact
+`Global.HttpEntrySamples.LifecycleWidget.CreateChildControls()` HTTP query with
+legacy roots and max depth 16 retained one Tier1 path and a separate Tier2
+candidate. Its eight gaps remain explicit (four truncation, two unavailable
+extractors, one no-remoting-evidence and one unlinked surface); coverage stays
+ReducedCoverage. No scanner/reporting defect was demonstrated; production code
+and extractor versions are unchanged. Full suite, pinned adapter smokes and
+private/runtime acceptance were not run for this leaf-only slice.
+
 ## Bounded WebRequest method evidence
 
 `HttpRequestMethodEvidenceTests` covers C# and VB fresh-local constant Method

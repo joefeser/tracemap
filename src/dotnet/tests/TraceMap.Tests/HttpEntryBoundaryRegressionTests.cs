@@ -192,7 +192,8 @@ public sealed class HttpEntryBoundaryRegressionTests
         Assert.Contains(entries, f => f.RuleId == RuleIds.WebFormsEntryLifecycle
             && f.TargetSymbol!.Contains("LifecycleWidget.CreateChildControls", StringComparison.Ordinal));
         Assert.DoesNotContain(entries, f => f.RuleId == RuleIds.WebFormsEntryLifecycle
-            && f.TargetSymbol!.Contains("SameNameWidget", StringComparison.Ordinal));
+            && (f.TargetSymbol!.Contains("SameNameWidget", StringComparison.Ordinal)
+                || f.TargetSymbol.Contains("UnrelatedOverrideWidget", StringComparison.Ordinal)));
         Assert.All(entries, f =>
         {
             Assert.Equal(64, f.Properties["generatorSha256"].Length);
@@ -256,7 +257,8 @@ public sealed class HttpEntryBoundaryRegressionTests
         {
             ("ProfileWidget", "Apply", true), ("HostPage", "ExplicitRead", true),
             ("LifecycleWidget", "CreateChildControls", true), ("HostPage", "Page_Load", false),
-            ("InertWidget", "CreateChildControls", false), ("SameNameWidget", "CreateChildControls", false),
+            ("InertWidget", "CreateChildControls", false), ("SameNameWidget", "CreateChildControls", true),
+            ("UnrelatedOverrideWidget", "ToString", true),
             ("DispatchWidget", "DirectCurrentClass", false), ("DispatchWidget", "VirtualCandidate", true)
         })
         {
@@ -288,13 +290,43 @@ public sealed class HttpEntryBoundaryRegressionTests
                 Assert.Equal(JsonSerializer.Serialize(legacy.WebFormsEntries), JsonSerializer.Serialize(legacyBounded.Report.WebFormsEntries));
                 Assert.All(legacyBounded.Report.Paths.SelectMany(p => p.Edges), e => Assert.DoesNotContain(e.EdgeKind,
                     new[] { "control-containment", "declarative-property-reference", "framework-lifecycle-candidate" }));
+                var candidate = Assert.Single(legacyBounded.Report.WebFormsEntries!.Relationships,
+                    r => r.EdgeKind == "framework-lifecycle-candidate" && r.TargetSymbolId == declaration.Properties["targetSymbolId"]);
+                Assert.Equal(EvidenceTiers.Tier2Structural, candidate.EvidenceTier);
+                Assert.Contains("System.Web.UI.Control.CreateChildControls", candidate.Source);
+                Assert.Contains("unproven", candidate.FirstUnresolvedBoundary);
+                Assert.All(legacyBounded.Report.Paths, path =>
+                {
+                    Assert.Equal(declaration.TargetSymbol, path.Nodes[0].SymbolId);
+                    Assert.Contains(path.Nodes, node => node.DisplayName.Contains("LifecycleWidget.Prepare", StringComparison.Ordinal));
+                    Assert.Equal("http-client", path.Nodes[^1].SurfaceKind);
+                    Assert.Equal(EvidenceTiers.Tier1Semantic, path.Nodes[^1].EvidenceTier);
+                    Assert.All(path.Edges, edge => Assert.Equal(EvidenceTiers.Tier1Semantic, edge.EvidenceTier));
+                });
                 var packet = GroupedCompiledPathHandoffBuilder.Create(legacyBounded.Report, new string('a', 64));
+                var restored = GroupedCompiledPathHandoffBuilder.Restore(
+                    JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(JsonSerializer.Serialize(packet))!);
+                Assert.Equal(JsonSerializer.Serialize(legacyBounded.Report), JsonSerializer.Serialize(restored));
+                Assert.Contains(restored.WebFormsEntries!.Relationships, r => JsonSerializer.Serialize(r) == JsonSerializer.Serialize(candidate));
                 var output = await GroupedCompiledPathReportWriter.WriteAsync(packet, Path.Combine(temp.Path, "lifecycle-html"));
                 var html = await File.ReadAllTextAsync(output.HtmlPath);
                 Assert.Contains("framework-lifecycle-candidate", html);
                 Assert.Contains("legacy.webforms.entry-lifecycle.v1", html);
                 Assert.Contains("Framework dispatch, control construction and lifecycle execution are unproven.", html);
                 Assert.Contains("not traversed call edges", html);
+                Assert.Contains("Tier2Structural", html);
+                Assert.Contains("LifecycleWidget.CreateChildControls", html);
+                var shallow = await CombinedDependencyPathReporter.BuildReportAsync(legacyOptions with { MaxDepth = 1 });
+                Assert.True(shallow.Summary.Truncated);
+                Assert.NotEmpty(shallow.Gaps);
+                var shallowPacket = GroupedCompiledPathHandoffBuilder.Create(shallow, new string('a', 64));
+                var shallowRestored = GroupedCompiledPathHandoffBuilder.Restore(
+                    JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(JsonSerializer.Serialize(shallowPacket))!);
+                Assert.Equal(JsonSerializer.Serialize(shallow.Gaps), JsonSerializer.Serialize(shallowRestored.Gaps));
+                Assert.True(shallowRestored.Summary.Truncated);
+                Assert.Equal(JsonSerializer.Serialize(restored.WebFormsEntries), JsonSerializer.Serialize(shallowRestored.WebFormsEntries));
+                var shallowOutput = await GroupedCompiledPathReportWriter.WriteAsync(shallowPacket, Path.Combine(temp.Path, "lifecycle-shallow"));
+                Assert.Contains("Enumeration incomplete", await File.ReadAllTextAsync(shallowOutput.HtmlPath));
             }
             Assert.All(result.Paths.SelectMany(p => p.Edges), e => Assert.DoesNotContain(e.EdgeKind,
                 new[] { "control-containment", "declarative-property-reference", "framework-lifecycle-candidate" }));
@@ -476,6 +508,7 @@ public sealed class HttpEntryBoundaryRegressionTests
     [InlineData("explicit-property", true)]
     [InlineData("markup-property", false)]
     [InlineData("lifecycle-body", true)]
+    [InlineData("unresolved-framework", true)]
     [InlineData("lifecycle-host", false)]
     [InlineData("inert-override", false)]
     [InlineData("same-name", false)]
@@ -552,6 +585,9 @@ public sealed class HttpEntryBoundaryRegressionTests
             End Class
             """);
         var widgetPath = Path.Combine(repo, "App_Code", "Widgets.vb");
+        if (mode == "unresolved-framework")
+            File.WriteAllText(widgetPath, File.ReadAllText(widgetPath).Replace(
+                "Inherits ControlHarness", "Inherits System.Web.UI.UserControl", StringComparison.Ordinal));
         if (mode == "virtual-property")
             File.WriteAllText(widgetPath, File.ReadAllText(widgetPath).Replace("Public ReadOnly Property Profile", "Public Overridable ReadOnly Property Profile", StringComparison.Ordinal));
         if (mode == "writable-property")
@@ -604,7 +640,7 @@ public sealed class HttpEntryBoundaryRegressionTests
         var scan = ScanEngine.Scan(new ScanOptions(repo, Path.Combine(temp.Path, "scan")) { VisualBasicCompilationContextPath = context });
         Assert.DoesNotContain(scan.Facts, f => f.RuleId == RuleIds.WebFormsEntryLifecycle);
         var diagnostics = scan.Facts.Where(f => f.Properties.GetValueOrDefault("gapKind") == "CompilationDiagnostic").ToArray();
-        if (mode == "invalid-write") Assert.NotEmpty(diagnostics);
+        if (mode is "invalid-write" or "unresolved-framework") Assert.NotEmpty(diagnostics);
         else Assert.True(diagnostics.Length == 0, JsonSerializer.Serialize(diagnostics.Select(f => new { f.Evidence.StartLine, f.Properties })));
         var http = scan.Facts.Where(f => f.FactType == FactTypes.HttpCallDetected && f.EvidenceTier == EvidenceTiers.Tier1Semantic).ToArray();
         Assert.Equal(2, http.Length);
@@ -624,7 +660,7 @@ public sealed class HttpEntryBoundaryRegressionTests
         var rootType = mode switch
         {
             "event-direct" or "event-constructor" => "ToolWidget",
-            "lifecycle-body" => "HistoryWidget",
+            "lifecycle-body" or "unresolved-framework" => "HistoryWidget",
             "inert-override" => "InertWidget",
             "same-name" => "SameNameWidget",
             _ => "Host"
@@ -654,6 +690,17 @@ public sealed class HttpEntryBoundaryRegressionTests
             new ReportInputBudget(250_000, 250_000, 128 * 1024 * 1024));
         Assert.Equal(expected, ordinary.Paths.Count > 0);
         Assert.Equal(expected, bounded.Report.Paths.Count > 0);
+        if (mode == "unresolved-framework")
+        {
+            Assert.DoesNotContain(ordinary.WebFormsEntries!.Relationships, r => r.EdgeKind == "framework-lifecycle-candidate");
+            Assert.Equal("ReducedCoverage", ordinary.ReportCoverage);
+            Assert.NotEmpty(ordinary.Gaps);
+            var packet = GroupedCompiledPathHandoffBuilder.Create(bounded.Report, new string('a', 64));
+            var restored = GroupedCompiledPathHandoffBuilder.Restore(
+                JsonSerializer.Deserialize<GroupedCompiledPathHandoff>(JsonSerializer.Serialize(packet))!);
+            Assert.Equal(JsonSerializer.Serialize(bounded.Report.Gaps), JsonSerializer.Serialize(restored.Gaps));
+            Assert.Equal("ReducedCoverage", restored.ReportCoverage);
+        }
         if (expected)
         {
             var semanticPaths = ordinary.Paths.Where(p => p.Edges.All(e => e.EvidenceTier == EvidenceTiers.Tier1Semantic)).ToArray();
