@@ -5,6 +5,22 @@ namespace TraceMap.Reporting;
 
 public static class SqlServerParameterReportWriter
 {
+    public static string Build(SqlServerDdlComparisonReport report)
+    {
+        var ddl = report.DdlEvidence;
+        var text = new StringBuilder("# SQL Server DDL parameter evidence\n\n");
+        text.AppendLine($"Origin: {ddl.Declarations.Origin}; rule: {ddl.RuleId}; tier: {ddl.Tier}; extractor: {ddl.ExtractorVersion}.");
+        text.AppendLine($"Parser: {ddl.ParserVersion}; parser SHA-256: {ddl.ParserSha256}.");
+        text.AppendLine($"DDL generator SHA-256: {ddl.GeneratorSha256}; DDL bounded input SHA-256: {ddl.BoundedInputSha256}.");
+        text.AppendLine($"Report generator SHA-256: {report.GeneratorSha256}; report bounded input SHA-256: {report.BoundedInputSha256}.\n");
+        foreach (var span in ddl.ParameterSpans)
+            text.AppendLine($"- DDL parameter: {WebUtility.HtmlEncode(span.Parameter)} at {WebUtility.HtmlEncode(span.FilePath)}:{span.StartLine}–{span.EndLine}; {ddl.RuleId}; {ddl.Tier}.");
+        foreach (var gap in ddl.Unsupported)
+            text.AppendLine($"- Unsupported: {WebUtility.HtmlEncode(gap.Kind)} {WebUtility.HtmlEncode(gap.Parameter)} at {WebUtility.HtmlEncode(gap.FilePath)}:{gap.StartLine}–{gap.EndLine}; {gap.RuleId}; {gap.Tier}.");
+        text.Append(Build(report.Comparison).Replace("# SQL Server synthetic parameter comparison", "## Bounded DDL parameter comparison", StringComparison.Ordinal));
+        return text.ToString();
+    }
+
     public static string Build(SqlServerComparisonReport report)
     {
         static string E(string value) => WebUtility.HtmlEncode(value).Replace("|", "&#124;", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
