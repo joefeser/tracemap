@@ -60,9 +60,9 @@ public static class SqlServerSchemaEvidence
         return JsonSerializer.Deserialize<T>(json, JsonOptions) ?? throw new ArgumentException("null-input");
     }
     private static void Require(bool ok, string reason) { if (!ok) throw new ArgumentException(reason); }
-    private static bool Identifier(string? value) => value is { Length: > 0 and <= 128 } && Regex.IsMatch(value, "^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
-    private static bool Sha(string? value, int length = 64) => value is not null && value.Length == length && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
-    private static bool PathSafe(string? value) => value is { Length: > 0 and <= 512 } && !value.StartsWith('/') && !value.Contains('\\')
+    internal static bool Identifier(string? value) => value is { Length: > 0 and <= 128 } && Regex.IsMatch(value, "^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant);
+    internal static bool Sha(string? value, int length = 64) => value is not null && value.Length == length && value.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f');
+    internal static bool PathSafe(string? value) => value is { Length: > 0 and <= 512 } && !value.StartsWith('/') && !value.Contains('\\')
         && value.Split('/').All(p => p is not ("" or "." or "..") && p.All(c => char.IsAsciiLetterOrDigit(c) || "._-".Contains(c)));
     private static bool Identity(SqlServerObjectIdentity? i) => i is not null && Identifier(i.Server) && Identifier(i.Database) && Identifier(i.Schema) && Identifier(i.Procedure);
     public static SqlServerSchemaExport Produce(string input)
@@ -72,10 +72,10 @@ public static class SqlServerSchemaEvidence
         // Hash the exact canonical public declaration projection; input whitespace is immaterial.
         return new("sqlserver-schema/1", GeneratorSha256, Digest(d), ExtractorVersion, d, "database.sqlserver.synthetic-schema.v1", EvidenceTiers.Tier2Structural);
     }
-    private static void Validate(SqlServerDeclarations d)
+    internal static void Validate(SqlServerDeclarations d, bool ddl = false)
     {
         Require(d.Provenance is null || Sha(d.Provenance.GeneratorSha256) && Sha(d.Provenance.BoundedInputSha256), "invalid-input-provenance");
-        Require(d.Version == "sqlserver-declarations/1" && d.Origin == "independent-synthetic-declarations"
+        Require(d.Version == (ddl ? "sqlserver-ddl-declarations/1" : "sqlserver-declarations/1") && d.Origin == (ddl ? "public-synthetic-tsql-ddl" : "independent-synthetic-declarations")
             && d.IdentifierPolicy == "ordinal-exact-no-aliases", "unsupported-declaration-contract");
         Require(PathSafe(d.Repo) && !d.Repo.Contains('/') && Sha(d.Revision, 40), "invalid-repo-or-revision");
         Require(d.Procedures is { Count: > 0 and <= 256 }, "procedure-limit");
@@ -119,6 +119,13 @@ public static class SqlServerSchemaEvidence
     {
         // Do not allow callers of the native library to bypass admission validation.
         schema = Admit(Json(schema), Json(schema.Declarations), repo, revision);
+        return CompareAdmitted(schema, bindings, facts, repo, revision);
+    }
+
+    // Only origin-specific admission paths may enter the shared comparison engine.
+    internal static SqlServerComparisonReport CompareAdmitted(SqlServerSchemaExport schema, SqlServerBindings bindings,
+        IReadOnlyList<CodeFact> facts, string repo, string revision)
+    {
         Require(bindings.Provenance is null || Sha(bindings.Provenance.GeneratorSha256) && Sha(bindings.Provenance.BoundedInputSha256), "invalid-binding-provenance");
         Require(bindings.Version == "sqlserver-bindings/1" && bindings.Repo == repo && bindings.Revision == revision
             && bindings.Calls is { Count: <= 4096 }, "invalid-binding-envelope");

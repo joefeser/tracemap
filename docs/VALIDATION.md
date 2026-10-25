@@ -1,5 +1,19 @@
 # TraceMap Validation Guide
 
+## Bounded offline SQL Server DDL parameter evidence
+
+[SQLSERVER_DDL_PARAMETER_EVIDENCE.md](validation/SQLSERVER_DDL_PARAMETER_EVIDENCE.md)
+documents the separate opt-in public synthetic DDL origin, pinned ScriptDom AST,
+explicit file/identity/digest admission, fail-closed bounds and unknown facets.
+Run SqlServerDdlEvidenceTests with the retained SqlServerParameterEvidenceTests and
+DnnSqlValidationTests, Python harness guards, then commit and freeze source/revision/
+build outputs for the full Debug -warnaserror suite. Only after full completion,
+run the original 52-case JSON smoke and the independent DDL smoke sequentially in
+new directories. Both retain 8 bounded matches / 12 mismatches / 32 unknowns and
+25 unbound-call gaps per report. No extractor change; pinned C#/VB OSS, non-.NET
+and Windows reruns are explicitly deferred with limits in the spec state.
+No SQL, containers, private input, application or live/catalog acceptance follows.
+
 ## Offline SQL Server synthetic parameter evidence
 
 [SQLSERVER_PARAMETER_EVIDENCE.md](validation/SQLSERVER_PARAMETER_EVIDENCE.md)
