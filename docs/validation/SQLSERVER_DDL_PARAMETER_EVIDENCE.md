@@ -6,6 +6,9 @@ comparison machinery without SQL Server. No procedure, application method,
 container, remote host or private schema is executed or accessed. Neither #908
 nor #870 is completed. Real DNN selected-reader, wrapper, qualifier and concrete
 connection identity gaps remain; synthetic success does not establish DNN binding.
+A separate opt-in [result-shape route](SQLSERVER_RESULT_COLUMN_EVIDENCE.md)
+(`sqlserver-ddl-result-input/1`) reuses this admission core unchanged; parameter
+manifests and exports are never reinterpreted as result-shape evidence.
 
 ## Parser and rule
 

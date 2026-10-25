@@ -112,5 +112,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../samples/sqlserver-parameter-evidence/csharp/Parameters.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/sqlserver-parameter-evidence/vb/Parameters.vbproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/sqlserver-result-column-evidence/csharp/Results.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/sqlserver-result-column-evidence/vb/Results.vbproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

@@ -74,7 +74,8 @@ internal static class SqlServerSchemaCommand
         catch (Exception secondary) { primary.Data["SqlServerOutputCleanupFailure"] = secondary; }
     }
 
-    internal static void PublishNewDirectory(string destination, Action<string> writer, Action<string>? cleanup = null)
+    internal static void PublishNewDirectory(string destination, Action<string> writer, Action<string>? cleanup = null,
+        IReadOnlyList<string>? requiredFiles = null)
     {
         // ScanOutputTransaction permits replacement and requires scan artifacts;
         // this command instead publishes a new two-file report, never replacing.
@@ -86,7 +87,7 @@ internal static class SqlServerSchemaCommand
         try
         {
             writer(staging);
-            if (!File.Exists(Path.Combine(staging, "parameter-comparison.json")) || !File.Exists(Path.Combine(staging, "report.md")))
+            if ((requiredFiles ?? ["parameter-comparison.json", "report.md"]).Any(name => !File.Exists(Path.Combine(staging, name))))
                 throw new IOException("IncompleteParameterReport");
             Directory.Move(staging, target);
         }
