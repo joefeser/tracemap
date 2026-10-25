@@ -21,5 +21,5 @@ assuming the recorded gates still hold.
   type names instead of silently normalizing them.
 - [x] R3. Strict UTF-8 BOM policy: documented as admitted, but the parser rejected
   BOM-prefixed files as malformed. Make code and documentation agree.
-- [ ] R4. Re-run focused tests and Python guards; commit; frozen full Debug
+- [x] R4. Re-run focused tests and Python guards; commit; frozen full Debug
   -warnaserror gate; committed-head JSON and DDL smokes; guards; report; push.

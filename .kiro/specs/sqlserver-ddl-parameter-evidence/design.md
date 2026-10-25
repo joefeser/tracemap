@@ -27,3 +27,8 @@ never traversed for declarations/results/runtime meaning. Defaults and decimal
 facets produce explicit unknown evidence; no expression bytes are retained.
 Identifiers after AST unquoting retain the existing ASCII bounded vocabulary.
 Quoted identifiers containing spaces/punctuation remain rejected, not normalized.
+Type names must use the canonical spelling of the six supported types (case and
+delimiters tolerated); ANSI synonyms that ScriptDom folds together reject.
+One leading UTF-8 BOM is hashed but excluded from lexing. Lexing and parsing run
+on a dedicated 64 MiB-stack thread so recursion the token budget does not cap
+cannot abort the host process.
