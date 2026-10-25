@@ -124,7 +124,7 @@ separate evidence and are never cleared by a parameter match.
 | nvarchar | Schema size in UTF-16 code units (byte-pairs), 1–4000 or MAX=-1. Source SqlParameter size in UTF-16 code units; absent/zero/unsupported sizes are unknown. Supplementary characters can occupy two units. |
 | varchar | Schema size in bytes, 1–8000 or MAX=-1; this slice does not resolve provider ANSI size/encoding policy and returns unknown. No silent character-to-byte conversion. |
 | Fixed-size primitives | Size must be null/not-applicable in declarations. An irrelevant source Size does not become SQL length evidence. |
-| Precision/scale/collation | Malformed facets fail admission; supplied supported-shape facets and Decimal comparison remain unknown. No silent rounding/collation/alias inference. |
+| Precision/scale/collation | Malformed facets fail admission; supplied supported-shape facets and Decimal comparison remain unknown. Independently proven type/direction differences remain in the reason list. No silent rounding/collation/alias inference. |
 | Length differences | Report declared-size differences only; do not establish runtime truncation, encoding behavior or incompatibility. |
 | Results | No result-set shape, consumer-column, runtime value, SQL execution, deployment or migration readiness claim. |
 
@@ -139,6 +139,13 @@ must be resolved before claiming comparable lengths.
 
 All output destinations must be new. No default admission occurs during ordinary
 scan or through PostgreSQL validation/harness receipt ingestion.
+Schema files are claimed with exclusive CreateNew semantics; comparison reports
+are staged beside the destination and promoted without replacement. Concurrent
+writers cannot overwrite an earlier winner. Failed report writes
+remove their owned staging directory rather than publishing a partial report.
+Command object initializers and implicit-receiver mutations in VB `With` blocks
+remain unsupported and yield unknown parameter state, never stale constructor
+command identity. Extractor versions are C# 0.22.8 and VB 0.10.11.
 
 ```sh
 dotnet build src/dotnet/TraceMap.Cli -c Debug -warnaserror
