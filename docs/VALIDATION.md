@@ -1,5 +1,17 @@
 # TraceMap Validation Guide
 
+## Bounded DNN SQL harness (#908)
+
+[DNN_SQL_VALIDATION.md](validation/DNN_SQL_VALIDATION.md) records the public pin,
+one independently inspected logical route, actual partial scanner observations,
+C#/VB synthetic controls and the separately gated SQL Server 2022 runbook.
+Run `DnnSqlValidationTests`, the Python `test_dnn_sql_harness.py` guards, both
+compile-only fixture builds and a native CLI smoke. Fixture ProjectReferences
+touch the test project, so run the full Debug solution suite with `-warnaserror`.
+Default tests fetch no DNN source and need no database, IIS or private inputs;
+ordinary NuGet restore remains a build prerequisite. Live SQL is NOT RUN.
+
+
 ## Public synthetic H4 lifecycle/HTTP regression
 
 `HttpEntryBoundaryRegressionTests` reuses `samples/http-entry-boundaries` and
