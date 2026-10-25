@@ -60,6 +60,8 @@ links at or below the explicitly supplied root are refused. System ancestors of
 that trusted root may be symlinks (macOS temporary-directory aliases). This is a
 local trusted-input tool, not a race-proof hostile filesystem sandbox. UTF-8 is
 strict; exact decoded/reencoded bytes are hashed, including an admitted UTF-8 BOM.
+One leading BOM is excluded only from lexing (it precedes line 1, so spans are
+unchanged); a repeated or embedded U+FEFF remains `ddl-malformed-sql`.
 No source snippets, default expressions or body text are stored in the export.
 
 `sqlserver-ddl-schema/1` includes the manifest/file hashes, public bounded input

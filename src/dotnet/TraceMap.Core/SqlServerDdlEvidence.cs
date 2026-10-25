@@ -67,9 +67,13 @@ public static class SqlServerDdlEvidence
             Require(!text!.Contains("$(", StringComparison.Ordinal)
                 && !text.Split('\n').Any(l => l.TrimStart().StartsWith(':') || l.TrimStart().StartsWith("!!", StringComparison.Ordinal)), "sqlcmd-unresolved");
             var parser = new TSql160Parser(initialQuotedIdentifiers: true);
+            // The digest above covers the exact bytes, including a leading UTF-8 BOM (common in
+            // SSMS-saved scripts). ScriptDom treats U+FEFF as a syntax error, so lex without that
+            // one leading mark; it precedes line 1, so recorded line spans are unchanged.
+            var lexText = text.StartsWith('\uFEFF') ? text[1..] : text;
             var (tokens, tokenErrors) = OnParserStack(() =>
             {
-                using var tokenReader = new StringReader(text);
+                using var tokenReader = new StringReader(lexText);
                 var stream = parser.GetTokenStream(tokenReader, out var lexErrors);
                 return (stream, lexErrors);
             });
