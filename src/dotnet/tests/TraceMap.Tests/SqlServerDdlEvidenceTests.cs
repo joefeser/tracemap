@@ -116,6 +116,20 @@ public sealed class SqlServerDdlEvidenceTests
     }
 
     [Fact]
+    public void Leading_UTF8_BOM_is_hashed_exactly_and_admitted_with_unchanged_spans()
+    {
+        var sql = "\uFEFFCREATE PROC dbo.ReadItem\r\n@Name nvarchar(20)\r\nAS SELECT 1;";
+        var e = Export(sql);
+        Assert.Equal(SqlServerSchemaEvidence.Hash([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(sql[1..])]), Assert.Single(e.Input.Files).Sha256);
+        var p = Assert.Single(e.Declarations.Procedures);
+        Assert.Equal(1, p.StartLine); Assert.Equal(3, p.EndLine);
+        Assert.Equal(2, Assert.Single(e.ParameterSpans).StartLine);
+        Assert.NotEqual(e.BoundedInputSha256, Export(sql[1..]).BoundedInputSha256);
+        // Only one leading mark is tolerated; an embedded or repeated U+FEFF stays malformed.
+        Assert.Contains("malformed-sql", Assert.Throws<ArgumentException>(() => Export("\uFEFF" + sql)).Message);
+    }
+
+    [Fact]
     public void Multiple_distinct_batches_are_retained_without_body_interpretation()
     {
         var e = Export(Simple + "\nGO\nALTER PROCEDURE other.ReadItem @Count int OUT AS EXEC(N'SELECT 1'); RETURN 7;\nGO");
