@@ -24,9 +24,12 @@ Regressions cover both languages, concurrent publication, partial-write cleanup
 and retry, and exact reason lists. Focused gate: 77 passed. Python guards:
 17 passed. An initial full run exposed a Unix File.Move no-overwrite race in
 the new concurrency regression; it was stopped and produce was corrected to
-direct CreateNew. No pass is claimed for that interrupted run. Full Debug
--warnaserror validation must be repeated; no new full-suite or
-committed-head smoke pass is claimed until it completes. Pinned OSS adapter
+direct CreateNew. No pass is claimed for that interrupted run. Corrected full Debug
+-warnaserror validation: 4,659 passed, 0 failed, 3 expected skips in 29m 2s.
+The concurrency regression also passed ten consecutive repetitions. Native smoke
+at repair commit 06865ce5dfb0d6888596a31edefad4e0bfd50469 passed all 52 cases:
+8 bounded matches, 12 mismatches, 32 unknowns; provenance and byte-identical
+repeated reports verified. Pinned OSS adapter
 smokes from the implementation remain historical; this bounded repair uses
 the focused semantic regressions and native synthetic smoke, with fresh pinned
 OSS runs explicitly deferred. No SQL/container/private execution or merge.
