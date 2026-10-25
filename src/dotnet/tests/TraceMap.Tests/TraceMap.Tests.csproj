@@ -109,4 +109,8 @@
   <ItemGroup>
     <ProjectReference Include="..\TraceMap.Oracle\TraceMap.Oracle.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../samples/sqlserver-parameter-evidence/csharp/Parameters.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/sqlserver-parameter-evidence/vb/Parameters.vbproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
 </Project>

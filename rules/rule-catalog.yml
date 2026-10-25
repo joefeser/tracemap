@@ -5343,6 +5343,7 @@ rules:
       - Raw SQL, command text, parameter values, and connection material are not retained on operation facts.
       - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
       - Shared C#/VB SQL matrix classification requires signed public declaration identity in System.Data, System.Data.Common, System.Data.SqlClient or Microsoft.Data.SqlClient. The preexisting signed Microsoft.Data.Sqlite command subset is preserved outside matrix-wide acceptance. Overrides retain their resolved signature separately from original emitted IL slots. DbCommand/IDbCommand and factory/abstract dispatch remain explicit boundaries.
+      - The additive sqlServerParameterState is independent of legacy aggregate witnesses; it retains only fresh signed SqlCommand local Add declarations and explicit Direction spans under its documented 20,000-operation and 128-parameter bounds. Aliases, mutation, helpers and unsupported control flow stay typed unknown; it does not admit schema or establish runtime parameter values.
       - The SQL matrix enumerates public metadata command sync/async/token/XML/APM forms, adapter Fill/FillSchema/Update and separate bulk-write boundaries. Original API signatures, provider assembly identities and availability metadata survive the bounded report projection. Open/Close never becomes SQL execution.
       - Bounded local straight-line command text/type, parameter direction/type, transaction and connection witnesses do not establish runtime state. Reassignment, branches and unknown calls reset supported local state; fields, alias escape, cross-method flow and parameter propagation remain unresolved. Raw SQL/procedure names and parameter/connection values are excluded; only availability and command fingerprints are retained.
       - Visual Basic late-bound or unresolved Fill/Execute-like calls emit bounded gaps and never become database-operation candidates.
@@ -7887,3 +7888,29 @@ rules:
       - Requires a direct metadata-backed System.Web.UI.Control/TemplateControl/UserControl/Page override from System.Web with public key token b03f5f7f11d50a3a. Supported void instance methods are CreateChildControls without parameters, or OnInit, OnLoad and OnPreRender with one by-value System.EventArgs parameter.
       - Same-name methods, fake unsigned framework types and overrides of source intermediates are excluded. Signed assembly identity is compiler evidence, not a cryptographic authenticity or original-build assertion.
       - Framework dispatch timing, construction and execution remain unresolved. No Page_Load-to-override CallEdge is fabricated; source call paths retain their original tiers and dispatch exclusions.
+
+  - id: database.sqlserver.parameter-comparison.v1
+    name: Bounded synthetic SQL Server procedure parameter comparison
+    description: Compares explicitly bound compiler-resolved command parameters with admitted independently authored synthetic declarations.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlServerComparison
+    limitations:
+      - Opt-in sqlserver-schema command only; separate report seam does not extend closed call-path receipts or clear scan gaps and truncation.
+      - Synthetic logical server/database/schema/procedure identities are not deployed server observations, connection inference, authentication or SQL execution.
+      - Exact ordinal identifiers only; aliases, identifier case equivalence, collation, precision and scale remain unsupported or unknown.
+      - Fresh signed SqlCommand local and constant Add(name, SqlDbType[,size]) with optional explicit Direction only; aliases, branching, helpers, indirect mutation and operation bounds retain typed gaps.
+      - nvarchar length uses UTF-16 code units and MAX is -1; ANSI provider length/encoding policy remains unknown. Differences do not establish runtime truncation or incompatibility.
+      - SQL OUTPUT declares input/output capability, never pure output-only. ReturnValue is separate from procedure parameters, affected-row counts and result sets. Omitted defaulted parameters remain unknown.
+      - Every report is partial with no aggregate clean verdict; result columns, DNN bindings and private SQL-A acceptance remain outside scope.
+
+  - id: database.sqlserver.synthetic-schema.v1
+    name: Independent synthetic SQL Server parameter declarations
+    description: Admits strictly versioned authored synthetic procedure declarations bound to logical repo/revision and exact generator/public-input SHA-256.
+    evidenceTier: Tier2Structural
+    emits:
+      - SqlServerSchemaExport
+    limitations:
+      - Authored declaration locations are assertions within the separately admitted synthetic input; no SQL DDL parser, live catalog or runtime observation is implemented.
+      - Exact logical identities are synthetic labels, not deployed servers; hashes establish integrity, not authenticity or deployment correspondence.
+      - Only the documented primitive parameter subset is admitted; output-only declarations and malformed/ambiguous names fail admission, unsupported facets remain comparison unknowns.

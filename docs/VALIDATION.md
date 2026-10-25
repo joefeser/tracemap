@@ -1,5 +1,18 @@
 # TraceMap Validation Guide
 
+## Offline SQL Server synthetic parameter evidence
+
+[SQLSERVER_PARAMETER_EVIDENCE.md](validation/SQLSERVER_PARAMETER_EVIDENCE.md)
+documents the opt-in native producer/admission/report seam, conservative length/
+direction/default policies and exact 52-case C#/VB matrix. Run
+SqlServerParameterEvidenceTests plus DnnSqlValidationTests, the existing Python
+harness guards, full Debug solution -warnaserror and the native offline smoke at
+the committed head. This shared-core change requires the full lane. Relevant
+pinned C#/VB OSS adapter smokes remain extraction/artifact checks with explicitly
+partial build/coverage, never SQL execution or deployment proof. No private input,
+SQL, Docker or application method executes. Schema/parameter evidence is separate
+from source reachability and the existing closed PostgreSQL/harness receipts.
+
 ## Bounded DNN SQL harness (#908)
 
 [DNN_SQL_VALIDATION.md](validation/DNN_SQL_VALIDATION.md) records the public pin,
