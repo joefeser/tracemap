@@ -12,8 +12,14 @@ of lexical context. Regression matrices cover each artifact's mutation/removal/
 symlink, linked directories, old receipts, all command forms in three contexts,
 and an ordinary-colon negative control. No source extractor or SQL execution added.
 
-Validation for this repair is pending the frozen-head full suite and sequential
-native smokes; earlier acceptance below does not establish this new head.
+Repair implementation: `fa00656cf7e548ffc405b6760cf2d5995504f550`.
+Focused Debug -warnaserror: 206 passed; Python guards: 21 passed (17 retained plus
+4 reuse tests with per-artifact subcases). Frozen-head full Debug -warnaserror:
+4,788 passed, zero failed, three expected skips, 30m 10s. Sequential committed-head
+JSON and DDL smokes each passed all 52 cases (8 bounded matches, 12 mismatches,
+32 unknowns), byte-identical repeated reports, with all five scan-output hashes
+bound and verified per language. No SQL execution. This validation reconciliation
+is docs-only after the validated implementation commit.
 
 Branch: codex/sqlserver-ddl-parameter-evidence. Initial clean head:
 70e57e329a9954de15712012d97d3c195d84cf6d (docs directly above requested
