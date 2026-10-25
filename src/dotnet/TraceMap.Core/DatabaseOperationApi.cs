@@ -65,6 +65,7 @@ internal static class DatabaseOperationApi
         properties["dispatchBoundary"] = method.ContainingType.TypeKind == TypeKind.Interface ? "interface"
             : method.IsAbstract ? "abstract" : "declared-api";
         DatabaseCommandState.Add(properties, call);
+        SqlServerCommandParameters.Add(properties, call);
         // Only inline construction is local to this call. Mutable receiver history is
         // retained elsewhere; it must not silently become current command state.
         var instance = call.Instance;
