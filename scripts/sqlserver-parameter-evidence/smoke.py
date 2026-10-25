@@ -10,6 +10,30 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+SCAN_FILES = ("scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log")
+
+
+def scan_hashes(root, language):
+    """Bind public synthetic scan bytes; refuse links at/below the supplied root."""
+    hashes = {}
+    for name in SCAN_FILES:
+        path = root
+        for part in (language, "scan", *Path(name).parts):
+            if path.is_symlink():
+                raise ValueError(f"symlink scan path: {path}")
+            path = path / part
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"missing or symlink scan artifact: {path}")
+        hashes[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashes
+
+
+def verify_scan_hashes(root, receipt):
+    expected = receipt.get("scanArtifactSha256")
+    actual = {language: scan_hashes(root, language) for language in ("csharp", "vb")}
+    if expected != actual:
+        raise ValueError("scan artifact digest mismatch or missing receipt bindings")
+    return actual
 EXPECTED = {
     "Good": "bounded-match", "SizeMismatch": "mismatch", "TypeMismatch": "mismatch",
     "DirectionMismatch": "mismatch", "Max": "bounded-match", "MissingSize": "unknown",
@@ -58,13 +82,13 @@ def main():
     base = json.loads((ROOT / "samples/sqlserver-parameter-evidence/declarations-base.json").read_text())
     rows = []
     public_inputs = []
+    scan_artifacts = {}
     for language in ("csharp", "vb"):
         scan = args.output / language / "scan"
         extension = "vbproj" if language == "vb" else "csproj"
         run("dotnet", cli, "scan", "--repo", ROOT / "samples/sqlserver-parameter-evidence", "--project",
             f"{language}/Parameters.{extension}", "--out", scan)
-        for required in ("scan-manifest.json", "facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"):
-            assert (scan / required).is_file(), required
+        scan_artifacts[language] = scan_hashes(args.output, language)
         manifest = json.loads((scan / "scan-manifest.json").read_text())
         assert manifest["commitSha"] == revision
         assert manifest["buildStatus"] == "Succeeded"
@@ -130,7 +154,9 @@ def main():
                          "reportSha256": hashlib.sha256(report_bytes).hexdigest()})
     receipt = {"version": "sqlserver-parameter-smoke/1", "generatorSha256": GENERATOR,
                "boundedInputSha256": digest({"base": base, "calls": public_inputs}), "revision": revision,
+               "scanArtifactSha256": scan_artifacts,
                "fixtureSitesPerLanguage": 26, "results": rows, "sqlExecution": "not-run"}
+    verify_scan_hashes(args.output, receipt)
     write(args.output / "smoke-receipt.json", receipt)
     counts = {status: sum(r["status"] == status for r in rows) for status in ("bounded-match", "mismatch", "unknown")}
     assert counts == {"bounded-match": 8, "mismatch": 12, "unknown": 32}, counts

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Text.RegularExpressions;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace TraceMap.Core;
@@ -27,6 +28,9 @@ public static class SqlServerDdlEvidence
     public const int MaxFiles = 32;
     public const int MaxTokens = 100000;
     public const int ParserStackBytes = 64 * 1024 * 1024;
+    private static readonly Regex SqlCmdDirective = new(
+        @":(?:r|setvar|connect|on\s+error|out|error|perftrace|list|reset|ed|listvar|xml|help|quit|exit|serverlist)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
     private static readonly Lazy<string> ParserDigest = new(() => SqlServerSchemaEvidence.Hash(File.ReadAllBytes(typeof(TSql160Parser).Assembly.Location)));
     private static void Require([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool ok, string reason) { if (!ok) throw new ArgumentException("ddl-" + reason); }
 
@@ -65,6 +69,7 @@ public static class SqlServerDdlEvidence
             Require(SqlServerSchemaEvidence.Hash(bytes) == file.Sha256, "source-digest-mismatch");
             // Refuse unresolved SQLCMD anywhere, including strings/comments; never substitute.
             Require(!text!.Contains("$(", StringComparison.Ordinal)
+                && !text.Contains("!!", StringComparison.Ordinal) && !SqlCmdDirective.IsMatch(text)
                 && !text.Split('\n').Any(l => l.TrimStart().StartsWith(':') || l.TrimStart().StartsWith("!!", StringComparison.Ordinal)), "sqlcmd-unresolved");
             var parser = new TSql160Parser(initialQuotedIdentifiers: true);
             // The digest above covers the exact bytes, including a leading UTF-8 BOM (common in

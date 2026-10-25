@@ -90,6 +90,27 @@ public sealed class SqlServerDdlEvidenceTests
     public void Unsupported_or_malformed_inputs_reject_whole_admission(string sql)
         => Assert.Throws<ArgumentException>(() => Export(sql));
 
+    public static IEnumerable<object[]> SqlCmdTextCases()
+    {
+        foreach (var command in new[] { ":r other.sql", ":SETVAR Name value", ":connect server", ":on error exit",
+            ":out output", ":error output", ":perftrace output", ":list", ":reset", ":ed", ":listvar",
+            ":xml on", ":help", ":quit", ":exit", ":serverlist", "!! command", "$(Name)" })
+        {
+            yield return [Simple + " -- " + command];
+            yield return ["/* " + command + " */\n" + Simple];
+            yield return ["CREATE PROCEDURE dbo.ReadItem AS SELECT N'" + command + "';"];
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(SqlCmdTextCases))]
+    public void Sqlcmd_text_in_comments_and_strings_rejects_before_parsing(string sql)
+        => Assert.Equal("ddl-sqlcmd-unresolved", Assert.Throws<ArgumentException>(() => Export(sql)).Message);
+
+    [Fact]
+    public void Ordinary_colon_text_is_not_a_sqlcmd_command()
+        => Assert.Single(Export("CREATE PROCEDURE dbo.ReadItem AS SELECT N'12:30 https://example.invalid :reader';").Declarations.Procedures);
+
     [Theory]
     [InlineData("ALTER PROCEDURE dbo.ReadItem @Name nvarchar(20) AS SELECT 2;")]
     [InlineData("CREATE OR ALTER PROCEDURE dbo.ReadItem @Name int AS SELECT 2;")]

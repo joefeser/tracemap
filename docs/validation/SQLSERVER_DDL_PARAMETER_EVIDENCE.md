@@ -213,6 +213,13 @@ git diff --check
 ```
 
 The DDL smoke reuses only same-head public native scans from the original smoke;
+the JSON smoke records SHA-256 for all five required scan outputs per language.
+Reuse verifies the complete artifact map before creating output or bindings and
+again before issuing its receipt. Missing, modified, or symlinked files (including
+directory links at/below the supplied root) fail closed. Older receipts without
+these bindings require a fresh JSON smoke. These local-only hashes detect drift,
+not an adversary rewriting both artifacts and their receipt; source directories
+must remain stable during the smoke. No private input is admitted by this harness.
 it independently specifies DDL expectations and binds exact smoke-script bytes,
 public template hashes and projected call evidence. Each generated manifest and
 binding carries producer provenance. Exports/report parser/Core bytes, source
