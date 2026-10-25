@@ -26,6 +26,7 @@ public static class SqlServerDdlEvidence
     public const int MaxTotalBytes = 1024 * 1024;
     public const int MaxFiles = 32;
     public const int MaxTokens = 100000;
+    public const int ParserStackBytes = 64 * 1024 * 1024;
     private static readonly Lazy<string> ParserDigest = new(() => SqlServerSchemaEvidence.Hash(File.ReadAllBytes(typeof(TSql160Parser).Assembly.Location)));
     private static void Require([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool ok, string reason) { if (!ok) throw new ArgumentException("ddl-" + reason); }
 
@@ -66,8 +67,12 @@ public static class SqlServerDdlEvidence
             Require(!text!.Contains("$(", StringComparison.Ordinal)
                 && !text.Split('\n').Any(l => l.TrimStart().StartsWith(':') || l.TrimStart().StartsWith("!!", StringComparison.Ordinal)), "sqlcmd-unresolved");
             var parser = new TSql160Parser(initialQuotedIdentifiers: true);
-            using var tokenReader = new StringReader(text);
-            var tokens = parser.GetTokenStream(tokenReader, out var tokenErrors);
+            var (tokens, tokenErrors) = OnParserStack(() =>
+            {
+                using var tokenReader = new StringReader(text);
+                var stream = parser.GetTokenStream(tokenReader, out var lexErrors);
+                return (stream, lexErrors);
+            });
             Require(tokenErrors.Count == 0, "malformed-sql");
             Require(tokens.Count <= MaxTokens, "token-limit");
             var nestingBudget = 0;
@@ -86,7 +91,8 @@ public static class SqlServerDdlEvidence
                     while (next < tokens.Count && tokens[next].TokenType == TSqlTokenType.WhiteSpace) next++;
                     Require(next == tokens.Count || tokens[next].TokenType != TSqlTokenType.Integer, "batch-repeat-unsupported");
                 }
-            var script = parser.Parse(tokens, out var errors) as TSqlScript;
+            var (fragment, errors) = OnParserStack(() => (parser.Parse(tokens, out var parseErrors), parseErrors));
+            var script = fragment as TSqlScript;
             Require(errors.Count == 0 && script is not null, "malformed-sql");
             foreach (var statement in script!.Batches.SelectMany(b => b.Statements))
             {
@@ -151,6 +157,29 @@ public static class SqlServerDdlEvidence
             ParserVersion, ParserDigest.Value, ExtractorVersion, RuleId, EvidenceTiers.Tier2Structural, input, declarations, spans, unsupported);
         Require(Encoding.UTF8.GetByteCount(SqlServerSchemaEvidence.Json(export)) <= SqlServerSchemaEvidence.MaxBytes, "export-size-limit");
         return export;
+    }
+
+    /// <summary>
+    /// ScriptDom's recursive-descent parser recurses on some constructs that the lexical
+    /// nesting budget does not cap (prefix unary chains, JOIN/APPLY chains). A stack overflow
+    /// aborts the process and cannot fail closed, so lexing and parsing always run on a
+    /// dedicated thread whose stack does not depend on the caller (1–8 MiB on common hosts).
+    /// Measured worst uncapped cost is about 200 bytes of stack per token; MaxTokens therefore
+    /// needs about 20 MiB, and this fixed size leaves a margin of more than 3x.
+    /// </summary>
+    private static T OnParserStack<T>(Func<T> work)
+    {
+        T result = default!;
+        System.Runtime.ExceptionServices.ExceptionDispatchInfo? failure = null;
+        var thread = new Thread(() =>
+        {
+            try { result = work(); }
+            catch (Exception ex) { failure = System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex); }
+        }, ParserStackBytes) { IsBackground = true, Name = "tracemap-tsql-parser" };
+        thread.Start();
+        thread.Join();
+        failure?.Throw();
+        return result;
     }
 
     private static int Integer(Literal literal)
