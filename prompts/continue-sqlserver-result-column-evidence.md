@@ -55,7 +55,7 @@ parameter smokes (8/12/32) and the result smoke (per language JSON 18/5/18, DDL
 bind new artifacts to exact generator and privacy-projected input SHA-256, and follow
 the commit-then-frozen full Debug -warnaserror protocol before sequential smokes.
 
-No private/FFP/work-machine inputs, credentials, containers/image pulls, remote
+No private or work-machine inputs, credentials, containers/image pulls, remote
 hosts, SQL execution, database provisioning, deployment, paid review requests,
 policy changes or merge are authorized. If a PR is requested, use the current
 pr-review-loop skill, canonical ACK preflight and owner-approved lane; never tag
