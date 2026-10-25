@@ -120,6 +120,7 @@ public static class TraceMapCommand
         {
             await output.WriteLineAsync(command switch
             {
+                "sqlserver-schema" => SqlServerSchemaCommand.Help,
                 "scan" => ScanHelp(),
                 "version" => VersionHelp(),
                 "versions" => "tracemap versions — prints the ScannerVersions extractor set as stable ordinal JSON (cache-key manifest; contract: extractor behavior changes bump their ScannerVersions constant)",
@@ -156,7 +157,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "sqlserver-schema" or "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -164,6 +165,7 @@ public static class TraceMapCommand
         {
             var exitCode = command switch
             {
+                "sqlserver-schema" => SqlServerSchemaCommand.Run(rest, output),
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "versions" => rest.Length == 0
                     ? Program.RunVersions(output)
@@ -2903,6 +2905,7 @@ public static class TraceMapCommand
               tracemap webforms-review preflight --config <private-json> --out <new-run-root>
               tracemap scan --repo <path> --out <path>
               tracemap report --index <path> --out <path>
+              tracemap sqlserver-schema <produce|compare> --help
               tracemap database-design-review --index <combined.sqlite> --out <path>
               tracemap webforms-modernization --index <index.sqlite> --out <directory>
               tracemap reduce --index <path> --contract-delta <path> --out <path>

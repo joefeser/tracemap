@@ -128,7 +128,15 @@ observed unavailable text in the bounded witness walker. This is documented
 unsupported constructor state, not procedure-schema evidence. Parameters carry
 no runtime values. Conditional/dynamic SQL is not interpreted by static tests.
 
-### Missing production seam, deferred to a scope decision
+### Original production seam gap (historical #909 baseline)
+
+The next offline slice is now documented in
+[SQLSERVER_PARAMETER_EVIDENCE.md](SQLSERVER_PARAMETER_EVIDENCE.md): an independent
+synthetic-declaration admission contract and explicit per-call parameter bindings.
+It does not admit this DNN SQL install file, clear the selected reader/qualifier
+limitations, implement result-column comparison or activate the live harness.
+The observations below describe the original #909 baseline and remain bounded
+historical evidence, not a claim that the new seam validated DNN.
 
 `DatabaseCommandState` provides bounded method-local witness summaries;
 `DatabaseCallEvidence` is an allowlisted projection. Neither admits per-parameter
@@ -192,8 +200,9 @@ The human must approve all of these together before a later live run:
 - Approval to pull this exact digest separately and to destroy only the newly
   created labeled container and its ephemeral data. No prune or existing-volume
   cleanup. Unknown resources are preserved.
-- Separate scope decision before implementing schema admission/comparison above.
-  This does not block static validation or future disposable SQL tests.
+- Separate scope decision for DDL/catalog or result-column admission beyond the
+  bounded independent synthetic parameter origin now documented in
+  SQLSERVER_PARAMETER_EVIDENCE.md. That offline origin does not activate this lane.
 
 Only after that approval, the operator can inspect the chosen context (substitute
 actual reviewed values; these examples are not executable default configuration):

@@ -1,0 +1,11 @@
+{
+  "version": "sqlserver-declarations/1",
+  "repo": "synthetic",
+  "revision": "1111111111111111111111111111111111111111",
+  "origin": "independent-synthetic-declarations",
+  "identifierPolicy": "ordinal-exact-no-aliases",
+  "procedures": [
+    {"identity":{"server":"SyntheticServer","database":"SyntheticDatabase","schema":"dbo","procedure":"ReadItem"},"filePath":"samples/sqlserver-parameter-evidence/declarations-base.json","startLine":8,"endLine":9,"parameters":[
+      {"name":"@Name","sqlType":"NVarChar","size":20,"units":"utf16-code-units","direction":"Input","hasDefault":false,"precision":null,"scale":null,"collation":null,"line":9}]}
+  ]
+}
