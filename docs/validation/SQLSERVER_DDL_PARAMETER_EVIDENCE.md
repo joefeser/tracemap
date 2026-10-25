@@ -204,8 +204,8 @@ checked. The receipt has an exact generator and public bounded-input digest.
 The reused JSON smoke helper source is independently hashed by its original receipt;
 core output and parser binary digests are additionally verified.
 
-Actual gate results and validated implementation SHA belong in the spec’s
-implementation-state.md. Fresh pinned C#/VB OSS adapter smokes are explicitly
+Actual gate results and the validated implementation SHA are recorded below and
+in the spec’s implementation-state.md. Fresh pinned C#/VB OSS adapter smokes are explicitly
 deferred: this adds only opt-in SQL parsing/admission/CLI and changes no C#/VB
 extractor. The native synthetic C#/VB scans and retained semantic regressions
 exercise the unchanged source route. Non-.NET and Windows private/application
@@ -217,3 +217,88 @@ are distinct future work. Publication has #910’s exclusive new-file / staged
 new-directory, disk-flush and primary-error-preservation contracts; it does not
 promise atomic file visibility during writing, directory fsync, abrupt-termination
 recovery or hostile concurrent filesystem mutation isolation.
+
+## Consolidated implementation and delivery receipt — 2026-10-25
+
+Validated implementation head: **`7a05e13e9e9db6c1020288597cb5e890cf2bd2bf`**,
+on `codex/sqlserver-ddl-parameter-evidence`. Initial clean branch head was
+`70e57e329a9954de15712012d97d3c195d84cf6d`, directly above requested #910 merge
+`560fa24216516b17f75882d7d10011361b3f9c11`; fetched dev matched that merge.
+This results reconciliation is documentation-only after the implementation head.
+The full suite and both native smokes below ran at the implementation SHA, not
+at the later documentation reconciliation SHA. No code change follows those gates.
+
+Implemented grammar, identities, six built-in type vocabulary, spans, explicit
+unknown facets, origin/version/digest admission and provenance guarantees are
+specified above. The authored JSON origin is retained unchanged; DDL is separately
+identified as `public-synthetic-tsql-ddl`. Exact Core and parser bytes checked in
+committed-head smoke:
+
+- Core generator SHA-256: `3bca2009f8ab0395bba3575111766dc4ee2bc3048572f2b2136d4bc8f9709ceb`.
+- ScriptDom parser SHA-256: `2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`.
+
+The comparison and producer verify actual expected input/source identity and
+regenerated payload at admission. Hashes bind public projected inputs and provide
+integrity/reproducibility, not authenticity, installed catalog truth or execution.
+
+| Origin / independently selected cases | Expected match / mismatch / unknown | Observed match / mismatch / unknown |
+| --- | --- | --- |
+| Original authored JSON, 52 | 8 / 12 / 32 | 8 / 12 / 32 |
+| Public synthetic DDL, 52 | 8 / 12 / 32 | 8 / 12 / 32 |
+
+These are two comparisons over the same 26 C# and 26 VB execution sites, not
+104 distinct source sites. Each case report also retained 25 other unbound calls
+as unknown with `binding-missing`; those rows are excluded from the selected-case
+denominators. Case-level independent expectations are listed above and authored
+in the tests/smokes before inspecting parser output. Both origins retained partial
+coverage and no aggregate clean verdict. Both synthetic projects built successfully;
+this is fixture compilation, not application or migration readiness.
+
+Validation results:
+
+- Focused Debug -warnaserror (DDL, original parameter and DNN tests): **133 passed,
+  0 failed, 0 skipped**, final repeat 16 seconds. Additional final DDL-only repeat
+  after oversize-export regression: **48 passed**, no failures/skips, 18 seconds.
+- Existing offline Python harness guards: **17 passed**; no activation/fetch/SQL.
+- Full Debug solution -warnaserror at the committed implementation head:
+  **4,715 passed, 0 failed, 3 expected skips**; test duration **32m 20s**, command
+  wall-clock **32m 30.78s**. No compiler/analyzer warning or error was emitted.
+  Skips: opt-in full golden sweep; Python receipt interop environment unset;
+  Windows-only deep projectless ASP.NET publish. Source, HEAD and shared outputs
+  stayed stable during the gate; no competing smoke, rebuild or commit occurred.
+- Sequential committed-head native JSON and DDL CLI smokes: **52/52 each**, exact
+  independent 8/12/32 matrices, all five scan artifacts and source revision,
+  parser/Core provenance, public input digests and repeated bytes checked.
+  JSON repeat bytes and DDL JSON/Markdown repeat bytes were identical.
+- Retained #910 initializer/VB With, execution-argument mutation, concurrent
+  publication, failed-write cleanup, disk-flush and primary-error regressions
+  passed in the focused and full gates. Private-path and whitespace guards passed
+  before implementation commit and again before delivery publication.
+
+Development attempts are distinguished in the spec state: an initial nullable
+warning and root-ancestor symlink regression were corrected before the committed
+implementation. No successful gate is claimed for those failed attempts. Early
+smokes used dirty code at the initial revision and are not the acceptance runs.
+
+Fresh pinned OSS C#/VB adapter smokes, non-.NET gates and Windows/application
+acceptance remain explicitly deferred. No source-language extractor/version change
+was made. The full suite and synthetic C#/VB native route passed; neither supplies
+cross-platform, public DNN reader/wrapper/qualifier binding or private acceptance.
+
+There is **no remaining blocker for this bounded offline slice** and no required
+work-machine round trip. The supported grammar remains deliberately limited;
+default/decimal semantics are unknown, unsupported input rejects, and bodies/
+result columns are not interpreted. Result-column/consumer comparison, catalog/
+live evidence, private SQL-A, application builds and migration readiness remain
+separate future scope. #908/#870 remain open. No PR, review spend, agents, merge,
+Docker/image operation, remote host access, SQL execution or deployment occurred.
+Git fetch/push and issue reads are the authorized repository delivery operations.
+
+One follow-up prompt: [continue-sqlserver-ddl-parameter-evidence.md](../../prompts/continue-sqlserver-ddl-parameter-evidence.md).
+
+Local public smoke receipts (outside Git): `/tmp/tracemap-ddl-7a05e13-json/smoke-receipt.json`
+and `/tmp/tracemap-ddl-7a05e13-ddl/smoke-receipt.json`. Recorded smoke generators:
+JSON `5a4f3bd77de59becbb64b757c1455fe86245292bb4d351c463b4171d0bde6ada`; DDL `8b9dd8843f027c60135d5c00e8beb18fa3c9b1928b338f088b76154187d67dff`.
+Their bounded-input digests respectively are `d5f38908241dd9f59f9a6ebbd0efd9c734b75cafe0be51fabb3dad90d1a01dda`
+and `f119125014c547bd6bd3550e57c5c771e0d4382c6f813bbee042d50e5ff79644`. These receipts bind script bytes and
+public input projections; native outputs additionally bind Core/parser bytes.

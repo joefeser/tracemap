@@ -6,8 +6,10 @@ Branch: codex/sqlserver-ddl-parameter-evidence. Initial clean head:
 Live #908/#870 inspected; both remain open and broader than this slice.
 No private inputs, SQL, Docker, remote hosts, agents or paid reviews authorized.
 
-Implementation in progress. Full gate must run after implementation commit with
-source, revision and build outputs held stable; smokes follow full completion.
+Implementation and validation complete at
+`7a05e13e9e9db6c1020288597cb5e890cf2bd2bf`. Source, revision and shared build outputs
+were held stable throughout the full gate; native smokes followed completion.
+This documentation-only reconciliation records delivery evidence separately.
 
 ## Implemented scope and precommit validation
 
@@ -56,3 +58,31 @@ Final DDL-only repeat after the oversize-export regression: 48 passed,
 0 failures/skips (18 seconds). Producer rejects exports over the 4 MiB admission
 ceiling; Markdown includes supported parameter spans as well as unsupported ones.
 Private-path and staged whitespace guards passed before implementation commit.
+
+
+## Committed-head acceptance and delivery
+
+Implementation commit: `7a05e13e9e9db6c1020288597cb5e890cf2bd2bf`.
+Full Debug solution -warnaserror: 4,715 passed, 0 failed, 3 expected skips;
+32m 20s tests / 32m 30.78s command wall-clock. Skips: opt-in full golden sweep,
+unset Python receipt interop environment, Windows-only deep ASP.NET publish.
+No compiler/analyzer warnings/errors. No source/HEAD/shared-output change or
+competing smoke/build occurred during the gate.
+
+Sequential committed-head JSON and DDL native smokes each passed 52 selected
+cases: 8 bounded matches, 12 mismatches, 32 unknowns, plus 25 retained unbound
+call gaps per report. Exact current revision, five scan outputs, public input
+hashes, Core/parser bytes and repeated report bytes verified. These are the
+acceptance runs; earlier dirty-source smokes remain development evidence only.
+Core SHA-256: 3bca2009f8ab0395bba3575111766dc4ee2bc3048572f2b2136d4bc8f9709ceb.
+Parser SHA-256: 2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce.
+
+Consolidated implementation report, exact matrices, guards, provenance, limitations
+and delivery boundary: docs/validation/SQLSERVER_DDL_PARAMETER_EVIDENCE.md.
+Follow-up: prompts/continue-sqlserver-ddl-parameter-evidence.md.
+The delivery reconciliation is documentation-only on top of the validated
+implementation; no implementation change follows those gates. All source changes
+are committed for normal push on this branch; no PR/merge is requested.
+No remaining blocker for the bounded offline slice. Pinned OSS/non-.NET/Windows
+reruns remain explicitly deferred; DNN binding, result/consumer, catalog/live,
+private SQL-A, application build and migration acceptance remain future work.

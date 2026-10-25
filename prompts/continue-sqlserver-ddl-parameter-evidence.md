@@ -15,7 +15,11 @@ decimal facets stay unknown; unsupported/malformed/ambiguous/over-bound input
 rejects as a whole. Bodies, result sets, RETURN and output assignments are not
 interpreted. DDL and independently authored JSON origins remain separate.
 
-Use the implementation-state receipt for actual gate results and exact SHA.
+Validated implementation: `7a05e13e9e9db6c1020288597cb5e890cf2bd2bf`; full Debug
+-warnaserror 4,715 passed / 0 failed / 3 expected skips; focused 133 passed;
+Python guards 17 passed; both committed-head smokes 52/52. The later delivery
+reconciliation changes documentation only. Use the consolidated implementation
+report and implementation-state receipt for provenance, actual limits and exact SHA.
 Both independently expected 52-case C#/VB matrices retain 8 bounded matches,
 12 mismatches, 32 unknowns, and 25 unbound calls per report. No DNN end-to-end
 binding, catalog/deployed state, SQL execution, application build or migration

@@ -5,6 +5,6 @@
 - [x] Implement parser/export/admission and native comparison/report route.
 - [x] Add independent grammar/refusal/provenance and C#/VB regression matrix.
 - [x] Run focused .NET and offline Python harness guards.
-- [ ] Commit implementation before frozen full Debug -warnaserror gate.
-- [ ] Run committed-head native CLI smokes; record pinned adapter deferrals/results.
-- [ ] Run privacy/whitespace guards, consolidate report/follow-up and push.
+- [x] Commit implementation before frozen full Debug -warnaserror gate.
+- [x] Run committed-head native CLI smokes; record pinned adapter deferrals/results.
+- [x] Run privacy/whitespace guards, consolidate report/follow-up and push.
