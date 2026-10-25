@@ -192,6 +192,23 @@ public sealed class SqlServerDdlEvidenceTests
         Assert.Contains("syntax-complexity-limit", Assert.Throws<ArgumentException>(() => Export("CREATE PROC dbo.P AS SELECT " + new string('(', 129) + "1" + new string(')', 129))).Message);
     }
 
+    [Theory]
+    [InlineData("unary")]
+    [InlineData("join")]
+    public void Recursive_constructs_within_token_bounds_parse_without_overflowing_the_caller_stack(string shape)
+    {
+        // Each shape crashed the process with an uncatchable stack overflow (exit 134) when
+        // parsed on a default 1-8 MiB stack, while staying under every documented bound.
+        var body = shape == "unary"
+            ? "SELECT " + string.Concat(Enumerable.Repeat("-~", 45000)) + "1;"
+            : "SELECT 1 FROM a" + string.Concat(Enumerable.Repeat(" JOIN a", 9000)) + string.Concat(Enumerable.Repeat(" ON 1=1", 9000)) + ";";
+        var sql = "CREATE PROC dbo.ReadItem @Name nvarchar(20) AS " + body;
+        Assert.True(Encoding.UTF8.GetByteCount(sql) <= SqlServerDdlEvidence.MaxFileBytes);
+        var e = Export(sql);
+        Assert.Equal(Identity, Assert.Single(e.Declarations.Procedures).Identity);
+        Assert.Contains("malformed-sql", Assert.Throws<ArgumentException>(() => Export(sql + " ON")).Message);
+    }
+
     [Fact]
     public void Export_and_reports_are_repeatable_and_bind_only_admitted_public_inputs()
     {
