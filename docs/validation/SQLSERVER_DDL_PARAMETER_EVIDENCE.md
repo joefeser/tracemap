@@ -100,6 +100,11 @@ Quoted spaces/punctuation, temp procedures and inferred identifier equivalence a
 not supported. Source spelling/case is preserved, never normalized for joins.
 
 Supported built-ins: int, bigint, bit, nvarchar(n/MAX), varchar(n/MAX), decimal.
+Only these canonical spellings are admitted (case-insensitive; bracket or double-quote
+delimiters as emitted by SSMS scripting are allowed). ANSI synonyms that ScriptDom
+folds into the same type (`integer`, `dec`, `char varying`, `character varying`,
+`nchar varying`, `national char[acter] varying`) reject the whole input with
+`ddl-type-spelling-unsupported` rather than being silently normalized.
 Length is mandatory for character types; nvarchar 1–4000 UTF-16 code units, varchar
 1–8000 bytes, MAX=-1. OUTPUT/OUT becomes InputOutput capability. Names, declared
 sizes, type, default presence, decimal precision/scale and parameter/procedure

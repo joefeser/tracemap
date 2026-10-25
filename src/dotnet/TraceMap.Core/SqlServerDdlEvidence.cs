@@ -125,6 +125,11 @@ public static class SqlServerDdlEvidence
                     Require(sqlType is not null, "built-in-type-unsupported");
                     // Reject qualified aliases to builtin names; do not silently normalize them.
                     Require(type.Name is null || type.Name.Identifiers.Count <= 1, "qualified-type-unsupported");
+                    // ScriptDom folds ANSI synonyms (integer, dec, char varying, national character
+                    // varying, nchar varying) into the same option. Admit only the documented canonical
+                    // spelling; bracket/double-quote delimiters (SSMS-scripted DDL) do not change it.
+                    Require(type.Name is not null && string.Equals(type.Name.BaseIdentifier.Value, sqlType, StringComparison.OrdinalIgnoreCase),
+                        "type-spelling-unsupported");
                     int? size = null, precision = null, scale = null;
                     if (sqlType is "NVarChar" or "VarChar")
                     {

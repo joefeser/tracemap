@@ -65,6 +65,14 @@ public sealed class SqlServerDdlEvidenceTests
     [InlineData("CREATE PROCEDURE dbo.ReadItem @Name nvarchar(0) AS SELECT 1;")]
     [InlineData("CREATE PROCEDURE dbo.ReadItem @Name decimal(2,3) AS SELECT 1;")]
     [InlineData("CREATE PROCEDURE dbo.ReadItem @Name nvarchar(20) COLLATE Latin1_General_CI_AS AS SELECT 1;")]
+    [InlineData("CREATE PROCEDURE dbo.ReadItem @Name integer AS SELECT 1;")]
+    [InlineData("CREATE PROCEDURE dbo.ReadItem @Name dec(10,2) AS SELECT 1;")]
+    [InlineData("CREATE PROCEDURE dbo.ReadItem @Name numeric(10,2) AS SELECT 1;")]
+    [InlineData("CREATE PROCEDURE dbo.ReadItem @Name char varying(20) AS SELECT 1;")]
+    [InlineData("CREATE PROCEDURE dbo.ReadItem @Name character varying(20) AS SELECT 1;")]
+    [InlineData("CREATE PROCEDURE dbo.ReadItem @Name nchar varying(20) AS SELECT 1;")]
+    [InlineData("CREATE PROCEDURE dbo.ReadItem @Name national character varying(20) AS SELECT 1;")]
+    [InlineData("CREATE PROCEDURE dbo.ReadItem @Name national char varying(20) AS SELECT 1;")]
     [InlineData("CREATE PROCEDURE dbo.ReadItem WITH ENCRYPTION AS SELECT 1;")]
     [InlineData("CREATE PROCEDURE dbo.ReadItem AS EXTERNAL NAME Assembly.Class.Method;")]
     [InlineData("CREATE PROCEDURE dbo.ReadItem;2 AS SELECT 1;")]
@@ -91,6 +99,20 @@ public sealed class SqlServerDdlEvidenceTests
         Assert.Throws<ArgumentException>(() => Export(Simple + "\nGO\n" + second));
         var sources = Sources(); sources.Add("second.sql", second);
         Assert.Throws<ArgumentException>(() => SqlServerDdlEvidence.Produce(Input(sources), sources));
+    }
+
+    [Theory]
+    [InlineData("int", "Int", null)]
+    [InlineData("INT", "Int", null)]
+    [InlineData("[int]", "Int", null)]
+    [InlineData("\"bigint\"", "BigInt", null)]
+    [InlineData("Bit", "Bit", null)]
+    [InlineData("[nvarchar](20)", "NVarChar", 20)]
+    [InlineData("VARCHAR(max)", "VarChar", -1)]
+    public void Canonical_type_spellings_admit_with_case_and_delimiters(string spelling, string sqlType, int? size)
+    {
+        var p = Assert.Single(Assert.Single(Export($"CREATE PROC dbo.ReadItem @Name {spelling} AS SELECT 1;").Declarations.Procedures).Parameters);
+        Assert.Equal(sqlType, p.SqlType); Assert.Equal(size, p.Size);
     }
 
     [Fact]
