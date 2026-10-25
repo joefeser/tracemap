@@ -7,6 +7,30 @@ Implementation and delivery complete. Implementation commit:
 `84e531984932d3ce7b3157d9f464f603a14e0c05`, pushed to origin on the named branch.
 This documentation-only reconciliation records the verified delivery evidence.
 
+## PR #910 review correction batch
+
+Four exact-head findings were admitted by ACK: unsupported implicit receivers,
+two output-publication findings, and lost mismatch reasons under unknown facets.
+The two publication findings share one invariant: only publish complete new
+outputs, never replace a concurrently created destination. The generic scan
+transaction permits replacement and requires five scan artifacts, so this
+two-file report uses its own no-replace staged promotion. Produce claims the
+destination directly with CreateNew; its owner removes failed output.
+
+Command initializers and implicit VB With property mutations return unknown;
+C#/VB extractor versions advance to 0.22.8 / 0.10.11. Proven type/direction
+reasons survive unsupported facets while overall status remains unknown.
+Regressions cover both languages, concurrent publication, partial-write cleanup
+and retry, and exact reason lists. Focused gate: 77 passed. Python guards:
+17 passed. An initial full run exposed a Unix File.Move no-overwrite race in
+the new concurrency regression; it was stopped and produce was corrected to
+direct CreateNew. No pass is claimed for that interrupted run. Full Debug
+-warnaserror validation must be repeated; no new full-suite or
+committed-head smoke pass is claimed until it completes. Pinned OSS adapter
+smokes from the implementation remain historical; this bounded repair uses
+the focused semantic regressions and native synthetic smoke, with fresh pinned
+OSS runs explicitly deferred. No SQL/container/private execution or merge.
+
 ## Contract and bounded scope
 
 Strict independently authored synthetic declaration input and native schema export/

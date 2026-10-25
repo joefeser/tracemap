@@ -148,6 +148,78 @@ public sealed class SqlServerParameterEvidenceTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Unsupported_facets_preserve_proven_type_and_direction_reasons(bool decimalType)
+    {
+        var parameter = decimalType
+            ? Parameter with { SqlType = "Decimal", Size = null, Units = "not-applicable", Direction = "InputOutput", Precision = 10, Scale = 2 }
+            : Parameter with { SqlType = "VarChar", Units = "bytes", Direction = "InputOutput", Collation = "Latin1_General_CI_AS" };
+        var row = Assert.Single(Compare(declarations: Declarations with { Procedures = [Declarations.Procedures[0] with { Parameters = [parameter] }] }).Comparisons);
+        Assert.Equal("unknown", row.Status);
+        Assert.Equal(decimalType
+            ? new[] { "direction:@Name", "type:@Name", "unsupported-facets:@Name" }
+            : new[] { "direction:@Name", "type:@Name", "unsupported-facets:@Name", "varchar-provider-length-policy-unsupported:@Name" }, row.Reasons);
+    }
+
+    [Fact]
+    public async Task New_output_publication_has_one_winner_and_preserves_existing_files()
+    {
+        using var temp = new TempDirectory();
+        var file = Path.Combine(temp.Path, "export.json");
+        var attempts = await Task.WhenAll(Enumerable.Range(0, 8).Select(i => Task.Run(() =>
+        {
+            try { SqlServerSchemaCommand.PublishNewFile(file, i.ToString(System.Globalization.CultureInfo.InvariantCulture)); return true; }
+            catch (IOException) { return false; }
+        })));
+        Assert.Equal(1, attempts.Count(success => success));
+        var original = File.ReadAllText(file);
+        Assert.Throws<IOException>(() => SqlServerSchemaCommand.PublishNewFile(file, "replacement"));
+        Assert.Equal(original, File.ReadAllText(file));
+        Assert.Single(Directory.GetFileSystemEntries(temp.Path));
+
+        var directory = Path.Combine(temp.Path, "report");
+        using var barrier = new Barrier(2);
+        var winners = await Task.WhenAll(Enumerable.Range(0, 2).Select(i => Task.Run(() =>
+        {
+            try
+            {
+                SqlServerSchemaCommand.PublishNewDirectory(directory, staging =>
+                {
+                    var value = i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    File.WriteAllText(Path.Combine(staging, "parameter-comparison.json"), value);
+                    File.WriteAllText(Path.Combine(staging, "report.md"), value);
+                    Assert.True(barrier.SignalAndWait(TimeSpan.FromSeconds(30)));
+                });
+                return true;
+            }
+            catch (IOException) { return false; }
+        })));
+        Assert.Equal(1, winners.Count(success => success));
+        Assert.Equal(File.ReadAllText(Path.Combine(directory, "parameter-comparison.json")), File.ReadAllText(Path.Combine(directory, "report.md")));
+        Assert.Equal(2, Directory.GetFileSystemEntries(temp.Path).Length);
+    }
+
+    [Fact]
+    public void Failed_report_publication_removes_staging_and_allows_retry()
+    {
+        using var temp = new TempDirectory();
+        var destination = Path.Combine(temp.Path, "report");
+        Assert.Throws<IOException>(() => SqlServerSchemaCommand.PublishNewDirectory(destination, staging =>
+        {
+            File.WriteAllText(Path.Combine(staging, "parameter-comparison.json"), "partial");
+            throw new IOException("injected second-write failure");
+        }));
+        Assert.Empty(Directory.GetFileSystemEntries(temp.Path));
+        SqlServerSchemaCommand.PublishNewDirectory(destination, staging =>
+        {
+            File.WriteAllText(Path.Combine(staging, "parameter-comparison.json"), "complete");
+            File.WriteAllText(Path.Combine(staging, "report.md"), "complete");
+        });
+        Assert.Equal(2, Directory.GetFiles(destination).Length);
+    }
+
+    [Theory]
     [InlineData("cs", "good")]
     [InlineData("cs", "indexed-mutation")]
     [InlineData("cs", "inline-mutation")]
@@ -182,6 +254,10 @@ public sealed class SqlServerParameterEvidenceTests
     [InlineData("vb", "constructor-escape")]
     [InlineData("cs", "cross-command-alias")]
     [InlineData("vb", "cross-command-alias")]
+    [InlineData("cs", "initializer")]
+    [InlineData("vb", "initializer")]
+    [InlineData("vb", "with-command")]
+    [InlineData("vb", "with-parameter")]
     public void Extractor_refuses_unsupported_mutation_and_work_bounds(string language, string shape)
     {
         var repository = new DirectoryInfo(AppContext.BaseDirectory);
@@ -194,8 +270,15 @@ public sealed class SqlServerParameterEvidenceTests
             .Append(provider).Distinct(StringComparer.Ordinal).Select(p => Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(p));
         var cs = "var command = new System.Data.SqlClient.SqlCommand(\"dbo.ReadItem\"); command.CommandType = System.Data.CommandType.StoredProcedure; var parameter = command.Parameters.Add(\"@Name\", System.Data.SqlDbType.NVarChar, 20);";
         var vb = "Dim command = New System.Data.SqlClient.SqlCommand(\"dbo.ReadItem\")\ncommand.CommandType = System.Data.CommandType.StoredProcedure\nDim parameter = command.Parameters.Add(\"@Name\", System.Data.SqlDbType.NVarChar, 20)\n";
+        if (shape == "initializer")
+        {
+            cs = cs.Replace("(\"dbo.ReadItem\");", "(\"dbo.ReadItem\") { CommandText = \"dbo.Other\" };", StringComparison.Ordinal);
+            vb = vb.Replace("(\"dbo.ReadItem\")\n", "(\"dbo.ReadItem\") With {.CommandText = \"dbo.Other\"}\n", StringComparison.Ordinal);
+        }
         var changes = shape switch
         {
+            "with-command" => ("", "With command\n.CommandText = \"dbo.Other\"\nEnd With"),
+            "with-parameter" => ("", "With parameter\n.Direction = System.Data.ParameterDirection.Output\nEnd With"),
             "cross-command-alias" => ("var second = new System.Data.SqlClient.SqlCommand(); second.Parameters.Add(parameter);", "Dim second = New System.Data.SqlClient.SqlCommand()\nsecond.Parameters.Add(parameter)"),
             "collection-alias" => ("var collection = command.Parameters;", "Dim collection = command.Parameters"),
             "array-alias" => ("var array = new object[] { command };", "Dim array = New Object() { command }"),

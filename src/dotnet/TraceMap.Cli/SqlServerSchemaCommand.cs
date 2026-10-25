@@ -25,18 +25,61 @@ internal static class SqlServerSchemaCommand
         var destination = options["--out"];
         if (File.Exists(destination) || Directory.Exists(destination)) throw new ArgumentException("output-must-be-new");
         var declarations = Read("--declarations");
-        if (args[0] == "produce") File.WriteAllText(destination, SqlServerSchemaEvidence.Json(SqlServerSchemaEvidence.Produce(declarations)) + "\n", new UTF8Encoding(false));
+        if (args[0] == "produce") PublishNewFile(destination, SqlServerSchemaEvidence.Json(SqlServerSchemaEvidence.Produce(declarations)) + "\n");
         else
         {
             var schema = SqlServerSchemaEvidence.Admit(Read("--schema"), declarations, options["--repo"], options["--revision"]);
             var bindings = SqlServerSchemaEvidence.Read<SqlServerBindings>(Read("--bindings"));
             var facts = Read("--facts").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(SqlServerSchemaEvidence.Read<CodeFact>).ToArray();
             var report = SqlServerSchemaEvidence.Compare(schema, bindings, facts, options["--repo"], options["--revision"]);
-            Directory.CreateDirectory(destination);
-            File.WriteAllText(Path.Combine(destination, "parameter-comparison.json"), SqlServerSchemaEvidence.Json(report) + "\n", new UTF8Encoding(false));
-            File.WriteAllText(Path.Combine(destination, "report.md"), SqlServerParameterReportWriter.Build(report), new UTF8Encoding(false));
+            PublishNewDirectory(destination, staging =>
+            {
+                File.WriteAllText(Path.Combine(staging, "parameter-comparison.json"), SqlServerSchemaEvidence.Json(report) + "\n", new UTF8Encoding(false));
+                File.WriteAllText(Path.Combine(staging, "report.md"), SqlServerParameterReportWriter.Build(report), new UTF8Encoding(false));
+            });
         }
         output.WriteLine(destination);
         return 0;
+    }
+
+    internal static void PublishNewFile(string destination, string content)
+    {
+        var target = Path.GetFullPath(destination);
+        // Claim the final file atomically: no-overwrite File.Move can race on Unix.
+        // Only the successful creator owns cleanup if writing or closing fails.
+        var stream = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        try
+        {
+            using (stream)
+            using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+                writer.Write(content);
+        }
+        catch
+        {
+            File.Delete(target);
+            throw;
+        }
+    }
+
+    internal static void PublishNewDirectory(string destination, Action<string> writer)
+    {
+        // ScanOutputTransaction permits replacement and requires scan artifacts;
+        // this command instead publishes a new two-file report, never replacing.
+        var target = Path.GetFullPath(destination);
+        var parent = Path.GetDirectoryName(target) ?? throw new IOException("OutputParentUnavailable");
+        Directory.CreateDirectory(parent);
+        var staging = Path.Combine(parent, ".sqlserver-report-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(staging);
+        try
+        {
+            writer(staging);
+            if (!File.Exists(Path.Combine(staging, "parameter-comparison.json")) || !File.Exists(Path.Combine(staging, "report.md")))
+                throw new IOException("IncompleteParameterReport");
+            Directory.Move(staging, target);
+        }
+        finally
+        {
+            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+        }
     }
 }

@@ -172,7 +172,7 @@ public static class SqlServerSchemaEvidence
                             else Mismatch("extra-parameter:" + p.Name);
                             continue;
                         }
-                        if (declaration.Collation is not null || declaration.Precision is not null || declaration.Scale is not null || declaration.SqlType == "Decimal") { Unknown("unsupported-facets:" + p.Name); continue; }
+                        if (declaration.Collation is not null || declaration.Precision is not null || declaration.Scale is not null || declaration.SqlType == "Decimal") Unknown("unsupported-facets:" + p.Name);
                         if (p.SqlType != declaration.SqlType) Mismatch("type:" + p.Name);
                         if (p.Direction != declaration.Direction)
                         {

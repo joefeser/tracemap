@@ -46,6 +46,7 @@ internal static class SqlServerCommandParameters
                 {
                     if (value is not IObjectCreationOperation creation || creation.Type?.ToDisplayString() is not ("System.Data.SqlClient.SqlCommand" or "Microsoft.Data.SqlClient.SqlCommand")
                         || !DatabaseOperationApi.Trusted(creation.Type.ContainingAssembly)) return Unknown("fresh-sqlcommand-required");
+                    if (creation.Initializer is not null) return Unknown("implicit-receiver-mutation");
                     fresh = true;
                     var text = creation.Arguments.FirstOrDefault(a => a.Parameter?.Name is "cmdText" or "commandText");
                     textHash = text?.Value.ConstantValue is { HasValue: true, Value: string s } ? FactFactory.Hash(s, 64) : null;
@@ -103,6 +104,10 @@ internal static class SqlServerCommandParameters
                     if (Walk(assignment.Value).OfType<ILocalReferenceOperation>().Any(r => SymbolEqualityComparer.Default.Equals(r.Local, receiver) || locals.ContainsKey(r.Local))) return Unknown("unsupported-assignment");
                     continue;
                 }
+                // Object initializers and VB With blocks need receiver resolution that
+                // this bounded walker does not provide. Never keep stale constructor state.
+                if (Unwrap(property.Instance) is IInstanceReferenceOperation { ReferenceKind: InstanceReferenceKind.ImplicitReceiver })
+                    return Unknown("implicit-receiver-mutation");
                 if (SymbolEqualityComparer.Default.Equals(Local(property.Instance), receiver))
                 {
                     if (!DatabaseOperationApi.Trusted(property.Property.ContainingAssembly)) return Unknown("untrusted-property");
