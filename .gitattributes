@@ -4,3 +4,5 @@ site/scripts/generate-webforms-source-compiled-proof.mjs text eol=lf
 scripts/dnn-sql-validation/resolve_image.py text eol=lf
 scripts/sqlserver-parameter-evidence/*.py text eol=lf
 samples/sqlserver-parameter-evidence/*.json text eol=lf
+scripts/sqlserver-ddl-parameter-evidence/*.py text eol=lf
+samples/sqlserver-ddl-parameter-evidence/*.sql text eol=lf

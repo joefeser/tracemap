@@ -6,6 +6,10 @@ private SQL-A acceptance. PR #909's inventory, scalar-version and deterministic
 receipt guards remain intact. The real DNN selected reader route, owner/object
 qualifiers, concrete connection identity and consumer-column join remain unavailable.
 
+The separate [bounded DDL route](SQLSERVER_DDL_PARAMETER_EVIDENCE.md) adds a distinct
+opt-in origin after #910; this authored JSON route and its 52-case denominator remain
+unchanged. DDL does not admit the real DNN route or activate the harness.
+
 ## Supported origin and declaration contract
 
 `sqlserver-declarations/1` is an **independently authored synthetic declaration**
