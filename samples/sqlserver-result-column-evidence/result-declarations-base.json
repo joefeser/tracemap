@@ -1,0 +1,28 @@
+{
+  "version": "sqlserver-result-declarations/1",
+  "repo": "synthetic",
+  "revision": "1111111111111111111111111111111111111111",
+  "origin": "independent-synthetic-result-declarations",
+  "identifierPolicy": "ordinal-exact-no-aliases",
+  "shapes": [
+    {
+      "identity": { "server": "SyntheticServer", "database": "SyntheticDatabase", "schema": "dbo", "procedure": "ReadItems" },
+      "filePath": "result-declarations-base.json", "startLine": 8, "endLine": 17,
+      "resultSet": "first", "completeness": "complete", "unknownReason": null,
+      "columns": [
+        { "name": "Id", "ordinal": 0, "line": 13, "declaredType": "int" },
+        { "name": "Name", "ordinal": 1, "line": 14, "declaredType": null },
+        { "name": "Total", "ordinal": 2, "line": 15, "declaredType": "decimal(10,2)" }
+      ]
+    },
+    {
+      "identity": { "server": "SyntheticServer", "database": "SyntheticDatabase", "schema": "dbo", "procedure": "ReadOther" },
+      "filePath": "result-declarations-base.json", "startLine": 18, "endLine": 25,
+      "resultSet": "first", "completeness": "complete", "unknownReason": null,
+      "columns": [
+        { "name": "Title", "ordinal": 0, "line": 23, "declaredType": null }
+      ]
+    }
+  ],
+  "provenance": null
+}

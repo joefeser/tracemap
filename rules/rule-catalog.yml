@@ -5344,6 +5344,7 @@ rules:
       - ADO.NET and Npgsql v0 table projection is limited to inline constant command construction; command variables, helper-returned commands, stored-procedure indirection, repository abstractions, DI dispatch, reflection, and branch feasibility remain reduced coverage.
       - Shared C#/VB SQL matrix classification requires signed public declaration identity in System.Data, System.Data.Common, System.Data.SqlClient or Microsoft.Data.SqlClient. The preexisting signed Microsoft.Data.Sqlite command subset is preserved outside matrix-wide acceptance. Overrides retain their resolved signature separately from original emitted IL slots. DbCommand/IDbCommand and factory/abstract dispatch remain explicit boundaries.
       - The additive sqlServerParameterState is independent of legacy aggregate witnesses; it retains only fresh signed SqlCommand local Add declarations and explicit Direction spans under its documented 20,000-operation and 128-parameter bounds. Aliases, mutation, helpers and unsupported control flow stay typed unknown; it does not admit schema or establish runtime parameter values.
+      - The additive sqlServerReaderState (sqlserver-reader/1, C# 0.22.10 / VB 0.10.13) is emitted on ExecuteReader-family candidates and is independent of parameter state. It retains only constant column-name indexers, constant ordinal getters and GetOrdinal(constant) accesses on one fresh SqlDataReader local directly assigned from a fresh signed SqlCommand local's ExecuteReader(), tolerating a using lifetime and one Read()-conditioned if/while. Aliases, reassignment, escapes, helpers, NextResult, other reader members and control flow stay typed unknown under 20,000-operation and 256-access bounds. Typed getters never establish types, nullability, rows or values.
       - The SQL matrix enumerates public metadata command sync/async/token/XML/APM forms, adapter Fill/FillSchema/Update and separate bulk-write boundaries. Original API signatures, provider assembly identities and availability metadata survive the bounded report projection. Open/Close never becomes SQL execution.
       - Bounded local straight-line command text/type, parameter direction/type, transaction and connection witnesses do not establish runtime state. Reassignment, branches and unknown calls reset supported local state; fields, alias escape, cross-method flow and parameter propagation remain unresolved. Raw SQL/procedure names and parameter/connection values are excluded; only availability and command fingerprints are retained.
       - Visual Basic late-bound or unresolved Fill/Execute-like calls emit bounded gaps and never become database-operation candidates.
@@ -7914,3 +7915,36 @@ rules:
       - Authored declaration locations are assertions within the separately admitted synthetic input; no SQL DDL parser, live catalog or runtime observation is implemented.
       - Exact logical identities are synthetic labels, not deployed servers; hashes establish integrity, not authenticity or deployment correspondence.
       - Only the documented primitive parameter subset is admitted; output-only declarations and malformed/ambiguous names fail admission, unsupported facets remain comparison unknowns.
+
+  - id: database.sqlserver.result-column-comparison.v1
+    name: Bounded SQL Server first-result-set column comparison
+    description: Compares explicitly bound compiler-resolved reader column-name and ordinal accesses with one admitted public synthetic first-result-set shape.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlServerResultComparison
+    limitations:
+      - Opt-in sqlserver-result-schema and sqlserver-ddl-result commands only; reports are always partial with no aggregate clean verdict and do not extend closed call-path receipts or clear scan gaps and truncation.
+      - Column identity/existence and ordinal bounds only. No CLR/SQL type conversion, nullability, row cardinality, value, execution or runtime-exception claim, including for typed getters and IsDBNull.
+      - Exact-case unique names only. Case-only, collation-dependent and duplicate names, dynamic names/ordinals, unknown or incomplete shapes and ambiguous bindings remain unknown; a missing name or out-of-range ordinal is a mismatch only against an admitted complete shape.
+      - Every row binds one exact execution fact and reader instance through sqlserver-result-bindings/1 and its reader-evidence digest; parameter bindings, procedure names, methods or nearby calls never join a reader to a shape.
+      - Scalar, non-query, RETURN, OUTPUT and affected-row channels, NextResult, DataTable/DataSet, adapters, ORMs, DNN hydration/provider wrappers, helpers and virtual dispatch are outside the subset and remain unknown or absent.
+  - id: database.sqlserver.synthetic-result-shape.v1
+    name: Independent synthetic SQL Server first-result-set declarations
+    description: Admits strictly versioned authored first-result shapes bound to logical repo/revision, four-part identity and exact generator/public-input SHA-256.
+    evidenceTier: Tier2Structural
+    emits:
+      - SqlServerResultSchemaExport
+    limitations:
+      - Hand-authored declarations are not compiler, catalog, runtime or deployed evidence; locations are assertions within the admitted synthetic input.
+      - Ordered ASCII identifier column names with explicit complete or unknown state; declared types are visible facets that are never compared. Duplicate names are admitted and compared as unknown.
+      - Hashes establish integrity and regeneration equality only, not authenticity or deployment correspondence.
+  - id: database.sqlserver.ddl-result-shape.v1
+    name: Bounded public synthetic T-SQL first-result projection
+    description: Derives one first-result shape per admitted procedure only from a single unconditional SELECT of aliased constants or CAST constants without FROM, optionally inside one BEGIN/END block.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlServerDdlResultExport
+    limitations:
+      - Opt-in sqlserver-ddl-result-input/1 manifest over the pinned ScriptDom 170.191.0 TSql160 parser and the unchanged DDL parameter admission core; malformed SQL, SQLCMD text, digest mismatches, identity ambiguity and bounds reject the whole input.
+      - IF, dynamic SQL/EXEC, multiple statements, SET options, SELECT *, FROM/table/view dependencies, joins, UNION, SELECT assignment, RETURN, nested blocks, non-constant or unaliased projections and duplicate/case-only aliases are explicit unknown shapes with Tier4 unsupported records, never partial column lists.
+      - Literal values and body text are never retained; CAST target spellings are visible uncompared facets. No catalog, migration ordering or deployed correspondence is claimed.

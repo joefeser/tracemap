@@ -31,14 +31,19 @@ public static class SqlServerDdlEvidence
     private static readonly Regex SqlCmdDirective = new(
         @":(?:r|setvar|connect|on\s+error|out|error|perftrace|list|reset|ed|listvar|xml|help|quit|exit|serverlist)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
-    private static readonly Lazy<string> ParserDigest = new(() => SqlServerSchemaEvidence.Hash(File.ReadAllBytes(typeof(TSql160Parser).Assembly.Location)));
+    internal static readonly Lazy<string> ParserDigest = new(() => SqlServerSchemaEvidence.Hash(File.ReadAllBytes(typeof(TSql160Parser).Assembly.Location)));
     private static void Require([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool ok, string reason) { if (!ok) throw new ArgumentException("ddl-" + reason); }
 
-    public static SqlServerDdlInput ReadInput(string json)
+    public const string InputVersion = "sqlserver-ddl-input/1";
+
+    public static SqlServerDdlInput ReadInput(string json) => ReadInput(json, InputVersion);
+
+    // The opt-in result-shape route supplies its own manifest version; the file/identity policy is shared.
+    internal static SqlServerDdlInput ReadInput(string json, string version)
     {
         var input = SqlServerSchemaEvidence.Read<SqlServerDdlInput>(json);
         Require(input.Provenance is null || SqlServerSchemaEvidence.Sha(input.Provenance.GeneratorSha256) && SqlServerSchemaEvidence.Sha(input.Provenance.BoundedInputSha256), "invalid-input-provenance");
-        Require(input.Version == "sqlserver-ddl-input/1" && input.PublicSynthetic, "unsupported-input-contract");
+        Require(input.Version == version && input.PublicSynthetic, "unsupported-input-contract");
         Require(SqlServerSchemaEvidence.PathSafe(input.Repo) && !input.Repo.Contains('/') && SqlServerSchemaEvidence.Sha(input.Revision, 40)
             && SqlServerSchemaEvidence.Identifier(input.Server) && SqlServerSchemaEvidence.Identifier(input.Database), "invalid-logical-identity");
         Require(input.Files is { Count: > 0 and <= MaxFiles }, "file-limit");
@@ -50,8 +55,17 @@ public static class SqlServerDdlEvidence
     }
 
     public static SqlServerDdlExport Produce(string inputJson, IReadOnlyDictionary<string, string> sources)
+        => ProduceCore(inputJson, sources, InputVersion, null);
+
+    /// <summary>
+    /// Shared whole-input admission (digests, SQLCMD guard, bounds, parser thread, identities and the
+    /// parameter vocabulary). The optional visitor sees each admitted procedure after its identity is
+    /// fixed; it never changes parameter admission or the parameter export.
+    /// </summary>
+    internal static SqlServerDdlExport ProduceCore(string inputJson, IReadOnlyDictionary<string, string> sources, string inputVersion,
+        Action<SqlServerObjectIdentity, string, ProcedureStatementBody>? visitor)
     {
-        var input = ReadInput(inputJson);
+        var input = ReadInput(inputJson, inputVersion);
         Require(sources.Count == input.Files.Count && sources.Keys.Order(StringComparer.Ordinal).SequenceEqual(
             input.Files.Select(f => f.Path).Order(StringComparer.Ordinal), StringComparer.Ordinal), "source-set-mismatch");
         var procedures = new List<SqlServerProcedure>();
@@ -161,6 +175,7 @@ public static class SqlServerDdlEvidence
                         precision, scale, null, p.StartLine));
                 }
                 procedures.Add(new(identity, file.Path, proc.StartLine, EndLine(proc), parameters));
+                visitor?.Invoke(identity, file.Path, proc);
             }
         }
         var declarations = new SqlServerDeclarations("sqlserver-ddl-declarations/1", input.Repo, input.Revision,
@@ -201,7 +216,7 @@ public static class SqlServerDdlEvidence
         Require(literal is IntegerLiteral && int.TryParse(literal.Value, NumberStyles.None, CultureInfo.InvariantCulture, out _), "invalid-numeric-facet");
         return int.Parse(literal.Value, CultureInfo.InvariantCulture);
     }
-    private static int EndLine(TSqlFragment fragment) => fragment.ScriptTokenStream[fragment.LastTokenIndex].Line
+    internal static int EndLine(TSqlFragment fragment) => fragment.ScriptTokenStream[fragment.LastTokenIndex].Line
         + fragment.ScriptTokenStream[fragment.LastTokenIndex].Text.Count(c => c == '\n');
     private static SqlServerDdlUnsupported Gap(SqlServerObjectIdentity identity, ProcedureParameter parameter, string kind, string path, TSqlFragment fragment)
         => new(identity, parameter.VariableName.Value, kind, RuleId, EvidenceTiers.Tier4Unknown, path, fragment.StartLine, EndLine(fragment));
