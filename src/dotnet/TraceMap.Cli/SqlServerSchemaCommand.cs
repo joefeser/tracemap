@@ -34,15 +34,15 @@ internal static class SqlServerSchemaCommand
             var report = SqlServerSchemaEvidence.Compare(schema, bindings, facts, options["--repo"], options["--revision"]);
             PublishNewDirectory(destination, staging =>
             {
-                File.WriteAllText(Path.Combine(staging, "parameter-comparison.json"), SqlServerSchemaEvidence.Json(report) + "\n", new UTF8Encoding(false));
-                File.WriteAllText(Path.Combine(staging, "report.md"), SqlServerParameterReportWriter.Build(report), new UTF8Encoding(false));
+                PublishNewFile(Path.Combine(staging, "parameter-comparison.json"), SqlServerSchemaEvidence.Json(report) + "\n");
+                PublishNewFile(Path.Combine(staging, "report.md"), SqlServerParameterReportWriter.Build(report));
             });
         }
         output.WriteLine(destination);
         return 0;
     }
 
-    internal static void PublishNewFile(string destination, string content)
+    internal static void PublishNewFile(string destination, string content, Action<string>? cleanup = null)
     {
         var target = Path.GetFullPath(destination);
         // Claim the final file atomically: no-overwrite File.Move can race on Unix.
@@ -51,17 +51,30 @@ internal static class SqlServerSchemaCommand
         try
         {
             using (stream)
-            using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
-                writer.Write(content);
+                WriteDurably(stream, content);
         }
-        catch
+        catch (Exception primary)
         {
-            File.Delete(target);
+            PreserveFailure(primary, () => (cleanup ?? File.Delete)(target));
             throw;
         }
     }
 
-    internal static void PublishNewDirectory(string destination, Action<string> writer)
+    internal static void WriteDurably(FileStream stream, string content)
+    {
+        using var writer = new StreamWriter(stream, new UTF8Encoding(false), leaveOpen: true);
+        writer.Write(content);
+        writer.Flush();
+        stream.Flush(flushToDisk: true);
+    }
+
+    private static void PreserveFailure(Exception primary, Action cleanup)
+    {
+        try { cleanup(); }
+        catch (Exception secondary) { primary.Data["SqlServerOutputCleanupFailure"] = secondary; }
+    }
+
+    internal static void PublishNewDirectory(string destination, Action<string> writer, Action<string>? cleanup = null)
     {
         // ScanOutputTransaction permits replacement and requires scan artifacts;
         // this command instead publishes a new two-file report, never replacing.
@@ -77,9 +90,14 @@ internal static class SqlServerSchemaCommand
                 throw new IOException("IncompleteParameterReport");
             Directory.Move(staging, target);
         }
-        finally
+        catch (Exception primary)
         {
-            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+            PreserveFailure(primary, () =>
+            {
+                if (Directory.Exists(staging))
+                    (cleanup ?? (path => Directory.Delete(path, recursive: true)))(staging);
+            });
+            throw;
         }
     }
 }

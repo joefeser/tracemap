@@ -20,6 +20,10 @@ internal static class SqlServerCommandParameters
     {
         SqlServerCallState Unknown(string gap) => new("sqlserver-call/1", "unknown", null, null, [], gap);
         if (Local(call.Instance) is not { } receiver) return Unknown("fresh-local-required");
+        // Arguments run before execution, although their source spans follow the
+        // invocation start. Admit only inert reads; helpers, getters, constructors
+        // and user conversions can mutate the command or its parameter objects.
+        if (call.Arguments.Any(a => !InertArgument(a.Value))) return Unknown("unsupported-execution-argument");
         IOperation root = call;
         while (root.Parent is not null) root = root.Parent;
         var all = Walk(root).Take(20001).ToArray();
@@ -130,6 +134,12 @@ internal static class SqlServerCommandParameters
         return fresh ? new("sqlserver-call/1", "bounded", commandType, textHash, parameters, null) : Unknown("fresh-local-required");
     }
     private static IOperation? Unwrap(IOperation? o) => o is IConversionOperation c ? Unwrap(c.Operand) : o;
+    private static bool InertArgument(IOperation operation) => operation switch
+    {
+        IConversionOperation { OperatorMethod: null } conversion => InertArgument(conversion.Operand),
+        ILiteralOperation or IDefaultValueOperation or ILocalReferenceOperation or IParameterReferenceOperation => true,
+        _ => false
+    };
     private static ILocalSymbol? Local(IOperation? o) => Unwrap(o) is ILocalReferenceOperation l ? l.Local : null;
     private static IEnumerable<IOperation> Walk(IOperation o)
     {

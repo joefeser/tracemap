@@ -36,6 +36,20 @@ OSS runs explicitly deferred. No SQL/container/private execution or merge.
 
 ## Contract and bounded scope
 
+### PR #910 second exact-head repair batch
+
+Three independent findings: execution-argument evaluation escaped the pre-call
+walker, output bytes lacked explicit disk flush, and cleanup could mask the
+primary publication error. Non-inert execution arguments now produce a typed
+unknown gap (C# 0.22.9 / VB 0.10.12). Both output paths use the same encoded-byte
+then disk-flush writer. Both cleanup paths preserve the primary exception and
+attach secondary cleanup evidence. This is not a power-loss/directory-fsync or
+abrupt-termination recovery guarantee.
+
+Focused gate: 85 passed, no failures/skips. Full Debug -warnaserror and a fresh
+committed-head synthetic smoke are pending; no pass is claimed yet. No live SQL,
+container activation, private acceptance, additional review spend or merge.
+
 Strict independently authored synthetic declaration input and native schema export/
 admission, not DDL parsing, catalog metadata or runtime observations. Exact Core
 assembly generator SHA-256 and canonical public input SHA-256, strict JSON/identity/

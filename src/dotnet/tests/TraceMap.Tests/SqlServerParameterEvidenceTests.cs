@@ -219,8 +219,54 @@ public sealed class SqlServerParameterEvidenceTests
         Assert.Equal(2, Directory.GetFiles(destination).Length);
     }
 
+    [Fact]
+    public void Cleanup_failure_preserves_primary_exception_and_secondary_evidence()
+    {
+        using var temp = new TempDirectory();
+        var primary = new IOException("writer failed");
+        var secondary = new IOException("cleanup failed");
+        var caught = Assert.Throws<IOException>(() => SqlServerSchemaCommand.PublishNewDirectory(
+            Path.Combine(temp.Path, "report"), _ => throw primary, _ => throw secondary));
+        Assert.Same(primary, caught);
+        Assert.Same(secondary, caught.Data["SqlServerOutputCleanupFailure"]);
+        Assert.False(Directory.Exists(Path.Combine(temp.Path, "report")));
+    }
+
+    [Fact]
+    public void Durable_writer_flushes_encoded_bytes_before_disk_flush()
+    {
+        using var temp = new TempDirectory();
+        using var stream = new FlushObservingStream(Path.Combine(temp.Path, "bytes"));
+        SqlServerSchemaCommand.WriteDurably(stream, "SQL café\n");
+        Assert.True(stream.DiskFlushObserved);
+        stream.Position = 0;
+        var bytes = new byte[stream.Length];
+        stream.ReadExactly(bytes);
+        Assert.Equal(System.Text.Encoding.UTF8.GetBytes("SQL café\n"), bytes);
+    }
+
+    private sealed class FlushObservingStream(string path) : FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None)
+    {
+        public bool DiskFlushObserved { get; private set; }
+        public override void Flush(bool flushToDisk)
+        {
+            if (flushToDisk)
+            {
+                Assert.True(Length > 0);
+                DiskFlushObserved = true;
+            }
+            base.Flush(flushToDisk);
+        }
+    }
+
     [Theory]
     [InlineData("cs", "good")]
+    [InlineData("cs", "argument-command")]
+    [InlineData("vb", "argument-command")]
+    [InlineData("cs", "argument-parameter")]
+    [InlineData("vb", "argument-parameter")]
+    [InlineData("cs", "argument-default")]
+    [InlineData("vb", "argument-default")]
     [InlineData("cs", "indexed-mutation")]
     [InlineData("cs", "inline-mutation")]
     [InlineData("cs", "assigned-add")]
@@ -299,23 +345,26 @@ public sealed class SqlServerParameterEvidenceTests
         };
         Microsoft.CodeAnalysis.Compilation compilation;
         Microsoft.CodeAnalysis.SyntaxTree tree;
+        var argument = shape switch { "argument-command" => "Mutate(command)", "argument-parameter" => "Mutate(parameter)", "argument-default" => language == "cs" ? "default(System.Threading.CancellationToken)" : "Nothing", _ => null };
+        var execution = argument is null ? "command.ExecuteScalar()" : "command.ExecuteScalarAsync(" + argument + ")";
         if (language == "cs")
         {
-            tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText("class Mutator { public Mutator(object o) {} } class Example { static void Helper(object o) {} static void Run(string input, bool flag) { " + cs + changes.Item1 + "command.ExecuteScalar(); } }");
+            tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText("class Mutator { public Mutator(object o) {} } class Example { static void Helper(object o) {} static System.Threading.CancellationToken Mutate(object o) { return default; } static void Run(string input, bool flag) { " + cs + changes.Item1 + execution + "; } }");
             compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create("Synthetic", [tree], references, new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
         }
         else
         {
-            tree = Microsoft.CodeAnalysis.VisualBasic.VisualBasicSyntaxTree.ParseText("Class Mutator\nPublic Sub New(o As Object)\nEnd Sub\nEnd Class\nModule Example\nSub Helper(o As Object)\nEnd Sub\nSub Run(input As String, flag As Boolean)\n" + vb + changes.Item2 + "\ncommand.ExecuteScalar()\nEnd Sub\nEnd Module");
+            tree = Microsoft.CodeAnalysis.VisualBasic.VisualBasicSyntaxTree.ParseText("Class Mutator\nPublic Sub New(o As Object)\nEnd Sub\nEnd Class\nModule Example\nSub Helper(o As Object)\nEnd Sub\nFunction Mutate(o As Object) As System.Threading.CancellationToken\nReturn Nothing\nEnd Function\nSub Run(input As String, flag As Boolean)\n" + vb + changes.Item2 + "\n" + execution + "\nEnd Sub\nEnd Module");
             compilation = Microsoft.CodeAnalysis.VisualBasic.VisualBasicCompilation.Create("Synthetic", [tree], references, new Microsoft.CodeAnalysis.VisualBasic.VisualBasicCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
         }
         Assert.DoesNotContain(compilation.GetDiagnostics(), d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
         var model = compilation.GetSemanticModel(tree);
-        var call = Assert.Single(tree.GetRoot().DescendantNodes().Select(n => model.GetOperation(n)).OfType<Microsoft.CodeAnalysis.Operations.IInvocationOperation>(), o => o.TargetMethod.Name == "ExecuteScalar");
+        var call = Assert.Single(tree.GetRoot().DescendantNodes().Select(n => model.GetOperation(n)).OfType<Microsoft.CodeAnalysis.Operations.IInvocationOperation>(), o => o.TargetMethod.Name is "ExecuteScalar" or "ExecuteScalarAsync");
         var properties = new SortedDictionary<string, string>();
         SqlServerCommandParameters.Add(properties, call);
         var state = SqlServerSchemaEvidence.Read<SqlServerCallState>(properties["sqlServerParameterState"]);
-        Assert.Equal(shape == "good" ? "bounded" : "unknown", state.Coverage);
+        Assert.Equal(shape is "good" or "argument-default" ? "bounded" : "unknown", state.Coverage);
+        if (shape is "argument-command" or "argument-parameter") Assert.Equal("unsupported-execution-argument", state.Gap);
         if (shape == "operation-limit") Assert.Equal("operation-limit", state.Gap);
         if (shape == "parameter-limit") Assert.Equal("parameter-limit-or-no-command", state.Gap);
     }

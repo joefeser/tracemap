@@ -7899,7 +7899,7 @@ rules:
       - Opt-in sqlserver-schema command only; separate report seam does not extend closed call-path receipts or clear scan gaps and truncation.
       - Synthetic logical server/database/schema/procedure identities are not deployed server observations, connection inference, authentication or SQL execution.
       - Exact ordinal identifiers only; aliases, identifier case equivalence, collation, precision and scale remain unsupported or unknown.
-      - Fresh signed SqlCommand local and constant Add(name, SqlDbType[,size]) with optional explicit Direction only; object initializers, implicit-receiver mutations, aliases, branching, helpers, indirect mutation and operation bounds retain typed gaps.
+      - Fresh signed SqlCommand local and constant Add(name, SqlDbType[,size]) with optional explicit Direction only; object initializers, implicit-receiver mutations, non-inert execution arguments, aliases, branching, helpers, indirect mutation and operation bounds retain typed gaps.
       - nvarchar length uses UTF-16 code units and MAX is -1; ANSI provider length/encoding policy remains unknown. Differences do not establish runtime truncation or incompatibility.
       - SQL OUTPUT declares input/output capability, never pure output-only. ReturnValue is separate from procedure parameters, affected-row counts and result sets. Omitted defaulted parameters remain unknown.
       - Every report is partial with no aggregate clean verdict; result columns, DNN bindings and private SQL-A acceptance remain outside scope.
