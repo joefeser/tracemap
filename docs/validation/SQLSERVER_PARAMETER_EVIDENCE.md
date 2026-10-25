@@ -143,9 +143,15 @@ Schema files are claimed with exclusive CreateNew semantics; comparison reports
 are staged beside the destination and promoted without replacement. Concurrent
 writers cannot overwrite an earlier winner. Failed report writes
 remove their owned staging directory rather than publishing a partial report.
+Writers flush encoded bytes and request a disk flush before success/promotion.
+This does not guarantee directory-entry durability or recovery from abrupt process
+termination/power loss. Cleanup failures are attached to the original exception
+under SqlServerOutputCleanupFailure rather than replacing its diagnostic.
 Command object initializers and implicit-receiver mutations in VB `With` blocks
 remain unsupported and yield unknown parameter state, never stale constructor
-command identity. Extractor versions are C# 0.22.8 and VB 0.10.11.
+command identity. Execution arguments admit only inert literal/default/local/parameter
+reads and built-in conversions; helpers, getters, constructors and user conversions
+yield unsupported-execution-argument. Extractor versions are C# 0.22.9 and VB 0.10.12.
 
 ```sh
 dotnet build src/dotnet/TraceMap.Cli -c Debug -warnaserror
