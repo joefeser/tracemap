@@ -2,3 +2,5 @@
 site/scripts/generate-webforms-source-compiled-proof.mjs text eol=lf
 # Recorded DNN image-resolution receipt hashes the exact resolver bytes.
 scripts/dnn-sql-validation/resolve_image.py text eol=lf
+scripts/sqlserver-parameter-evidence/*.py text eol=lf
+samples/sqlserver-parameter-evidence/*.json text eol=lf

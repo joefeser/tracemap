@@ -1,0 +1,9 @@
+- [x] Inspect instructions, live issues, #909 ancestry, validation/harness and native contracts.
+- [x] Specify bounded synthetic origin and conservative policies.
+- [x] Implement strict producer/admission, explicit binding and comparison contracts.
+- [x] Implement independent command parameter evidence in C# and VB.
+- [x] Add native JSON/Markdown report seam and CLI admission smoke.
+- [x] Complete synthetic matrix, round-trip, tampering and deterministic provenance tests.
+- [x] Run focused, DNN, Python, full Debug -warnaserror and relevant adapter gates.
+- [x] Record exact denominator/results/limits and one consolidated follow-up prompt.
+- [x] Commit, committed-head CLI smoke and push new codex branch; no merge.
