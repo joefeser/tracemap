@@ -1,5 +1,20 @@
 # Implementation state
 
+## PR #911 current-head repair
+
+Two independently verified findings at e5f3886a: reused scan artifacts lacked byte
+bindings, and the SQLCMD guard did not reject directive text in comments/strings
+as documented. The JSON smoke now records all five scan artifact digests for both
+languages; DDL reuse checks those bytes and rejects links before generating any
+bindings, and checks again before receipt publication. The raw-source SQLCMD
+guard covers recognized commands, shell escapes and variable forms regardless
+of lexical context. Regression matrices cover each artifact's mutation/removal/
+symlink, linked directories, old receipts, all command forms in three contexts,
+and an ordinary-colon negative control. No source extractor or SQL execution added.
+
+Validation for this repair is pending the frozen-head full suite and sequential
+native smokes; earlier acceptance below does not establish this new head.
+
 Branch: codex/sqlserver-ddl-parameter-evidence. Initial clean head:
 70e57e329a9954de15712012d97d3c195d84cf6d (docs directly above requested
 560fa24216516b17f75882d7d10011361b3f9c11). Fetched origin; dev unchanged.

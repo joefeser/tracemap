@@ -36,6 +36,7 @@ def main():
     assert len(old_receipt["results"]) == 52
     assert {s: sum(r["status"] == s for r in old_receipt["results"]) for s in ("bounded-match", "mismatch", "unknown")} == {
         "bounded-match": 8, "mismatch": 12, "unknown": 32}
+    scan_artifacts = HELPERS.verify_scan_hashes(args.json_smoke, old_receipt)
     args.output.mkdir(parents=True, exist_ok=False)
     cli = ROOT / "src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll"
     core_hash = hashlib.sha256((cli.parent / "TraceMap.Core.dll").read_bytes()).hexdigest()
@@ -48,8 +49,6 @@ def main():
         scan = args.json_smoke / language / "scan"
         manifest = json.loads((scan / "scan-manifest.json").read_bytes())
         assert manifest["commitSha"] == revision and manifest["buildStatus"] == "Succeeded"
-        for required in ("facts.ndjson", "index.sqlite", "report.md", "logs/analyzer.log"):
-            assert (scan / required).is_file()
         calls = [f for line in (scan / "facts.ndjson").read_text().splitlines()
                  if (f := json.loads(line))["factType"] == "DatabaseOperationCandidate" and f["evidenceTier"] == "Tier1Semantic"]
         assert len(calls) == 26
@@ -111,7 +110,9 @@ def main():
                "boundedInputSha256": HELPERS.digest({"templates": template_hashes, "calls": public_inputs}),
                "revision": revision, "coreSha256": core_hash, "parserSha256": parser_hash,
                "helperGeneratorSha256": HELPERS.GENERATOR,
+               "scanArtifactSha256": scan_artifacts,
                "fixtureSitesPerLanguage": 26, "results": results, "sqlExecution": "not-run"}
+    HELPERS.verify_scan_hashes(args.json_smoke, old_receipt)
     HELPERS.write(args.output / "smoke-receipt.json", receipt)
     print(f"52 DDL native cases passed at {revision}: {counts}; SQL NOT RUN")
 
