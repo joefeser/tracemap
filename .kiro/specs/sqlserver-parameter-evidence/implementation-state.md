@@ -46,9 +46,16 @@ then disk-flush writer. Both cleanup paths preserve the primary exception and
 attach secondary cleanup evidence. This is not a power-loss/directory-fsync or
 abrupt-termination recovery guarantee.
 
-Focused gate: 85 passed, no failures/skips. Full Debug -warnaserror and a fresh
-committed-head synthetic smoke are pending; no pass is claimed yet. No live SQL,
-container activation, private acceptance, additional review spend or merge.
+Focused gate: 85 passed, no failures/skips. Stable repair commit
+1e5a5b560d4fb87b132c75162c1a14ac53ea17c9 passed full Debug -warnaserror:
+4,667 passed, 0 failed, 3 expected skips in 30m 42s. Native committed-head smoke
+passed 52 cases (8 bounded matches / 12 mismatches / 32 unknowns), provenance and
+byte-identical repeats. Python guards: 17 passed. An earlier full run was stopped
+after committing during its scans invalidated source/revision stability; its
+snapshot/repeat-identity failures are not claimed as a pass. The successful run
+kept revision and build outputs stable. Fresh pinned OSS reruns remain deferred.
+No live SQL, container activation, private acceptance, additional review spend
+or merge.
 
 Strict independently authored synthetic declaration input and native schema export/
 admission, not DDL parsing, catalog metadata or runtime observations. Exact Core
