@@ -30,6 +30,8 @@
   <ItemGroup>
     <ProjectReference Include="../../../../samples/fixture-build/deep-projectless/DeepWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../../../../samples/compiled-dotnet-evidence/constructed-generics/caller/ConstructedGenerics.Caller.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/dnn-sql-validation/csharp/Contracts.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/dnn-sql-validation/vb/Contracts.vbproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/backend-extraction/BackendExtraction.Sample.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/http-entry-inheritance-csharp/HttpEntryInheritance.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../../../../samples/sql-database-matrix/net20/csharp/SqlMatrix.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
