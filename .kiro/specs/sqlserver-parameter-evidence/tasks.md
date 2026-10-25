@@ -6,4 +6,4 @@
 - [x] Complete synthetic matrix, round-trip, tampering and deterministic provenance tests.
 - [x] Run focused, DNN, Python, full Debug -warnaserror and relevant adapter gates.
 - [x] Record exact denominator/results/limits and one consolidated follow-up prompt.
-- [ ] Commit, committed-head CLI smoke and push new codex branch; no merge.
+- [x] Commit, committed-head CLI smoke and push new codex branch; no merge.

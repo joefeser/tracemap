@@ -3,7 +3,9 @@
 Branch: `codex/sqlserver-parameter-evidence`.
 Base: freshly fetched `origin/dev` `fe48109124912d0b22516ce009ee34e7d59ff7bd`
 (PR #909); ancestry verified. Other worktrees preserved. Live #908/#870 read.
-Implementation complete; committed-head smoke and push are the remaining delivery steps.
+Implementation and delivery complete. Implementation commit:
+`84e531984932d3ce7b3157d9f464f603a14e0c05`, pushed to origin on the named branch.
+This documentation-only reconciliation records the verified delivery evidence.
 
 ## Contract and bounded scope
 
@@ -42,8 +44,13 @@ exact format, commands, policies, matrix, provenance and limitations.
   25 methods each; **8 bounded matches / 12 mismatches / 32 unknowns**. Expectations
   and the two-command order are independently authored. Each report preserves the
   other 25 unbound calls as unknown. Repeated output bytes are identical. This
-  precommit smoke used dirty implementation content and the base Git revision;
-  a committed-head receipt is required below before delivery.
+  precommit smoke used dirty implementation content and the base Git revision.
+- Committed implementation-head rebuild: **0 warnings / 0 errors**. Native smoke
+  at `84e531984932d3ce7b3157d9f464f603a14e0c05`: **all 52 selected cases passed**,
+  exact 8/12/32 matrix, current revision, actual Core generator bytes, explicit
+  projected source-evidence bindings and byte-identical repeated reports verified.
+  The receipt binds exact smoke script bytes and only its public bounded inputs.
+  Both language scans built successfully and retained all five required outputs.
 - Final compiled-contract pinned C# ProjectExtensions.Azure.ServiceBus
   `2a8e72c8f5680edf2096b05ac08c39d47a95cef8`: 12,949 facts / 4,732 gaps.
   Pinned Community.VisualBasic `20d2a51dfc9f342848ad134952ceaa8d79302559`:
