@@ -222,7 +222,7 @@ documentation-only commit; no implementation change follows the gates.
 | DDL 52-case smoke reusing those scans | 52/52, 8 / 12 / 32; five scan artifacts per language re-verified |
 | Result smoke | JSON 36 / 10 / 36 (82 rows), DDL 36 / 10 / 58 (104 rows), expected = observed, 0 gaps, 20/20 refusals, repeat bytes identical |
 | Pinned OSS C#/VB adapter smoke | exit 0; artifacts present; 0.22.10 / 0.10.13; reduced/partial as documented; no database calls in either repo |
-| Private-path guard, `git diff --check` | passed |
+| Private-path guard, `git diff --check` | passed at the implementation commit; failed on docs-only `456b425ec` (prompt token), fixed and passing from `a733e2199` |
 
 Skips: Python receipt interop environment unset, opt-in Oracle full golden sweep,
 Windows-only deep projectless ASP.NET publish. Receipts are local (outside Git):

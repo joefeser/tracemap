@@ -88,13 +88,17 @@ recorded by a later documentation-only commit whose SHA differs.
   new property does not disturb unrelated extraction; it exercises no reader path.
   Non-.NET adapters, fluentjdf and Windows/private application checks deferred:
   no non-.NET code changed; reader evidence is covered by the synthetic corpus only.
-- Private-path guard and `git diff --check` passed again after the gates.
+- Private-path guard and `git diff --check` passed at the implementation commit.
+  The first docs-only results commit `456b425ec` failed the guard (a private fixture
+  token in the new prompt; a pipe masked the exit status) and was pushed; `a733e2199`
+  fixed the text and the guard plus `git diff --check 730610582..HEAD` pass there.
 
 Core differs from the development smoke's Core because the assembly embeds the
 commit; source was unchanged between the final focused run and the commit.
 
 ## Delivery
 
-Docs-only results commit on top of `1660a5a8c`; follow-up prompt
+Docs-only commits on top of `1660a5a8c`: `456b425ec` (results), `a733e2199`
+(guard fix) and this state correction; follow-up prompt
 `prompts/continue-sqlserver-result-column-evidence.md`; branch pushed. No PR,
 merge, review request, SQL execution, container or private input. #908/#870 open.
