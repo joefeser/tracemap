@@ -15,10 +15,12 @@ decimal facets stay unknown; unsupported/malformed/ambiguous/over-bound input
 rejects as a whole. Bodies, result sets, RETURN and output assignments are not
 interpreted. DDL and independently authored JSON origins remain separate.
 
-Validated implementation: `7a05e13e9e9db6c1020288597cb5e890cf2bd2bf`; full Debug
--warnaserror 4,715 passed / 0 failed / 3 expected skips; focused 133 passed;
-Python guards 17 passed; both committed-head smokes 52/52. The later delivery
-reconciliation changes documentation only. Use the consolidated implementation
+Validated implementation: `7d20c1ec600916f02dd4f3e65092230bba859ba3` (review
+round fixing parser stack overflow, ANSI type-synonym admission and leading-BOM
+rejection; supersedes 7a05e13e9). Full Debug -warnaserror 4,733 passed / 0 failed
+/ 3 expected skips; focused 151 passed; Python guards 17 passed; both
+committed-head smokes 52/52. The later delivery reconciliation changes
+documentation only. Use the consolidated implementation
 report and implementation-state receipt for provenance, actual limits and exact SHA.
 Both independently expected 52-case C#/VB matrices retain 8 bounded matches,
 12 mismatches, 32 unknowns, and 25 unbound calls per report. No DNN end-to-end

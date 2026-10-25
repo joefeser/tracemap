@@ -130,7 +130,17 @@ Fake declarations inside strings/comments do not create procedures.
 Bounds: 32 files, 256 KiB per file, 1 MiB total UTF-8; 100,000 lexical tokens per
 file before AST parsing; conservative maximum 128 combined opening parentheses/
 BEGIN/CASE/IF/WHILE tokens per file (a complexity budget, not flow analysis);
-256 procedures and 128 parameters per procedure. Manifest/export/binding/facts
+256 procedures and 128 parameters per procedure. The paren budget is per file, not
+per depth, so a procedure with many sized character parameters can exhaust it
+before reaching 128 parameters; that input rejects rather than truncating.
+ScriptDom still recurses on constructs the budget does not count (prefix unary
+and JOIN/APPLY chains), so lexing and parsing run on a dedicated 64 MiB-stack
+thread independent of the caller. Of the shapes measured at 1 MiB (prefix `~`,
+`-`, `-~`, JOIN/ON, CROSS APPLY, IF chains), the worst needed about 200 bytes of
+stack per token, so 100,000 tokens fit with >3x margin. Unmeasured grammar shapes
+could cost more; this is a measured margin, not a proof.
+Before this, such inputs inside every bound aborted the process (exit 134).
+Manifest/export/binding/facts
 CLI inputs are each limited to 4 MiB, strict JSON depth 32; shared comparison
 limits remain one million facts / 4,096 bindings. CLI bounded reads also refuse
 files that grow beyond the byte ceiling during reading. Exports larger than the
@@ -225,7 +235,55 @@ new-directory, disk-flush and primary-error-preservation contracts; it does not
 promise atomic file visibility during writing, directory fsync, abrupt-termination
 recovery or hostile concurrent filesystem mutation isolation.
 
-## Consolidated implementation and delivery receipt — 2026-10-25
+## Current validated head — independent review round, 2026-10-25
+
+Validated implementation head: **`7d20c1ec600916f02dd4f3e65092230bba859ba3`**.
+It supersedes the earlier `7a05e13e9` receipt below, which stays as history.
+A re-verification of the delivered head against the original brief found three
+defects inside the documented bounds, each fixed with a regression test:
+
+- `84a70b0a2`: prefix unary (`-~` x 45,000) and JOIN chains inside the token/file
+  bounds crashed CLI and test host with an uncatchable stack overflow (exit 134,
+  reproduced through the CLI and by reverting the fix under the new test).
+  Parsing now runs on a fixed 64 MiB-stack thread; parser exceptions rethrow.
+- `63318851c`: ANSI synonyms (`integer`, `dec`, `char`/`character varying`,
+  `nchar varying`, `national char[acter] varying`) were silently admitted as the
+  six documented types. Non-canonical spellings now reject; case and delimiters
+  (`[nvarchar](20)`) remain admitted.
+- `1624cf592`: a leading UTF-8 BOM was documented as admitted but rejected as
+  malformed. One leading mark is now excluded from lexing only; digests still
+  cover exact bytes; spans are unchanged.
+- `7d20c1ec6`: LF pinned for the DDL smoke script and hashed SQL templates,
+  matching the JSON-origin smoke policy.
+
+Gates at `7d20c1ec6`, with source, HEAD and shared outputs frozen and no
+competing build, smoke or commit during the full suite:
+
+- Focused Debug -warnaserror (DDL, original parameter and DNN tests): **151
+  passed, 0 failed, 0 skipped** (135 before this round plus 16 new cases).
+  One earlier focused run during development reported 58 passed then "Test Run
+  Aborted" without a recorded reason; seven later repeats passed in full. It
+  is not counted as a pass and no cause was confirmed.
+- Python harness guards: **17 passed**.
+- Full Debug solution -warnaserror: **4,733 passed, 0 failed, 3 expected skips**
+  (same three skips as below); 33m 13s tests, 1,999 s command wall-clock; zero
+  compiler/analyzer warnings or errors.
+- Sequential committed-head JSON then DDL native smokes in new directories:
+  **52/52 each, 8 / 12 / 32** expected and observed, 25 `binding-missing` unbound
+  calls per report, repeat bytes identical. Receipts (outside Git):
+  `/tmp/tracemap-ddl-7d20c1e-json/smoke-receipt.json` (bounded input
+  `c7d16c7c8adaca57a2096ddc73bd213d371c7beb07a02236c59e7bd7ab540c40`) and
+  `/tmp/tracemap-ddl-7d20c1e-ddl/smoke-receipt.json` (bounded input
+  `126d7c7c981b1a27e090dd5a7e40c8e52b0f865653b6ba033b60ce23071aad37`).
+  Smoke generators are unchanged from the earlier receipt.
+- Core generator SHA-256 `a9a368ffd71180138db37809edc01ae4dc55d5b9a6b9ee493d5096a3b9a01098`;
+  ScriptDom parser SHA-256 unchanged `2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`.
+- Private-path guard and `git diff --check` over `560fa2421..HEAD` passed.
+
+Deferrals, limits and future scope below are unchanged. #908 and #870 were read
+live and remain open; origin/dev is still `560fa2421`.
+
+## Earlier implementation and delivery receipt — 2026-10-25 (superseded)
 
 Validated implementation head: **`7a05e13e9e9db6c1020288597cb5e890cf2bd2bf`**,
 on `codex/sqlserver-ddl-parameter-evidence`. Initial clean branch head was

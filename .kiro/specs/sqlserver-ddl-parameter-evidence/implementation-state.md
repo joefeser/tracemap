@@ -6,7 +6,8 @@ Branch: codex/sqlserver-ddl-parameter-evidence. Initial clean head:
 Live #908/#870 inspected; both remain open and broader than this slice.
 No private inputs, SQL, Docker, remote hosts, agents or paid reviews authorized.
 
-Implementation and validation complete at
+Current validated implementation head: `7d20c1ec600916f02dd4f3e65092230bba859ba3`
+(see "Independent review round" below). First implementation and validation was
 `7a05e13e9e9db6c1020288597cb5e890cf2bd2bf`. Source, revision and shared build outputs
 were held stable throughout the full gate; native smokes followed completion.
 This documentation-only reconciliation records delivery evidence separately.
@@ -60,7 +61,28 @@ ceiling; Markdown includes supported parameter spans as well as unsupported ones
 Private-path and staged whitespace guards passed before implementation commit.
 
 
-## Committed-head acceptance and delivery
+## Independent review round (current)
+
+Started from delivered head 0a48b40 without assuming its gates still held.
+Probed ScriptDom directly and through the CLI. Fixed, one commit each, each with
+a regression test: parser stack overflow inside bounds (84a70b0a2; reproduced
+exit 134, and the new test crashes the test host when the fix is reverted),
+silent ANSI type-synonym admission (63318851c), documented-but-rejected leading
+BOM (1624cf592), plus LF pinning for DDL smoke/template bytes (7d20c1ec6).
+
+Validated implementation head: `7d20c1ec600916f02dd4f3e65092230bba859ba3`.
+Focused 151 passed; Python guards 17 passed; full Debug -warnaserror 4,733
+passed / 0 failed / 3 expected skips (33m 13s) with frozen source/HEAD/outputs;
+sequential JSON then DDL committed-head smokes 52/52 each, 8/12/32, 25 unbound
+per report. Core SHA-256 a9a368ff…1098; parser unchanged 2dcf224a…54ce.
+One development focused run printed 58 passed then "Test Run Aborted" with no
+recorded reason; seven repeats passed fully. Not counted; cause unconfirmed.
+
+Known conservative bound kept as-is: the 128 opening-paren/BEGIN/CASE/IF/WHILE
+budget is per file, so sized parameters can exhaust it before 128 parameters.
+Changing it is a deliberate future decision, not a defect fix.
+
+## Earlier committed-head acceptance and delivery (superseded by the round above)
 
 Implementation commit: `7a05e13e9e9db6c1020288597cb5e890cf2bd2bf`.
 Full Debug solution -warnaserror: 4,715 passed, 0 failed, 3 expected skips;
