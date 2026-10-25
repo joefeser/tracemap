@@ -52,8 +52,49 @@ Live #908/#870 read for context only; both open and broader than this slice.
   passed. Python guards: 9 `test_sqlserver_*` (5 new + 4 reuse) and 17 DNN passed.
 - Private-path guard and `git diff --check` passed before the implementation commit.
 
-## Remaining protocol
+## Committed-head acceptance (implementation `1660a5a8cb0107abb3792788f3eed637987ac30b`)
 
-Commit implementation; freeze source/HEAD/build outputs for full Debug
--warnaserror; then sequential committed-head JSON, DDL and result smokes; pinned
-adapter smoke decision; guards; docs-only results commit; follow-up prompt; push.
+All gates below ran at the implementation commit with source, HEAD and shared
+build outputs frozen (`git status` empty and HEAD unchanged before and after);
+no competing build, smoke or commit ran during the full suite. Results are
+recorded by a later documentation-only commit whose SHA differs.
+
+- Full Debug solution `dotnet test src/dotnet/TraceMap.sln -c Debug -warnaserror`:
+  **4,930 passed, 0 failed, 3 expected skips** (HttpReportProvenanceInterop receipt
+  env unset, Oracle full golden sweep opt-in, Windows-only deep projectless
+  ASP.NET publish); 29m 37s tests, 1,787 s wall. Zero compiler/analyzer warnings.
+- Then sequentially, new directories outside Git:
+  - JSON 52-case smoke `/tmp/tracemap-rc-1660a5a-json`: 52/52, **8/12/32**,
+    generator `16f7b62d92d3e8e34573d09f46fdaf6e6437db5553cc85f6578f63ce58548c46`,
+    bounded input `20ee5a3cdb517448b59768060d890f332742e02568d308de9a1c28e51f41efd8`.
+  - DDL 52-case smoke reusing those scans `/tmp/tracemap-rc-1660a5a-ddl`: 52/52,
+    **8/12/32**, five scan artifacts per language re-verified, generator
+    `118db6e0d3ab192ea463f6378a1c6b2922c0ef16f9a13a2f19cfdcb4ffefd334`, bounded input
+    `5676094d22d667cab3f5b563b75ab95a5dc7eca7c1491cf08301681a4878d904`.
+  - New result smoke `/tmp/tracemap-rc-1660a5a-result`: 158 case reports, JSON
+    **36/10/36**, DDL **36/10/58** (expected = observed), 0 gaps, **20/20 refusals**,
+    byte-identical JSON+Markdown repeats per case, generator
+    `af02e6722879edf4b8d0205d63297b9af87895ba2d6ca9bd2ed6810886aaf205`, bounded input
+    `2081b429d67aa09870c583513b2a3d3d96e8a579a8695f0468bfbee4698296e7`.
+  - Core SHA-256 `430b0ee3151b3831fe72c6c3e77a4ec3ce955a87ba29fa3e88e62f10a15b9a88`
+    (all three receipts and every export/report); ScriptDom parser unchanged
+    `2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`.
+- Pinned OSS adapter smoke (`TRACEMAP_SKIP_BUILD=1
+  TRACEMAP_OSS_SMOKE_REPOS=ProjectExtensions.Azure.ServiceBus,community-visual-basic`,
+  public pinned clones): exit 0, all five artifacts each; C# `csharp-semantic/0.22.10`
+  12,949 facts, VB `vb-semantic/0.10.13` 114,806 facts, both
+  `Level1SemanticAnalysisReduced` / `FailedOrPartial` (documented expected partial
+  coverage). Neither repo has a DatabaseOperationCandidate, so this only shows the
+  new property does not disturb unrelated extraction; it exercises no reader path.
+  Non-.NET adapters, fluentjdf and Windows/private application checks deferred:
+  no non-.NET code changed; reader evidence is covered by the synthetic corpus only.
+- Private-path guard and `git diff --check` passed again after the gates.
+
+Core differs from the development smoke's Core because the assembly embeds the
+commit; source was unchanged between the final focused run and the commit.
+
+## Delivery
+
+Docs-only results commit on top of `1660a5a8c`; follow-up prompt
+`prompts/continue-sqlserver-result-column-evidence.md`; branch pushed. No PR,
+merge, review request, SQL execution, container or private input. #908/#870 open.

@@ -206,4 +206,34 @@ hydration/provider wrappers (`CBO.FillCollection`, `IHydratable`), DataTable/Dat
 inference, adapters, ORMs, RETURN/OUTPUT/affected-row/scalar channels. This is not a
 general SQL interpreter.
 
-Actual gate results are recorded in the spec implementation state and below.
+## Validated implementation head — 2026-10-25
+
+Implementation commit **`1660a5a8cb0107abb3792788f3eed637987ac30b`** on
+`codex/sqlserver-result-column-evidence`, from fresh `origin/dev` = #911 merge
+`730610582660fe32354479b35cf80eb2aa954a62`. These results are recorded by a separate
+documentation-only commit; no implementation change follows the gates.
+
+| Gate | Result |
+| --- | --- |
+| Focused Debug -warnaserror (new + DDL + parameter + DNN classes) | 348 passed, 0 failed/skipped (142 new) |
+| Python guards | 9 `test_sqlserver_*` (5 new, 4 #911 reuse) + 17 DNN harness passed |
+| Full Debug solution -warnaserror, frozen source/HEAD/outputs | 4,930 passed, 0 failed, 3 expected skips; 29m 37s (1,787 s wall); no warnings |
+| JSON 52-case smoke (sequential, committed head) | 52/52, 8 / 12 / 32 |
+| DDL 52-case smoke reusing those scans | 52/52, 8 / 12 / 32; five scan artifacts per language re-verified |
+| Result smoke | JSON 36 / 10 / 36 (82 rows), DDL 36 / 10 / 58 (104 rows), expected = observed, 0 gaps, 20/20 refusals, repeat bytes identical |
+| Pinned OSS C#/VB adapter smoke | exit 0; artifacts present; 0.22.10 / 0.10.13; reduced/partial as documented; no database calls in either repo |
+| Private-path guard, `git diff --check` | passed |
+
+Skips: Python receipt interop environment unset, opt-in Oracle full golden sweep,
+Windows-only deep projectless ASP.NET publish. Receipts are local (outside Git):
+`/tmp/tracemap-rc-1660a5a-{json,ddl,result}/smoke-receipt.json`. Result smoke
+generator `af02e6722879edf4b8d0205d63297b9af87895ba2d6ca9bd2ed6810886aaf205`, bounded
+input `2081b429d67aa09870c583513b2a3d3d96e8a579a8695f0468bfbee4698296e7`; Core
+`430b0ee3151b3831fe72c6c3e77a4ec3ce955a87ba29fa3e88e62f10a15b9a88`; parser unchanged
+`2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`.
+
+Coverage honesty: the pinned OSS repos contain no database operations, so reader
+extraction is exercised only by the synthetic corpus and direct Roslyn tests.
+Non-.NET adapters, Windows and private/application checks were not run (no non-.NET
+code changed). Synthetic results do not establish DNN, SQL-A, catalog or deployed
+acceptance. Follow-up: [continue-sqlserver-result-column-evidence.md](../../prompts/continue-sqlserver-result-column-evidence.md).
