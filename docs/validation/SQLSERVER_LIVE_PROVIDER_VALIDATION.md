@@ -202,3 +202,18 @@ Local linked receipt: `/tmp/tracemap-linked-provider-hr-d39acb8/linked-receipt.j
 (SHA-256 `ac750b24d02616d515e92b8edf23568d7b48487ca2b348f691046618b976e8c3`). This remains a
 narrow synthetic matrix, not modern-provider parity, DNN, private-application or deployment
 acceptance.
+## Phase 5 regression run (matrix unchanged) — 2026-10-26
+The internal-helper slice did not extend this matrix. At implementation head `d811d7193` with
+the CLI built by the frozen full suite, after a read-only revalidation of the reviewed context
+(`tracemap-sql-validation` → `ssh://dockercache`; native linux/x86_64, 8 CPUs, ~30.6 GiB,
+memory/swap/CFS/PID limits enforceable, Docker 29.9.2, 359 GiB free on the Docker data
+filesystem; pinned image present by RepoDigest, linux/amd64; no pre-existing harness
+containers): exit 0, 92 s. **22 linked cases = 12 match / 4 mismatch / 6 unknown** as authored,
+**42/42 runtime checks**, SQL Server 16.0.4205.1, 2 CPUs / 6 GiB memory / SQL 2 GiB, network
+none, no published ports, cleanup **owned-container-removed**, no harness containers afterwards,
+no credential text in either receipt. Linked receipt
+`/tmp/tracemap-linked-provider-ih-d811d71/linked-receipt.json` (SHA-256
+`656478a2ee85a1e6c95601d8f772729e1319ae44f421bcf885a7f3e1a6f5f485`, generator `0fd27dd2…`
+unchanged, bounded input `40ebc2f2…`); runtime receipt `runtime/receipt.json` (SHA-256
+`ebc5fe43919650f05695f98a697a38fe40422b3356a5fbae8a27b9aa686d2b92`, harness generator
+`3df876f7…` unchanged). Regression evidence only; no internal helper is linked.
