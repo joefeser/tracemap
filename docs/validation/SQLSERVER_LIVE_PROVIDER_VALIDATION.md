@@ -121,8 +121,9 @@ receipt binds generator, source matrix, CLI DLLs, scan/report bytes and the runt
 receipt. The runtime receipt separately binds the published client bytes.
 
 Only a clean committed worktree is admitted; every bounded input is compared with
-its exact Git blob before and after execution. Output must be outside the sample
-tree, including through symlink aliases. The harness runs in-process with its own
+its exact Git blob before and after execution. Source file, directory and dangling
+links are rejected before filtering. Output must be outside the repository tree,
+including through symlink aliases. The harness runs in-process with its own
 bounded Docker operations so an outer timeout cannot kill ownership-checked cleanup.
 Each linked row carries the native comparison provenance and report limitations;
 totals are derived from those validated rows.

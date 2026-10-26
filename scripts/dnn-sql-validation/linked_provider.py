@@ -33,13 +33,16 @@ def load(name, path):
     return module
 
 def inputs():
-    paths = [p for p in SAMPLE.rglob('*') if p.is_file() and not {'bin', 'obj'} & set(p.relative_to(SAMPLE).parts)]
+    entries = [SAMPLE, *SAMPLE.rglob('*')]
+    require(not any(p.is_symlink() for p in entries), 'source links refused')
+    paths = [p for p in entries if p.is_file() and not {'bin', 'obj'} & set(p.relative_to(SAMPLE).parts)]
     paths += [Path(__file__), ROOT / 'scripts/dnn-sql-validation/harness.py',
               ROOT / 'samples/sqlserver-result-column-evidence/result-declarations-base.json']
     paths += list((ROOT / 'samples/dnn-sql-validation/sql').glob('*.sql'))
     paths += [ROOT / f'scripts/sqlserver-{kind}-evidence/smoke.py'
               for kind in ('parameter', 'result-column', 'datatable', 'dataset')]
-    require(not any(p.is_symlink() for p in paths), 'source links refused')
+    require(not any(p.is_symlink() or any(parent.is_symlink() for parent in p.parents if parent.is_relative_to(ROOT))
+                    for p in paths), 'source links refused')
     return {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted(paths)}
 
 def verify_committed(revision, snapshot):
@@ -81,7 +84,7 @@ def run(args):
     require(all(getattr(args, g) for g in gates), 'all activation approvals required')
     require(args.context and args.expected_endpoint, 'explicit reviewed context and endpoint required')
     args.output = args.output.resolve()
-    require(not args.output.is_relative_to(SAMPLE.resolve()), 'output must be outside sample tree')
+    require(not args.output.is_relative_to(ROOT.resolve()), 'output must be outside repository tree')
     require(not args.output.exists(), 'new output directory required')
     before = inputs()
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
