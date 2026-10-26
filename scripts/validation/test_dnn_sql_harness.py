@@ -183,10 +183,16 @@ class HarnessTests(unittest.TestCase):
                 self.assertNotIn('--privileged', args)
                 self.assertNotIn('-p', args)
                 self.assertNotIn('-v', args)
+                self.assertEqual('ALL', args[args.index('--cap-drop') + 1])
+                self.assertEqual('NET_BIND_SERVICE', args[args.index('--cap-add') + 1])
+                self.assertIn('no-new-privileges', args)
                 return container
             if args[0] == 'inspect':
+                if args[-1] == '{{.State.Running}}':
+                    return 'true'
                 return owner
             if args[0] == 'exec':
+                self.assertEqual('tcp:127.0.0.1,1433', args[args.index('-S') + 1])
                 if kwargs.get('input', '').startswith('SET NOCOUNT ON;\nSELECT CONVERT(nvarchar(128),SERVERPROPERTY('):
                     self.assertIn('-h', args)
                     self.assertIn('-1', args)
@@ -208,6 +214,29 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual(h.provenance(), receipt['provenance'])
             self.assertNotIn(password, (output / 'receipt.json').read_text())
         fake.run.assert_any_call('rm', '-f', container)
+
+    def test_provider_publish_rejects_incomplete_or_linked_payload(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(ValueError, 'incomplete'):
+                h.provider_inputs(root)
+            for name in ('ProviderChecks', 'ProviderChecks.dll', 'Microsoft.Data.SqlClient.dll'):
+                (root / name).write_bytes(b'public-test-bytes')
+            first = h.provider_inputs(root)
+            self.assertEqual(3, len(first))
+            (root / 'ProviderChecks.dll').write_bytes(b'changed')
+            self.assertNotEqual(first, h.provider_inputs(root))
+            (root / 'link').symlink_to(root / 'ProviderChecks.dll')
+            with self.assertRaisesRegex(ValueError, 'links'):
+                h.provider_inputs(root)
+
+    def test_container_stderr_logs_are_retained_and_secret_redacted(self):
+        from unittest.mock import Mock
+        result = Mock(returncode=0, stdout='banner\n', stderr='startup failed secret-value\n')
+        with patch.object(h.subprocess, 'run', return_value=result):
+            logs = h.Docker('test', 'secret-value').run('logs', 'owned')
+        self.assertIn('startup failed [REDACTED]', logs)
+        self.assertNotIn('secret-value', logs)
 
     def test_mocked_unknown_owner_is_never_removed(self):
         from unittest.mock import Mock
