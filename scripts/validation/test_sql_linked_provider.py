@@ -29,21 +29,42 @@ class LinkedProviderTests(unittest.TestCase):
     def test_output_boundary_and_existing_failure_evidence_are_preserved(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            sample = root / 'sample'
-            sample.mkdir()
+            repo = root / 'repo'
+            sample = repo / 'sample'
+            sample.mkdir(parents=True)
             alias = root / 'alias'
             alias.symlink_to(sample, target_is_directory=True)
             old = root / 'failed'
             old.mkdir()
             (old / 'receipt.json').write_text('failure evidence')
-            for output in (sample, sample / 'new', alias / 'new', old):
+            for output in (repo, repo / 'reports', sample, sample / 'new', alias / 'new', old):
                 args = argparse.Namespace(activate=True, approve_host=True, approve_resources=True,
                     accept_eula=True, approve_disposable=True, context='reviewed', expected_endpoint='ssh://reviewed', output=output)
-                with patch.object(h, 'SAMPLE', sample), patch.object(h.subprocess, 'check_output', side_effect=AssertionError('effect')):
+                with patch.object(h, 'ROOT', repo), patch.object(h, 'SAMPLE', sample), patch.object(h.subprocess, 'check_output', side_effect=AssertionError('effect')):
                     with self.assertRaises(ValueError):
                         h.run(args)
             self.assertFalse((sample / 'new').exists())
             self.assertEqual('failure evidence', (old / 'receipt.json').read_text())
+
+    def test_source_links_are_rejected_before_file_filtering(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sample = root / 'sample'
+            sample.mkdir()
+            target = root / 'external'
+            target.mkdir()
+            file = target / 'fixture.cs'
+            file.write_text('public class Fixture {}')
+            for destination in (target, file, root / 'missing'):
+                link = sample / 'linked'
+                link.symlink_to(destination, target_is_directory=destination == target)
+                with patch.object(h, 'SAMPLE', sample), self.assertRaisesRegex(ValueError, 'source links'):
+                    h.inputs()
+                link.unlink()
+            root_link = root / 'sample-alias'
+            root_link.symlink_to(sample, target_is_directory=True)
+            with patch.object(h, 'SAMPLE', root_link), self.assertRaisesRegex(ValueError, 'source links'):
+                h.inputs()
 
     def test_runtime_does_not_use_killing_outer_subprocess_timeout(self):
         harness = Mock()
