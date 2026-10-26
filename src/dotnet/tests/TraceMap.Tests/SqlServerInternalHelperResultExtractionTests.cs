@@ -53,7 +53,7 @@ public sealed class SqlServerInternalHelperResultExtractionTests
             var compilation = project.GetCompilationAsync().GetAwaiter().GetResult()!;
             if (mutate is not null) compilation = mutate(compilation);
             if (!allowErrors) Assert.DoesNotContain(compilation.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
-            if (register) SqlServerCompilationScopes.Register(repo, project, compilation);
+            if (register) SqlServerCompilationScopes.Register(repo, project, compilation, compilation.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error));
             return compilation.SyntaxTrees.SelectMany(tree =>
             {
                 var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
