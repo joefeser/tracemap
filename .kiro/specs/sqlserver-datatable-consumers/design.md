@@ -33,8 +33,9 @@ with the listed gap (first failing check wins; order below), or an access-level 
 | Reads | `row["Name"]`, `row[0]`, VB `row("Name")`, `row(0)` and `row!Name`, `row.IsNull("Name")`, `row.IsNull(0)`; converted integer constants keep the converted value | access-level gaps: nonconstant name → `dynamic-column-name`; non-identifier constant → `column-name-outside-identifier-vocabulary`; nonconstant ordinal → `dynamic-ordinal` |
 | Guards / flow | `if (table.Rows.Count > 0) { ... }` (no else) on the selected table; foreach above; using lifetimes | any other if/loop/switch/try/lambda/local function/`?.`/`??`/`&&`/`||`/compound/increment/deconstruction/dynamic/late-bound/with/invalid, guards on another table, reader, adapter or comparison → `unsupported-control-flow`; implicit receiver → `implicit-receiver-unsupported`; bounds 20,000 operations / 256 accesses → `operation-limit` / `access-limit` |
 Checks run in this order: Fill overload and statement shape, adapter receiver, table argument,
-method-wide flow, adapter construction/association/members, command, table members and
-position, rows, rows/row members, accesses.
+method-wide control flow, adapter and table construction, implicit receivers (initializers,
+VB `With`), adapter members/association, command, table members and position, rows, row
+members, accesses.
 ## Contracts
 | Contract | Meaning |
 | --- | --- |
