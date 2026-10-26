@@ -83,3 +83,17 @@ documentation-only commit whose SHA differs.
 Docs-only results commit on top of `f4f74f01c`, next-slice prompt
 `prompts/continue-sqlserver-dataset-consumers.md`, branch pushed. No PR, merge, review request,
 SQL execution, container or private input.
+
+## PR #914 clean-fixture repair
+- CI's rest shard ran successfully but the two native fixture theories failed with
+  `FailedOrPartial`: both new fixture projects were missing from the test project's
+  restore/build graph. Prior explicit local fixture restores masked the omission.
+- Added both projects as `ReferenceOutputAssembly="false"` references, matching the
+  existing SQL fixtures. Added a Python guard for both unconditional references.
+- Moved both fixtures' generated bin/obj directories aside, then ran the normal test
+  project command (no separate fixture restore): both projects restored and built,
+  and all 59 DataTable tests passed with Debug `-warnaserror`.
+- All 25 SQL Python guards, private-path and whitespace checks passed. This is a
+  test-build wiring repair; no extractor, comparison or smoke semantics changed.
+  The full suite was not repeated locally for this leaf repair; CI must validate
+  the pushed head. ACK reported no current findings or unresolved review threads.

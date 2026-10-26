@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -28,6 +29,17 @@ def fact(name, line, state=None):
 
 
 class DataTableSmokeGuards(unittest.TestCase):
+    def test_native_fixtures_are_in_the_normal_test_build_graph(self):
+        project = ROOT / "src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj"
+        references = { (project.parent / node.attrib["Include"].replace("\\", "/")).resolve(): node
+                       for node in ET.parse(project).iter("ProjectReference") }
+        for language, extension in (("csharp", "csproj"), ("vb", "vbproj")):
+            fixture = ROOT / "samples/sqlserver-datatable-evidence" / language / f"DataTables.{extension}"
+            with self.subTest(language=language):
+                self.assertIn(fixture, references)
+                self.assertEqual("false", references[fixture].get("ReferenceOutputAssembly"))
+                self.assertIsNone(references[fixture].get("Condition"))
+
     def test_optimized_execution_refuses_before_output_or_helpers(self):
         for flag, env_value in (("-O", None), ("-OO", None), (None, "1")):
             with self.subTest(flag=flag, env=env_value), tempfile.TemporaryDirectory() as tmp:
