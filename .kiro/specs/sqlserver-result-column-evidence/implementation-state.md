@@ -106,7 +106,14 @@ CommandText, CommandType and Connection arm regressions. Consolidate captured
 smoke calls behind fixed-dotnet shell=False execution, a narrowly documented
 audit suppression and a mocked literal-argument/executable guard. Synchronize
 current provenance docs to C# 0.22.12 / VB 0.10.15 while retaining historical
-validation versions. Current-head validation pending.
+validation versions. Frozen repair commit d57a0f8a07ce5b4016df404558f55491768d9f3f:
+focused gate 163 passed; full Debug -warnaserror 4,947 passed, zero failures,
+three expected skips (29m 13s); 27 Python guards passed. Sequential parameter
+JSON/DDL smokes each retained 52 cases (8/12/32); result JSON 36/10/36 and
+DDL 36/10/58, all 20 refusals and repeated-report checks passed. Pinned C#/VB
+OSS smokes passed with reduced coverage and no SQL calls; synthetic tests remain
+the reader-specific evidence. No SQL execution or private inputs. This readback
+is docs-only after the frozen repair commit.
 
 ### PR #912 exact-head repair
 

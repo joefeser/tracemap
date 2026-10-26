@@ -195,6 +195,13 @@ Those smokes retained reduced coverage and zero SQL calls; they do not
 establish real-application reader coverage. The subsequent switch-control-flow
 repair advances the current versions to C# 0.22.12 / VB 0.10.15.
 
+At `d57a0f8a0`, the full Debug -warnaserror gate passed 4,947 tests with
+three expected skips. Focused tests: 163; Python guards: 27. The sequential
+JSON/DDL parameter and result smokes preserved the documented matrices and all
+20 refusal checks. Fresh pinned OSS C#/VB smokes passed with
+`csharp-semantic/0.22.12` and `vb-semantic/0.10.15`: 12,949 / 114,806 facts,
+both reduced coverage and zero SQL calls. No live SQL or private acceptance.
+
 Captured smoke subprocesses use a fixed dotnet executable, literal argument
 lists and explicit shell=False. The single rule-specific audit suppression is
 pinned by a mocked regression for executable rejection and literal shell
