@@ -50,12 +50,24 @@ public static class SqlServerDdlResultEvidence
     }
 
     private static (SqlServerResultShape, IReadOnlyList<SqlServerDdlResultUnsupported>) Analyse(SqlServerObjectIdentity identity, string path, ProcedureStatementBody procedure)
+        => Analyse(identity, path, procedure, RuleId, null);
+
+    internal delegate (SqlServerResultShape Shape, IReadOnlyList<SqlServerDdlResultUnsupported> Gaps) UnknownShape(string kind, TSqlFragment at);
+
+    /// <summary>
+    /// Shared body analysis. Without <paramref name="tableBacked"/> (this route) any FROM is an unknown
+    /// <c>from-dependency-unsupported</c> shape exactly as before; the opt-in table route supplies the handler,
+    /// which sees only a single plain QuerySpecification that already passed the shared body and statement checks.
+    /// </summary>
+    internal static (SqlServerResultShape Shape, IReadOnlyList<SqlServerDdlResultUnsupported> Gaps) Analyse(SqlServerObjectIdentity identity,
+        string path, ProcedureStatementBody procedure, string ruleId,
+        Func<SelectStatement, QuerySpecification, UnknownShape, (SqlServerResultShape, IReadOnlyList<SqlServerDdlResultUnsupported>)>? tableBacked)
     {
         var start = procedure.StartLine;
         var end = SqlServerDdlEvidence.EndLine(procedure);
         (SqlServerResultShape, IReadOnlyList<SqlServerDdlResultUnsupported>) Unknown(string kind, TSqlFragment at)
             => (new(identity, path, start, end, "first", "unknown", kind, []),
-                [new(identity, kind, RuleId, EvidenceTiers.Tier4Unknown, path, at.StartLine, SqlServerDdlEvidence.EndLine(at))]);
+                [new(identity, kind, ruleId, EvidenceTiers.Tier4Unknown, path, at.StartLine, SqlServerDdlEvidence.EndLine(at))]);
         IList<TSqlStatement> statements = procedure.StatementList.Statements;
         // At most one simple BEGIN/END wrapper; atomic or nested blocks are not unwrapped.
         if (statements.Count == 1 && statements[0].GetType() == typeof(BeginEndBlockStatement))
@@ -73,6 +85,8 @@ public static class SqlServerDdlResultEvidence
             _ => "body-statement-unsupported"
         }, statement);
         var select = (SelectStatement)statement;
+        // The table route names CTEs specifically; this route keeps its original select-clause reason.
+        if (tableBacked is not null && select.WithCtesAndXmlNamespaces is not null) return Unknown("cte-unsupported", select.WithCtesAndXmlNamespaces);
         if (select.Into is not null || select.On is not null || select.ComputeClauses.Count > 0 || select.WithCtesAndXmlNamespaces is not null
             || select.OptimizerHints.Count > 0) return Unknown("select-clause-unsupported", select);
         if (select.QueryExpression is BinaryQueryExpression) return Unknown("set-operation-unsupported", select.QueryExpression);
@@ -81,7 +95,8 @@ public static class SqlServerDdlResultEvidence
         // Star and assignment elements are named before table dependencies so their reason stays specific.
         if (query.SelectElements.FirstOrDefault(e => e is SelectStarExpression) is { } star) return Unknown("select-star-unsupported", star);
         if (query.SelectElements.FirstOrDefault(e => e is SelectSetVariable) is { } assignment) return Unknown("select-assignment-unsupported", assignment);
-        if (query.FromClause is not null) return Unknown("from-dependency-unsupported", query.FromClause);
+        if (query.FromClause is not null)
+            return tableBacked is null ? Unknown("from-dependency-unsupported", query.FromClause) : tableBacked(select, query, Unknown);
         if (query.WhereClause is not null || query.GroupByClause is not null || query.HavingClause is not null || query.OrderByClause is not null
             || query.TopRowFilter is not null || query.OffsetClause is not null || query.ForClause is not null || query.WindowClause is not null
             || query.UniqueRowFilter != UniqueRowFilter.NotSpecified) return Unknown("select-clause-unsupported", query);
@@ -109,7 +124,7 @@ public static class SqlServerDdlResultEvidence
         if (columns.Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != columns.Count)
             return Unknown("duplicate-or-case-only-alias-unsupported", select);
         // Literal and CAST types, nullability and values stay visible as an explicit uncompared facet.
-        SqlServerDdlResultUnsupported[] facets = [new(identity, "column-type-facets-not-compared", RuleId, EvidenceTiers.Tier4Unknown,
+        SqlServerDdlResultUnsupported[] facets = [new(identity, "column-type-facets-not-compared", ruleId, EvidenceTiers.Tier4Unknown,
             path, select.StartLine, SqlServerDdlEvidence.EndLine(select))];
         return (new(identity, path, select.StartLine, SqlServerDdlEvidence.EndLine(select), "first", "complete", null, columns), facets);
     }

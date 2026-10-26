@@ -2,6 +2,15 @@
 
 Operator examples use generic site, page, and handler names. Historical receipts remain bound to their recorded input bytes; genericized examples do not establish a fresh platform validation result.
 
+## Bounded offline SQL Server table-backed result shapes
+[SQLSERVER_TABLE_RESULT_EVIDENCE.md](validation/SQLSERVER_TABLE_RESULT_EVIDENCE.md)
+documents the opt-in `sqlserver-ddl-table-result` route: bounded CREATE TABLE plus one
+unconditional SELECT of direct columns from one admitted table, compared with the unchanged
+reader evidence (no extractor change). Shared Core changes, so run the new tests with the
+retained SQL/DNN tests and Python guards, commit, then the frozen full Debug -warnaserror
+suite. Afterwards, sequentially at the committed head: the retained 52-case smokes (8/12/32),
+the retained result smoke (JSON 36/10/36, DDL 36/10/58, 20 refusals) and the new table smoke
+(per language 22/5/44 over 64 cases, 24 refusals). No SQL, containers or private inputs.
 ## Bounded offline SQL Server result-column / reader evidence
 [SQLSERVER_RESULT_COLUMN_EVIDENCE.md](validation/SQLSERVER_RESULT_COLUMN_EVIDENCE.md)
 documents the additive `sqlServerReaderState` source evidence (C# 0.22.13 / VB
