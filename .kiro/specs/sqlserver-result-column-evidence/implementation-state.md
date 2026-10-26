@@ -143,7 +143,15 @@ Reject nested/non-standalone command assignments rather than infer evaluation
 order. Ref-local declarations and ref reassignments invalidate GetOrdinal-name
 provenance. Seven new regression cases cover the reported shapes and adjacent
 CommandType/Connection/readonly/ref-reassignment variants. Extractors advance
-to C# 0.22.13 / VB 0.10.16. Validation is pending on the frozen repair head.
+to C# 0.22.13 / VB 0.10.16. Frozen repair head
+`2950a6e5b0df3e42bfbbc42e0f1aa953f9e6a258`: full Debug `-warnaserror`
+passed 4,954 tests, zero failures, three existing skips (32m 51s). Focused
+result/Razor gate passed 170 tests; all 27 Python guards passed. Sequential
+JSON/DDL parameter smokes retained 52 cases each (8/12/32). Result smoke retained
+JSON 36/10/36 and DDL 36/10/58, all 20 refusals and deterministic repeated reports.
+Pinned C#/VB public-repository scans passed their reduced-coverage smoke checks;
+neither repository has SQL calls. No private inputs or SQL execution. This
+validation readback is docs-only after the frozen repair commit.
 
 ### Pre-PR catalog correction and revalidation
 
