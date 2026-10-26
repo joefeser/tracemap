@@ -2,7 +2,9 @@
 
 This is a static public corpus and a prepared, **NOT RUN** optional SQL Server
 lane. It is a first slice of #870, not schema-comparison implementation or private
-application acceptance. No DNN application, IIS, container or SQL was executed.
+application acceptance. No DNN application, IIS, container or SQL was executed
+in that original slice. For the later live synthetic provider checks, see
+[SQLSERVER_LIVE_PROVIDER_VALIDATION.md](SQLSERVER_LIVE_PROVIDER_VALIDATION.md).
 
 Later bounded synthetic [result-column evidence](SQLSERVER_RESULT_COLUMN_EVIDENCE.md)
 compares fresh SqlCommand/SqlDataReader consumers with admitted first-result shapes;
@@ -232,12 +234,16 @@ python3 scripts/dnn-sql-validation/harness.py --activate \
 
 The harness rechecks endpoint, daemon architecture/resources, enforceable memory/swap/CPU/PID limits and local RepoDigests
 before asking for a password or creating anything. It never starts IIS/DNN.
-Twelve readiness attempts have a 10-second command timeout plus 2-second retry
+Sixty readiness attempts have a 10-second command timeout plus 2-second retry
 delay. SQL commands use bounded login/query timeouts. Failures retain bounded,
 credential-redacted container logs when ownership is verified; raw daemon error
 text is not printed. Process termination/daemon failure can interrupt cleanup;
 retain the output directory and inspect the recorded owner label before manual
 removal. Never remove an unknown container by name or prune the host.
+The pinned server executable declares `cap_net_bind_service=ep`; retain only
+`NET_BIND_SERVICE` after dropping all capabilities, keeping no-new-privileges.
+Explicit loopback TCP avoids hostname-resolution failures in network-none mode.
+Exited containers fail readiness immediately. Logs retain redacted stderr too.
 
 `schema.sql` and `seed.sql` are synthetic setup only. `metadata.sql` describes
 parameters and first result metadata; it is separate from `execution.sql`, which
