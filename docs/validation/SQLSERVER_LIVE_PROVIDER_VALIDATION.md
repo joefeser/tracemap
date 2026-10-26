@@ -124,3 +124,24 @@ There are **32 runtime assertions**: the original 20 plus 12 linked observations
 This is a narrow synthetic matrix, not modern-provider parity across all scanner
 shapes, DNN acceptance, work-machine acceptance or application readiness. Native
 scan/report artifacts are local evidence, not privacy-projected public exports.
+
+### Linked committed-head validation — 2026-10-26
+
+At `88230f187`, after rebuilding the CLI with `-warnaserror`:
+
+- C# and VB scans built successfully; exactly six semantic execution sites each.
+- All 12 static verdicts matched: **6 bounded matches / 2 mismatches / 4 unknowns**.
+- Repeated JSON and Markdown comparisons were byte-identical.
+- All **32 runtime assertions passed** on the pinned SQL Server container.
+- Source and CLI bytes remained unchanged; owned-container cleanup completed.
+- **56 focused Python guards passed**, including runtime counterpart/hash/cleanup
+  refusals. Private-path and whitespace guards passed.
+
+Local linked receipt:
+`/tmp/tracemap-linked-provider-committed-20261026/linked-receipt.json`.
+The preceding development run also passed. An overly broad unittest discovery
+invocation additionally selected an older command-text integration suite without
+its required artifact arguments; those 32 setup errors were an invocation error,
+not a passing gate. The explicit focused invocation above supersedes that attempt
+for this slice. No production scanner code changed and no full .NET test-suite
+claim is made.
