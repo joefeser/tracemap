@@ -152,3 +152,31 @@ migration order. Explicitly unknown or absent: views, joins, CTEs, subqueries, U
 other clauses, expressions, temporary tables, table variables, functions, dynamic SQL, EXEC,
 conditional/multiple result sets, ALTER/migration scripts, DataTable/DataSet, adapters, ORMs,
 DNN hydration and provider wrappers. This is not a SQL interpreter.
+
+## Validated implementation head — 2026-10-26
+
+Implementation commit **`c28dbd3df38ee80da684914677829dfee9a35644`** on
+`codex/sqlserver-table-result-shapes`, from fresh `origin/dev` = #912 merge `fc14857a5`.
+Recorded by a separate documentation-only commit; no implementation change follows the gates.
+
+| Gate | Result |
+| --- | --- |
+| Focused Debug -warnaserror (table + result + DDL + parameter + catalog + DNN classes) | 495 passed, 0 failed/skipped (122 new) |
+| Python guards | 15 `test_sqlserver_*` (5 new) + 17 DNN harness passed |
+| Full Debug solution -warnaserror, frozen source/HEAD/outputs | 5,077 passed, 0 failed, 3 expected skips; 34m 4s (2,057 s wall); no warnings |
+| Retained JSON / DDL 52-case parameter smokes | 8 / 12 / 32 each |
+| Retained result smoke | JSON 36 / 10 / 36, DDL 36 / 10 / 58, 20/20 refusals |
+| New table smoke | 64 cases per language; 44 / 10 / 88 (142 rows), expected = observed, 0 gaps, 24/24 refusals, repeat bytes identical |
+| Private-path guard, `git diff --check` | passed |
+
+Receipts are local (outside Git): `/tmp/tracemap-tr-c28dbd3-{json,ddl,result,table}/smoke-receipt.json`.
+Table smoke generator `aff4dd7ef885e207923dd52034e36ee58c5f600348397356314ee95de417d080`, bounded
+input `4b7eec018407f86876865670b4726e894a1f9ecf9338140195aeed96394652c6`; Core
+`dce5cfff0c3f008249ea722b638478594678acbe3ae6071cabb7ad691281a8bd`; parser unchanged
+`2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`.
+
+Coverage honesty: no source extractor changed, so the pinned OSS adapter smoke was not rerun;
+those public repos contain no SQL calls and would not exercise this route. Table-backed shapes
+are exercised only by the synthetic corpus and direct tests. Not DNN, private, catalog or
+deployed acceptance. Follow-up (Phase 2):
+[continue-sqlserver-datatable-consumers.md](../../prompts/continue-sqlserver-datatable-consumers.md).
