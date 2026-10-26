@@ -12,7 +12,7 @@ namespace TraceMap.Core;
 public sealed record SqlServerDataTableAccess(string Kind, string Member, string RowSource, int? RowIndex, string? Name, int? Ordinal,
     int Line, int EndLine, string? Gap);
 /// <param name="AdapterAssociation">constructor-command or select-command-property.</param>
-/// <param name="Guard">none, rows-count, foreach or rows-count+foreach; guards are bound to the selected table only.</param>
+/// <param name="Guard">none, rows-count, foreach or rows-count-and-foreach; guards are bound to the selected table only.</param>
 public sealed record SqlServerDataTableState(string Version, string Coverage, string? Gap, string? CommandType, string? CommandTextHash,
     string? AdapterAssociation, int? AdapterLine, int? TableLine, string Guard, IReadOnlyList<SqlServerDataTableAccess> Accesses);
 
@@ -244,7 +244,7 @@ internal static class SqlServerDataTableConsumers
         if (accesses.Count > MaxAccesses) return Unknown("access-limit");
         var adapterLine = adapterDeclarator!.Syntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
         var tableLine = tableDeclarator!.Syntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-        var guard = countGuard && foreachGuard ? "rows-count+foreach" : countGuard ? "rows-count" : foreachGuard ? "foreach" : "none";
+        var guard = countGuard && foreachGuard ? "rows-count-and-foreach" : countGuard ? "rows-count" : foreachGuard ? "foreach" : "none";
         return new(Version, "bounded", null, commandType, textHash, associationKind, adapterLine, tableLine, guard,
             accesses.OrderBy(a => a.Position).Select(a => a.Access).ToArray());
     }

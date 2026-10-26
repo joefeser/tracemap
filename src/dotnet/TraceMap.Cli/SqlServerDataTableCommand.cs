@@ -5,6 +5,7 @@ namespace TraceMap.Cli;
 internal static class SqlServerDataTableCommand
 {
     internal const string Help = "tracemap sqlserver-datatable-result compare --origin result-schema --declarations <public-result-declarations.json> | --origin <ddl-result|ddl-table-result> --input <public-manifest.json> --source-root <public-synthetic-root>; then --schema <shape-export.json> --bindings <datatable-bindings.json> --facts <facts.ndjson> --repo <logical-repo> --revision <sha> --out <new-directory>";
+    internal const int MaxFactsBytes = 64 * 1024 * 1024;
     private static readonly string[] ReportFiles = ["datatable-column-comparison.json", "report.md"];
     private static readonly string[] Common = ["--origin", "--schema", "--bindings", "--facts", "--repo", "--revision", "--out"];
     internal static int Run(string[] args, TextWriter output)
@@ -24,7 +25,9 @@ internal static class SqlServerDataTableCommand
         var destination = options["--out"];
         if (File.Exists(destination) || Directory.Exists(destination)) throw new ArgumentException("output-must-be-new");
         var bindings = SqlServerSchemaEvidence.Read<SqlServerDataTableBindings>(Read(options, "--bindings"));
-        var facts = Read(options, "--facts").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(SqlServerSchemaEvidence.Read<CodeFact>).ToArray();
+        // A whole scan's facts.ndjson is larger than the 4 MiB public-artifact bound; it keeps its own explicit bound.
+        var facts = SqlServerDdlCommand.ReadBounded(options["--facts"], MaxFactsBytes).Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(SqlServerSchemaEvidence.Read<CodeFact>).ToArray();
         var schema = Read(options, "--schema");
         var (repo, revision) = (options["--repo"], options["--revision"]);
         SqlServerDataTableComparisonReport report;

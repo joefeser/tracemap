@@ -158,7 +158,9 @@ reads and built-in conversions; helpers, getters, constructors and user conversi
 yield unsupported-execution-argument. Extractor versions are C# 0.22.9 and VB 0.10.12.
 The later result-column slice bumps them to C# 0.22.13 / VB 0.10.16 for the additive,
 independent `sqlServerReaderState`; parameter state and its digest projection are unchanged
-([result-column evidence](SQLSERVER_RESULT_COLUMN_EVIDENCE.md)).
+([result-column evidence](SQLSERVER_RESULT_COLUMN_EVIDENCE.md)). The DataTable slice bumps
+them to C# 0.22.14 / VB 0.10.17 for the additive, Fill-only `sqlServerDataTableState`
+([DataTable evidence](SQLSERVER_DATATABLE_EVIDENCE.md)); parameter and reader state are unchanged.
 
 ```sh
 dotnet build src/dotnet/TraceMap.Cli -c Debug -warnaserror
