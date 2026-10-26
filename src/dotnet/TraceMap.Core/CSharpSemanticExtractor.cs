@@ -631,7 +631,8 @@ public static class CSharpSemanticExtractor
         AddCompilationDiagnostics(repoPath, projectPath, compilation, gaps);
         // Whole-compilation document scope for internal-helper caller enumeration (Fill facts of this compilation only);
         // every compilation error the adapter reports as a CompilationDiagnostic gap makes that enumeration unknown.
-        SqlServerCompilationScopes.Register(repoPath, project, compilation, hasErrors: gaps.Count > gapsBeforeDiagnostics);
+        SqlServerCompilationScopes.Register(repoPath, project, compilation, hasErrors: gaps.Count > gapsBeforeDiagnostics,
+            compilationInputPaths: compilationInputPaths);
         progress?.FinishStage(
             ScanProgressReporter.ScanOperation,
             ScanProgressStages.Compilation,

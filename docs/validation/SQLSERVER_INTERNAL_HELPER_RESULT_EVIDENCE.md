@@ -88,6 +88,14 @@ under a temporary repository root) cover the assembly- and scan-shaped cells:
 exclusion path, unregistered scope, tree and character bounds, generated header/name and
 non-document trees, external and path-unsafe documents, private protected / protected internal,
 and the 64/65 cross-document caller limit.
+## PR #918 caller-scope hardening
+Current extraction versions are C# `0.22.19` and VB `0.10.22`; the initial versions in the
+contract/acceptance record above are historical. The state schema is unchanged. Decoded
+identifier tokens preserve Unicode-escaped C# calls and reference escapes. Unavailable
+captured project inputs reduce the whole helper scope before any Fill is analyzed, regardless
+of document order, using the adapters' existing inventory-or-file availability policy.
+Prior extractor evidence remains unknown in the comparison route, including matching bindings.
+
 ## Validation commands
 ```sh
 dotnet build src/dotnet/TraceMap.sln -c Debug -warnaserror   # restores every SQL fixture through the test project graph
