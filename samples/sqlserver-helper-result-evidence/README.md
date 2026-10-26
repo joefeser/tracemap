@@ -7,3 +7,11 @@ each refused helper keeps one `Use<Helper>` caller.
 Result shapes are reused from [`../sqlserver-result-column-evidence`](../sqlserver-result-column-evidence/README.md)
 (JSON base declarations, `ddl/` and `ddl-table/` templates). See
 [the contract, syntax matrix and native commands](../../docs/validation/SQLSERVER_HELPER_RESULT_EVIDENCE.md).
+
+## Security analyzer boundary
+
+The C# fixture's 29 rule-specific `nosemgrep` annotations apply only to
+`csharp.lang.security.sqli.csharp-sqli`. These are deliberately varied source-analysis
+inputs, compiled and scanned but never invoked; altering their command construction
+would remove coverage. The fixture project is a library, not an executable.
+This is not a repository-wide SQL-injection exclusion or guidance for application SQL.

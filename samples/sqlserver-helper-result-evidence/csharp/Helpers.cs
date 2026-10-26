@@ -9,7 +9,7 @@ private static void ConsumeTable(DataTable table) { }
 private static void Touch() { }
 // ---- Bounded helpers: one Phase 2/3 Fill shape, command text from the procedure parameter, filled local returned.
 private static DataTable ReadTable(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -17,7 +17,7 @@ adapter.Fill(table);
 return table;
 }
 private static DataSet ReadSet(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var results = new DataSet();
@@ -25,7 +25,7 @@ adapter.Fill(results);
 return results;
 }
 private static DataSet ReadNamedSet(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var results = new DataSet();
@@ -34,7 +34,7 @@ return results;
 }
 private static DataTable ReadTableText(string procedure) {
 var command = new SqlCommand();
-command.CommandText = procedure;
+command.CommandText = procedure; // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter();
 adapter.SelectCommand = command;
@@ -43,7 +43,7 @@ adapter.Fill(table);
 return table;
 }
 private static DataTable ReadTableUsing(SqlConnection connection, string procedure) {
-using var command = new SqlCommand(procedure, connection);
+using var command = new SqlCommand(procedure, connection); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 using var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -156,7 +156,7 @@ return table.Rows[0]["Name"];
 }
 // ---- Helper state cells: the whole helper state is unknown with the authored gap (each helper keeps one caller).
 public static DataTable PublicHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -168,7 +168,7 @@ var table = PublicHelper("dbo.ReadItems");
 return table.Rows[0]["Name"];
 }
 internal static DataTable InternalHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -180,7 +180,7 @@ var table = InternalHelper("dbo.ReadItems");
 return table.Rows[0]["Name"];
 }
 private static DataTable GenericHelper<T>(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -192,7 +192,7 @@ var table = GenericHelper<int>("dbo.ReadItems");
 return table.Rows[0]["Name"];
 }
 private static DataTable OverloadedHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -200,7 +200,7 @@ adapter.Fill(table);
 return table;
 }
 private static DataTable OverloadedHelper(string procedure, int timeout) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -213,7 +213,7 @@ var other = OverloadedHelper("dbo.ReadItems", 30);
 return table.Rows[0]["Name"];
 }
 private static DataTable ExtensionHelper(this string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -226,7 +226,7 @@ var table = procedure.ExtensionHelper();
 return table.Rows[0]["Name"];
 }
 private static DataTable RefHelper(ref string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -239,7 +239,7 @@ var table = RefHelper(ref procedure);
 return table.Rows[0]["Name"];
 }
 private static DataTable OptionalHelper(string procedure = "dbo.ReadItems") {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -251,7 +251,7 @@ var table = OptionalHelper();
 return table.Rows[0]["Name"];
 }
 private static DataTable TwoStringHelper(string procedure, string other) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -263,7 +263,7 @@ var table = TwoStringHelper("dbo.ReadItems", "unused");
 return table.Rows[0]["Name"];
 }
 private static object ObjectHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -278,7 +278,7 @@ private static DataTable RecursiveHelper(string procedure) {
 if (procedure.Length == 0) {
 return RecursiveHelper("dbo.ReadItems");
 }
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -291,7 +291,7 @@ return table.Rows[0]["Name"];
 }
 private static readonly Func<string, DataTable> Reader = DelegateHelper;
 private static DataTable DelegateHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -306,7 +306,7 @@ public static object DelegateValue() {
 return Reader;
 }
 private static DataTable MutatingHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -319,7 +319,7 @@ var table = MutatingHelper("dbo.ReadItems");
 return table.Rows[0]["Name"];
 }
 private static DataTable GuardedHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -333,7 +333,7 @@ var table = GuardedHelper("dbo.ReadItems");
 return table.Rows[0]["Name"];
 }
 private static DataTable ExecutingHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 command.ExecuteNonQuery();
 var adapter = new SqlDataAdapter(command);
@@ -346,7 +346,7 @@ var table = ExecutingHelper("dbo.ReadItems");
 return table.Rows[0]["Name"];
 }
 private static DataTable MultipleReturnHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -374,7 +374,7 @@ return table.Rows[0]["Name"];
 }
 private static DataTable ParameterWriteHelper(string procedure) {
 procedure = "dbo." + procedure;
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -387,7 +387,7 @@ return table.Rows[0]["Name"];
 }
 private static DataTable CallingHelper(string procedure) {
 Touch();
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -399,7 +399,7 @@ var table = CallingHelper("dbo.ReadItems");
 return table.Rows[0]["Name"];
 }
 private static DataTable DisposedHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 using var table = new DataTable();
@@ -411,7 +411,7 @@ var table = DisposedHelper("dbo.ReadItems");
 return table.Rows[0]["Name"];
 }
 private static DataTable UncalledHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -419,7 +419,7 @@ adapter.Fill(table);
 return table;
 }
 private static DataTable TextCommandHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.Text;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -529,7 +529,7 @@ return null;
 // Instance and virtual helpers need a non-static type.
 public sealed class InstanceHelpers {
 private DataTable InstanceHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -543,7 +543,7 @@ return table.Rows[0]["Name"];
 }
 public class VirtualHelpers {
 protected virtual DataTable VirtualHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();
@@ -557,7 +557,7 @@ return table.Rows[0]["Name"];
 }
 public static partial class PartialHelpers {
 private static DataTable PartialHelper(string procedure) {
-var command = new SqlCommand(procedure);
+var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
 command.CommandType = CommandType.StoredProcedure;
 var adapter = new SqlDataAdapter(command);
 var table = new DataTable();

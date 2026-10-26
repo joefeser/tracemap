@@ -56,8 +56,10 @@ public static class Cases {
         return set.Tables[1].Rows[0]["Value"];
     }
     // Phase 4: one private static helper level; each call site is bound separately.
+    // The two SQLi suppressions below cover private StoredProcedure helpers called only with
+    // fixed dbo.ReadItems/dbo.ReadOther names in this disposable synthetic harness, not SQL text.
     private static DataTable ReadTable(SqlConnection connection, string procedure) {
-        using var command = new SqlCommand(procedure);
+        using var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
         command.CommandType = CommandType.StoredProcedure;
         command.Connection = connection;
         using var adapter = new SqlDataAdapter(command);
@@ -66,7 +68,7 @@ public static class Cases {
         return table;
     }
     private static DataSet ReadSet(SqlConnection connection, string procedure) {
-        using var command = new SqlCommand(procedure);
+        using var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli
         command.CommandType = CommandType.StoredProcedure;
         command.Connection = connection;
         using var adapter = new SqlDataAdapter(command);
