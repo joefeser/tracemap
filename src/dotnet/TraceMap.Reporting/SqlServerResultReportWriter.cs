@@ -27,6 +27,32 @@ public static class SqlServerResultReportWriter
         return text.ToString();
     }
 
+    public static string Build(SqlServerDdlTableResultComparisonReport report)
+    {
+        var ddl = report.DdlEvidence;
+        var text = new StringBuilder("# SQL Server DDL table-backed result-column evidence\n\n");
+        text.AppendLine($"Origin: {E(ddl.Declarations.Origin)}; rule: {ddl.RuleId}; tier: {ddl.Tier}; extractor: {ddl.ExtractorVersion}.");
+        text.AppendLine($"Parser: {ddl.ParserVersion}; parser SHA-256: {ddl.ParserSha256}.");
+        text.AppendLine($"DDL generator SHA-256: {ddl.GeneratorSha256}; DDL bounded input SHA-256: {ddl.BoundedInputSha256}.");
+        text.AppendLine($"Report generator SHA-256: {report.GeneratorSha256}; report bounded input SHA-256: {report.BoundedInputSha256}.\n");
+        foreach (var table in ddl.Tables)
+            text.AppendLine($"- DDL table: {Identity(table.Identity)} at {E(table.FilePath)}:{table.StartLine}–{table.EndLine}; {table.Completeness}"
+                + (table.UnknownReason is null ? "" : " (" + E(table.UnknownReason) + ")") + $"; {table.Columns.Count} columns; {ddl.RuleId}; {(table.Completeness == "complete" ? ddl.Tier : EvidenceTiers.Tier4Unknown)}.");
+        foreach (var shape in ddl.Declarations.Shapes)
+            text.AppendLine($"- DDL first result shape: {Identity(shape.Identity)} at {E(shape.FilePath)}:{shape.StartLine}–{shape.EndLine}; {shape.Completeness}"
+                + (shape.UnknownReason is null ? "" : " (" + E(shape.UnknownReason) + ")") + $"; {shape.Columns.Count} columns; {ddl.RuleId}; {(shape.Completeness == "complete" ? ddl.Tier : EvidenceTiers.Tier4Unknown)}.");
+        foreach (var projection in ddl.Projections)
+            text.AppendLine($"- Projection: {Identity(projection.Procedure)} from {Identity(projection.Table)}: "
+                + E(string.Join(", ", projection.Columns.Select(c => $"{c.Ordinal} {c.OutputName} ← {c.SourceColumn} (lines {c.Line}/{c.SourceColumnLine})"))) + ".");
+        foreach (var gap in ddl.TableUnsupported)
+            text.AppendLine($"- Unsupported table: {E(gap.Kind)} {Identity(gap.Identity)} at {E(gap.FilePath)}:{gap.StartLine}–{gap.EndLine}; {gap.RuleId}; {gap.Tier}.");
+        foreach (var gap in ddl.Unsupported)
+            text.AppendLine($"- Unsupported: {E(gap.Kind)} {Identity(gap.Identity)} at {E(gap.FilePath)}:{gap.StartLine}–{gap.EndLine}; {gap.RuleId}; {gap.Tier}.");
+        text.Append('\n');
+        text.Append(Build(report.Comparison).Replace("# SQL Server result-column comparison", "## Bounded DDL table-backed result-column comparison", StringComparison.Ordinal));
+        return text.ToString();
+    }
+
     public static string Build(SqlServerResultComparisonReport report)
     {
         var s = new StringBuilder("# SQL Server result-column comparison\n\nCoverage: partial. No aggregate clean verdict. First result set; column identity and ordinal bounds only.\n\n");
@@ -51,4 +77,5 @@ public static class SqlServerResultReportWriter
     }
 
     private static string Identity(SqlServerObjectIdentity i) => E(i.Server + "." + i.Database + "." + i.Schema + "." + i.Procedure);
+    private static string Identity(SqlServerTableIdentity i) => E(i.Server + "." + i.Database + "." + i.Schema + "." + i.Table);
 }
