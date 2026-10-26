@@ -40,9 +40,11 @@
   (`helper-compilation-limit`), checked before any reference scan; a text prefilter skips trees
   without the helper name; at most 64 call sites (`helper-caller-limit`, collection stops at the
   65th); each caller method keeps the 20,000-operation bound (`operation-limit`).
-- **Errors.** Any error diagnostic in the compilation (evaluated once, lazily, only when an
-  internal helper reaches the check) is `helper-compilation-errors`: unresolved binding could
-  hide a call.
+- **Errors.** Any compilation error the adapter itself counts against coverage (its
+  `CompilationDiagnostic` gaps) is `helper-compilation-errors`: unresolved binding could hide a
+  call. Amended during implementation: the first draft evaluated every error diagnostic, but VB
+  MSBuildWorkspace loads always carry the location-less injected My-template errors that the VB
+  adapter already excludes from coverage, so both adapters now pass their own decision.
 - **Other compilations.** `InternalsVisibleTo` on the assembly →
   `helper-internals-visible-to-unsupported`. Without it, only reflection can reach an internal
   member from another compilation; that is never claimed. Calls into the helper from other

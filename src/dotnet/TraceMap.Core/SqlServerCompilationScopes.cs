@@ -18,19 +18,17 @@ internal sealed class SqlServerCompilationScope
     internal const string LinkedGap = "helper-linked-document-unsupported";
     internal const string PathGap = "helper-document-path-unsupported";
     private readonly IReadOnlyDictionary<string, SqlServerCompilationDocument> documents;
-    private readonly Lazy<bool> errors;
-
-    internal SqlServerCompilationScope(IReadOnlyDictionary<string, SqlServerCompilationDocument> documents, bool reduced, Compilation compilation)
+    internal SqlServerCompilationScope(IReadOnlyDictionary<string, SqlServerCompilationDocument> documents, bool reduced, bool hasErrors)
     {
         this.documents = documents;
         Reduced = reduced;
-        // Evaluated once and only when an internal helper reaches this check; unresolved binding could hide a call.
-        errors = new(() => compilation.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error), LazyThreadSafetyMode.ExecutionAndPublication);
+        HasErrors = hasErrors;
     }
 
     /// <summary>Scan-scope exclusion removed documents of this project before compilation.</summary>
     internal bool Reduced { get; }
-    internal bool HasErrors => errors.Value;
+    /// <summary>The adapter counted source error diagnostics against coverage; unresolved binding could hide a call.</summary>
+    internal bool HasErrors { get; }
 
     /// <summary>The tree's document class; trees that are not project documents (source generators, injected trees) are generated.</summary>
     internal SqlServerCompilationDocument Document(SyntaxTree tree)
@@ -66,8 +64,11 @@ internal static class SqlServerCompilationScopes
     internal static SqlServerCompilationScope? Find(Compilation? compilation)
         => compilation is not null && Scopes.TryGetValue(compilation, out var scope) ? scope : null;
 
-    /// <summary>Registers the document scope of <paramref name="project"/>'s <paramref name="compilation"/>.</summary>
-    internal static void Register(string repoPath, Project project, Compilation compilation)
+    /// <summary>
+    /// Registers the document scope of <paramref name="project"/>'s <paramref name="compilation"/>. <paramref name="hasErrors"/> is the
+    /// adapter's own coverage-reducing error decision (its CompilationDiagnostic gaps), so both adapters keep one error policy.
+    /// </summary>
+    internal static void Register(string repoPath, Project project, Compilation compilation, bool hasErrors)
     {
         if (string.IsNullOrWhiteSpace(project.FilePath) || Path.GetDirectoryName(project.FilePath) is not { Length: > 0 } directory) return;
         var projectDirectory = CSharpSemanticExtractor.ToRelativePathProjection(repoPath, directory);
@@ -82,7 +83,7 @@ internal static class SqlServerCompilationScopes
         bool reduced;
         if (ReducedProjects.TryGetValue(project.Solution, out var set)) lock (set) reduced = set.Contains(project.Id);
         else reduced = false;
-        Scopes.AddOrUpdate(compilation, new(documents, reduced, compilation));
+        Scopes.AddOrUpdate(compilation, new(documents, reduced, hasErrors));
     }
 
     private static SqlServerCompilationDocument Classify(string repoPath, CSharpSemanticExtractor.RelativePathProjection projectDirectory, string fullPath)
