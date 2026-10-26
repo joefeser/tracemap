@@ -135,9 +135,11 @@ This validation readback is docs-only after the frozen repair commit.
 ### Owner-authorized nested assignment and ordinal alias repair
 
 Owner explicitly authorized the two current-head findings and increasing hosted
-review-fix cycle limits to six. Codex freshness and Baz fix cycles are now six;
+review-fix cycle limits to six. Codex freshness cycles are six; Baz uses five,
+the ACK 0.5.7 schema maximum (within the owner's ceiling of six).
 request/spend ceilings, local fallback bounds, quorum and human merge gates are
-unchanged. ACK 0.5.7 doctor accepts the lane.
+unchanged. ACK 0.5.7 doctor accepted the six-cycle lane, but full PR-loop parsing
+rejected Baz six; the follow-up corrects Baz to five without bypassing lane policy.
 
 Reject nested/non-standalone command assignments rather than infer evaluation
 order. Ref-local declarations and ref reassignments invalidate GetOrdinal-name

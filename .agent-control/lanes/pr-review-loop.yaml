@@ -52,7 +52,8 @@ prLoopPacket:
       authority: trusted_exact_head
       quorumGroups:
         - trustedCodeReview
-      maxFixCycles: 6
+      # ACK 0.5.7 caps hosted-reviewer cycles at five (owner ceiling: six).
+      maxFixCycles: 5
   reviewQuorum:
     enabled: true
     groups:
