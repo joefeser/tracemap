@@ -394,6 +394,8 @@ public static partial class VisualBasicSemanticExtractor
         }
 
         AddCompilationDiagnostics(repoPath, projectPath, compilation, gaps, out var sourceErrorDiagnosticCount, out var injectedTemplateErrorCount);
+        // Whole-compilation document scope for internal-helper caller enumeration (Fill facts of this compilation only).
+        SqlServerCompilationScopes.Register(repoPath, project, compilation);
 
         var documentCount = 0;
         var unavailableCompilationInputObserved = false;
