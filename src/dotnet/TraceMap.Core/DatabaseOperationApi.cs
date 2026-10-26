@@ -66,6 +66,8 @@ internal static class DatabaseOperationApi
             : method.IsAbstract ? "abstract" : "declared-api";
         DatabaseCommandState.Add(properties, call);
         SqlServerCommandParameters.Add(properties, call);
+        // Separate first-result reader consumer state; never derived from parameter state.
+        if (Kind(method.Name) == "select-candidate") SqlServerReaderColumns.Add(properties, call);
         // Only inline construction is local to this call. Mutable receiver history is
         // retained elsewhere; it must not silently become current command state.
         var instance = call.Instance;

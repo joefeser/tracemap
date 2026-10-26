@@ -11,8 +11,10 @@ The lane requires Codex and trusted exact-head Baz review evidence before partia
 findings are processed. Qodo is disabled: do not request or await it. ACK observes
 Baz reviews automatically; it never requests Baz. Numeric quorum alone cannot
 release a batch while the trusted Baz return is missing. Stale Baz does not count
-as exact-head evidence. Baz has at most two finding/fix cycles; clean verification
-at the ceiling remains permitted. Checks, threads, findings, merge state,
+as exact-head evidence. Baz has at most five finding/fix cycles (the ACK v0.5.7
+hosted-reviewer schema maximum); clean verification at the ceiling remains permitted.
+Codex freshness recovery allows at most six fix cycles. These limits do not increase
+review-request or local-fallback spend ceilings. Checks, threads, findings, merge state,
 risky-file gates and main/release promotion policy remain unchanged.
 
 After `FRESH_REVIEW_FIX_CYCLE_CEILING_REACHED`, the trusted lane may use the

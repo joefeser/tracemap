@@ -6,3 +6,6 @@ scripts/sqlserver-parameter-evidence/*.py text eol=lf
 samples/sqlserver-parameter-evidence/*.json text eol=lf
 scripts/sqlserver-ddl-parameter-evidence/*.py text eol=lf
 samples/sqlserver-ddl-parameter-evidence/*.sql text eol=lf
+scripts/sqlserver-result-column-evidence/*.py text eol=lf
+samples/sqlserver-result-column-evidence/*.json text eol=lf
+samples/sqlserver-result-column-evidence/ddl/*.sql text eol=lf
