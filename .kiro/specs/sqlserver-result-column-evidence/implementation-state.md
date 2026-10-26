@@ -99,6 +99,19 @@ commit; source was unchanged between the final focused run and the commit.
 
 ## Delivery
 
+### Pre-PR catalog correction and revalidation
+
+Added the missing DDL parameter rule entry and a catalog regression guard in
+`4672b57e92fc69d42e336044eadde3bb0570b9a3`; no production-code changes after
+`1660a5a8c`. Focused SQL/catalog gate: 354 passed. Python guards: 26 passed.
+Fresh frozen-head full Debug `-warnaserror`: 4,931 passed, zero failures,
+three expected skips, 30m 47s. Sequential committed-head JSON and DDL parameter
+smokes each passed 52 cases (8/12/32). Result smoke passed JSON 36/10/36 and
+DDL 36/10/58, all 20 refusals, with deterministic repeated reports. No SQL ran.
+Private-path and whitespace guards passed. This results update is docs-only
+after that validated correction head. Existing pinned OSS partial-coverage
+evidence is retained; no source extractor changed in the pre-PR correction.
+
 Docs-only commits on top of `1660a5a8c`: `456b425ec` (results), `a733e2199`
 (guard fix) and this state correction; follow-up prompt
 `prompts/continue-sqlserver-result-column-evidence.md`; branch pushed. No PR,
