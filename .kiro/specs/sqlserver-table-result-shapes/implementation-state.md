@@ -80,6 +80,16 @@ documentation-only commit whose SHA differs.
 
 ## Delivery
 
+PR #913 smoke-only review repair at `0d3bd85d3`: reject optimized Python before
+helper imports, use explicit validation exceptions (including table report/status
+checks), and validate counts/gaps/all 24 refusals before receipt publication.
+Regression guards cover -O, -OO, PYTHONOPTIMIZE, incorrect exports/statuses and
+failed aggregate receipt publication. All 18 SQL Python guards and 17 DNN guards
+pass. Committed-head native table smoke passes unchanged: 64 cases per language,
+44/10/88, zero gaps, 24 refusals and deterministic repeats. Existing helper files
+and production .NET code are unchanged; the full .NET gate is not rerun for this
+script/test-only repair. Prior implementation validation remains historical.
+
 Docs-only results commit on top of `c28dbd3df`, Phase 2 prompt
 `prompts/continue-sqlserver-datatable-consumers.md`, branch pushed. No PR, merge, review
 request, SQL execution, container or private input. Phase 2 has not started.
