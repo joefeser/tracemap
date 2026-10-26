@@ -12,6 +12,7 @@ public sealed record SqlServerResultDeclarations(string Version, string Repo, st
 public sealed record SqlServerResultSchemaExport(string Version, string GeneratorSha256, string BoundedInputSha256,
     string ExtractorVersion, string RuleId, string Tier, SqlServerResultDeclarations Declarations);
 public sealed record SqlServerResultBinding(string FactId, string CommandText, SqlServerObjectIdentity Identity, string ReaderEvidenceSha256);
+public sealed record SqlServerResultBindingReference(string FactId, string ReaderEvidenceSha256);
 public sealed record SqlServerResultBindings(string Version, string Repo, string Revision, IReadOnlyList<SqlServerResultBinding> Calls,
     SqlServerInputProvenance? Provenance = null);
 public sealed record SqlServerResultShapeReference(SqlServerObjectIdentity Identity, string FilePath, int StartLine, int EndLine,
@@ -19,7 +20,7 @@ public sealed record SqlServerResultShapeReference(SqlServerObjectIdentity Ident
 public sealed record SqlServerResultComparison(string FactId, int? AccessIndex, string RuleId, string Tier, string Status,
     IReadOnlyList<string> Reasons, IReadOnlyList<string> UncomparedFacets, string SourcePath, int SourceStartLine, int SourceEndLine,
     string Revision, string SourceExtractor, string SourceExtractorVersion, string SourceRuleId, string SourceTier,
-    SqlServerReaderAccess? Access, SqlServerResultShapeReference? Shape, SqlServerResultColumn? Column, SqlServerResultBinding? Binding);
+    SqlServerReaderAccess? Access, SqlServerResultShapeReference? Shape, SqlServerResultColumn? Column, SqlServerResultBindingReference? Binding);
 public sealed record SqlServerResultComparisonReport(string Version, string GeneratorSha256, string BoundedInputSha256,
     string SchemaVersion, string SchemaGeneratorSha256, string SchemaInputSha256, string SchemaExtractorVersion, string SchemaRuleId,
     string SchemaTier, string Origin, string Repo, string Revision, string Coverage, string Verdict,
@@ -150,7 +151,7 @@ public static class SqlServerResultEvidence
                 => new(fact.FactId, index, RuleId, status == "unknown" ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural, status,
                     why.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray(), facets, fact.Evidence.FilePath, fact.Evidence.StartLine,
                     fact.Evidence.EndLine, revision, fact.Evidence.ExtractorId, fact.Evidence.ExtractorVersion, fact.RuleId, fact.EvidenceTier,
-                    access, reference, column, binding);
+                    access, reference, column, binding is null ? null : BindingProjection(binding));
             if (reasons.Count > 0 || shape is null || state is null)
             {
                 rows.Add(Row(null, "unknown", reasons, null, null, []));
@@ -172,7 +173,11 @@ public static class SqlServerResultEvidence
             }
         }
         // Allowlist projection only: never hash raw SQL, snippets, original facts or private source bytes.
-        var projection = new { schema = schemaProjection, bindings, calls = calls.Select(ReaderProjection) };
+        var projection = new { schema = schemaProjection,
+            bindings = bindings.Calls.OrderBy(b => b.FactId, StringComparer.Ordinal).Select(BindingProjection),
+            calls = calls.Select(ReaderProjection),
+            // Bind the public admission outcome too, without retaining untrusted identity text.
+            resolutions = rows.Select(r => new { r.FactId, r.AccessIndex, r.Shape, r.Status, r.Reasons }) };
         return new("sqlserver-result-comparison/1", SqlServerSchemaEvidence.GeneratorSha256, SqlServerSchemaEvidence.Digest(projection),
             schemaVersion, schemaGenerator, schemaInput, schemaExtractor, schemaRule, schemaTier, declarations.Origin, repo, revision,
             "partial", "no-aggregate-clean-verdict", rows,
@@ -185,6 +190,9 @@ public static class SqlServerResultEvidence
             "Reachability, source build/scan gaps and truncation are not cleared by this separate result-column report.",
             "Self-consistent hashes prove integrity only, not authenticity, SQL execution, deployment or private acceptance."]);
     }
+
+    private static SqlServerResultBindingReference BindingProjection(SqlServerResultBinding binding)
+        => new(binding.FactId, binding.ReaderEvidenceSha256);
 
     private static (string Status, IReadOnlyList<string> Reasons, SqlServerResultColumn? Column) CompareAccess(SqlServerResultShape shape, SqlServerReaderAccess access)
     {

@@ -12,7 +12,7 @@ Nothing is executed: no SQL, procedure, application method, container or remote 
 
 | Contract | Meaning |
 | --- | --- |
-| `sqlserver-reader/1` (`sqlServerReaderState` fact property) | Source consumer evidence on every ExecuteReader-family DatabaseOperationCandidate. Separate from `sqlServerParameterState`. C# `csharp-semantic/0.22.10`, VB `vb-semantic/0.10.13`. |
+| `sqlserver-reader/1` (`sqlServerReaderState` fact property) | Source consumer evidence on every ExecuteReader-family DatabaseOperationCandidate. Separate from `sqlServerParameterState`. C# `csharp-semantic/0.22.11`, VB `vb-semantic/0.10.14`. |
 | `sqlserver-result-declarations/1` → `sqlserver-result-schema/1` | Independently authored public JSON (origin `independent-synthetic-result-declarations`), extractor `sqlserver-synthetic-result-declarations/1`, rule `database.sqlserver.synthetic-result-shape.v1`, Tier2Structural. |
 | `sqlserver-ddl-result-input/1` → `sqlserver-ddl-result-schema/1` | Opt-in DDL projection (origin `public-synthetic-tsql-ddl-result`), extractor `sqlserver-ddl-result-shapes/1`, rule `database.sqlserver.ddl-result-shape.v1`; Tier2 complete shapes, Tier4 unsupported records. |
 | `sqlserver-result-bindings/1` | Exact `factId`, two-part `commandText`, four-part `identity` and `readerEvidenceSha256`. |
@@ -44,6 +44,16 @@ and the corresponding extractor version bumps; `sqlServerParameterState` and its
 `CallDigest` projection are unchanged in shape.
 
 ## Source subset (C# and VB, one shared IOperation walker)
+
+PR #912 hardening: a supported Read guard must belong to the selected reader.
+Command assignments nested under conditional or loop control flow are unknown,
+not unconditional state. Ordinals use the converted constant value; nonconstant
+narrowing conversions cannot borrow GetOrdinal name provenance.
+
+Comparison rows and bounded-input hashing project bindings to factId and
+readerEvidenceSha256 only. Raw binding command text, identity, and provenance
+are excluded. The hash also binds public shape-resolution outcomes; independently
+admitted public schema identities remain visible. This applies to JSON and DDL.
 
 Supported, all inside one method body:
 

@@ -56,9 +56,9 @@ internal static class SqlServerReaderColumns
         if (all.Length > MaxOperations) return Unknown("operation-limit");
         foreach (var op in all)
         {
-            // Only a using lifetime and if/top-tested while conditioned exactly on some reader's Read() are tolerated.
-            if (op is IWhileLoopOperation { ConditionIsTop: true, ConditionIsUntil: false } loop && IsReadCondition(loop.Condition)) continue;
-            if (op is IConditionalOperation { Type: null } branch && IsReadCondition(branch.Condition)) continue;
+            // Only the selected reader's Read() may guard its bounded consumer evidence.
+            if (op is IWhileLoopOperation { ConditionIsTop: true, ConditionIsUntil: false } loop && IsReadCondition(loop.Condition, reader)) continue;
+            if (op is IConditionalOperation { Type: null } branch && IsReadCondition(branch.Condition, reader)) continue;
             if (op is IConditionalOperation or ILoopOperation or IBranchOperation or ITryOperation or IAnonymousFunctionOperation
                 or ILocalFunctionOperation or IInvalidOperation or ICompoundAssignmentOperation or IIncrementOrDecrementOperation
                 or IDeconstructionAssignmentOperation or IDynamicInvocationOperation or IDynamicObjectCreationOperation
@@ -104,6 +104,9 @@ internal static class SqlServerReaderColumns
                 if (property.Parent is ISimpleAssignmentOperation assignment && assignment.Target == property)
                 {
                     if (assignment.Syntax.SpanStart > start) continue; // Later mutation cannot change this execution.
+                    for (var ancestor = assignment.Parent; ancestor is not null; ancestor = ancestor.Parent)
+                        if (ancestor is IConditionalOperation or ILoopOperation)
+                            return Unknown("conditional-command-assignment");
                     if (property.Property.Name == "CommandType") commandType = assignment.Value.ConstantValue.Value switch { 4 => "StoredProcedure", 1 => "Text", _ => null };
                     else if (property.Property.Name == "CommandText") textHash = assignment.Value.ConstantValue is { HasValue: true, Value: string t } ? FactFactory.Hash(t, 64) : null;
                     else if (property.Property.Name == "Connection" && Unwrap(assignment.Value) is ILocalReferenceOperation or IParameterReferenceOperation && Inert(assignment.Value, command, reader)) { }
@@ -119,7 +122,7 @@ internal static class SqlServerReaderColumns
         // Ordinal locals declared directly from GetOrdinal(constant) on some reader.
         var ordinalLocals = new Dictionary<ILocalSymbol, (ILocalSymbol Reader, IInvocationOperation GetOrdinal)>(SymbolEqualityComparer.Default);
         foreach (var declarator in all.OfType<IVariableDeclaratorOperation>())
-            if (Unwrap(Initializer(declarator)) is IInvocationOperation { TargetMethod.Name: "GetOrdinal" } getOrdinal && Local(getOrdinal.Instance) is { } owner
+            if (UnwrapIdentity(Initializer(declarator)) is IInvocationOperation { TargetMethod.Name: "GetOrdinal" } getOrdinal && Local(getOrdinal.Instance) is { } owner
                 && ReaderTypes.Contains(owner.Type.ToDisplayString(), StringComparer.Ordinal))
                 ordinalLocals[declarator.Symbol] = (owner, getOrdinal);
         var rewritten = new HashSet<ILocalSymbol>(SymbolEqualityComparer.Default);
@@ -139,7 +142,7 @@ internal static class SqlServerReaderColumns
                 if (indexer.Parent is ISimpleAssignmentOperation target && target.Target == indexer) return Unknown("reader-alias-or-escape");
                 if (!Trusted(indexer.Property.ContainingType, indexer.Property.ContainingAssembly) || indexer.Property.Parameters.Length != 1 || indexer.Arguments.Length != 1)
                     return Unknown("unsupported-reader-member");
-                var argument = Unwrap(indexer.Arguments[0].Value)!;
+                var argument = indexer.Arguments[0].Value;
                 var parameterType = indexer.Property.Parameters[0].Type.SpecialType;
                 if (parameterType == SpecialType.System_String) accesses.Add((indexer.Syntax.SpanStart, NameAccess("name-indexer", "Item", argument, indexer)));
                 else if (parameterType == SpecialType.System_Int32) accesses.Add((indexer.Syntax.SpanStart, OrdinalAccess("ordinal-indexer", "Item", argument, indexer, reader, ordinalLocals, rewritten)));
@@ -168,7 +171,7 @@ internal static class SqlServerReaderColumns
                     && target.Name is not ("GetOrdinal" or "GetEnumerator" or "GetSchemaTable" or "GetValues" or "GetData")
                     && target.Parameters.Length == 1 && target.Parameters[0].Type.SpecialType == SpecialType.System_Int32 && target.Parameters[0].RefKind == RefKind.None)
                 {
-                    accesses.Add((member.Syntax.SpanStart, OrdinalAccess("ordinal-getter", target.Name, Unwrap(member.Arguments[0].Value)!, member, reader, ordinalLocals, rewritten)));
+                    accesses.Add((member.Syntax.SpanStart, OrdinalAccess("ordinal-getter", target.Name, member.Arguments[0].Value, member, reader, ordinalLocals, rewritten)));
                     continue;
                 }
                 // NextResult, RecordsAffected/FieldCount (via property), async members and others are outside the first-result subset.
@@ -200,6 +203,9 @@ internal static class SqlServerReaderColumns
     {
         var (line, end) = Lines(site);
         if (argument.ConstantValue is { HasValue: true, Value: int ordinal }) return new(kind, member, null, ordinal, "constant", line, end, null);
+        // A nonconstant narrowing conversion changes the ordinal; it cannot borrow
+        // the underlying GetOrdinal name, even when the final argument is an int.
+        argument = UnwrapIdentity(argument)!;
         if (argument is IInvocationOperation { TargetMethod.Name: "GetOrdinal" } direct && Same(Local(direct.Instance), reader))
             return FromName(direct, "get-ordinal");
         if (argument is ILocalReferenceOperation local && ordinalLocals.TryGetValue(local.Local, out var source))
@@ -217,9 +223,9 @@ internal static class SqlServerReaderColumns
         }
     }
 
-    private static bool IsReadCondition(IOperation? condition)
+    private static bool IsReadCondition(IOperation? condition, ILocalSymbol reader)
         => Unwrap(condition) is IInvocationOperation { TargetMethod.Name: "Read", TargetMethod.Parameters.Length: 0 } read
-            && Local(read.Instance) is { } local && ReaderTypes.Contains(local.Type.ToDisplayString(), StringComparer.Ordinal)
+            && Local(read.Instance) is { } local && Same(local, reader) && ReaderTypes.Contains(local.Type.ToDisplayString(), StringComparer.Ordinal)
             && Trusted(read.TargetMethod.ContainingType, read.TargetMethod.ContainingAssembly);
     private static bool Trusted(INamedTypeSymbol type, IAssemblySymbol assembly)
         => DatabaseOperationApi.Trusted(assembly) && (ReaderTypes.Contains(type.ToDisplayString(), StringComparer.Ordinal)
@@ -236,6 +242,8 @@ internal static class SqlServerReaderColumns
     }
     private static bool Same(ISymbol? left, ISymbol? right) => SymbolEqualityComparer.Default.Equals(left, right);
     private static IOperation? Unwrap(IOperation? o) => o is IConversionOperation { OperatorMethod: null } c ? Unwrap(c.Operand) : o is IParenthesizedOperation p ? Unwrap(p.Operand) : o;
+    private static IOperation? UnwrapIdentity(IOperation? o) => o is IConversionOperation { OperatorMethod: null, Conversion.IsIdentity: true } c
+        ? UnwrapIdentity(c.Operand) : o is IParenthesizedOperation p ? UnwrapIdentity(p.Operand) : o;
     private static ILocalSymbol? Local(IOperation? o) => Unwrap(o) is ILocalReferenceOperation l ? l.Local : null;
     private static IEnumerable<IOperation> Walk(IOperation o)
     {

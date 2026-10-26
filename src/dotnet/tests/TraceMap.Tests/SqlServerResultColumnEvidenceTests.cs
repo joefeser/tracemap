@@ -206,6 +206,33 @@ public sealed class SqlServerResultColumnEvidenceTests
     // ---------------------------------------------------------------- JSON declaration admission
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Unmatched_binding_identity_and_provenance_are_not_reported_or_hashed(bool ddl)
+    {
+        var fact = Fact(State(Name("Name")));
+        object Report(string marker, char digestCharacter)
+        {
+            var identity = new SqlServerObjectIdentity(marker + "Server", marker + "Database", marker + "Schema", marker + "Procedure");
+            var bindings = Bindings(fact, identity) with { Provenance = new(new(digestCharacter, 64), new(digestCharacter, 64)) };
+            return ddl ? DdlCompare("CREATE PROCEDURE dbo.ReadItems AS SELECT 1 AS Id;", fact, bindings) : Compare(fact, bindings: bindings);
+        }
+        var first = Report("HiddenAlpha", 'a');
+        var second = Report("HiddenBeta", 'b');
+        var json = SqlServerSchemaEvidence.Json(first);
+        Assert.Equal(json, SqlServerSchemaEvidence.Json(second));
+        Assert.DoesNotContain("HiddenAlpha", json);
+        Assert.DoesNotContain("commandText", json);
+        var report = first is SqlServerDdlResultComparisonReport wrapper ? wrapper.Comparison : (SqlServerResultComparisonReport)first;
+        var row = Assert.Single(report.Comparisons);
+        Assert.Equal(U, row.Status);
+        Assert.Null(row.Shape);
+        Assert.Equal(new SqlServerResultBindingReference(fact.FactId, SqlServerResultEvidence.ReaderDigest(fact)), row.Binding);
+        Assert.DoesNotContain("HiddenAlpha", SqlServerResultReportWriter.Build(report));
+        Assert.NotEqual(Compare(fact).BoundedInputSha256, report.BoundedInputSha256);
+    }
+
+    [Theory]
     [InlineData("version")]
     [InlineData("generator")]
     [InlineData("input-hash")]
@@ -485,6 +512,69 @@ public sealed class SqlServerResultColumnEvidenceTests
 
     private const string CsCommand = "var command = new SqlCommand(\"dbo.ReadItems\"); command.CommandType = CommandType.StoredProcedure;\n";
     private const string VbCommand = "Dim command = New SqlCommand(\"dbo.ReadItems\")\ncommand.CommandType = CommandType.StoredProcedure\n";
+
+    [Theory]
+    [InlineData("cs", "if")]
+    [InlineData("cs", "while")]
+    [InlineData("vb", "if")]
+    [InlineData("vb", "while")]
+    public void Foreign_reader_guards_and_conditional_command_mutations_remain_unknown(string language, string guard)
+    {
+        foreach (var mutation in new[] { "none", "CommandText", "CommandType", "Connection" })
+        {
+            var body = language == "cs"
+                ? CsCommand + "var gateCommand = new SqlCommand(\"dbo.ReadOther\"); var gate = gateCommand.ExecuteReader(); var connection = new SqlConnection();\n"
+                : VbCommand + "Dim gateCommand = New SqlCommand(\"dbo.ReadOther\")\nDim gate = gateCommand.ExecuteReader()\nDim connection = New SqlConnection()\n";
+            var statement = mutation switch
+            {
+                "CommandText" => "command.CommandText = \"dbo.ReadOther\"",
+                "CommandType" => "command.CommandType = CommandType.Text",
+                "Connection" => "command.Connection = connection",
+                _ => language == "cs" ? "var value = reader[\"Missing\"]" : "Dim value = reader(\"Missing\")"
+            };
+            var declare = language == "cs" ? "var reader = command.ExecuteReader();\n" : "Dim reader = command.ExecuteReader()\n";
+            if (mutation == "none") body += declare;
+            body += language == "cs" ? $"{guard} (gate.Read()) {{ {statement}; }}\n"
+                : guard == "if" ? $"If gate.Read() Then\n{statement}\nEnd If\n" : $"While gate.Read()\n{statement}\nEnd While\n";
+            if (mutation != "none") body += declare;
+            body += language == "cs" ? "return reader[\"Missing\"];" : "Return reader(\"Missing\")";
+            var state = Extract(language, body).Last();
+            Assert.Equal("unknown", state.Coverage);
+            Assert.Equal("unsupported-control-flow", state.Gap);
+            Assert.Null(state.CommandTextHash);
+            Assert.Equal([U], Statuses(Compare(Fact(state))));
+        }
+    }
+
+    [Theory]
+    [InlineData("cs", "unchecked((byte)256)", 0)]
+    [InlineData("cs", "unchecked((byte)-1)", 255)]
+    [InlineData("cs", "(int)1.9", 1)]
+    [InlineData("vb", "CInt(1.6)", 2)]
+    [InlineData("vb", "CInt(0.4)", 0)]
+    public void Getter_and_indexer_ordinals_use_the_converted_constant(string language, string expression, int expected)
+    {
+        var body = language == "cs" ? CsCommand + $"var reader = command.ExecuteReader(); var a = reader.GetInt32({expression}); return reader[{expression}];"
+            : VbCommand + $"Dim reader = command.ExecuteReader()\nDim a = reader.GetInt32({expression})\nReturn reader({expression})";
+        var state = Assert.Single(Extract(language, body));
+        Assert.Equal("bounded", state.Coverage);
+        Assert.Equal(2, state.Accesses.Count);
+        Assert.All(state.Accesses, a => Assert.Equal(expected, a.Ordinal));
+        Assert.All(Compare(Fact(state)).Comparisons, row => Assert.Equal(expected < 3 ? M : X, row.Status));
+    }
+
+    [Theory]
+    [InlineData("cs")]
+    [InlineData("vb")]
+    public void Nonconstant_narrowing_cannot_borrow_GetOrdinal_provenance(string language)
+    {
+        var body = language == "cs" ? CsCommand + "var reader = command.ExecuteReader(); var ordinal = (byte)reader.GetOrdinal(\"Name\"); var a = reader.GetInt32(ordinal); return reader[(byte)reader.GetOrdinal(\"Name\")];"
+            : VbCommand + "Dim reader = command.ExecuteReader()\nDim ordinal = CByte(reader.GetOrdinal(\"Name\"))\nDim a = reader.GetInt32(ordinal)\nReturn reader(CByte(reader.GetOrdinal(\"Name\")))";
+        var state = Assert.Single(Extract(language, body));
+        Assert.Equal("bounded", state.Coverage);
+        Assert.Equal(2, state.Accesses.Count(a => a.Gap == "dynamic-ordinal"));
+        Assert.Equal(2, Compare(Fact(state)).Comparisons.Count(r => r.Status == U));
+    }
 
     [Theory]
     [InlineData("cs", "using-declaration", "using var reader = command.ExecuteReader(); return reader[\"Name\"];", null)]
