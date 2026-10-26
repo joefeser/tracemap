@@ -7946,6 +7946,19 @@ rules:
       - Rows and bounded-input hashes retain only binding factId and readerEvidenceSha256, not raw binding command text, identity or provenance. Public admitted shape-resolution outcomes remain bound into the digest.
       - Read guards must use the selected reader; conditional command assignments stay unknown. Converted ordinal constants retain their converted value, while nonconstant narrowing cannot inherit GetOrdinal provenance.
       - Scalar, non-query, RETURN, OUTPUT and affected-row channels, NextResult, DataTable/DataSet, adapters, ORMs, DNN hydration/provider wrappers, helpers and virtual dispatch are outside the subset and remain unknown or absent.
+  - id: database.sqlserver.datatable-column-comparison.v1
+    name: Bounded SQL Server DataTable/DataRow column comparison
+    description: Compares explicitly bound compiler-resolved DataRow column-name and ordinal reads of the DataTable filled by one exact SqlDataAdapter.Fill(DataTable) with one admitted public synthetic first-result-set shape.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlServerDataTableComparison
+    limitations:
+      - Opt-in sqlserver-datatable-result compare only; shapes are admitted solely by the unchanged sqlserver-result-schema, sqlserver-ddl-result and sqlserver-ddl-table-result routes. Reports are always partial with no aggregate clean verdict and do not clear scan gaps or truncation; no SQL execution.
+      - Source evidence is the separate sqlserver-datatable/1 sqlServerDataTableState property on Fill facts; rows bind one exact Fill fact through sqlserver-datatable-bindings/1 and its dataTableEvidenceSha256 digest. Reader and parameter bindings or digests never substitute.
+      - Supported subset is one fresh signed SqlCommand with constant StoredProcedure intent (the result-column command rules, cut off at the adapter association), one fresh SqlDataAdapter (command constructor or one SelectCommand write), one fresh DataTable() filled exactly once, and constant reads through table.Rows[k], a fresh DataRow local or a foreach row, guarded only by Rows.Count > 0 or foreach on that table.
+      - Aliases, reassignment, ref/out escapes, helpers, repeated Fill, adapter reuse, TableMappings, MissingSchemaAction, MissingMappingAction, AcceptChangesDuringFill, ContinueUpdateOnError and other adapter options, command mutation after association, table/column/row mutation, named tables, Select/DefaultView/Copy/LINQ row ownership, Field<T>, DataColumn and DataRowVersion access and other control flow remain unknown.
+      - Column identity/existence and ordinal bounds only. No claim that Fill executes, rows exist, values convert or types/nullability agree, including for IsNull. Case-only names stay unknown although DataTable lookup is case-insensitive at runtime; duplicate shape names keep absent names unknown because Fill renames duplicates.
+      - Rows and bounded-input hashes retain only binding factId and dataTableEvidenceSha256 plus the admitted public export digest (SHA-256), not raw binding command text, SQL bodies or snippets.
   - id: database.sqlserver.synthetic-result-shape.v1
     name: Independent synthetic SQL Server first-result-set declarations
     description: Admits strictly versioned authored first-result shapes bound to logical repo/revision, four-part identity and exact generator/public-input SHA-256.

@@ -23,7 +23,7 @@ internal static class SqlServerReaderColumns
     internal const string Version = "sqlserver-reader/1";
     internal const int MaxOperations = 20000;
     internal const int MaxAccesses = 256;
-    private static readonly string[] CommandTypes = ["System.Data.SqlClient.SqlCommand", "Microsoft.Data.SqlClient.SqlCommand"];
+    internal static readonly string[] CommandTypes = ["System.Data.SqlClient.SqlCommand", "Microsoft.Data.SqlClient.SqlCommand"];
     private static readonly string[] ReaderTypes = ["System.Data.SqlClient.SqlDataReader", "Microsoft.Data.SqlClient.SqlDataReader"];
     private static readonly string[] CollectionTypes = ["System.Data.SqlClient.SqlParameterCollection", "Microsoft.Data.SqlClient.SqlParameterCollection"];
 
@@ -59,68 +59,16 @@ internal static class SqlServerReaderColumns
             // Only the selected reader's Read() may guard its bounded consumer evidence.
             if (op is IWhileLoopOperation { ConditionIsTop: true, ConditionIsUntil: false } loop && IsReadCondition(loop.Condition, reader)) continue;
             if (op is IConditionalOperation { Type: null } branch && IsReadCondition(branch.Condition, reader)) continue;
-            if (op is IConditionalOperation or ISwitchExpressionOperation or ISwitchOperation or ILoopOperation or IBranchOperation or ITryOperation or IAnonymousFunctionOperation
-                or ILocalFunctionOperation or IInvalidOperation or ICompoundAssignmentOperation or IIncrementOrDecrementOperation
-                or IDeconstructionAssignmentOperation or IDynamicInvocationOperation or IDynamicObjectCreationOperation
-                or IDynamicMemberReferenceOperation or IDynamicIndexerAccessOperation or IConditionalAccessOperation or ICoalesceOperation
-                or IWithOperation or IBinaryOperation { OperatorKind: BinaryOperatorKind.ConditionalAnd or BinaryOperatorKind.ConditionalOr })
-                return Unknown("unsupported-control-flow");
+            if (UnsupportedFlow(op)) return Unknown("unsupported-control-flow");
             if (op is IInstanceReferenceOperation { ReferenceKind: InstanceReferenceKind.ImplicitReceiver }) return Unknown("implicit-receiver-unsupported");
         }
 
-        // Command: declared from a signed SqlCommand constructor, no initializer, inert constructor arguments.
-        var commandDeclarator = all.OfType<IVariableDeclaratorOperation>().SingleOrDefault(d => Same(d.Symbol, command));
-        var creation = Unwrap(commandDeclarator is null ? null : Initializer(commandDeclarator)) as IObjectCreationOperation;
-        if (creation?.Type is null || !CommandTypes.Contains(creation.Type.ToDisplayString(), StringComparer.Ordinal)
-            || !DatabaseOperationApi.Trusted(creation.Type.ContainingAssembly)) return Unknown("fresh-sqlcommand-required");
-        if (creation.Initializer is not null) return Unknown("implicit-receiver-unsupported");
-        if (creation.Arguments.Any(a => !Inert(a.Value, command, reader))) return Unknown("unsupported-constructor-argument");
-        var text = creation.Arguments.FirstOrDefault(a => a.Parameter?.Name is "cmdText" or "commandText");
-        var textHash = text?.Value.ConstantValue is { HasValue: true, Value: string s } ? FactFactory.Hash(s, 64) : null;
-        string? commandType = null;
         var start = call.Syntax.SpanStart;
-        foreach (var reference in all.OfType<ILocalReferenceOperation>().Where(r => Same(r.Local, command)))
-        {
-            var parent = reference.Parent;
-            if (parent is IInvocationOperation invocation && invocation.Instance == reference)
-            {
-                if (invocation == call) continue;
-                if (DatabaseOperationApi.TryClassify(invocation.TargetMethod, out _, out _))
-                {
-                    if (invocation.Syntax.SpanStart < start) return Unknown("prior-execution");
-                    continue;
-                }
-                return Unknown("unsupported-command-member");
-            }
-            if (parent is IPropertyReferenceOperation property && property.Instance == reference && DatabaseOperationApi.Trusted(property.Property.ContainingAssembly))
-            {
-                if (property.Property.Name == "Parameters" && property.Parent is IInvocationOperation add && add.Instance == property
-                    && add.TargetMethod.Name is "Add" or "AddWithValue" && CollectionTypes.Contains(add.TargetMethod.ContainingType.ToDisplayString(), StringComparer.Ordinal)
-                    && DatabaseOperationApi.Trusted(add.TargetMethod.ContainingAssembly) && add.Arguments.All(a => Inert(a.Value, command, reader)))
-                {
-                    if (add.Parent is not (IExpressionStatementOperation or IVariableInitializerOperation)) return Unknown("command-alias-or-escape");
-                    continue;
-                }
-                if (property.Parent is ISimpleAssignmentOperation assignment && assignment.Target == property)
-                {
-                    if (assignment.Syntax.SpanStart > start) continue; // Later mutation cannot change this execution.
-                    if (assignment.Parent is not IExpressionStatementOperation
-                        || Walk(assignment.Value).Any(o => o is IAssignmentOperation))
-                        return Unknown("nested-command-assignment");
-                    for (var ancestor = assignment.Parent; ancestor is not null; ancestor = ancestor.Parent)
-                        if (ancestor is IConditionalOperation or ILoopOperation)
-                            return Unknown("conditional-command-assignment");
-                    if (property.Property.Name == "CommandType") commandType = assignment.Value.ConstantValue.Value switch { 4 => "StoredProcedure", 1 => "Text", _ => null };
-                    else if (property.Property.Name == "CommandText") textHash = assignment.Value.ConstantValue is { HasValue: true, Value: string t } ? FactFactory.Hash(t, 64) : null;
-                    else if (property.Property.Name == "Connection" && Unwrap(assignment.Value) is ILocalReferenceOperation or IParameterReferenceOperation && Inert(assignment.Value, command, reader)) { }
-                    else return Unknown("unsupported-command-assignment");
-                    continue;
-                }
-                return Unknown("unsupported-command-member");
-            }
-            if (parent is ISimpleAssignmentOperation reassigned && reassigned.Target == reference) return Unknown("command-reassignment");
-            return Unknown("command-alias-or-escape");
-        }
+        var commandGap = ClassifyCommand(all, command, [command, reader], start,
+            reference => reference.Parent is IInvocationOperation invocation && invocation.Instance == reference && invocation == call,
+            invocation => invocation.Syntax.SpanStart < start ? "prior-execution" : null, afterCutoffGap: null,
+            out var commandType, out var textHash);
+        if (commandGap is not null) return Unknown(commandGap);
 
         // Ordinal locals declared directly from GetOrdinal(constant) on some reader.
         var ordinalLocals = new Dictionary<ILocalSymbol, (ILocalSymbol Reader, IInvocationOperation GetOrdinal)>(SymbolEqualityComparer.Default);
@@ -228,6 +176,86 @@ internal static class SqlServerReaderColumns
         }
     }
 
+    /// <summary>Method-wide control flow outside every consumer subset; callers first admit their own bounded guards.</summary>
+    internal static bool UnsupportedFlow(IOperation op)
+        => op is IConditionalOperation or ISwitchExpressionOperation or ISwitchOperation or ILoopOperation or IBranchOperation or ITryOperation or IAnonymousFunctionOperation
+            or ILocalFunctionOperation or IInvalidOperation or ICompoundAssignmentOperation or IIncrementOrDecrementOperation
+            or IDeconstructionAssignmentOperation or IDynamicInvocationOperation or IDynamicObjectCreationOperation
+            or IDynamicMemberReferenceOperation or IDynamicIndexerAccessOperation or IConditionalAccessOperation or ICoalesceOperation
+            or IWithOperation or IBinaryOperation { OperatorKind: BinaryOperatorKind.ConditionalAnd or BinaryOperatorKind.ConditionalOr };
+
+    /// <summary>
+    /// The #912 fresh-command rules shared by every consumer route. <paramref name="cutoff"/> is the source position of the
+    /// consuming use (ExecuteReader, or the adapter association); <paramref name="consumer"/> admits that one reference;
+    /// <paramref name="execution"/> returns a gap (or null to continue) for any other execution on the command. With
+    /// <paramref name="afterCutoffGap"/> null, writes after the cut-off are ignored as they cannot change the execution;
+    /// otherwise any write or parameter add after it returns that gap. Returns null when the command is supported.
+    /// </summary>
+    internal static string? ClassifyCommand(IOperation[] all, ILocalSymbol command, ILocalSymbol[] excluded, int cutoff,
+        Func<ILocalReferenceOperation, bool> consumer, Func<IInvocationOperation, string?> execution, string? afterCutoffGap,
+        out string? commandType, out string? textHash)
+    {
+        commandType = null;
+        textHash = null;
+        // Command: declared from a signed SqlCommand constructor, no initializer, inert constructor arguments.
+        var commandDeclarator = all.OfType<IVariableDeclaratorOperation>().SingleOrDefault(d => Same(d.Symbol, command));
+        var creation = Unwrap(commandDeclarator is null ? null : Initializer(commandDeclarator)) as IObjectCreationOperation;
+        if (creation?.Type is null || !CommandTypes.Contains(creation.Type.ToDisplayString(), StringComparer.Ordinal)
+            || !DatabaseOperationApi.Trusted(creation.Type.ContainingAssembly)) return "fresh-sqlcommand-required";
+        if (creation.Initializer is not null) return "implicit-receiver-unsupported";
+        if (creation.Arguments.Any(a => !Inert(a.Value, excluded))) return "unsupported-constructor-argument";
+        var text = creation.Arguments.FirstOrDefault(a => a.Parameter?.Name is "cmdText" or "commandText");
+        textHash = text?.Value.ConstantValue is { HasValue: true, Value: string s } ? FactFactory.Hash(s, 64) : null;
+        foreach (var reference in all.OfType<ILocalReferenceOperation>().Where(r => Same(r.Local, command)))
+        {
+            if (consumer(reference)) continue;
+            var parent = reference.Parent;
+            if (parent is IInvocationOperation invocation && invocation.Instance == reference)
+            {
+                if (DatabaseOperationApi.TryClassify(invocation.TargetMethod, out _, out _))
+                {
+                    if (execution(invocation) is { } executed) return executed;
+                    continue;
+                }
+                return "unsupported-command-member";
+            }
+            if (parent is IPropertyReferenceOperation property && property.Instance == reference && DatabaseOperationApi.Trusted(property.Property.ContainingAssembly))
+            {
+                if (property.Property.Name == "Parameters" && property.Parent is IInvocationOperation add && add.Instance == property
+                    && add.TargetMethod.Name is "Add" or "AddWithValue" && CollectionTypes.Contains(add.TargetMethod.ContainingType.ToDisplayString(), StringComparer.Ordinal)
+                    && DatabaseOperationApi.Trusted(add.TargetMethod.ContainingAssembly) && add.Arguments.All(a => Inert(a.Value, excluded)))
+                {
+                    if (add.Parent is not (IExpressionStatementOperation or IVariableInitializerOperation)) return "command-alias-or-escape";
+                    if (afterCutoffGap is not null && add.Syntax.SpanStart > cutoff) return afterCutoffGap;
+                    continue;
+                }
+                if (property.Parent is ISimpleAssignmentOperation assignment && assignment.Target == property)
+                {
+                    if (assignment.Syntax.SpanStart > cutoff)
+                    {
+                        if (afterCutoffGap is not null) return afterCutoffGap;
+                        continue; // Later mutation cannot change this execution.
+                    }
+                    if (assignment.Parent is not IExpressionStatementOperation
+                        || Walk(assignment.Value).Any(o => o is IAssignmentOperation))
+                        return "nested-command-assignment";
+                    for (var ancestor = assignment.Parent; ancestor is not null; ancestor = ancestor.Parent)
+                        if (ancestor is IConditionalOperation or ILoopOperation)
+                            return "conditional-command-assignment";
+                    if (property.Property.Name == "CommandType") commandType = assignment.Value.ConstantValue.Value switch { 4 => "StoredProcedure", 1 => "Text", _ => null };
+                    else if (property.Property.Name == "CommandText") textHash = assignment.Value.ConstantValue is { HasValue: true, Value: string t } ? FactFactory.Hash(t, 64) : null;
+                    else if (property.Property.Name == "Connection" && Unwrap(assignment.Value) is ILocalReferenceOperation or IParameterReferenceOperation && Inert(assignment.Value, excluded)) { }
+                    else return "unsupported-command-assignment";
+                    continue;
+                }
+                return "unsupported-command-member";
+            }
+            if (parent is ISimpleAssignmentOperation reassigned && reassigned.Target == reference) return "command-reassignment";
+            return "command-alias-or-escape";
+        }
+        return null;
+    }
+
     private static bool IsReadCondition(IOperation? condition, ILocalSymbol reader)
         => Unwrap(condition) is IInvocationOperation { TargetMethod.Name: "Read", TargetMethod.Parameters.Length: 0 } read
             && Local(read.Instance) is { } local && Same(local, reader) && ReaderTypes.Contains(local.Type.ToDisplayString(), StringComparer.Ordinal)
@@ -235,22 +263,23 @@ internal static class SqlServerReaderColumns
     private static bool Trusted(INamedTypeSymbol type, IAssemblySymbol assembly)
         => DatabaseOperationApi.Trusted(assembly) && (ReaderTypes.Contains(type.ToDisplayString(), StringComparer.Ordinal)
             || type.ToDisplayString() is "System.Data.Common.DbDataReader");
-    private static bool Inert(IOperation value, ILocalSymbol command, ILocalSymbol reader)
+    /// <summary>Literals, constants, parameters and locals other than the consumer's own command/consumer locals.</summary>
+    internal static bool Inert(IOperation value, ILocalSymbol[] excluded)
         => Walk(value).All(o => o is ILiteralOperation or IDefaultValueOperation or IParameterReferenceOperation or IFieldReferenceOperation { Field.IsConst: true }
-            or IConversionOperation { OperatorMethod: null } || o is ILocalReferenceOperation l && !Same(l.Local, command) && !Same(l.Local, reader));
-    private static IOperation? Initializer(IVariableDeclaratorOperation declarator)
+            or IConversionOperation { OperatorMethod: null } || o is ILocalReferenceOperation l && !excluded.Any(e => Same(l.Local, e)));
+    internal static IOperation? Initializer(IVariableDeclaratorOperation declarator)
         => declarator.Initializer?.Value ?? (declarator.Parent is IVariableDeclarationOperation { Declarators.Length: 1 } declaration ? declaration.Initializer?.Value : null);
-    private static (int, int) Lines(IOperation operation)
+    internal static (int, int) Lines(IOperation operation)
     {
         var span = operation.Syntax.GetLocation().GetLineSpan();
         return (span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1);
     }
-    private static bool Same(ISymbol? left, ISymbol? right) => SymbolEqualityComparer.Default.Equals(left, right);
-    private static IOperation? Unwrap(IOperation? o) => o is IConversionOperation { OperatorMethod: null } c ? Unwrap(c.Operand) : o is IParenthesizedOperation p ? Unwrap(p.Operand) : o;
-    private static IOperation? UnwrapIdentity(IOperation? o) => o is IConversionOperation { OperatorMethod: null, Conversion.IsIdentity: true } c
+    internal static bool Same(ISymbol? left, ISymbol? right) => SymbolEqualityComparer.Default.Equals(left, right);
+    internal static IOperation? Unwrap(IOperation? o) => o is IConversionOperation { OperatorMethod: null } c ? Unwrap(c.Operand) : o is IParenthesizedOperation p ? Unwrap(p.Operand) : o;
+    internal static IOperation? UnwrapIdentity(IOperation? o) => o is IConversionOperation { OperatorMethod: null, Conversion.IsIdentity: true } c
         ? UnwrapIdentity(c.Operand) : o is IParenthesizedOperation p ? UnwrapIdentity(p.Operand) : o;
-    private static ILocalSymbol? Local(IOperation? o) => Unwrap(o) is ILocalReferenceOperation l ? l.Local : null;
-    private static IEnumerable<IOperation> Walk(IOperation o)
+    internal static ILocalSymbol? Local(IOperation? o) => Unwrap(o) is ILocalReferenceOperation l ? l.Local : null;
+    internal static IEnumerable<IOperation> Walk(IOperation o)
     {
         var stack = new Stack<IOperation>();
         stack.Push(o);

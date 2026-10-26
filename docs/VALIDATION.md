@@ -1,4 +1,15 @@
 # TraceMap Validation Guide
+## Bounded offline SQL Server SqlDataAdapter.Fill → DataTable/DataRow evidence
+[SQLSERVER_DATATABLE_EVIDENCE.md](validation/SQLSERVER_DATATABLE_EVIDENCE.md) documents the
+additive `sqlServerDataTableState` on Fill facts (C# 0.22.14 / VB 0.10.17), the separate
+`sqlserver-datatable-bindings/1` digest and the `sqlserver-datatable-result` route over shapes
+admitted by the unchanged JSON, constant DDL and table DDL routes. Shared Core and both
+adapters change: run the new tests with the retained SQL/DNN tests and Python guards, commit,
+then the frozen full Debug -warnaserror suite. Afterwards, sequentially at the committed head:
+the retained 52-case smokes (8/12/32), result smoke (JSON 36/10/36, DDL 36/10/58, 20 refusals),
+table smoke (per language 22/5/44, 24 refusals), the new DataTable smoke (per language
+54/12/88 over 148 cases, 22 refusals) and the pinned C#/VB OSS adapter smoke (reduced coverage;
+no SQL calls there). No SQL, containers or private inputs.
 ## Bounded offline SQL Server table-backed result shapes
 [SQLSERVER_TABLE_RESULT_EVIDENCE.md](validation/SQLSERVER_TABLE_RESULT_EVIDENCE.md)
 documents the opt-in `sqlserver-ddl-table-result` route: bounded CREATE TABLE plus one

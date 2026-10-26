@@ -199,10 +199,15 @@ public static class SqlServerResultEvidence
         => new(binding.FactId, binding.ReaderEvidenceSha256);
 
     private static (string Status, IReadOnlyList<string> Reasons, SqlServerResultColumn? Column) CompareAccess(SqlServerResultShape shape, SqlServerReaderAccess access)
+        => CompareColumn(shape, access.Gap, access.Name, access.Ordinal);
+
+    /// <summary>Shared column-identity and ordinal-bound semantics for every consumer route.</summary>
+    internal static (string Status, IReadOnlyList<string> Reasons, SqlServerResultColumn? Column) CompareColumn(SqlServerResultShape shape,
+        string? gap, string? accessName, int? accessOrdinal)
     {
         if (shape.Completeness != "complete") return ("unknown", ["result-shape-unknown:" + shape.UnknownReason], null);
-        if (access.Gap is not null) return ("unknown", [access.Gap], null);
-        if (access.Name is { } name)
+        if (gap is not null) return ("unknown", [gap], null);
+        if (accessName is { } name)
         {
             var exact = shape.Columns.Where(c => c.Name == name).ToArray();
             var folded = shape.Columns.Where(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -212,7 +217,7 @@ public static class SqlServerResultEvidence
             if (exact.Length == 1) return ("bounded-match", [], exact[0]);
             return ("mismatch", ["missing-column:" + name], null);
         }
-        var ordinal = access.Ordinal!.Value;
+        var ordinal = accessOrdinal!.Value;
         if (ordinal >= 0 && ordinal < shape.Columns.Count) return ("bounded-match", [], shape.Columns[ordinal]);
         return ("mismatch", ["ordinal-out-of-range:" + ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture)], null);
     }
