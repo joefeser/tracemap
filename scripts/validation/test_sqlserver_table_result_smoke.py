@@ -1,8 +1,14 @@
 """Public synthetic table-backed result smoke guards; no CLI, network, or SQL execution."""
 import hashlib
+import ast
+import os
+import subprocess
+import sys
+import tempfile
 import importlib.util
 from pathlib import Path
 import unittest
+from unittest import mock
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("table_smoke", ROOT / "scripts/sqlserver-table-result-evidence/smoke.py")
 SMOKE = importlib.util.module_from_spec(SPEC)
@@ -11,6 +17,49 @@ M, X, U = "bounded-match", "mismatch", "unknown"
 
 
 class TableResultSmokeGuards(unittest.TestCase):
+    def test_optimized_execution_refuses_before_output_or_helpers(self):
+        for flag, env_value in (("-O", None), ("-OO", None), (None, "1")):
+            with self.subTest(flag=flag, env=env_value), tempfile.TemporaryDirectory() as tmp:
+                output = Path(tmp) / "must-not-exist"
+                env = dict(os.environ)
+                env.pop("PYTHONOPTIMIZE", None)
+                if env_value:
+                    env["PYTHONOPTIMIZE"] = env_value
+                result = subprocess.run([sys.executable, *([flag] if flag else []), SMOKE.__file__,
+                                         "--output", str(output)], env=env, capture_output=True, text=True, check=False)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("requires Python optimization disabled", result.stderr)
+                self.assertFalse(output.exists())
+        source = Path(SMOKE.__file__).read_text()
+        self.assertLess(source.index("if sys.flags.optimize:"), source.index("SPEC.loader.exec_module"))
+        self.assertFalse(any(isinstance(n, ast.Assert) for n in ast.walk(ast.parse(source))))
+
+    def test_invalid_aggregate_never_publishes_a_receipt(self):
+        good = {"gaps": [], "observedCounts": {M: 1}, "expectedCounts": {M: 1},
+                "refusals": [{"refused": True} for _ in range(24)]}
+        for change in ({"gaps": ["missing:case"]}, {"observedCounts": {M: 2}},
+                       {"refusals": []}, {"refusals": [{"refused": False}] * 24}):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
+                with mock.patch.object(SMOKE.HELPERS, "verify_scan_hashes") as verify:
+                    with self.assertRaises(ValueError):
+                        SMOKE.publish_receipt(Path(tmp), dict(good, **change))
+                    verify.assert_not_called()
+                self.assertFalse((Path(tmp) / "smoke-receipt.json").exists())
+
+    def test_bad_export_and_report_status_are_rejected(self):
+        with self.assertRaises(ValueError):
+            SMOKE.check_export({"version": "wrong"}, "base.sql", "tables.sql", "complete", {}, "a", "b")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in ("report", "repeat"):
+                (root / name).mkdir()
+                SMOKE.HELPERS.write(root / name / "result-column-comparison.json", {
+                    "comparison": {"coverage": "partial", "verdict": "no-aggregate-clean-verdict",
+                                   "comparisons": [{"factId": "f", "status": X}]}})
+                (root / name / "report.md").write_text("No aggregate clean verdict")
+            with self.assertRaises(ValueError):
+                SMOKE.check_report(root, {"factId": "f"}, [M])
+
     def test_denominator_is_derived_from_the_authored_matrices(self):
         self.assertEqual(SMOKE.EXPECTED_TOTALS, SMOKE.expected_totals())
         self.assertEqual({M: 22, X: 5, U: 44}, SMOKE.expected_totals())
