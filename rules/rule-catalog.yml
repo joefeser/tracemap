@@ -7959,6 +7959,19 @@ rules:
       - Aliases, reassignment, ref/out escapes, helpers, repeated Fill, adapter reuse, TableMappings, MissingSchemaAction, MissingMappingAction, AcceptChangesDuringFill, ContinueUpdateOnError and other adapter options, command mutation after association, table/column/row mutation, named tables, Select/DefaultView/Copy/LINQ row ownership, Field<T>, DataColumn and DataRowVersion access and other control flow remain unknown.
       - Column identity/existence and ordinal bounds only. No claim that Fill executes, rows exist, values convert or types/nullability agree, including for IsNull. Case-only names stay unknown although DataTable lookup is case-insensitive at runtime; duplicate shape names keep absent names unknown because Fill renames duplicates.
       - Rows and bounded-input hashes retain only binding factId and dataTableEvidenceSha256 plus the admitted public export digest (SHA-256), not raw binding command text, SQL bodies or snippets.
+  - id: database.sqlserver.dataset-column-comparison.v1
+    name: Bounded SQL Server DataSet first-table DataRow column comparison
+    description: Compares explicitly bound compiler-resolved DataRow column-name and ordinal reads of the first table of the DataSet filled by one exact SqlDataAdapter.Fill(DataSet) or Fill(DataSet, constant) with one admitted public synthetic first-result-set shape.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlServerDataSetComparison
+    limitations:
+      - Opt-in sqlserver-dataset-result compare only; shapes are admitted solely by the unchanged sqlserver-result-schema, sqlserver-ddl-result and sqlserver-ddl-table-result routes. Reports are always partial with no aggregate clean verdict and do not clear scan gaps or truncation; no SQL execution.
+      - Source evidence is the separate sqlserver-dataset/1 sqlServerDataSetState sibling property on Fill facts; rows bind one exact Fill fact through sqlserver-dataset-bindings/1 and its dataSetEvidenceSha256 digest. DataTable, reader and parameter bindings or digests never substitute.
+      - Supported subset is the DataTable route's command and adapter rules, one fresh untyped DataSet() filled exactly once, and constant reads through rows of its first table selected by Tables[0] or the exact-case default name (Table, or the constant source table), directly or via a fresh DataTable local, guarded only by Tables.Count > 0, Rows.Count > 0 or foreach on that DataSet and table.
+      - Later tables (Tables[1] and beyond), other or case-only table names, dynamic selectors, namespaces, Tables.Count outside the guard, Tables.Add, Merge, ReadXml, Relations, EnforceConstraints, CaseSensitive and other DataSet members, typed or named DataSets, TableMappings, MissingSchemaAction, MissingMappingAction and other adapter options, aliases, escapes, helpers, repeated Fill, Field<T>, DataColumn and DataRowVersion access and other control flow remain unknown.
+      - Column identity/existence and ordinal bounds only. No claim that Fill executes, tables or rows exist, later result sets, values convert or types/nullability agree, including for IsNull. Case-only column and table names stay unknown although DataSet lookups are case-insensitive at runtime; duplicate shape names keep absent names unknown because Fill renames duplicates.
+      - Rows and bounded-input hashes retain only binding factId and dataSetEvidenceSha256 plus the admitted public export digest (SHA-256), not raw binding command text, SQL bodies or snippets.
   - id: database.sqlserver.synthetic-result-shape.v1
     name: Independent synthetic SQL Server first-result-set declarations
     description: Admits strictly versioned authored first-result shapes bound to logical repo/revision, four-part identity and exact generator/public-input SHA-256.

@@ -69,7 +69,12 @@ internal static class DatabaseOperationApi
         // Separate first-result reader consumer state; never derived from parameter state.
         if (Kind(method.Name) == "select-candidate") SqlServerReaderColumns.Add(properties, call);
         // Separate Fill -> DataTable/DataRow consumer state; never derived from reader or parameter state.
-        if (Kind(method.Name) == "data-adapter-fill") SqlServerDataTableConsumers.Add(properties, call);
+        if (Kind(method.Name) == "data-adapter-fill")
+        {
+            SqlServerDataTableConsumers.Add(properties, call);
+            // Sibling Fill(DataSet) -> first-table consumer state; each property refuses the other's overloads.
+            SqlServerDataSetConsumers.Add(properties, call);
+        }
         // Only inline construction is local to this call. Mutable receiver history is
         // retained elsewhere; it must not silently become current command state.
         var instance = call.Instance;

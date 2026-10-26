@@ -29,7 +29,7 @@ public static class SqlServerDataTableEvidence
     public const string ReportVersion = "sqlserver-datatable-comparison/1";
     public const string StateVersion = SqlServerDataTableConsumers.Version;
     private static void Require([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool ok, string reason) { if (!ok) throw new ArgumentException("datatable-" + reason); }
-    private static bool Identity(SqlServerObjectIdentity? i) => i is not null && SqlServerSchemaEvidence.Identifier(i.Server)
+    internal static bool Identity(SqlServerObjectIdentity? i) => i is not null && SqlServerSchemaEvidence.Identifier(i.Server)
         && SqlServerSchemaEvidence.Identifier(i.Database) && SqlServerSchemaEvidence.Identifier(i.Schema) && SqlServerSchemaEvidence.Identifier(i.Procedure);
 
     internal static SqlServerDataTableState? State(CodeFact f)
@@ -96,11 +96,7 @@ public static class SqlServerDataTableEvidence
             if (state is null) reasons.Add("datatable-state-unavailable");
             else if (state.Version != StateVersion || state.Coverage != "bounded") reasons.Add(state.Gap ?? "datatable-state-unavailable");
             else if (state.CommandType != "StoredProcedure") reasons.Add(state.CommandType == "Text" ? "text-command-outside-scope" : "stored-procedure-intent-unavailable");
-            else if (state.Accesses is null || state.Accesses.Count > SqlServerDataTableConsumers.MaxAccesses || state.Accesses.Any(a => a is null
-                || a.Kind is not ("name-indexer" or "ordinal-indexer" or "isnull-name" or "isnull-ordinal") || a.Member is not ("Item" or "IsNull")
-                || a.RowSource is not ("rows-index" or "row-local" or "foreach-row") || a.Line < fact.Evidence.StartLine || a.EndLine < a.Line
-                || (a.Name is not null && !SqlServerSchemaEvidence.Identifier(a.Name)) || (a.Gap is null && a.Name is null && a.Ordinal is null)))
-                reasons.Add("invalid-datatable-state");
+            else if (InvalidAccesses(state.Accesses, fact.Evidence.StartLine)) reasons.Add("invalid-datatable-state");
             if (!map.TryGetValue(fact.FactId, out var binding)) reasons.Add("binding-missing");
             else
             {
@@ -125,17 +121,11 @@ public static class SqlServerDataTableEvidence
                 rows.Add(Row(null, "unknown", ["no-bounded-column-access"], null, null, []));
                 continue;
             }
-            // Fill renames duplicate result names (Name, Name1, ...); with any duplicate an absent name proves nothing.
-            var renaming = shape.Columns.Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != shape.Columns.Count;
+            var renaming = Renaming(shape);
             for (var index = 0; index < state.Accesses.Count; index++)
             {
                 var access = state.Accesses[index];
-                var (status, why, column) = SqlServerResultEvidence.CompareColumn(shape, access.Gap, access.Name, access.Ordinal);
-                if (status == "mismatch" && renaming && access.Name is { } name)
-                    (status, why, column) = ("unknown", ["datatable-duplicate-column-renaming-unknown:" + name], null);
-                var facets = new List<string>();
-                if (access.Member == "IsNull") facets.Add("nullability-not-compared:IsNull");
-                if (column?.DeclaredType is { } declared) facets.Add("declared-type-not-compared:" + declared);
+                var (status, why, column, facets) = CompareAccess(shape, access, renaming);
                 rows.Add(Row(index, status, why, access, column, facets));
             }
         }
@@ -156,6 +146,30 @@ public static class SqlServerDataTableEvidence
             "Aliases, reassignment, escapes, helpers, repeated Fill, adapter options and mappings, command mutation after association, table/row mutation, ambiguous row ownership and other control flow remain unknown; guards are bound to the selected table.",
             "Readers, DataSet, Field<T>, DataColumn and DataRowVersion access, ORMs, DNN wrappers and multiple result sets are outside scope.",
             "Reachability, source build/scan gaps and truncation are not cleared by this separate report. Self-consistent hashes prove integrity only, not authenticity, SQL execution, deployment or private acceptance."]);
+    }
+
+    /// <summary>Shared DataRow access-state validation (DataTable and DataSet consumers).</summary>
+    internal static bool InvalidAccesses(IReadOnlyList<SqlServerDataTableAccess>? accesses, int startLine)
+        => accesses is null || accesses.Count > SqlServerDataTableConsumers.MaxAccesses || accesses.Any(a => a is null
+            || a.Kind is not ("name-indexer" or "ordinal-indexer" or "isnull-name" or "isnull-ordinal") || a.Member is not ("Item" or "IsNull")
+            || a.RowSource is not ("rows-index" or "row-local" or "foreach-row") || a.Line < startLine || a.EndLine < a.Line
+            || (a.Name is not null && !SqlServerSchemaEvidence.Identifier(a.Name)) || (a.Gap is null && a.Name is null && a.Ordinal is null));
+
+    /// <summary>Fill renames duplicate result names (Name, Name1, ...); with any duplicate an absent name proves nothing.</summary>
+    internal static bool Renaming(SqlServerResultShape shape)
+        => shape.Columns.Select(c => c.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != shape.Columns.Count;
+
+    /// <summary>Shared DataRow access decision over the #912 column engine plus the Fill renaming and IsNull facets.</summary>
+    internal static (string Status, IReadOnlyList<string> Reasons, SqlServerResultColumn? Column, IReadOnlyList<string> Facets) CompareAccess(
+        SqlServerResultShape shape, SqlServerDataTableAccess access, bool renaming)
+    {
+        var (status, why, column) = SqlServerResultEvidence.CompareColumn(shape, access.Gap, access.Name, access.Ordinal);
+        if (status == "mismatch" && renaming && access.Name is { } name)
+            (status, why, column) = ("unknown", ["datatable-duplicate-column-renaming-unknown:" + name], null);
+        var facets = new List<string>();
+        if (access.Member == "IsNull") facets.Add("nullability-not-compared:IsNull");
+        if (column?.DeclaredType is { } declared) facets.Add("declared-type-not-compared:" + declared);
+        return (status, why, column, facets);
     }
 
     private static SqlServerDataTableBindingReference BindingProjection(SqlServerDataTableBinding binding) => new(binding.FactId, binding.DataTableEvidenceSha256);

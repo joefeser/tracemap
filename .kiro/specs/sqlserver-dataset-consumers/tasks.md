@@ -1,0 +1,11 @@
+# Tasks — Phase 3 (SqlDataAdapter.Fill(DataSet) → first-table DataRow)
+- [x] 1. Verify base (Phase 2 #914 merge `f0850183d` is fresh origin/dev), dedicated worktree/branch, read AGENTS/VALIDATION/SQL docs/specs/code/smokes; #864/#865/#870/#908 context only.
+- [x] 2. Inspect signed SqlClient/System.Data reference metadata; author the accepted syntax matrix, decisions, contracts and independent expected matrix (design.md) before implementation.
+- [x] 3. Extract the Phase 2 adapter/command/table/rows rules into shared helpers without changing DataTable output (Phase 2 lane green before any DataSet code).
+- [x] 4. New sibling `sqlServerDataSetState` walker on Fill facts; extractor version bumps.
+- [x] 5. DataSet bindings, three-origin comparison route, Markdown, `sqlserver-dataset-result` CLI, rule catalog entry.
+- [x] 6. Public synthetic C#/VB fixtures wired into the normal test-project restore/build graph; tests and a new native smoke carrying the authored expectations (retained smokes unchanged); Python guards; docs.
+- [x] 7. Verify the fixtures restore/build/scan through the normal test project with no pre-existing fixture `bin/`/`obj/`; focused lanes.
+- [x] 8. Commit implementation; frozen full Debug `-warnaserror`.
+- [x] 9. Sequential committed-head retained smokes, new DataSet smoke, pinned OSS C#/VB smoke; privacy/whitespace guards.
+- [x] 10. Record results (docs-only commit), next-slice prompt, push branch. No PR.
