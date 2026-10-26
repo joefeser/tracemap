@@ -132,6 +132,19 @@ neither public repository contains SQL calls, so reader-specific coverage remain
 synthetic/direct-test evidence. No SQL or private application was executed.
 This validation readback is docs-only after the frozen repair commit.
 
+### Owner-authorized nested assignment and ordinal alias repair
+
+Owner explicitly authorized the two current-head findings and increasing hosted
+review-fix cycle limits to six. Codex freshness and Baz fix cycles are now six;
+request/spend ceilings, local fallback bounds, quorum and human merge gates are
+unchanged. ACK 0.5.7 doctor accepts the lane.
+
+Reject nested/non-standalone command assignments rather than infer evaluation
+order. Ref-local declarations and ref reassignments invalidate GetOrdinal-name
+provenance. Seven new regression cases cover the reported shapes and adjacent
+CommandType/Connection/readonly/ref-reassignment variants. Extractors advance
+to C# 0.22.13 / VB 0.10.16. Validation is pending on the frozen repair head.
+
 ### Pre-PR catalog correction and revalidation
 
 Added the missing DDL parameter rule entry and a catalog regression guard in

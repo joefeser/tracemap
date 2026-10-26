@@ -514,6 +514,35 @@ public sealed class SqlServerResultColumnEvidenceTests
     private const string VbCommand = "Dim command = New SqlCommand(\"dbo.ReadItems\")\ncommand.CommandType = CommandType.StoredProcedure\n";
 
     [Theory]
+    [InlineData("command.CommandText = (command.CommandText = \"dbo.ReadOther\") + \"Suffix\";")]
+    [InlineData("command.CommandType = (command.CommandType = CommandType.Text);")]
+    [InlineData("command.Connection = (command.Connection = new SqlConnection());")]
+    [InlineData("var saved = command.CommandText = \"dbo.ReadOther\";")]
+    public void Nested_command_assignments_are_unknown(string mutation)
+    {
+        var state = Assert.Single(Extract("cs", CsCommand + mutation
+            + "var reader = command.ExecuteReader(); return reader[\"Name\"];"));
+        Assert.Equal("unknown", state.Coverage);
+        Assert.Equal("nested-command-assignment", state.Gap);
+        Assert.Null(state.CommandTextHash);
+        Assert.Equal([U], Statuses(Compare(Fact(state))));
+    }
+
+    [Theory]
+    [InlineData("ref int alias = ref ordinal; alias = 999;")]
+    [InlineData("ref readonly int alias = ref ordinal;")]
+    [InlineData("int other = 0; ref int alias = ref other; alias = ref ordinal; alias = 999;")]
+    public void Ref_aliases_invalidate_ordinal_name_provenance(string alias)
+    {
+        var state = Assert.Single(Extract("cs", CsCommand
+            + "var reader = command.ExecuteReader(); var ordinal = reader.GetOrdinal(\"Name\");"
+            + alias + "return reader.GetString(ordinal);"));
+        var access = Assert.Single(state.Accesses, a => a.Member == "GetString");
+        Assert.NotNull(access.Gap);
+        Assert.Equal(U, Assert.Single(Compare(Fact(state)).Comparisons, r => r.Access?.Member == "GetString").Status);
+    }
+
+    [Theory]
     [InlineData("command.CommandText = \"dbo.ReadOther\"", "\"unchanged\"")]
     [InlineData("command.CommandType = CommandType.Text", "CommandType.StoredProcedure")]
     [InlineData("command.Connection = connection", "connection")]

@@ -104,6 +104,9 @@ internal static class SqlServerReaderColumns
                 if (property.Parent is ISimpleAssignmentOperation assignment && assignment.Target == property)
                 {
                     if (assignment.Syntax.SpanStart > start) continue; // Later mutation cannot change this execution.
+                    if (assignment.Parent is not IExpressionStatementOperation
+                        || Walk(assignment.Value).Any(o => o is IAssignmentOperation))
+                        return Unknown("nested-command-assignment");
                     for (var ancestor = assignment.Parent; ancestor is not null; ancestor = ancestor.Parent)
                         if (ancestor is IConditionalOperation or ILoopOperation)
                             return Unknown("conditional-command-assignment");
@@ -128,6 +131,8 @@ internal static class SqlServerReaderColumns
         var rewritten = new HashSet<ILocalSymbol>(SymbolEqualityComparer.Default);
         foreach (var reference in all.OfType<ILocalReferenceOperation>().Where(r => ordinalLocals.ContainsKey(r.Local)))
             if (reference.Parent is ISimpleAssignmentOperation write && write.Target == reference
+                || reference.Parent is ISimpleAssignmentOperation { IsRef: true }
+                || reference.Parent is IVariableInitializerOperation { Parent: IVariableDeclaratorOperation { Symbol.RefKind: not RefKind.None } }
                 || reference.Parent is IArgumentOperation { Parameter.RefKind: not RefKind.None })
                 rewritten.Add(reference.Local);
 
