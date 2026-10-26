@@ -206,6 +206,43 @@ public sealed class SqlServerHelperResultExtractionTests
         Assert.All(sites, s => Assert.Equal("unknown", s.Helper.Coverage));
     }
 
+    [Theory]
+    [InlineData("cs", "var extra = new SqlCommand(); extra.ExecuteNonQuery();")]
+    [InlineData("cs", "var extra = new SqlCommand(); extra.ExecuteScalar();")]
+    [InlineData("cs", "var extra = new SqlDataAdapter(); var other = new DataTable(); extra.Fill(other);")]
+    [InlineData("cs", "var unused = new DataSet();")]
+    [InlineData("vb", "Dim extra = New SqlCommand()\nextra.ExecuteNonQuery()")]
+    [InlineData("vb", "Dim extra = New SqlCommand()\nextra.ExecuteScalar()")]
+    [InlineData("vb", "Dim extra = New SqlDataAdapter()\nDim other = New DataTable()\nextra.Fill(other)")]
+    [InlineData("vb", "Dim unused = New DataSet()")]
+    public void Signed_provider_identity_does_not_admit_unrelated_helper_work(string language, string extra)
+    {
+        var source = Table(language).Replace(language == "cs" ? "return table;" : "Return table",
+            extra + "\n" + (language == "cs" ? "return table;" : "Return table"), StringComparison.Ordinal);
+        var sites = Extract(language, source);
+        Assert.Equal("helper-body-unsupported", sites[0].Helper.Gap);
+        Assert.All(sites, s => Assert.Equal("unknown", s.Helper.Coverage));
+    }
+
+    [Theory]
+    [InlineData("cs", 64)]
+    [InlineData("cs", 65)]
+    [InlineData("vb", 64)]
+    [InlineData("vb", 65)]
+    public void Caller_limit_is_enforced_during_collection(string language, int count)
+    {
+        var callers = string.Concat(Enumerable.Range(0, count).Select(i => language == "cs"
+            ? $"static object Use{i}() {{ var t = ReadTable(\"dbo.ReadItems\"); return t.Rows[0][\"Name\"]; }}\n"
+            : $"Function Use{i}() As Object\nDim t = ReadTable(\"dbo.ReadItems\")\nReturn t.Rows(0)(\"Name\")\nEnd Function\n"));
+        // A later escape must not require traversing the rest of the document after the cap is exceeded.
+        if (count > 64) callers += language == "cs" ? "static string Escaped = nameof(ReadTable);"
+            : "Private Escaped As String = NameOf(ReadTable)";
+        var state = Assert.Single(Extract(language, Table(language) + callers)).Helper;
+        Assert.Equal(count == 64 ? "bounded" : "unknown", state.Coverage);
+        Assert.Equal(count == 64 ? null : "helper-caller-limit", state.Gap);
+        Assert.Equal(count == 64 ? 64 : 0, state.Callers.Count);
+    }
+
     // Caller refusals: each caller is its own entry; the helper stays bounded and other callers are unaffected.
     [Theory]
     [InlineData("cs", "var t = ReadTable(procedure: \"dbo.ReadItems\"); return t.Rows[0][\"Name\"];", "helper-named-argument-unsupported")]

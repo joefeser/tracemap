@@ -169,7 +169,8 @@ public static class SqlServerHelperResultEvidence
                 }
             }
         }
-        // Allowlist projection only: never hash raw SQL, procedure text, snippets, original facts or private source bytes.
+        // Bounded local evidence projection, not a public sanitization boundary. Retains locations and caller metadata;
+        // never hashes raw SQL, procedure text, snippets, original facts or source-file bytes.
         var schemaDigest = SqlServerSchemaEvidence.Digest(schemaProjection);
         var projection = new { route, schema = schemaProjection,
             bindings = bindings.Calls.OrderBy(b => b.FactId, StringComparer.Ordinal).ThenBy(b => b.CallerIndex).Select(BindingProjection),
@@ -179,7 +180,8 @@ public static class SqlServerHelperResultEvidence
         return new(ReportVersion, SqlServerSchemaEvidence.GeneratorSha256, SqlServerSchemaEvidence.Digest(projection), StateVersion, BindingsVersion,
             route, schemaVersion, schemaGenerator, schemaInput, schemaExtractor, schemaRule, schemaTier, schemaDigest, declarations.Origin, repo, revision,
             "partial", "no-aggregate-clean-verdict", declarations.Shapes, rows,
-            ["Declared result shapes are public synthetic inputs admitted by their unchanged origin route, not compiler, installed catalog, runtime or deployed observations.",
+            ["Local evidence report, not a sanitized shareable export: source paths, member identities and column names are retained. Public synthetic shape admission does not establish that source facts are public; do not publish private-input reports or their provenance hashes.",
+            "Declared result shapes are public synthetic inputs admitted by their unchanged origin route, not compiler, installed catalog, runtime or deployed observations.",
             "First result set only (DataSet helpers: first DataSet table); column identity/existence and ordinal bounds only. No claim that the helper or Fill executes, that any table or row exists, about later result sets, or about CLR/SQL type conversion, nullability, values or runtime exceptions, even for IsNull.",
             "Exactly one helper level: a private, static, non-virtual, non-generic, non-extension method with a unique name in single-declaration types, whose body is one bounded Fill(DataTable) or Fill(DataSet[, constant]) shape with the command text taken from one string parameter, returning the filled local.",
             "Call sites are the invocations of that private helper in its own type declaration and document; calls from other documents or compilations, reflection and delegates are never evidence (method-group references make the whole helper unknown). Enumerated call sites are not a runtime-caller completeness claim.",

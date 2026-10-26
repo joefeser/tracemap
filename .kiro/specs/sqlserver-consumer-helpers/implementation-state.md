@@ -1,4 +1,18 @@
 # Implementation state — Phase 4
+## PR 917 review repair
+
+The settled review batch identified independent admission, resource-bound and presentation
+issues. Helper bodies now admit only the selected Fill, its command/adapter/result allocations
+and command/adapter disposal; signed provider identity alone does not admit unrelated calls.
+Caller collection uses span deduplication and stops at the 65th unique invocation. C#/VB
+regressions cover independent executions, other fills, allocations and the 64/65 boundary.
+Reports retain source evidence by design, but now explicitly warn that they are local,
+not sanitized shareable exports; public schema admission does not certify source-fact privacy.
+The misleading public-input hash label is removed. Repair validation: helper-focused 106
+passed and broader SQL 693 passed with Debug `-warnaserror`; private-path and whitespace
+guards passed. Committed-head smoke and refreshed review/CI remain pending. The original
+full-suite result below is historical evidence, not a full-suite rerun of this repair.
+
 Branch `codex/sqlserver-consumer-helpers`, worktree
 `~/.codex/worktrees/sqlserver-consumer-helpers/tracemap`, created from freshly fetched
 `origin/dev` = `834d74fe86e1a1e769c9d1be583317b09295e92a` (#916 merge; #915 `b55b2d107` is an
