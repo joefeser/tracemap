@@ -159,3 +159,24 @@ its required artifact arguments; those 32 setup errors were an invocation error,
 not a passing gate. The explicit focused invocation above supersedes that attempt
 for this slice. No production scanner code changed and no full .NET test-suite
 claim is made.
+
+## Phase 4 helper extension (authored before execution)
+
+`matrix.md` now adds five helper cases per language over two private static
+helpers, `ReadTable(connection, procedure)` and `ReadSet(connection, procedure)`,
+in the same Microsoft.Data.SqlClient fixture pair that the runtime client
+references: HelperTableName and HelperOtherProcedure (the same helper with
+`dbo.ReadItems` and `dbo.ReadOther`), HelperSetName, HelperMissingName and
+HelperLaterTable. Each helper is one Fill fact; each call site is bound
+separately through `sqlserver-helper-result-bindings/1` and compared by the
+`sqlserver-helper-result` route. Runtime setup additionally creates
+`dbo.ReadOther AS SELECT N'other' AS Title`.
+
+The combined linked denominator is **22 cases = 12 bounded matches / 4 mismatches /
+6 unknowns**, and the runtime oracle asserts **42** checks (the original 20 plus 22
+linked method observations; `harness.PROVIDER_CHECKS`). HelperLaterTable returns
+99 at runtime but must stay a static unknown with `dataset-later-table-unsupported`;
+static rows are fixed before the runtime receipt is joined and runtime success
+never changes a status. Pinned image, network-none isolation, Developer/EULA
+settings, transient credentials, resource limits, ownership-checked cleanup and
+failed-run evidence preservation are unchanged.

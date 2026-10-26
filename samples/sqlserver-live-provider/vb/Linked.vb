@@ -67,5 +67,48 @@ Public Module Cases
             End Using
         End Using
     End Function
+    ' Phase 4: one private static helper level; each call site is bound separately.
+    Private Function ReadTable(connection As SqlConnection, procedure As String) As DataTable
+        Using command As New SqlCommand(procedure)
+            command.CommandType = CommandType.StoredProcedure
+            command.Connection = connection
+            Using adapter As New SqlDataAdapter(command)
+                Dim table As New DataTable()
+                adapter.Fill(table)
+                Return table
+            End Using
+        End Using
+    End Function
+    Private Function ReadSet(connection As SqlConnection, procedure As String) As DataSet
+        Using command As New SqlCommand(procedure)
+            command.CommandType = CommandType.StoredProcedure
+            command.Connection = connection
+            Using adapter As New SqlDataAdapter(command)
+                Dim results As New DataSet()
+                adapter.Fill(results)
+                Return results
+            End Using
+        End Using
+    End Function
+    Public Function HelperTableName(connection As SqlConnection) As Object
+        Dim table = ReadTable(connection, "dbo.ReadItems")
+        Return table.Rows(0)("Name")
+    End Function
+    Public Function HelperOtherProcedure(connection As SqlConnection) As Object
+        Dim table = ReadTable(connection, "dbo.ReadOther")
+        Return table.Rows(0)("Title")
+    End Function
+    Public Function HelperSetName(connection As SqlConnection) As Object
+        Dim results = ReadSet(connection, "dbo.ReadItems")
+        Return results.Tables(0).Rows(0)("Name")
+    End Function
+    Public Function HelperMissingName(connection As SqlConnection) As Object
+        Dim table = ReadTable(connection, "dbo.ReadItems")
+        Return table.Rows(0)("Missing")
+    End Function
+    Public Function HelperLaterTable(connection As SqlConnection) As Object
+        Dim results = ReadSet(connection, "dbo.ReadItems")
+        Return results.Tables(1).Rows(0)("Value")
+    End Function
 End Module
 End Namespace
