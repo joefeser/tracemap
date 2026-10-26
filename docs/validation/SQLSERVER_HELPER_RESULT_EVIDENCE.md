@@ -115,8 +115,10 @@ non-private, generic or wrapper helpers, reader-returning helpers, `Field<T>`, n
 DataSets, `DataColumn`/`DataRowVersion` access, ORMs, DNN hydration and provider wrappers.
 ## Follow-up work log
 Bounded backlog, not an authorization to widen this branch.
-1. **Next slice:** see the [next-slice prompt](../../prompts/continue-sqlserver-internal-helpers.md)
-   (internal helpers called from other documents of the same compilation).
+1. **Next slice:** internal helpers called from other documents of the same compilation are the
+   separate Phase 5 state, documented in
+   [SQLSERVER_INTERNAL_HELPER_RESULT_EVIDENCE.md](SQLSERVER_INTERNAL_HELPER_RESULT_EVIDENCE.md);
+   this Phase 4 state is unchanged.
 2. **Deferred decisions:** multi-level and wrapper helpers, reader-returning helpers,
    `Field<T>`, named/typed DataSets, `new DataTable(name)`, later result sets.
 3. **Deferred engineering work:** test wall-clock restructuring stays deferred.
