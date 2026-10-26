@@ -4,6 +4,11 @@ This is a static public corpus and a prepared, **NOT RUN** optional SQL Server
 lane. It is a first slice of #870, not schema-comparison implementation or private
 application acceptance. No DNN application, IIS, container or SQL was executed.
 
+Later bounded synthetic [result-column evidence](SQLSERVER_RESULT_COLUMN_EVIDENCE.md)
+compares fresh SqlCommand/SqlDataReader consumers with admitted first-result shapes;
+it does not admit this DNN route (`CBO.FillCollection`/`IHydratable` hydration,
+provider wrappers, `SELECT *` over RoleGroups) and the selected-reader gap remains.
+
 ## Reproducible inputs and licensing
 
 Canonical upstream: https://github.com/dnnsoftware/Dnn.Platform

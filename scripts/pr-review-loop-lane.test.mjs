@@ -24,6 +24,7 @@ const qodo = blockAfter(/^    qodo:\s*$/m, 6)
 const codex = blockAfter(/^    codex:\s*$/m, 6)
 const claudeLocal = blockAfter(/^    claude-local:\s*$/m, 6)
 const localReviewFallback = blockAfter(/^  localReviewFallback:\s*$/m, 4)
+const reviewFreshnessPolicy = blockAfter(/^  reviewFreshnessPolicy:\s*$/m, 4)
 
 function boundedCurrentHeadRecoveryEligible({ codexCurrent, bazCurrent, qodoRequestCountZero }) {
   return /minimumReturned:\s*1\b/.test(quorum)
@@ -33,7 +34,7 @@ function boundedCurrentHeadRecoveryEligible({ codexCurrent, bazCurrent, qodoRequ
     && /requestRetryCeiling:\s*0\b/.test(qodo)
     && /authority:\s*trusted_exact_head\b/.test(baz)
     && /- trustedCodeReview\b/.test(baz)
-    && /maxFixCycles:\s*2\b/.test(baz)
+    && /^      maxFixCycles: 5\s*$/m.test(baz)
     && /requirement:\s*required\b/.test(codex)
     && /waitUntilReturnedBeforeProcessing:\s*true\b/.test(codex)
     && codexCurrent && bazCurrent && qodoRequestCountZero
@@ -54,6 +55,14 @@ test('TraceMap admits stable ACK v0.5.2 through v0.5.x with required review capa
     bazCurrent: true,
     qodoRequestCountZero: true,
   }), true)
+})
+
+test('hosted and freshness cycle limits match the documented scoped contract', () => {
+  assert.match(baz, /^      maxFixCycles: 5\s*$/m)
+  assert.doesNotMatch(baz, /localReviewFallback:/)
+  assert.match(reviewFreshnessPolicy, /^    maxFreshReviewFixCycles: 6\s*$/m)
+  assert.match(runbook, /Baz has at most five finding\/fix cycles/)
+  assert.match(runbook, /Codex freshness recovery allows at most six fix cycles/)
 })
 
 test('stale Codex or stale Baz cannot satisfy the consumer lane contract', () => {
