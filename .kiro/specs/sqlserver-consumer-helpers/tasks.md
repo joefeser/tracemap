@@ -6,6 +6,6 @@
 - [x] 5. Public synthetic C#/VB fixtures wired into the normal test-project graph; native tests and a new native smoke carrying the authored expectations (retained smokes unchanged); Python guards; docs.
 - [x] 6. Extend the linked Microsoft.Data.SqlClient static/runtime matrix with C#/VB helper cases (authored expectations, same methods scanned and executed, 42 runtime assertions).
 - [x] 7. Verify fixtures restore/build/scan through the normal test project with no pre-existing fixture `bin/`/`obj/`; focused lanes.
-- [ ] 8. Commit implementation; frozen full Debug `-warnaserror`.
-- [ ] 9. Sequential committed-head retained smokes, new helper smoke, explicit Python guards, pinned OSS C#/VB smoke, linked live harness on the revalidated disposable context; privacy/whitespace guards.
-- [ ] 10. Record results (docs-only commit), next-slice prompt, push branch. No PR.
+- [x] 8. Commit implementation; frozen full Debug `-warnaserror`.
+- [x] 9. Sequential committed-head retained smokes, new helper smoke, explicit Python guards, pinned OSS C#/VB smoke, linked live harness on the revalidated disposable context; privacy/whitespace guards.
+- [x] 10. Record results (docs-only commit), next-slice prompt, push branch. No PR.

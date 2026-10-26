@@ -106,3 +106,36 @@ any table or row exists, later result sets, values, types, conversions, nullabil
 exceptions, catalog/live/deployed correspondence. Outside scope: multi-level, instance,
 non-private, generic or wrapper helpers, reader-returning helpers, `Field<T>`, named/typed
 DataSets, `DataColumn`/`DataRowVersion` access, ORMs, DNN hydration and provider wrappers.
+## Follow-up work log
+Bounded backlog, not an authorization to widen this branch.
+1. **Next slice:** see the [next-slice prompt](../../prompts/continue-sqlserver-internal-helpers.md)
+   (internal helpers called from other documents of the same compilation).
+2. **Deferred decisions:** multi-level and wrapper helpers, reader-returning helpers,
+   `Field<T>`, named/typed DataSets, `new DataTable(name)`, later result sets.
+3. **Deferred engineering work:** test wall-clock restructuring stays deferred.
+## Validated implementation head — 2026-10-26
+Implementation head **`d39acb8cd4f192fc4be8165f7f1b8d04f1c3213b`** on `codex/sqlserver-consumer-helpers`, from fresh `origin/dev` =
+#916 merge `834d74fe8`. Recorded by a separate documentation-only commit; no implementation
+change follows the gates.
+| Gate | Result |
+| --- | --- |
+| Clean fixture graph (all ten SQL fixture `bin/`/`obj/` moved out, normal test-project build only) | all restored and built; focused lane 689 passed (93 new) |
+| Full Debug solution -warnaserror, frozen source/HEAD/outputs | 5,266 passed, 0 failed, 3 expected skips; 32m 8s (1,939 s wall); no warnings |
+| Retained JSON / DDL 52-case parameter smokes | 8 / 12 / 32 each |
+| Retained result smoke | JSON 36 / 10 / 36, DDL 36 / 10 / 58, 20/20 refusals |
+| Retained table smoke | 64 cases per language; 44 / 10 / 88, 24/24 refusals |
+| Retained DataTable smoke | 148 cases per language; 108 / 24 / 176, 22/22 refusals |
+| Retained DataSet smoke | 169 cases per language; 156 / 24 / 176, 24/24 refusals |
+| New helper smoke | 115 cases per language; 84 / 30 / 116, expected = observed, 0 gaps, 24/24 refusals, repeat bytes identical |
+| Pinned C#/VB OSS adapter smoke | exit 0; 12,949 / 114,806 facts at C# 0.22.16 / VB 0.10.19; reduced coverage, no SQL calls |
+| Linked live harness (reviewed disposable context) | 22 cases 12 / 4 / 6 as authored; 42/42 runtime checks; SQL Server 16.0.4205.1; owned container removed |
+| Python guards; private-path guard; `git diff --check` | 39 + 20 + 11 passed; passed; passed |
+Receipts are local (outside Git): `/tmp/tracemap-hr-d39acb8-{json,ddl,result,table,datatable,dataset,helper}/smoke-receipt.json`
+and `/tmp/tracemap-linked-provider-hr-d39acb8/`. Helper smoke generator
+`f6226aaa89ea7cfab9a86ef5e0000397fe8970a0d181aadebed5ceb73afb637f`, bounded input
+`b09d214e0ecd97f584880168aa93ae2e12e00c69c1b18bc1c8470833de6db906`; Core
+`67f0cc20563a054fa5a18a41f91509ec851092ab772bbe65095bead9cb8d8c19`. Retained smoke generators
+are unchanged.
+Coverage honesty: the pinned public repositories contain no SQL calls; helper evidence is
+exercised by the synthetic corpus, direct tests and the linked synthetic matrix only. Not DNN,
+private-application, catalog, deployment or migration acceptance.

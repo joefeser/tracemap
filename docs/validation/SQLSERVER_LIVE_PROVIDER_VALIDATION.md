@@ -180,3 +180,25 @@ static rows are fixed before the runtime receipt is joined and runtime success
 never changes a status. Pinned image, network-none isolation, Developer/EULA
 settings, transient credentials, resource limits, ownership-checked cleanup and
 failed-run evidence preservation are unchanged.
+
+### Phase 4 linked committed-head validation — 2026-10-26
+
+At implementation head `d39acb8cd` with the CLI built by the frozen full suite, after a
+read-only revalidation of the reviewed context (endpoint `ssh://dockercache`, native
+linux/x86_64, 8 CPUs, ~30.6 GiB, enforceable memory/swap/CFS/PID limits, 359 GiB free on the
+Docker data filesystem, pinned image present by RepoDigest, no pre-existing harness
+containers):
+
+- C# and VB scans built; eight semantic execution sites each (six direct, two helper Fills).
+- All 22 static verdicts matched: **12 bounded matches / 4 mismatches / 6 unknowns**;
+  HelperLaterTable stayed unknown with `dataset-later-table-unsupported`.
+- Repeated JSON and Markdown comparisons were byte-identical.
+- **42/42 runtime assertions passed** on SQL Server 16.0.4205.1 (2 CPUs, 6 GiB memory/swap,
+  SQL 2 GiB, 2 GiB tmpfs, network none, no ports); owned container removed; source and CLI bytes
+  unchanged; no credential text in either receipt; 106 s.
+- 20 harness + 11 linked-runner Python guards passed.
+
+Local linked receipt: `/tmp/tracemap-linked-provider-hr-d39acb8/linked-receipt.json`
+(SHA-256 `ac750b24d02616d515e92b8edf23568d7b48487ca2b348f691046618b976e8c3`). This remains a
+narrow synthetic matrix, not modern-provider parity, DNN, private-application or deployment
+acceptance.
