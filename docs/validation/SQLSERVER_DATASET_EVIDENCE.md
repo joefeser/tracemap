@@ -115,3 +115,28 @@ Bounded backlog, not an authorization to widen this branch. Related tracking: #8
    public fixtures.
 3. **Deferred engineering work:** test wall-clock restructuring stays deferred; measure before
    changing project or concurrency boundaries.
+## Validated implementation head — 2026-10-26
+Implementation commit **`c46a0e6054d90975d30d4fadc5bf83f280d4df0e`** on
+`codex/sqlserver-dataset-consumers`, from fresh `origin/dev` = #914 merge `f0850183d`.
+Recorded by a separate documentation-only commit; no implementation change follows the gates.
+| Gate | Result |
+| --- | --- |
+| Clean fixture graph (all SQL fixture `bin/`/`obj/` moved out, normal test-project build only) | all eight SQL fixture projects restored and built; focused lane 596 passed (37 new) |
+| Python guards | 32 `test_sqlserver_*` (7 new) + 17 DNN harness passed |
+| Full Debug solution -warnaserror, frozen source/HEAD/outputs | 5,173 passed, 0 failed, 3 expected skips; 29m 23s (1,773 s wall); no warnings |
+| Retained JSON / DDL 52-case parameter smokes | 8 / 12 / 32 each |
+| Retained result smoke | JSON 36 / 10 / 36, DDL 36 / 10 / 58, 20/20 refusals |
+| Retained table smoke | 64 cases per language; 44 / 10 / 88, 24/24 refusals |
+| Retained DataTable smoke | 148 cases per language; 108 / 24 / 176, 22/22 refusals |
+| New DataSet smoke | 169 cases per language; 156 / 24 / 176 (356 rows), expected = observed, 0 gaps, 24/24 refusals, repeat bytes identical |
+| Pinned C#/VB OSS adapter smoke | exit 0; 12,949 / 114,806 facts at C# 0.22.15 / VB 0.10.18; reduced coverage, no SQL calls |
+| Private-path guard, `git diff --check` | passed |
+Receipts are local (outside Git): `/tmp/tracemap-ds-c46a0e6-{json,ddl,result,table,datatable,dataset}/smoke-receipt.json`.
+DataSet smoke generator `33d80e40ed5a8389548a4717322cc48190d944f041bb7275ab454cf432c9f141`,
+bounded input `ea4957233857713e5fa109d6ab965433de6bdfb8799b09eb34473123f808346e`; Core
+`5df9d3938ee4810ae4df57ca7a1a7ee7c38493d12b242682951b5ab26a78dae5`; parser unchanged
+`2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`. Retained smoke generators
+are unchanged.
+Coverage honesty: the pinned public repositories contain no SQL calls, so DataSet evidence is
+exercised only by the synthetic corpus and direct tests. Not DNN, private, catalog or deployed
+acceptance.
