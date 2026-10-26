@@ -46,8 +46,10 @@ validated only on the synthetic corpus.
    expectations and the same fail-closed alias/escape rules.
 3. DNN route: a bounded `CBO.FillCollection<T>`/`IHydratable` hydration model tied
    to the #908 public slice, with independently inspected expectations.
-4. Housekeeping found here: `database.sqlserver.ddl-parameters.v1` (#911) has no
-   rule-catalog entry.
+
+The pre-PR correction added the missing #911
+`database.sqlserver.ddl-parameters.v1` catalog entry with its provenance, bounds,
+unsupported facets and non-execution limitations. It is no longer pending work.
 
 Any slice must keep the existing parameter and result contracts, both 52-case
 parameter smokes (8/12/32) and the result smoke (per language JSON 18/5/18, DDL

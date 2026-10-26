@@ -31,7 +31,8 @@ Live #908/#870 read for context only; both open and broader than this slice.
 
 ## Oddities noticed (not changed)
 
-- `database.sqlserver.ddl-parameters.v1` from #911 has no rule-catalog entry.
+- `database.sqlserver.ddl-parameters.v1` from #911 initially had no rule-catalog
+  entry; corrected before PR with its evidence tier, outputs and limitations.
   Out of scope here; recorded for the follow-up.
 - Report rows are ordered by fact ID (hash), mirroring the parameter route;
   deterministic but not source order.

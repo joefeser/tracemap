@@ -7916,6 +7916,22 @@ rules:
       - Exact logical identities are synthetic labels, not deployed servers; hashes establish integrity, not authenticity or deployment correspondence.
       - Only the documented primitive parameter subset is admitted; output-only declarations and malformed/ambiguous names fail admission, unsupported facets remain comparison unknowns.
 
+  - id: database.sqlserver.ddl-parameters.v1
+    name: Bounded public synthetic T-SQL procedure parameter declarations
+    description: Derives schema-qualified procedure parameter declarations and spans from explicitly hashed public synthetic DDL using the pinned ScriptDom parser.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlServerDdlExport
+      - SqlServerDdlUnsupported
+    limitations:
+      - Opt-in sqlserver-ddl route only; DDL origin is separate from authored JSON declarations, live catalogs and deployed correspondence. Exact logical repo/revision/server/database/schema/procedure identity is required; no short-name joins or migration ordering.
+      - ScriptDom 170.191.0 TSql160 admits CREATE, ALTER and CREATE OR ALTER PROCEDURE with explicit schemas and the documented canonical int, bigint, bit, nvarchar, varchar and decimal vocabulary. Unsupported types, ANSI synonyms, ambiguous identities, malformed SQL and SQLCMD text even in strings/comments reject the whole input.
+      - Explicit character lengths or MAX are required. OUTPUT denotes InputOutput capability; defaults and decimal facets are retained as Tier4Unknown unsupported evidence, never evaluated into compatibility. ANSI length/encoding policy remains unknown.
+      - Procedure bodies are syntax-checked only by this rule; result shapes, RETURN values, OUTPUT assignments, effects and runtime behavior are not interpreted. The separate ddl-result-shape rule governs opt-in result evidence.
+      - Admission binds exact generator, parser and bounded-input SHA-256 plus source-file digests and declaration spans. Hashes establish integrity, not authenticity or deployment proof; no raw body/default snippets are retained.
+      - File, aggregate-byte, token, syntax-complexity, procedure, parameter and export-size limits reject rather than truncate. The dedicated 64 MiB parser stack is a measured margin, not universal crash containment or a parsing time limit.
+      - Parameter comparisons remain partial with no aggregate clean verdict; no SQL execution, DNN binding or private application acceptance follows.
+
   - id: database.sqlserver.result-column-comparison.v1
     name: Bounded SQL Server first-result-set column comparison
     description: Compares explicitly bound compiler-resolved reader column-name and ordinal accesses with one admitted public synthetic first-result-set shape.
