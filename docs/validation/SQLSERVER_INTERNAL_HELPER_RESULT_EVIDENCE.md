@@ -116,3 +116,44 @@ nullability, runtime exceptions, catalog/live/deployed correspondence. Outside s
 multi-level, instance, public, protected, generic or wrapper helpers, callers in other
 compilations, reader-returning helpers, `Field<T>`, named/typed DataSets,
 `DataColumn`/`DataRowVersion` access, ORMs, DNN hydration and provider wrappers.
+## Follow-up work log
+Bounded backlog, not an authorization to widen this branch.
+1. **Next slice:** see the [next-slice prompt](../../prompts/continue-sqlserver-field-reads.md)
+   (`Field<T>` / `Field(Of T)` column-identity reads on bounded DataRow consumers).
+2. **Deferred decisions:** linking a cross-document internal helper into the disposable runtime
+   matrix, multi-level and wrapper helpers, reader-returning helpers, callers in other
+   compilations, named/typed DataSets, `new DataTable(name)`, later result sets.
+3. **Deferred engineering work:** test wall-clock restructuring stays deferred.
+## Validated implementation head — 2026-10-26
+Implementation head **`d811d71937b5d4b46aaa965433cc8d9c84bcc112`** on
+`codex/sqlserver-internal-helpers`, from fresh `origin/dev` = #917 merge `7169ee6e4`. Recorded by
+a separate documentation-only commit; no implementation change follows the gates. Source, HEAD
+and CLI-directory DLL hashes were identical before and after the smokes and the linked run; no
+competing build, smoke or commit ran in the worktree.
+| Gate | Result |
+| --- | --- |
+| Clean fixture graph (all twelve SQL fixture `bin/`/`obj/` moved out, normal test-project build only) | all restored and built; focused lane 762 passed (57 new) |
+| Full Debug solution -warnaserror, frozen source/HEAD | 5,339 passed, 0 failed, 3 expected skips; 32m 52s tests (1,982 s wall); no warnings |
+| Retained JSON / DDL 52-case parameter smokes | 8 / 12 / 32 each (19 s / 25 s) |
+| Retained result smoke | JSON 36 / 10 / 36, DDL 36 / 10 / 58, 20/20 refusals (71 s) |
+| Retained table smoke | 64 cases per language; 44 / 10 / 88, 24/24 refusals (74 s) |
+| Retained DataTable smoke | 148 cases per language; 108 / 24 / 176, 22/22 refusals (159 s) |
+| Retained DataSet smoke | 169 cases per language; 156 / 24 / 176, 24/24 refusals (171 s) |
+| Retained helper smoke | 115 cases per language; 84 / 30 / 116, 24/24 refusals (96 s) |
+| New internal-helper smoke | 78 cases per language; 72 / 24 / 60, expected = observed, 0 gaps, 24/24 refusals, repeat bytes identical (60 s) |
+| Pinned C#/VB OSS adapter smoke | exit 0 (21 s); 12,949 / 114,806 facts at C# 0.22.18 / VB 0.10.21; reduced coverage, no SQL calls |
+| Unchanged linked live harness (reviewed disposable context) | 22 cases 12 / 4 / 6; 42/42 runtime checks; SQL Server 16.0.4205.1; owned container removed (92 s) |
+| Python guards; private-path guard; `git diff --check 7169ee6e4..HEAD` | 50 + 20 + 11 passed; passed; passed |
+Receipts are local (outside Git): `/tmp/tracemap-ih-d811d71-{json,ddl,result,table,datatable,dataset,helper,internal}/smoke-receipt.json`,
+`/tmp/tracemap-ih-d811d71-oss/` and `/tmp/tracemap-linked-provider-ih-d811d71/`. Internal-helper
+smoke generator `72f5cd34f60ba600d81e45d33f2d0ca238b26b7ecbd4cfc70696588c496f7667`, bounded input
+`b8a35d605e5b7c40453e41ad727bf802413d5f929722ce3850728ccaf2b4312a`; Core
+`2ed437c42c10585498617aa9be6bd5cd30b9d3df4fe3d3ab102567747a820d04`; ScriptDom parser unchanged
+`2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`. Retained smoke generators
+are byte-identical to `origin/dev` (the helper smoke's `9d534a8e…` is its post-#917-repair
+script, not the earlier `f6226aaa…` recorded at `d39acb8cd`); their bounded inputs moved only
+through the extractor version strings in projected facts.
+Coverage honesty: the pinned public repositories contain no SQL calls; internal-helper evidence
+is exercised by the synthetic corpus and direct tests only, and the linked runtime matrix was
+run unchanged (it contains no internal helper). Not DNN, private-application, catalog,
+deployment or migration acceptance.

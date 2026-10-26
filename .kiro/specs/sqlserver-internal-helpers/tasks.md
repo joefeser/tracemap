@@ -5,6 +5,6 @@
 - [x] 4. Internal bindings, three-origin comparison route, Markdown, `sqlserver-internal-helper-result` CLI, rule catalog entry; substitution tests.
 - [x] 5. Public synthetic multi-document C#/VB fixtures wired into the normal test-project graph; native tests and a new native smoke with the authored expectations (retained smokes unchanged); Python guards; docs.
 - [x] 6. Verify fixtures restore/build/scan through the normal test project with no pre-existing fixture `bin/`/`obj/`; focused lanes.
-- [ ] 7. Commit implementation; frozen full Debug `-warnaserror`.
-- [ ] 8. Sequential committed-head retained smokes, new smoke, Python guards, pinned OSS C#/VB smoke, unchanged linked live harness on the revalidated disposable context; privacy/whitespace guards.
-- [ ] 9. Record results (docs-only commit), next-slice prompt, push branch. No PR.
+- [x] 7. Commit implementation; frozen full Debug `-warnaserror`.
+- [x] 8. Sequential committed-head retained smokes, new smoke, Python guards, pinned OSS C#/VB smoke, unchanged linked live harness on the revalidated disposable context; privacy/whitespace guards.
+- [x] 9. Record results (docs-only commit), next-slice prompt, push branch. No PR.

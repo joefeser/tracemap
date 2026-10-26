@@ -35,3 +35,25 @@ by accident. The user checkout and every other worktree were not touched.
   observed), 0 gaps, 24/24 refusals each for its intended reason, ~59 s.
 - Python guards: 50 `test_sqlserver_*` (9 new), 20 DNN harness, 11 linked provider passed;
   private-path guard passed.
+## Committed-head acceptance (implementation head `d811d71937b5d4b46aaa965433cc8d9c84bcc112`)
+Implementation commits `1504bb620` (state), `7f4e40b7f` (route), `b08be39bb` (adapter error
+policy), `ee0811d93` (fixtures/smoke) and the development-notes commit `d811d7193`. All gates ran at
+`d811d7193` with source and HEAD frozen (`git status` empty before and after) and every
+CLI-directory DLL hash identical before and after the smokes and the linked run.
+- Full Debug solution `dotnet test src/dotnet/TraceMap.sln -c Debug -warnaserror`:
+  **5,339 passed, 0 failed, 3 expected skips** (Oracle full golden sweep opt-in,
+  HttpReportProvenanceInterop receipt env unset, Windows-only deep projectless ASP.NET
+  publish); 32m 52s tests, 1,982 s wall; zero compiler/analyzer warnings. No failure occurred,
+  so no rerun was needed or counted.
+- Retained smokes unchanged: 52-case 8/12/32 ×2; result JSON 36/10/36, DDL 36/10/58, 20/20;
+  table 44/10/88, 24/24; DataTable 108/24/176, 22/22; DataSet 156/24/176, 24/24; helper
+  84/30/116, 24/24. New internal-helper smoke 72/24/60 (per language 36/12/30 over 78 cases),
+  0 gaps, 24/24.
+- Pinned OSS smoke: exit 0; 12,949 / 114,806 facts, both `Level1SemanticAnalysisReduced` /
+  `FailedOrPartial`; no DatabaseOperationCandidate, so no internal-helper state.
+- Unchanged linked live harness: 12/4/6, 42/42 runtime checks, owned container removed.
+- Python guards 50 + 20 + 11; private-path guard; `git diff --check 7169ee6e4..HEAD`.
+## Delivery
+Docs-only results commit on top of `d811d7193`, next-slice prompt
+`prompts/continue-sqlserver-field-reads.md`, branch pushed. No PR, merge, ACK-policy change or
+review request. Not DNN, private-application, deployment or migration acceptance.
