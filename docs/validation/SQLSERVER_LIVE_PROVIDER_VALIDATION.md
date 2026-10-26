@@ -120,6 +120,19 @@ missing runtime counterparts, byte drift and incomplete cleanup. Its local linke
 receipt binds generator, source matrix, CLI DLLs, scan/report bytes and the runtime
 receipt. The runtime receipt separately binds the published client bytes.
 
+Only a clean committed worktree is admitted; every bounded input is compared with
+its exact Git blob before and after execution. Output must be outside the sample
+tree, including through symlink aliases. The harness runs in-process with its own
+bounded Docker operations so an outer timeout cannot kill ownership-checked cleanup.
+Each linked row carries the native comparison provenance and report limitations;
+totals are derived from those validated rows.
+
+Failed output directories are intentionally preserved, not atomically discarded:
+they may contain the only ownership/cleanup receipt and diagnostic logs after a
+remote failure. A failed run has no successful linked receipt. Retry with a fresh
+output path; do not delete failed evidence before inspecting cleanup status. This
+matches the underlying harness's exclusive-output/evidence-preservation contract.
+
 There are **32 runtime assertions**: the original 20 plus 12 linked observations.
 This is a narrow synthetic matrix, not modern-provider parity across all scanner
 shapes, DNN acceptance, work-machine acceptance or application readiness. Native

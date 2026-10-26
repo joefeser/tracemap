@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Explicit opt-in static/runtime matrix; no effect without all activation gates."""
 import argparse
+from collections import Counter
 import hashlib
 import importlib.util
 import json
 from pathlib import Path
 import subprocess
-import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 SAMPLE = ROOT / 'samples/sqlserver-live-provider'
@@ -39,7 +39,30 @@ def inputs():
     paths += list((ROOT / 'samples/dnn-sql-validation/sql').glob('*.sql'))
     paths += [ROOT / f'scripts/sqlserver-{kind}-evidence/smoke.py'
               for kind in ('parameter', 'result-column', 'datatable', 'dataset')]
+    require(not any(p.is_symlink() for p in paths), 'source links refused')
     return {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted(paths)}
+
+def verify_committed(revision, snapshot):
+    require(not subprocess.check_output(['git', 'status', '--porcelain', '--untracked-files=all'], cwd=ROOT),
+            'clean committed worktree required; preserve changes and commit before validation')
+    require(subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip() == revision,
+            'HEAD changed during validation')
+    for name, digest in snapshot.items():
+        blob = subprocess.check_output(['git', 'show', f'{revision}:{name}'], cwd=ROOT)
+        require(hashlib.sha256(blob).hexdigest() == digest, 'input differs from committed blob: ' + name)
+
+def run_runtime(args, publish, runtime):
+    # The harness bounds each Docker operation and readiness attempt itself.
+    # Invoke in-process: an outer subprocess timeout must never kill its finally
+    # block before ownership-checked cleanup and partial receipt persistence.
+    harness = load('linked_runtime', ROOT / 'scripts/dnn-sql-validation/harness.py')
+    harness.run(argparse.Namespace(activate=True, context=args.context,
+        expected_endpoint=args.expected_endpoint, approve_host=True, approve_resources=True,
+        accept_eula=True, approve_disposable=True, generate_password=True,
+        provider_directory=publish, output=runtime))
+
+def summarize(rows):
+    return dict(sorted(Counter(row['static'] for row in rows).items()))
 
 def verify_runtime(runtime, rows):
     receipt = json.loads((runtime / 'receipt.json').read_bytes())
@@ -57,10 +80,13 @@ def run(args):
     gates = ('activate', 'approve_host', 'approve_resources', 'accept_eula', 'approve_disposable')
     require(all(getattr(args, g) for g in gates), 'all activation approvals required')
     require(args.context and args.expected_endpoint, 'explicit reviewed context and endpoint required')
+    args.output = args.output.resolve()
+    require(not args.output.is_relative_to(SAMPLE.resolve()), 'output must be outside sample tree')
     require(not args.output.exists(), 'new output directory required')
-    args.output.mkdir(parents=True)
     before = inputs()
     revision = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+    verify_committed(revision, before)
+    args.output.mkdir(parents=True)
     helper = load('linked_reader', ROOT / 'scripts/sqlserver-result-column-evidence/smoke.py')
     table = load('linked_table', ROOT / 'scripts/sqlserver-datatable-evidence/smoke.py')
     dataset = load('linked_dataset', ROOT / 'scripts/sqlserver-dataset-evidence/smoke.py')
@@ -120,28 +146,28 @@ def run(args):
             require(report['coverage'] == 'partial' and report['verdict'] == 'no-aggregate-clean-verdict', 'coverage widened')
             require(selected[0]['sourceTier'] == 'Tier1Semantic' and
                     selected[0]['tier'] == ('Tier4Unknown' if expected == 'unknown' else 'Tier2Structural'), 'tier widened')
-            rows.append({'language': language, 'case': name, 'static': expected, 'ruleId': selected[0]['ruleId'],
-                         'sourceTier': selected[0]['sourceTier'], 'reasons': selected[0]['reasons']})
+            rows.append({'language': language, 'case': name, 'static': selected[0]['status'],
+                         'comparison': selected[0], 'limitations': report['limitations'],
+                         'reportPath': (case / 'report' / filename).relative_to(args.output).as_posix()})
         for path in sorted(work.rglob('*')):
             if path.is_file():
                 evidence_hashes[path.relative_to(args.output).as_posix()] = sha(path)
     runtime = args.output / 'runtime'
-    command(sys.executable, ROOT / 'scripts/dnn-sql-validation/harness.py', '--activate', '--context', args.context,
-            '--expected-endpoint', args.expected_endpoint, '--approve-host', '--approve-resources', '--accept-eula',
-            '--approve-disposable', '--generate-password', '--provider-directory', publish, '--output', runtime)
+    run_runtime(args, publish, runtime)
     verify_runtime(runtime, rows)
     for row in rows:
         row['runtime'] = 'expected exception' if row['case'] == 'MissingName' else '99' if row['case'] == 'LaterTable' else 'sample'
     require(inputs() == before, 'source changed during validation')
+    verify_committed(revision, before)
     require(cli_files == {p.name: sha(p) for p in cli.parent.glob('*.dll')}, 'CLI changed during validation')
     evidence_hashes['runtime/receipt.json'] = sha(runtime / 'receipt.json')
     result = {'version': 'sqlserver-linked-provider-validation/1', 'generatorSha256': sha(__file__),
               'boundedInputSha256': helper.HELPERS.digest({'sources': before, 'cli': cli_files, 'evidence': evidence_hashes}),
               'revision': revision, 'coverage': 'partial', 'verdict': 'bounded-matrix-verified-not-application-acceptance',
               'sources': before, 'cli': cli_files, 'evidence': evidence_hashes, 'rows': rows,
-              'runtimeChecks': 32, 'staticCounts': {'bounded-match': 6, 'mismatch': 2, 'unknown': 4}}
+              'runtimeChecks': 32, 'staticCounts': summarize(rows)}
     helper.HELPERS.write(args.output / 'linked-receipt.json', result)
-    print('Verified 12 linked cases: 6 bounded matches / 2 mismatches / 4 unknowns; 32 runtime checks; owned container removed')
+    print(f'Verified {len(rows)} linked cases: {summarize(rows)}; 32 runtime checks; owned container removed')
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
