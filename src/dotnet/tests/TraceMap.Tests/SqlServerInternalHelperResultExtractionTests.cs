@@ -33,7 +33,7 @@ public sealed class SqlServerInternalHelperResultExtractionTests
     /// own exclusion path, registers the compilation scope, and returns both helper states of every Fill site in (path, position) order.
     /// </summary>
     internal static Site[] Extract(string language, (string Path, string Text)[] documents, bool register = true, string[]? exclude = null,
-        bool allowErrors = false, Func<Compilation, Compilation>? mutate = null)
+        bool allowErrors = false, Func<Compilation, Compilation>? mutate = null, string? unavailablePath = null, bool fileAppeared = false)
     {
         var repo = Directory.CreateTempSubdirectory("tracemap-internal-helper-").FullName;
         try
@@ -53,7 +53,16 @@ public sealed class SqlServerInternalHelperResultExtractionTests
             var compilation = project.GetCompilationAsync().GetAwaiter().GetResult()!;
             if (mutate is not null) compilation = mutate(compilation);
             if (!allowErrors) Assert.DoesNotContain(compilation.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
-            if (register) SqlServerCompilationScopes.Register(repo, project, compilation, compilation.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error));
+            IReadOnlyDictionary<string, string>? inputs = unavailablePath is null ? null
+                : documents.Where(d => d.Path != unavailablePath).ToDictionary(d => d.Path, d => d.Path, StringComparer.Ordinal);
+            if (fileAppeared)
+            {
+                var path = Path.Combine(repo, unavailablePath!);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, documents.Single(d => d.Path == unavailablePath).Text);
+            }
+            if (register) SqlServerCompilationScopes.Register(repo, project, compilation,
+                compilation.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error), inputs);
             return compilation.SyntaxTrees.SelectMany(tree =>
             {
                 var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
@@ -70,6 +79,52 @@ public sealed class SqlServerInternalHelperResultExtractionTests
     }
 
     private static string Ext(string language) => language == "cs" ? "cs" : "vb";
+
+    [Theory]
+    [InlineData("proj/Callers.cs", null)]
+    [InlineData("proj/Generated.g.cs", "helper-generated-document-unsupported")]
+    [InlineData("shared/Linked.cs", "helper-linked-document-unsupported")]
+    [InlineData("proj/Unsafe Callers.cs", "helper-document-path-unsupported")]
+    public void Escaped_identifiers_do_not_bypass_caller_enumeration_or_document_refusals(string path, string? gap)
+    {
+        var body = Call("cs").Replace("ReadTable", @"\u0052eadTable", StringComparison.Ordinal);
+        var state = Assert.Single(Extract("cs", [("proj/Helpers.cs", HelperDocument("cs")),
+            (path, CallerDocument("cs", "Callers", body))])).Internal;
+        Assert.Equal(gap is null ? "bounded" : "unknown", state.Coverage);
+        Assert.Equal(gap, state.Gap);
+        if (gap is null) Assert.Equal(path, Assert.Single(state.Callers).Path);
+        else Assert.Empty(state.Callers);
+    }
+
+    [Theory]
+    [InlineData("Func<string, DataTable> Reader = Data.\\u0052eadTable")]
+    [InlineData("string Name = nameof(Data.\\u0052eadTable)")]
+    public void Escaped_method_groups_and_nameof_fail_closed(string member)
+    {
+        var state = Assert.Single(Extract("cs", [("proj/Helpers.cs", HelperDocument("cs")),
+            ("proj/Callers.cs", CallerDocument("cs", "Callers", Call("cs"))),
+            ("proj/Escapes.cs", CsUsings + "internal static class Escapes { internal static readonly " + member + "; }")])).Internal;
+        Assert.Equal("helper-reference-escape", state.Gap);
+        Assert.Empty(state.Callers);
+    }
+
+    [Theory]
+    [InlineData("cs", "A")]
+    [InlineData("cs", "Z")]
+    [InlineData("vb", "A")]
+    [InlineData("vb", "Z")]
+    public void Unavailable_input_reduces_scope_before_extraction_regardless_of_document_order(string language, string prefix)
+    {
+        var e = Ext(language);
+        var missing = $"proj/{prefix}Missing.{e}";
+        (string, string)[] documents = [("proj/Helpers." + e, HelperDocument(language, language == "cs" ? "internal" : "Friend")),
+            ($"proj/Callers.{e}", CallerDocument(language, "Callers", Call(language))),
+            (missing, "")]; // No diagnostic or visible reference: an unavailable input cannot prove absence of callers.
+        var state = Assert.Single(Extract(language, documents, unavailablePath: missing)).Internal;
+        Assert.Equal("helper-compilation-reduced", state.Gap);
+        Assert.Empty(state.Callers);
+        Assert.Equal("bounded", Assert.Single(Extract(language, documents, unavailablePath: missing, fileAppeared: true)).Internal.Coverage);
+    }
 
     [Theory]
     [InlineData("cs")]

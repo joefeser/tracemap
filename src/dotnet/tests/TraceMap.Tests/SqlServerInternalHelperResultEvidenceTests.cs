@@ -51,6 +51,17 @@ public sealed class SqlServerInternalHelperResultEvidenceTests
         return repo!.FullName;
     }
 
+    [Theory]
+    [InlineData("csharp-semantic/0.22.18")]
+    [InlineData("vb-semantic/0.10.21")]
+    public void Before_scope_repair_extractor_evidence_stays_unknown_even_with_matching_binding(string version)
+    {
+        var fact = Fact(State(Caller("proj/Callers.cs", "dbo.ReadItems", Name("Name"))), version);
+        var row = Assert.Single(Compare(fact).Comparisons);
+        Assert.Equal(U, row.Status);
+        Assert.Contains("unsupported-source-extractor-or-tier", row.Reasons);
+    }
+
     [Fact]
     public void Each_cross_document_caller_compares_against_its_own_shape_and_carries_its_path()
     {

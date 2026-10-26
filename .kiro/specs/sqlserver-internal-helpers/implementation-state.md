@@ -57,3 +57,18 @@ CLI-directory DLL hash identical before and after the smokes and the linked run.
 Docs-only results commit on top of `d811d7193`, next-slice prompt
 `prompts/continue-sqlserver-field-reads.md`, branch pushed. No PR, merge, ACK-policy change or
 review request. Not DNN, private-application, deployment or migration acceptance.
+
+## PR #918 bounded caller-enumeration repair
+Codex identified raw-text filtering that omitted C# Unicode-escaped references; Baz identified
+unavailable project inputs that did not reduce helper scope. Both violate the bounded caller
+enumeration boundary. Filtering now uses decoded token ValueText, and both adapters pass their
+captured-input inventory into scope registration so unavailable inputs reduce scope before any
+helper extraction (including inputs ordered after the helper). The existing inventory-or-file
+availability policy and project-level CompilationInputUnavailable diagnostic are preserved.
+
+Regressions cover escaped calls, generated/linked/unsafe document refusals, escaped method groups
+and nameof, plus unavailable inputs before/after helpers in C# and VB and inputs that appear on
+disk after inventory. C# 0.22.19 / VB 0.10.22 identify the repaired extraction; comparison tests
+reject prior extractor evidence even with matching bindings. State schema remains unchanged.
+Initial focused repair gate: 67 internal-helper tests passed before the version-bump tests.
+Final committed-head gates are recorded separately; original acceptance above remains historical.

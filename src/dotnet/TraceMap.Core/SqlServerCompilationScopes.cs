@@ -25,7 +25,7 @@ internal sealed class SqlServerCompilationScope
         HasErrors = hasErrors;
     }
 
-    /// <summary>Scan-scope exclusion removed documents of this project before compilation.</summary>
+    /// <summary>Scan-scope exclusion or an unavailable captured input makes this project's document scope incomplete.</summary>
     internal bool Reduced { get; }
     /// <summary>The adapter counted source error diagnostics against coverage; unresolved binding could hide a call.</summary>
     internal bool HasErrors { get; }
@@ -68,14 +68,23 @@ internal static class SqlServerCompilationScopes
     /// Registers the document scope of <paramref name="project"/>'s <paramref name="compilation"/>. <paramref name="hasErrors"/> is the
     /// adapter's own coverage-reducing error decision (its CompilationDiagnostic gaps), so both adapters keep one error policy.
     /// </summary>
-    internal static void Register(string repoPath, Project project, Compilation compilation, bool hasErrors)
+    internal static void Register(string repoPath, Project project, Compilation compilation, bool hasErrors,
+        IReadOnlyDictionary<string, string>? compilationInputPaths = null)
     {
         if (string.IsNullOrWhiteSpace(project.FilePath) || Path.GetDirectoryName(project.FilePath) is not { Length: > 0 } directory) return;
         var projectDirectory = CSharpSemanticExtractor.ToRelativePathProjection(repoPath, directory);
         var documents = new Dictionary<string, SqlServerCompilationDocument>(StringComparer.Ordinal);
+        var unavailableInput = false;
         foreach (var document in project.Documents)
         {
             if (document.FilePath is not { Length: > 0 } fullPath) continue;
+            // Preflight the complete project before any Fill is extracted, including documents ordered after its helper.
+            // Use the same inventory-or-file availability rule as both adapters' CompilationInputUnavailable gap.
+            var projection = CSharpSemanticExtractor.ToRelativePathProjection(repoPath, fullPath);
+            if (compilationInputPaths is not null && !projection.IsExternal
+                && !compilationInputPaths.ContainsKey(projection.Path)
+                && !File.Exists(Path.Combine(repoPath, projection.Path.Replace('/', Path.DirectorySeparatorChar))))
+                unavailableInput = true;
             var entry = Classify(repoPath, projectDirectory, fullPath);
             // A file listed twice is compiled as two documents; neither is an ordinary single document.
             if (!documents.TryAdd(fullPath, entry)) documents[fullPath] = new(null, SqlServerCompilationScope.LinkedGap);
@@ -83,7 +92,7 @@ internal static class SqlServerCompilationScopes
         bool reduced;
         if (ReducedProjects.TryGetValue(project.Solution, out var set)) lock (set) reduced = set.Contains(project.Id);
         else reduced = false;
-        Scopes.AddOrUpdate(compilation, new(documents, reduced, hasErrors));
+        Scopes.AddOrUpdate(compilation, new(documents, reduced || unavailableInput, hasErrors));
     }
 
     private static SqlServerCompilationDocument Classify(string repoPath, CSharpSemanticExtractor.RelativePathProjection projectDirectory, string fullPath)

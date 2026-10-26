@@ -230,8 +230,9 @@ internal static class SqlServerHelperResults
         string? documentGap = null;
         foreach (var tree in model.Compilation.SyntaxTrees.OrderBy(t => t.FilePath, StringComparer.Ordinal))
         {
-            // Cheap prefilter; VB names are case-insensitive and the symbol check stays exact.
-            if (tree.GetText().ToString().IndexOf(helper.Name, StringComparison.OrdinalIgnoreCase) < 0) continue;
+            // Decode identifiers before filtering: C# Unicode escapes can spell a reference without the raw helper name.
+            // VB names are case-insensitive and the semantic symbol check stays exact.
+            if (!tree.GetRoot().DescendantTokens().Any(t => string.Equals(t.ValueText, helper.Name, StringComparison.OrdinalIgnoreCase))) continue;
             var treeModel = tree == model.SyntaxTree ? model : model.Compilation.GetSemanticModel(tree, ignoreAccessibility: true);
             if (ScanReferences(treeModel, helper, callers, ref recursion, ref escape, out var found)) return ("helper-caller-limit", []);
             if (found && documentGap is null) documentGap = scope.Document(tree).Gap;
