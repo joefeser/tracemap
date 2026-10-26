@@ -1,8 +1,8 @@
 # TraceMap Validation Guide
 ## Bounded offline SQL Server result-column / reader evidence
 [SQLSERVER_RESULT_COLUMN_EVIDENCE.md](validation/SQLSERVER_RESULT_COLUMN_EVIDENCE.md)
-documents the additive `sqlServerReaderState` source evidence (C# 0.22.10 / VB
-0.10.13), independent JSON and narrow DDL first-result shapes, exact reader-digest
+documents the additive `sqlServerReaderState` source evidence (C# 0.22.12 / VB
+0.10.15), independent JSON and narrow DDL first-result shapes, exact reader-digest
 bindings and the column-identity/ordinal-bound comparison. This changes shared Core
 and both semantic adapters, so run SqlServerResultColumnEvidenceTests with the
 retained DDL/parameter/DNN tests and the Python guards, commit, then the frozen full

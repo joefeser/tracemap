@@ -12,7 +12,7 @@ Nothing is executed: no SQL, procedure, application method, container or remote 
 
 | Contract | Meaning |
 | --- | --- |
-| `sqlserver-reader/1` (`sqlServerReaderState` fact property) | Source consumer evidence on every ExecuteReader-family DatabaseOperationCandidate. Separate from `sqlServerParameterState`. C# `csharp-semantic/0.22.11`, VB `vb-semantic/0.10.14`. |
+| `sqlserver-reader/1` (`sqlServerReaderState` fact property) | Source consumer evidence on every ExecuteReader-family DatabaseOperationCandidate. Separate from `sqlServerParameterState`. C# `csharp-semantic/0.22.12`, VB `vb-semantic/0.10.15`. |
 | `sqlserver-result-declarations/1` → `sqlserver-result-schema/1` | Independently authored public JSON (origin `independent-synthetic-result-declarations`), extractor `sqlserver-synthetic-result-declarations/1`, rule `database.sqlserver.synthetic-result-shape.v1`, Tier2Structural. |
 | `sqlserver-ddl-result-input/1` → `sqlserver-ddl-result-schema/1` | Opt-in DDL projection (origin `public-synthetic-tsql-ddl-result`), extractor `sqlserver-ddl-result-shapes/1`, rule `database.sqlserver.ddl-result-shape.v1`; Tier2 complete shapes, Tier4 unsupported records. |
 | `sqlserver-result-bindings/1` | Exact `factId`, two-part `commandText`, four-part `identity` and `readerEvidenceSha256`. |
@@ -46,7 +46,7 @@ and the corresponding extractor version bumps; `sqlServerParameterState` and its
 ## Source subset (C# and VB, one shared IOperation walker)
 
 PR #912 hardening: a supported Read guard must belong to the selected reader.
-Command assignments nested under conditional or loop control flow are unknown,
+Switch statements and expressions are unsupported; command assignments nested under conditional or loop control flow are unknown,
 not unconditional state. Ordinals use the converted constant value; nonconstant
 narrowing conversions cannot borrow GetOrdinal name provenance.
 
@@ -188,6 +188,17 @@ run. The receipt binds the exact smoke bytes, helper bytes, public base/template
 reader projections, Core/parser bytes and report hashes, and records SQL NOT RUN.
 
 ## Validation commands
+
+The prior repaired head `0221dadd7` passed the full suite (4,944 passed,
+three expected skips) and pinned OSS smokes with C# 0.22.11 / VB 0.10.14.
+Those smokes retained reduced coverage and zero SQL calls; they do not
+establish real-application reader coverage. The subsequent switch-control-flow
+repair advances the current versions to C# 0.22.12 / VB 0.10.15.
+
+Captured smoke subprocesses use a fixed dotnet executable, literal argument
+lists and explicit shell=False. The single rule-specific audit suppression is
+pinned by a mocked regression for executable rejection and literal shell
+metacharacters; it does not authorize untrusted executable or source execution.
 
 ```sh
 dotnet build src/dotnet/TraceMap.Cli -c Debug -warnaserror

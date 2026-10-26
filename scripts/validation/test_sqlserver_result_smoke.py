@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("result_smoke", ROOT / "scripts/sqlserver-result-column-evidence/smoke.py")
@@ -15,10 +16,22 @@ def fact(name, line, state=None):
     return {"factId": f"id-{name}-{line}", "repo": "synthetic", "commitSha": "1" * 40, "ruleId": "database.operation.call-pattern.v1",
             "evidenceTier": "Tier1Semantic", "sourceSymbol": f"ResultCases.{name}(string, int, bool)",
             "evidence": {"filePath": "Results.cs", "startLine": line, "endLine": line, "extractorId": "CSharpSemanticExtractor",
-                         "extractorVersion": "csharp-semantic/0.22.11"}, "properties": properties}
+                         "extractorVersion": "csharp-semantic/0.22.12"}, "properties": properties}
 
 
 class ResultSmokeGuards(unittest.TestCase):
+    def test_captured_cli_uses_fixed_executable_and_literal_arguments_without_shell(self):
+        argument = "$(touch never); & | path with spaces"
+        with patch.object(SMOKE.subprocess, "run") as run:
+            SMOKE.run_captured_cli("dotnet", Path("local.dll"), argument)
+            run.assert_called_once_with(["dotnet", "local.dll", argument], cwd=SMOKE.ROOT,
+                                        capture_output=True, text=True, shell=False)
+        with patch.object(SMOKE.subprocess, "run") as run:
+            for args in ((), ("sh", "-c", argument), ("dotnet;evil",)):
+                with self.assertRaises(ValueError):
+                    SMOKE.run_captured_cli(*args)
+            run.assert_not_called()
+
     def test_documented_denominator_is_derived_from_the_authored_matrix(self):
         self.assertEqual(SMOKE.EXPECTED_TOTALS, SMOKE.expected_totals())
         self.assertEqual(34, len(SMOKE.SOURCE_CASES))

@@ -59,7 +59,7 @@ internal static class SqlServerReaderColumns
             // Only the selected reader's Read() may guard its bounded consumer evidence.
             if (op is IWhileLoopOperation { ConditionIsTop: true, ConditionIsUntil: false } loop && IsReadCondition(loop.Condition, reader)) continue;
             if (op is IConditionalOperation { Type: null } branch && IsReadCondition(branch.Condition, reader)) continue;
-            if (op is IConditionalOperation or ILoopOperation or IBranchOperation or ITryOperation or IAnonymousFunctionOperation
+            if (op is IConditionalOperation or ISwitchExpressionOperation or ISwitchOperation or ILoopOperation or IBranchOperation or ITryOperation or IAnonymousFunctionOperation
                 or ILocalFunctionOperation or IInvalidOperation or ICompoundAssignmentOperation or IIncrementOrDecrementOperation
                 or IDeconstructionAssignmentOperation or IDynamicInvocationOperation or IDynamicObjectCreationOperation
                 or IDynamicMemberReferenceOperation or IDynamicIndexerAccessOperation or IConditionalAccessOperation or ICoalesceOperation

@@ -118,8 +118,16 @@ def run_ok(*args):
     HELPERS.run(*args)
 
 
+def run_captured_cli(*args):
+    if not args or args[0] != "dotnet":
+        raise ValueError("Only the local dotnet CLI is admitted")
+    # Fixed executable, literal argv, no shell: paths/metacharacters are data.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+    return subprocess.run(["dotnet", *[str(a) for a in args[1:]]], cwd=ROOT, capture_output=True, text=True, shell=False)
+
+
 def refused(*args, output):
-    result = subprocess.run([str(a) for a in args], cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    result = run_captured_cli(*args)
     return result.returncode != 0 and not Path(output).exists(), result.stderr.strip().splitlines()[-1:] if result.stderr else []
 
 
@@ -323,9 +331,9 @@ def check_refusals(root, cli, revision, base, selected, templates, template_hash
     existing = work / "existing"
     existing.mkdir()
     (existing / "keep.txt").write_bytes(b"prior winner\n")
-    result = subprocess.run([str(a) for a in ("dotnet", cli, "sqlserver-result-schema", "compare", "--declarations", work / "declarations.json",
+    result = run_captured_cli("dotnet", cli, "sqlserver-result-schema", "compare", "--declarations", work / "declarations.json",
                              "--schema", work / "schema.json", "--bindings", work / "bindings.json", "--facts", scan,
-                             "--repo", fact["repo"], "--revision", revision, "--out", existing)], cwd=ROOT, capture_output=True)
+                             "--repo", fact["repo"], "--revision", revision, "--out", existing)
     checks.append({"case": "existing-output-not-replaced", "refused": result.returncode != 0
                    and sorted(p.name for p in existing.iterdir()) == ["keep.txt"] and (existing / "keep.txt").read_bytes() == b"prior winner\n",
                    "message": []})
