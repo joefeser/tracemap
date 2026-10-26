@@ -13,7 +13,8 @@ public static class SqlServerHelperResultReportWriter
         s.AppendLine($"Consumer: {E(report.ConsumerVersion)}; bindings: {E(report.BindingsVersion)}; rule: {SqlServerHelperResultEvidence.RuleId}.");
         s.AppendLine($"Shapes: route {E(report.SchemaRoute)}; origin {E(report.Origin)}; schema {E(report.SchemaVersion)} / {E(report.SchemaRuleId)} / {E(report.SchemaTier)} / {E(report.SchemaExtractorVersion)}.");
         s.AppendLine($"Schema generator SHA-256: {report.SchemaGeneratorSha256}; schema bounded input SHA-256: {report.SchemaInputSha256}; admitted export SHA-256: {report.SchemaEvidenceSha256}.");
-        s.AppendLine($"Repo: {E(report.Repo)}; revision: {E(report.Revision)}; generator SHA-256: {report.GeneratorSha256}; public bounded input SHA-256: {report.BoundedInputSha256}.\n");
+        s.AppendLine("Privacy: local evidence report, not a sanitized shareable export. Source paths, member identities and column names are retained. Public synthetic schema admission does not establish that source facts are public. Do not publish private-input reports.\n");
+        s.AppendLine($"Repo: {E(report.Repo)}; revision: {E(report.Revision)}; generator SHA-256: {report.GeneratorSha256}; bounded evidence input SHA-256: {report.BoundedInputSha256}.\n");
         foreach (var shape in report.Shapes)
             s.AppendLine($"- First result shape: {Identity(shape.Identity)} at {E(shape.FilePath)}:{shape.StartLine}–{shape.EndLine}; {E(shape.Completeness)}"
                 + (shape.UnknownReason is null ? "" : " (" + E(shape.UnknownReason) + ")") + $"; {shape.Columns.Count} columns.");

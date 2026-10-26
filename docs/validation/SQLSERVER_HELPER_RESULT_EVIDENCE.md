@@ -101,6 +101,13 @@ git diff --check
 The linked static/runtime extension is documented in
 [SQLSERVER_LIVE_PROVIDER_VALIDATION.md](SQLSERVER_LIVE_PROVIDER_VALIDATION.md).
 ## Non-claims and remaining unknowns
+Privacy: comparison JSON and Markdown are **local evidence reports, not sanitized shareable
+exports**. They intentionally retain repo-relative source locations, caller identities and
+column names required to trace findings. Public synthetic schema admission does not certify
+the source facts as public. Keep reports and provenance hashes from private inputs private;
+only the public synthetic corpus outputs are suitable for publication. No public-source
+attestation or automatic redaction is implemented by this route.
+
 Not proven: that the helper or Fill executes, that the call sites are all runtime callers, that
 any table or row exists, later result sets, values, types, conversions, nullability, runtime
 exceptions, catalog/live/deployed correspondence. Outside scope: multi-level, instance,

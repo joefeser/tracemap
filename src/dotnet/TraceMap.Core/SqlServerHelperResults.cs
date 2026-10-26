@@ -127,10 +127,17 @@ internal static class SqlServerHelperResults
         if (CommandTextSource(all, adapter, adapterCreation, parameterReferences.Where(r => Same(r.Parameter, procedure)).ToArray()) is not { } textSource)
             return Unknown("helper-command-text-parameter-required");
         if (connection is not null && !ConnectionUse(parameterReferences.Where(r => Same(r.Parameter, connection)).ToArray())) return Unknown("helper-body-unsupported");
-        // No other call or creation outside the signed provider surface (no indirect recursion, logging or state changes).
-        if (all.Any(o => o is IInvocationOperation i && i != call && !DatabaseOperationApi.Trusted(i.TargetMethod.ContainingAssembly)
-            || o is IObjectCreationOperation { Type: { } created } && !DatabaseOperationApi.Trusted(created.ContainingAssembly)))
-            return Unknown("helper-body-unsupported");
+        // Assembly trust establishes identity, not permission for unrelated executions or allocations.
+        var commandLocal = Local(adapterCreation.Arguments.FirstOrDefault()?.Value)
+            ?? all.OfType<ISimpleAssignmentOperation>()
+                .Where(w => w.Target is IPropertyReferenceOperation p && p.Property.Name == "SelectCommand" && Same(Local(p.Instance), adapter))
+                .Select(w => Local(w.Value)).SingleOrDefault();
+        var commandCreation = all.OfType<IVariableDeclaratorOperation>().Where(d => Same(d.Symbol, commandLocal))
+            .Select(d => Unwrap(Initializer(d))).OfType<IObjectCreationOperation>().SingleOrDefault();
+        var unsupportedBody = all.Any(o => o is IInvocationOperation i && i != call
+                && !(i.TargetMethod.Name == "Dispose" && i.Arguments.Length == 0
+                    && (Same(Local(i.Instance), adapter) || Same(Local(i.Instance), commandLocal)))
+            || o is IObjectCreationOperation c && c != adapterCreation && c != creation && c != commandCreation);
         var rows = new List<IPropertyReferenceOperation>();
         var consumed = false;
         var fillEnd = call.Syntax.Span.End;
@@ -149,6 +156,7 @@ internal static class SqlServerHelperResults
         // row-level mutations keep their Phase 2 gap.
         if (rows.Count > 0) return Unknown(RowsAndAccesses(all, rows, [], [], []) ?? "helper-body-unsupported");
         if (consumed) return Unknown("helper-body-unsupported");
+        if (unsupportedBody) return Unknown("helper-body-unsupported");
 
         var entries = callers.OrderBy(c => c.Syntax.SpanStart).Select(c => Caller(c, procedure, connection, resultType, tableName)).ToArray();
         return new(Version, "bounded", null, table ? "datatable" : "dataset", commandType, textSource, association, overload, tableName,
@@ -162,6 +170,7 @@ internal static class SqlServerHelperResults
     private static (string? Gap, List<IInvocationOperation> Callers) References(SemanticModel model, IMethodSymbol helper)
     {
         var callers = new List<IInvocationOperation>();
+        var seen = new HashSet<Microsoft.CodeAnalysis.Text.TextSpan>();
         bool recursion = false, escape = false;
         foreach (var token in model.SyntaxTree.GetRoot().DescendantTokens())
         {
@@ -180,7 +189,11 @@ internal static class SqlServerHelperResults
                     && !candidate.Arguments.Any(a => a.Syntax.Span.Contains(node.Span)))
                     invocation = candidate;
             if (invocation is null) escape = true;
-            else if (!callers.Contains(invocation)) callers.Add(invocation);
+            else if (seen.Add(invocation.Syntax.Span))
+            {
+                if (callers.Count == MaxCallers) return ("helper-caller-limit", []);
+                callers.Add(invocation);
+            }
         }
         return (recursion ? "helper-recursion" : escape ? "helper-reference-escape" : callers.Count > MaxCallers ? "helper-caller-limit" : null, callers);
     }

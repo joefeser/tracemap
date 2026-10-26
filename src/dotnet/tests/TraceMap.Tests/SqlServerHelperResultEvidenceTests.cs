@@ -93,7 +93,25 @@ public sealed partial class SqlServerHelperResultEvidenceTests
         Assert.Contains("No aggregate clean verdict", markdown);
         Assert.Contains("each call site binds separately", markdown);
         Assert.Contains("call #0 at line 11", markdown);
+        Assert.Contains("not a sanitized shareable export", markdown);
+        Assert.DoesNotContain("public bounded input", markdown);
+        Assert.Contains(report.Limitations, l => l.Contains("do not publish private-input reports", StringComparison.Ordinal));
         foreach (var reason in row.Reasons) Assert.Contains(reason, markdown);
+    }
+
+    [Fact]
+    public void Public_shapes_do_not_sanitize_source_metadata_in_local_reports()
+    {
+        var caller = Caller("dbo.ReadItems", Name("Name")) with { Caller = "ConfidentialExample.Work()" };
+        var fact = Fact(State(caller));
+        fact = fact with { Evidence = fact.Evidence with { FilePath = "ConfidentialExample/Work.cs" } };
+        var report = Compare(fact);
+        var json = SqlServerSchemaEvidence.Json(report);
+        var markdown = SqlServerHelperResultReportWriter.Build(report);
+        Assert.Contains("ConfidentialExample/Work.cs", json);
+        Assert.Contains("ConfidentialExample.Work()", markdown);
+        Assert.Contains("not a sanitized shareable export", json);
+        Assert.Contains("Do not publish private-input reports", markdown);
     }
 
     [Fact]
