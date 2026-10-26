@@ -11,6 +11,15 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
+
+if sys.flags.optimize:
+    raise RuntimeError("Table-result smoke requires Python optimization disabled")
+
+
+def require(condition, detail):
+    if not condition:
+        raise ValueError(f"Table-result smoke validation failed: {detail}")
 
 ROOT = Path(__file__).resolve().parents[2]
 GENERATOR = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -103,29 +112,61 @@ def manifest(repo, revision, files, hashes):
 
 
 def check_export(export, template, tables, expected_shape, input_doc, core_hash, parser_hash):
-    assert export["version"] == "sqlserver-ddl-table-result-schema/1" and export["ruleId"] == RULE
-    assert export["generatorSha256"] == core_hash and export["parserSha256"] == parser_hash
-    assert export["boundedInputSha256"] == HELPERS.digest(input_doc)
-    assert export["declarations"]["origin"] == ORIGIN and export["tier"] == "Tier2Structural"
+    require(export["version"] == "sqlserver-ddl-table-result-schema/1" and export["ruleId"] == RULE, 'check at original line 115')
+    require(export["generatorSha256"] == core_hash and export["parserSha256"] == parser_hash, 'check at original line 116')
+    require(export["boundedInputSha256"] == HELPERS.digest(input_doc), 'check at original line 117')
+    require(export["declarations"]["origin"] == ORIGIN and export["tier"] == "Tier2Structural", 'check at original line 118')
     items = next(s for s in export["declarations"]["shapes"] if s["identity"]["procedure"] == "ReadItems")
     observed = "complete" if items["completeness"] == "complete" else items["unknownReason"]
-    assert observed == expected_shape, (template, tables, observed, expected_shape)
+    require(observed == expected_shape, (template, tables, observed, expected_shape))
     if items["completeness"] != "complete":
-        assert not items["columns"], template  # Never a partial column list.
-        assert not [p for p in export["projections"] if p["procedure"]["procedure"] == "ReadItems"], template
+        require(not items["columns"], template)
+        require(not [p for p in export["projections"] if p["procedure"]["procedure"] == "ReadItems"], template)
         return
     outputs, sources = EXPECTED_PROJECTIONS[template]
-    assert [c["name"] for c in items["columns"]] == outputs, (template, items)
+    require([c["name"] for c in items["columns"]] == outputs, (template, items))
     projection = next(p for p in export["projections"] if p["procedure"]["procedure"] == "ReadItems")
-    assert [c["sourceColumn"] for c in projection["columns"]] == sources, (template, projection)
-    assert projection["table"] == {"server": RESULT.IDENTITY["server"], "database": RESULT.IDENTITY["database"], "schema": "dbo", "table": "Items"}
+    require([c["sourceColumn"] for c in projection["columns"]] == sources, (template, projection))
+    require(projection["table"] == {"server": RESULT.IDENTITY["server"], "database": RESULT.IDENTITY["database"], "schema": "dbo", "table": "Items"}, 'check at original line 130')
+
+
+def check_report(case, fact, expected):
+    """Explicit table-route checks; retained helper bytes remain unchanged."""
+    for name in ("result-column-comparison.json", "report.md"):
+        require((case / "report" / name).read_bytes() == (case / "repeat" / name).read_bytes(), (case, name))
+    raw = (case / "report/result-column-comparison.json").read_bytes()
+    wrapper = json.loads(raw)
+    report = wrapper["comparison"]
+    require(report["coverage"] == "partial" and report["verdict"] == "no-aggregate-clean-verdict", "coverage/verdict")
+    rows = [r for r in report["comparisons"] if r["factId"] == fact["factId"]]
+    statuses = [r["status"] for r in rows]
+    require(statuses == expected, (case.name, statuses, expected))
+    for row in report["comparisons"]:
+        if row["factId"] != fact["factId"]:
+            require(row["status"] == U and "binding-missing" in row["reasons"], row)
+        require(row["tier"] == ("Tier4Unknown" if row["status"] == U else "Tier2Structural"), row)
+        require(row["sourceTier"] == "Tier1Semantic", row)
+    markdown = (case / "report/report.md").read_text()
+    require("No aggregate clean verdict" in markdown, "markdown verdict")
+    for row in rows:
+        for reason in row["reasons"]:
+            require(reason in markdown, (case.name, reason))
+    return wrapper, report, statuses, hashlib.sha256(raw).hexdigest()
+
+
+def publish_receipt(root, receipt):
+    require(not receipt["gaps"], receipt["gaps"])
+    require(receipt["observedCounts"] == receipt["expectedCounts"], "aggregate counts")
+    require(len(receipt["refusals"]) == 24 and all(r["refused"] for r in receipt["refusals"]), "refusals")
+    HELPERS.verify_scan_hashes(root, receipt)
+    HELPERS.write(root / "smoke-receipt.json", receipt)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True, help="new output directory")
     args = parser.parse_args()
-    assert expected_totals() == EXPECTED_TOTALS, expected_totals()
+    require(expected_totals() == EXPECTED_TOTALS, expected_totals())
     args.output.mkdir(parents=True, exist_ok=False)
     cli = ROOT / "src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll"
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
@@ -140,12 +181,12 @@ def main():
         RESULT.run_ok("dotnet", cli, "scan", "--repo", SAMPLE, "--project", f"{language}/Results.{extension}", "--out", scan)
         scan_artifacts[language] = HELPERS.scan_hashes(args.output, language)
         scan_manifest = json.loads((scan / "scan-manifest.json").read_bytes())
-        assert scan_manifest["commitSha"] == revision and scan_manifest["buildStatus"] == "Succeeded"
+        require(scan_manifest["commitSha"] == revision and scan_manifest["buildStatus"] == "Succeeded", 'check at original line 184')
         calls = [f for line in (scan / "facts.ndjson").read_text().splitlines()
                  if (f := json.loads(line))["factType"] == "DatabaseOperationCandidate" and f["evidenceTier"] == "Tier1Semantic"]
         keyed = dict((k, f) for f, k in RESULT.case_keys(calls))
         gaps += [f"{language}:{g}" for g in RESULT.case_gaps(k for _, k in RESULT.case_keys(calls))]
-        assert len(calls) == RESULT.SITES_PER_LANGUAGE or gaps, len(calls)
+        require(len(calls) == RESULT.SITES_PER_LANGUAGE or gaps, len(calls))
         for number, (key, template, tables, expected, shape_reason) in enumerate(plan):
             fact = keyed.get(key)
             if fact is None:
@@ -166,14 +207,14 @@ def main():
                       "--repo", fact["repo"], "--revision", revision]
             for output in ("report", "repeat"):
                 RESULT.run_ok(*common, "--out", case / output)
-            wrapper, report, statuses, digest = RESULT.check_report(case, fact, expected, "ddl")
-            assert wrapper["version"] == "sqlserver-ddl-table-result-comparison/1"
-            assert report["version"] == "sqlserver-ddl-table-result-column-comparison/1" and report["origin"] == ORIGIN
-            assert wrapper["generatorSha256"] == core_hash and report["generatorSha256"] == core_hash
+            wrapper, report, statuses, digest = check_report(case, fact, expected)
+            require(wrapper["version"] == "sqlserver-ddl-table-result-comparison/1", 'check at original line 211')
+            require(report["version"] == "sqlserver-ddl-table-result-column-comparison/1" and report["origin"] == ORIGIN, 'check at original line 212')
+            require(wrapper["generatorSha256"] == core_hash and report["generatorSha256"] == core_hash, 'check at original line 213')
             check_export(wrapper["ddlEvidence"], template, tables, shape_reason, input_doc, core_hash, parser_hash)
             markdown = (case / "report/report.md").read_text()
             if shape_reason != "complete":
-                assert shape_reason in markdown, (case.name, shape_reason)
+                require(shape_reason in markdown, (case.name, shape_reason))
             results.append({"language": language, "case": key, "template": template, "tables": tables, "factId": fact["factId"],
                             "statuses": statuses, "shape": shape_reason, "reportSha256": digest})
     refusals = check_refusals(args.output, cli, revision, selected, hashes) if not gaps else []
@@ -186,11 +227,7 @@ def main():
                "scanArtifactSha256": scan_artifacts, "sitesPerLanguage": RESULT.SITES_PER_LANGUAGE, "casesPerLanguage": len(plan),
                "expectedCounts": expected_counts, "observedCounts": counts, "gaps": gaps, "refusals": refusals, "results": results,
                "sqlExecution": "not-run"}
-    HELPERS.verify_scan_hashes(args.output, receipt)
-    HELPERS.write(args.output / "smoke-receipt.json", receipt)
-    assert not gaps, gaps
-    assert counts == expected_counts, counts
-    assert refusals and all(r["refused"] for r in refusals), refusals
+    publish_receipt(args.output, receipt)
     print(f"table-result native smoke passed at {revision}: {len(plan)} cases per language, {counts}; "
           f"{len(refusals)} refusals; SQL NOT RUN")
 
