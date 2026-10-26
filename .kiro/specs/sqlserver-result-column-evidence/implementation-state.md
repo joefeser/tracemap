@@ -99,6 +99,15 @@ commit; source was unchanged between the final focused run and the commit.
 
 ## Delivery
 
+### Owner-authorized second PR #912 repair
+
+Reject switch statements/expressions as unsupported reader control flow, with
+CommandText, CommandType and Connection arm regressions. Consolidate captured
+smoke calls behind fixed-dotnet shell=False execution, a narrowly documented
+audit suppression and a mocked literal-argument/executable guard. Synchronize
+current provenance docs to C# 0.22.12 / VB 0.10.15 while retaining historical
+validation versions. Current-head validation pending.
+
 ### PR #912 exact-head repair
 
 Four authorized findings repaired together: selected-reader guard identity,

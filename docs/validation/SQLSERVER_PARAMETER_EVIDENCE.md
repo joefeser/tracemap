@@ -156,7 +156,7 @@ remain unsupported and yield unknown parameter state, never stale constructor
 command identity. Execution arguments admit only inert literal/default/local/parameter
 reads and built-in conversions; helpers, getters, constructors and user conversions
 yield unsupported-execution-argument. Extractor versions are C# 0.22.9 and VB 0.10.12.
-The later result-column slice bumps them to C# 0.22.10 / VB 0.10.13 for the additive,
+The later result-column slice bumps them to C# 0.22.12 / VB 0.10.15 for the additive,
 independent `sqlServerReaderState`; parameter state and its digest projection are unchanged
 ([result-column evidence](SQLSERVER_RESULT_COLUMN_EVIDENCE.md)).
 

@@ -32,7 +32,7 @@ members and others make the reader unknown. Method-wide control flow other than
 using blocks and Read()-conditioned if/while is unknown. Ordinal locals must be
 declared directly from the same reader's `GetOrdinal(constant)` and never written
 again; otherwise that access is `dynamic-ordinal`. Bounds: 20,000 operations,
-256 accesses. Extractor versions: C# 0.22.10, VB 0.10.13.
+256 accesses. Extractor versions: C# 0.22.12, VB 0.10.15.
 
 ## Admission and comparison
 

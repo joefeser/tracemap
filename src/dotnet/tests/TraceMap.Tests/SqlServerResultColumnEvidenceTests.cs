@@ -514,6 +514,22 @@ public sealed class SqlServerResultColumnEvidenceTests
     private const string VbCommand = "Dim command = New SqlCommand(\"dbo.ReadItems\")\ncommand.CommandType = CommandType.StoredProcedure\n";
 
     [Theory]
+    [InlineData("command.CommandText = \"dbo.ReadOther\"", "\"unchanged\"")]
+    [InlineData("command.CommandType = CommandType.Text", "CommandType.StoredProcedure")]
+    [InlineData("command.Connection = connection", "connection")]
+    public void Switch_expression_command_mutations_remain_unknown(string assignment, string fallback)
+    {
+        var body = CsCommand + "var connection = new SqlConnection();\n"
+            + $"var ignored = index switch {{ 0 => {assignment}, _ => {fallback} }};\n"
+            + "var reader = command.ExecuteReader(); return reader[\"Missing\"];";
+        var state = Assert.Single(Extract("cs", body));
+        Assert.Equal("unknown", state.Coverage);
+        Assert.Equal("unsupported-control-flow", state.Gap);
+        Assert.Null(state.CommandTextHash);
+        Assert.Equal([U], Statuses(Compare(Fact(state))));
+    }
+
+    [Theory]
     [InlineData("cs", "if")]
     [InlineData("cs", "while")]
     [InlineData("vb", "if")]
