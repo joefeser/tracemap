@@ -74,6 +74,8 @@ internal static class DatabaseOperationApi
             SqlServerDataTableConsumers.Add(properties, call);
             // Sibling Fill(DataSet) -> first-table consumer state; each property refuses the other's overloads.
             SqlServerDataSetConsumers.Add(properties, call);
+            // Sibling one-level helper boundary: the helper execution once plus one entry per call site of its returned local.
+            SqlServerHelperResults.Add(properties, call);
         }
         // Only inline construction is local to this call. Mutable receiver history is
         // retained elsewhere; it must not silently become current command state.
