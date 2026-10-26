@@ -17,7 +17,7 @@ reassignments invalidate ordinal-name provenance. No alias analysis is claimed.
 
 | Contract | Meaning |
 | --- | --- |
-| `sqlserver-reader/1` (`sqlServerReaderState` fact property) | Source consumer evidence on every ExecuteReader-family DatabaseOperationCandidate. Separate from `sqlServerParameterState`. Introduced at C# `csharp-semantic/0.22.13`, VB `vb-semantic/0.10.16`; current C# 0.22.14 / VB 0.10.17 add only the Fill-only [DataTable state](SQLSERVER_DATATABLE_EVIDENCE.md), reader state unchanged. |
+| `sqlserver-reader/1` (`sqlServerReaderState` fact property) | Source consumer evidence on every ExecuteReader-family DatabaseOperationCandidate. Separate from `sqlServerParameterState`. Introduced at C# `csharp-semantic/0.22.13`, VB `vb-semantic/0.10.16`; C# 0.22.14 / VB 0.10.17 add only the Fill-only [DataTable state](SQLSERVER_DATATABLE_EVIDENCE.md) and current C# 0.22.15 / VB 0.10.18 the sibling [DataSet state](SQLSERVER_DATASET_EVIDENCE.md), reader state unchanged. |
 | `sqlserver-result-declarations/1` → `sqlserver-result-schema/1` | Independently authored public JSON (origin `independent-synthetic-result-declarations`), extractor `sqlserver-synthetic-result-declarations/1`, rule `database.sqlserver.synthetic-result-shape.v1`, Tier2Structural. |
 | `sqlserver-ddl-result-input/1` → `sqlserver-ddl-result-schema/1` | Opt-in DDL projection (origin `public-synthetic-tsql-ddl-result`), extractor `sqlserver-ddl-result-shapes/1`, rule `database.sqlserver.ddl-result-shape.v1`; Tier2 complete shapes, Tier4 unsupported records. |
 | `sqlserver-result-bindings/1` | Exact `factId`, two-part `commandText`, four-part `identity` and `readerEvidenceSha256`. |
