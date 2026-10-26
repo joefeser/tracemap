@@ -145,7 +145,7 @@ class LinkedProviderTests(unittest.TestCase):
         route = h.load('linked_helper_test', h.ROOT / 'scripts/sqlserver-helper-result-evidence/smoke.py')
         caller = {'line': 3, 'endLine': 3, 'coverage': 'bounded', 'gap': None, 'commandTextHash': 'a' * 64, 'resultLine': 3,
                   'selectors': [], 'guards': [], 'accesses': []}
-        state = {'version': 'sqlserver-helper-result/1', 'coverage': 'bounded', 'gap': None, 'callers': [
+        state = {'version': 'sqlserver-helper-result/2', 'coverage': 'bounded', 'gap': None, 'callers': [
             dict(caller, caller='LinkedCSharp.Cases.HelperTableName(Microsoft.Data.SqlClient.SqlConnection)'),
             dict(caller, line=7, caller='LinkedCSharp.Cases.HelperOtherProcedure(Microsoft.Data.SqlClient.SqlConnection)')]}
         fact = {'factId': 'f', 'repo': 'r', 'commitSha': '1' * 40, 'ruleId': 'x', 'evidenceTier': 'Tier1Semantic',

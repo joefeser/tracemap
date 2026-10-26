@@ -4,7 +4,7 @@ Operator examples use generic site, page, and handler names. Historical receipts
 
 ## Bounded offline SQL Server helper-returned DataTable/DataSet evidence (one helper level)
 [SQLSERVER_HELPER_RESULT_EVIDENCE.md](validation/SQLSERVER_HELPER_RESULT_EVIDENCE.md) documents
-the additive sibling `sqlServerHelperResultState` on Fill facts (C# 0.22.16 / VB 0.10.19): one
+the additive sibling `sqlServerHelperResultState` on Fill facts (C# 0.22.17 / VB 0.10.20): one
 private same-document static helper execution plus one entry per call site, the separate
 `sqlserver-helper-result-bindings/1` digest per `(factId, callerIndex)` and the
 `sqlserver-helper-result` route over shapes admitted by the unchanged JSON, constant DDL and

@@ -1,6 +1,14 @@
 # Implementation state — Phase 4
 ## PR 917 review repair
 
+Follow-up provenance repair: state is now `sqlserver-helper-result/2`, C# extractor
+`csharp-semantic/0.22.17`, VB `vb-semantic/0.10.20`. Old bounded v1 facts and old semantic
+extractor versions remain unknown even with valid binding digests. The full run on
+`37b56231d` was stopped as superseded; no full-suite pass is claimed for that repair.
+SQL/Razor gate on the completed version update: 701 passed, 0 failed; helper-smoke and
+linked-provider Python guards: 7 + 11 passed. A transient catalog mismatch during editing
+was corrected before the complete successful rerun.
+
 The settled review batch identified independent admission, resource-bound and presentation
 issues. Helper bodies now admit only the selected Fill, its command/adapter/result allocations
 and command/adapter disposal; signed provider identity alone does not admit unrelated calls.

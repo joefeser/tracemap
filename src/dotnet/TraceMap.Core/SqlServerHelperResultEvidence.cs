@@ -22,7 +22,7 @@ public sealed record SqlServerHelperResultComparisonReport(string Version, strin
 /// <summary>
 /// Offline first-result-set column-identity and ordinal-bound comparison for DataRow reads of the DataTable (or first DataSet
 /// table) returned by one bounded same-document static helper, per call site. Shapes are admitted only through their unchanged
-/// origin routes; the consumer identity is the separate <c>sqlserver-helper-result/1</c> state and one
+/// origin routes; the consumer identity is the separate <c>sqlserver-helper-result/2</c> state and one
 /// <c>sqlserver-helper-result-bindings/1</c> digest per (fact, caller). No execution, caller-completeness, table, row,
 /// later-result, type, nullability or value claim.
 /// </summary>

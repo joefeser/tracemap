@@ -16,7 +16,7 @@ comparison stay separate later slices.
    parameters, named/nonconstant/null procedure arguments, multiple returns, any helper mutation,
    guard, second execution or unrelated call, method-group escapes of the helper, and every
    Phase 2/3 caller-side gap on the returned local.
-3. Evidence: a distinct sibling property `sqlServerHelperResultState` (`sqlserver-helper-result/1`)
+3. Evidence: a distinct sibling property `sqlServerHelperResultState` (`sqlserver-helper-result/2`)
    on every existing Fill DatabaseOperationCandidate, carrying the helper execution once and one
    caller entry per call site (procedure argument hash, returned-consumer accesses). It never
    overloads DataTable, DataSet, reader or parameter state; those properties and every Phase 2/3
