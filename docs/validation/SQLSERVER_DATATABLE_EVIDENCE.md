@@ -106,3 +106,37 @@ DataSet, named tables, `Field<T>`, `DataColumn`/`DataRowVersion` access, reader-
 helpers, ORMs, DNN hydration and provider wrappers, multiple result sets, Microsoft.Data.SqlClient
 fixtures (the subset admits its signed types, but no public fixture exercises them here).
 This is not a SQL interpreter or a runtime model of `DataAdapter`.
+## Follow-up work log
+Bounded backlog, not an authorization to widen this branch. Related tracking: #870 (schema
+contracts), #908 (DNN validation), #864 / #865 (extraction coverage).
+1. **Next slice:** `Fill(DataSet)` to single-table DataRow reads; see the
+   [Phase 3 prompt](../../prompts/continue-sqlserver-dataset-consumers.md).
+2. **Deferred decisions:** `new DataTable(name)` (table-mapping interaction), `Field<T>`
+   (would widen the trusted assembly set to System.Data.DataSetExtensions), DataColumn and
+   DataRowVersion access, Microsoft.Data.SqlClient public fixtures.
+3. **Deferred engineering work:** test wall-clock restructuring stays deferred; the full gate
+   took 37m 43s at `f4f74f01c` (5,136 tests). Measure before changing project or concurrency
+   boundaries; preserve denominators, isolation and frozen build provenance.
+## Validated implementation head — 2026-10-26
+Implementation commit **`f4f74f01cc92867f3542c41ee110a0378d6d9145`** on
+`codex/sqlserver-datatable-consumers`, from fresh `origin/dev` = #913 merge `4f664daf5`.
+Recorded by a separate documentation-only commit; no implementation change follows the gates.
+| Gate | Result |
+| --- | --- |
+| Focused Debug -warnaserror (DataTable + table + result + DDL + parameter + catalog + DNN + Razor + SQL matrix + VB data boundary) | 581 passed, 0 failed/skipped (59 new) |
+| Python guards | 24 `test_sqlserver_*` (6 new) + 17 DNN harness passed |
+| Full Debug solution -warnaserror, frozen source/HEAD/outputs | 5,136 passed, 0 failed, 3 expected skips; 37m 43s (2,274 s wall); no warnings |
+| Retained JSON / DDL 52-case parameter smokes | 8 / 12 / 32 each |
+| Retained result smoke | JSON 36 / 10 / 36, DDL 36 / 10 / 58, 20/20 refusals |
+| Retained table smoke | 64 cases per language; 44 / 10 / 88, 24/24 refusals |
+| New DataTable smoke | 148 cases per language; 108 / 24 / 176 (308 rows), expected = observed, 0 gaps, 22/22 refusals, repeat bytes identical |
+| Pinned C#/VB OSS adapter smoke | exit 0; 12,949 / 114,806 facts at C# 0.22.14 / VB 0.10.17; reduced coverage, no SQL calls |
+| Private-path guard, `git diff --check` | passed |
+Receipts are local (outside Git): `/tmp/tracemap-dt-f4f74f0-{json,ddl,result,table,datatable}/smoke-receipt.json`.
+DataTable smoke generator `08946e0d0266cd688240deff2a8b4ba18e52a0ffc6f18672b5cdd83ecf7fa7dc`,
+bounded input `3bfeca89d6a36fdad3af9ed778d61a9e0551ebd30667212f1f56334f630d7d9b`; Core
+`4a43b45da23025fbfb1a674c525c9f2332795e5255e3cc9ce4deb06e6727d631`; parser unchanged
+`2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`.
+Coverage honesty: the pinned public repositories contain no SQL calls, so DataTable evidence is
+exercised only by the synthetic corpus and direct tests. Not DNN, private, catalog or deployed
+acceptance.

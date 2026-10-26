@@ -44,3 +44,42 @@ checkout (`codex/sqlserver-result-column-prompt`) and all other worktrees were n
   native theories fail (then restored). Focused lane (new + table + result + DDL + parameter +
   catalog + DNN + Razor + SQL matrix + VB data boundary) 581 passed with `-warnaserror`.
 - Python guards: 24 `test_sqlserver_*` (6 new) + 17 DNN passed.
+## Committed-head acceptance (implementation `f4f74f01cc92867f3542c41ee110a0378d6d9145`)
+All gates below ran at the implementation commit with source, HEAD and shared build outputs
+frozen (`git status` empty and HEAD unchanged before and after); no competing build, smoke or
+commit ran in this checkout during the full suite. Results are recorded by a later
+documentation-only commit whose SHA differs.
+- Full Debug solution `dotnet test src/dotnet/TraceMap.sln -c Debug -warnaserror`:
+  **5,136 passed, 0 failed, 3 expected skips** (HttpReportProvenanceInterop receipt env unset,
+  Oracle full golden sweep opt-in, Windows-only deep projectless ASP.NET publish); 37m 43s tests,
+  2,274 s wall; zero compiler/analyzer warnings. (Timing recorded only; test restructuring
+  stays deferred.)
+- Then sequentially, new directories outside Git (`/tmp/tracemap-dt-f4f74f0-*`):
+  - JSON 52-case parameter smoke: **8/12/32**, 17 s, generator `16f7b62d…` (unchanged).
+  - DDL 52-case parameter smoke reusing those scans: **8/12/32**, 22 s, generator `118db6e0…` (unchanged).
+  - Retained result smoke: JSON **36/10/36**, DDL **36/10/58**, **20/20 refusals**, 0 gaps, 62 s,
+    generator `ce53c852…` (script unchanged).
+  - Retained table smoke: **64 cases per language, 44/10/88**, **24/24 refusals**, 0 gaps, 65 s,
+    generator `7c40fa9d…` (script unchanged since the #913 repair).
+  - New DataTable smoke: **148 cases per language, 108/24/176** (per language 54/12/88,
+    expected = observed), 0 gaps, **22/22 refusals**, byte-identical JSON+Markdown repeats,
+    130 s, generator `08946e0d0266cd688240deff2a8b4ba18e52a0ffc6f18672b5cdd83ecf7fa7dc`, bounded
+    input `3bfeca89d6a36fdad3af9ed778d61a9e0551ebd30667212f1f56334f630d7d9b`.
+  - Core SHA-256 `4a43b45da23025fbfb1a674c525c9f2332795e5255e3cc9ce4deb06e6727d631` in every
+    Core-bound receipt; ScriptDom parser unchanged `2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`.
+- Reader outputs for the retained fixtures did not change: the retained result and table smokes
+  reproduce their denominators and refusals exactly; only the extractor version string moved.
+- Pinned OSS adapter smoke (`TRACEMAP_SKIP_BUILD=1
+  TRACEMAP_OSS_SMOKE_REPOS=ProjectExtensions.Azure.ServiceBus,community-visual-basic`, public
+  pinned clones fetched into a fresh cache): exit 0, all artifacts each; C# `csharp-semantic/0.22.14`
+  12,949 facts, VB `vb-semantic/0.10.17` 114,806 facts (same counts as the #912 record), both
+  `Level1SemanticAnalysisReduced` / `FailedOrPartial` (documented expected partial coverage).
+  Neither repo has a DatabaseOperationCandidate or `sqlServerDataTableState`, so this only shows
+  the change does not disturb unrelated extraction; DataTable evidence is covered by the
+  synthetic corpus and direct tests only. Non-.NET adapters, Windows and private/application
+  checks not run (no such code changed).
+- Private-path guard and `git diff --check 4f664daf5..HEAD` passed at the implementation commit.
+## Delivery
+Docs-only results commit on top of `f4f74f01c`, next-slice prompt
+`prompts/continue-sqlserver-dataset-consumers.md`, branch pushed. No PR, merge, review request,
+SQL execution, container or private input.
