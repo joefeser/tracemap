@@ -10,9 +10,14 @@ Nothing is executed: no SQL, procedure, application method, container or remote 
 
 ## Contracts and routes
 
+Command-property assignments must be standalone and have no nested assignments;
+unsupported evaluation order is `nested-command-assignment`, never a retained
+procedure identity. Ref-local declarations (including readonly refs) and ref
+reassignments invalidate ordinal-name provenance. No alias analysis is claimed.
+
 | Contract | Meaning |
 | --- | --- |
-| `sqlserver-reader/1` (`sqlServerReaderState` fact property) | Source consumer evidence on every ExecuteReader-family DatabaseOperationCandidate. Separate from `sqlServerParameterState`. C# `csharp-semantic/0.22.12`, VB `vb-semantic/0.10.15`. |
+| `sqlserver-reader/1` (`sqlServerReaderState` fact property) | Source consumer evidence on every ExecuteReader-family DatabaseOperationCandidate. Separate from `sqlServerParameterState`. C# `csharp-semantic/0.22.13`, VB `vb-semantic/0.10.16`. |
 | `sqlserver-result-declarations/1` → `sqlserver-result-schema/1` | Independently authored public JSON (origin `independent-synthetic-result-declarations`), extractor `sqlserver-synthetic-result-declarations/1`, rule `database.sqlserver.synthetic-result-shape.v1`, Tier2Structural. |
 | `sqlserver-ddl-result-input/1` → `sqlserver-ddl-result-schema/1` | Opt-in DDL projection (origin `public-synthetic-tsql-ddl-result`), extractor `sqlserver-ddl-result-shapes/1`, rule `database.sqlserver.ddl-result-shape.v1`; Tier2 complete shapes, Tier4 unsupported records. |
 | `sqlserver-result-bindings/1` | Exact `factId`, two-part `commandText`, four-part `identity` and `readerEvidenceSha256`. |
