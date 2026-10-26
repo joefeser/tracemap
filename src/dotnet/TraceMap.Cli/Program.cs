@@ -126,6 +126,7 @@ public static class TraceMapCommand
                 "sqlserver-ddl-result" => SqlServerResultCommand.DdlHelp,
                 "sqlserver-ddl-table-result" => SqlServerResultCommand.DdlTableHelp,
                 "sqlserver-datatable-result" => SqlServerDataTableCommand.Help,
+                "sqlserver-dataset-result" => SqlServerDataSetCommand.Help,
                 "scan" => ScanHelp(),
                 "version" => VersionHelp(),
                 "versions" => "tracemap versions — prints the ScannerVersions extractor set as stable ordinal JSON (cache-key manifest; contract: extractor behavior changes bump their ScannerVersions constant)",
@@ -162,7 +163,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "sqlserver-datatable-result" or "sqlserver-ddl-table-result" or "sqlserver-ddl-result" or "sqlserver-result-schema" or "sqlserver-ddl" or "sqlserver-schema" or "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "sqlserver-dataset-result" or "sqlserver-datatable-result" or "sqlserver-ddl-table-result" or "sqlserver-ddl-result" or "sqlserver-result-schema" or "sqlserver-ddl" or "sqlserver-schema" or "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -176,6 +177,7 @@ public static class TraceMapCommand
                 "sqlserver-ddl-result" => SqlServerResultCommand.RunDdl(rest, output),
                 "sqlserver-ddl-table-result" => SqlServerResultCommand.RunDdlTable(rest, output),
                 "sqlserver-datatable-result" => SqlServerDataTableCommand.Run(rest, output),
+                "sqlserver-dataset-result" => SqlServerDataSetCommand.Run(rest, output),
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "versions" => rest.Length == 0
                     ? Program.RunVersions(output)
@@ -2921,6 +2923,7 @@ public static class TraceMapCommand
               tracemap sqlserver-ddl-result <produce|compare> --help
               tracemap sqlserver-ddl-table-result <produce|compare> --help
               tracemap sqlserver-datatable-result compare --help
+              tracemap sqlserver-dataset-result compare --help
               tracemap database-design-review --index <combined.sqlite> --out <path>
               tracemap webforms-modernization --index <index.sqlite> --out <directory>
               tracemap reduce --index <path> --contract-delta <path> --out <path>

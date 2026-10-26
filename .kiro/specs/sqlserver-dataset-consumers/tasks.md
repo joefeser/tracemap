@@ -3,7 +3,7 @@
 - [x] 2. Inspect signed SqlClient/System.Data reference metadata; author the accepted syntax matrix, decisions, contracts and independent expected matrix (design.md) before implementation.
 - [x] 3. Extract the Phase 2 adapter/command/table/rows rules into shared helpers without changing DataTable output (Phase 2 lane green before any DataSet code).
 - [x] 4. New sibling `sqlServerDataSetState` walker on Fill facts; extractor version bumps.
-- [ ] 5. DataSet bindings, three-origin comparison route, Markdown, `sqlserver-dataset-result` CLI, rule catalog entry.
+- [x] 5. DataSet bindings, three-origin comparison route, Markdown, `sqlserver-dataset-result` CLI, rule catalog entry.
 - [ ] 6. Public synthetic C#/VB fixtures wired into the normal test-project restore/build graph; tests and a new native smoke carrying the authored expectations (retained smokes unchanged); Python guards; docs.
 - [ ] 7. Verify the fixtures restore/build/scan through the normal test project with no pre-existing fixture `bin/`/`obj/`; focused lanes.
 - [ ] 8. Commit implementation; frozen full Debug `-warnaserror`.
