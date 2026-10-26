@@ -76,6 +76,8 @@ internal static class DatabaseOperationApi
             SqlServerDataSetConsumers.Add(properties, call);
             // Sibling one-level helper boundary: the helper execution once plus one entry per call site of its returned local.
             SqlServerHelperResults.Add(properties, call);
+            // Sibling internal-helper boundary: the same rules, call sites enumerated across the registered compilation scope.
+            SqlServerInternalHelperResults.Add(properties, call);
         }
         // Only inline construction is local to this call. Mutable receiver history is
         // retained elsewhere; it must not silently become current command state.
