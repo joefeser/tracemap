@@ -3,6 +3,7 @@ import ast
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -39,6 +40,30 @@ def fact(name, line, helper=None, table_gap="datatable-alias-or-escape", set_gap
 
 
 class HelperResultSmokeGuards(unittest.TestCase):
+    def test_sql_injection_suppressions_are_rule_specific_static_fixture_controls(self):
+        fixture = ROOT / "samples/sqlserver-helper-result-evidence/csharp/Helpers.cs"
+        text = fixture.read_text()
+        lines = [line for line in text.splitlines() if "nosemgrep" in line]
+        self.assertEqual(29, len(lines))
+        for line in lines:
+            self.assertRegex(line, r"(?:new SqlCommand\(procedure(?:, connection)?\)|command\.CommandText = procedure); // nosemgrep: csharp\.lang\.security\.sqli\.csharp-sqli$")
+        self.assertIn("Compile and scan only; never invoke methods.", text)
+        project = ET.parse(fixture.with_name("Helpers.csproj"))
+        self.assertFalse(any(n.text in ("Exe", "WinExe") for n in project.iter("OutputType")))
+
+    def test_live_helper_suppressions_have_only_constant_procedure_callers(self):
+        text = (ROOT / "samples/sqlserver-live-provider/csharp/Linked.cs").read_text()
+        lines = [line for line in text.splitlines() if "nosemgrep" in line]
+        self.assertEqual(2, len(lines))
+        self.assertTrue(all(line.strip() == "using var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli" for line in lines))
+        for helper, kind in (("ReadTable", "DataTable"), ("ReadSet", "DataSet")):
+            self.assertIn(f"private static {kind} {helper}(SqlConnection connection, string procedure)", text)
+            calls = re.findall(rf"\b{helper}\(([^)]*)\)", text)
+            self.assertEqual("SqlConnection connection, string procedure", calls[0])
+            self.assertGreater(len(calls), 1)
+            self.assertTrue(all(args in ('connection, "dbo.ReadItems"', 'connection, "dbo.ReadOther"') for args in calls[1:]))
+        self.assertEqual(2, len(re.findall(r"new SqlCommand\(procedure\);[^\n]*\n\s*command\.CommandType = CommandType\.StoredProcedure;", text)))
+
     def test_native_fixtures_are_in_the_normal_test_build_graph(self):
         project = ROOT / "src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj"
         references = {(project.parent / node.attrib["Include"].replace("\\", "/")).resolve(): node
