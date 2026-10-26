@@ -79,4 +79,16 @@ using (var adapter = new SqlDataAdapter(command)) {
     Check(table.Columns[0].ColumnName == "Name" && table.Columns[1].ColumnName == "Name1", "duplicate-column-renaming-runtime-only");
 }
 Check(count == 19, "case-denominator");
-Console.WriteLine("PROVIDER_CHECKS_PASSED 20");
+using (var setup = new SqlCommand("CREATE PROCEDURE dbo.ReadItems AS SELECT 1 AS Id, N'sample' AS Name, 2 AS Total; SELECT 99 AS Value;", connection))
+    setup.ExecuteNonQuery();
+foreach (var (language, type) in new[] { ("csharp", typeof(LinkedCSharp.Cases)), ("vb", typeof(LinkedVisualBasic.Cases)) }) {
+    foreach (var method in new[] { "ReaderName", "TableName", "SetName", "MissingName", "CaseOnly", "LaterTable" }) {
+        object? value = null;
+        var missing = false;
+        try { value = type.GetMethod(method)!.Invoke(null, [connection]); }
+        catch (System.Reflection.TargetInvocationException error) when (method == "MissingName" && error.InnerException is ArgumentException) { missing = true; }
+        Check(method == "MissingName" ? missing : method == "LaterTable" ? Equals(value, 99) : Equals(value, "sample"), "linked-" + language + "-" + method);
+    }
+}
+if (count != 32) throw new InvalidOperationException("Linked denominator mismatch");
+Console.WriteLine("PROVIDER_CHECKS_PASSED 32");

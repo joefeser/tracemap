@@ -198,10 +198,10 @@ def run(args):
             if provider_inputs(provider) != provider_hashes:
                 raise ValueError('provider publish changed during execution')
             lines = result.splitlines()
-            if lines[-1:] != ['PROVIDER_CHECKS_PASSED 20'] or sum(s.startswith('PASS ') for s in lines) != 20:
+            if lines[-1:] != ['PROVIDER_CHECKS_PASSED 32'] or sum(s.startswith('PASS ') for s in lines) != 32:
                 raise ValueError('provider test denominator mismatch')
             (output / 'provider.log').write_text(result + '\n')
-            receipt['providerRuntime'] = '20 checks passed; observed execution only, not static acceptance'
+            receipt['providerRuntime'] = '32 checks passed; observed execution only, not static acceptance'
         receipt['phase'] = 'server-version'
         version = parse_version(sql("SET NOCOUNT ON;\nSELECT CONVERT(nvarchar(128),SERVERPROPERTY('ProductVersion'));\nGO\n", scalar=True))
         receipt.update(status='PASSED synthetic SQL checks', testedVersion=version,

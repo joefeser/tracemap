@@ -20,8 +20,9 @@ The 19 behavioral assertions plus one denominator assertion cover:
   DataSet multi-result naming and duplicate-column renaming.
 
 Runtime case fallback does not upgrade static unknowns. Multiple results remain
-outside the static first-result slice. Type coercion, parameter mismatches, VB
-execution, modern-provider scanner fixtures, DNN and private acceptance remain gaps.
+outside the static first-result slice. Type coercion, parameter mismatches,
+DNN and private acceptance remain gaps. The linked extension below adds bounded
+modern-provider C#/VB extraction and execution coverage.
 
 ## Run
 
@@ -75,7 +76,7 @@ missing stderr in captured logs. Explicit loopback also corrected localhost
 connection failures under network-none. Both defects are now guarded. Failed
 attempts were cleaned up; an obsolete retry was interrupted and cleanup verified.
 
-Next: connect this runtime oracle to modern-provider C#/VB scanner fixtures and
+Original next step: connect this runtime oracle to modern-provider C#/VB scanner fixtures and
 an independently authored static-versus-runtime expectation matrix. Runtime
 success alone does not prove TraceMap recognizes these source shapes.
 
@@ -90,3 +91,36 @@ All **32 SQL + 19 harness Python guards** passed. This documentation-only readba
 follows the validated implementation. No full scanner suite or private acceptance
 is claimed. The branch is based on the unmerged DataSet implementation and must
 not be presented as an independent dev-based patch until that dependency lands.
+
+## Linked static/runtime matrix
+
+`samples/sqlserver-live-provider/matrix.md` defines six cases per language before
+execution. The runtime client references the same C# and VB fixture projects that
+TraceMap scans. Their modern-provider command/reader/adapter methods therefore
+have both static evidence and runtime observations, not merely similar snippets.
+
+The expected combined static denominator is **6 bounded matches, 2 mismatches,
+4 unknowns**. Missing columns throw at runtime. Case-only names and later result
+tables succeed at runtime but must remain unknown in the bounded static contract.
+The first-result declaration is independently authored public JSON; this does not
+admit the two-statement procedure through the restricted DDL route.
+
+```sh
+dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -c Debug -warnaserror
+python3 scripts/dnn-sql-validation/linked_provider.py --activate \
+  --context "$REVIEWED_CONTEXT" --expected-endpoint "$REVIEWED_ENDPOINT" \
+  --approve-host --approve-resources --accept-eula --approve-disposable \
+  --output /tmp/tracemap-linked-provider-new
+```
+
+The runner publishes the referenced fixture assemblies, scans both projects,
+compares every site twice, and then invokes the isolated SQL harness. It refuses
+missing/extra sites, unexpected static verdicts, nondeterministic comparisons,
+missing runtime counterparts, byte drift and incomplete cleanup. Its local linked
+receipt binds generator, source matrix, CLI DLLs, scan/report bytes and the runtime
+receipt. The runtime receipt separately binds the published client bytes.
+
+There are **32 runtime assertions**: the original 20 plus 12 linked observations.
+This is a narrow synthetic matrix, not modern-provider parity across all scanner
+shapes, DNN acceptance, work-machine acceptance or application readiness. Native
+scan/report artifacts are local evidence, not privacy-projected public exports.
