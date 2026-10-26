@@ -239,6 +239,10 @@ hydration/provider wrappers (`CBO.FillCollection`, `IHydratable`), DataTable/Dat
 inference, adapters, ORMs, RETURN/OUTPUT/affected-row/scalar channels. This is not a
 general SQL interpreter.
 
+Later (separate route, not a change to this one): explicit columns from one admitted table are
+covered by [SQLSERVER_TABLE_RESULT_EVIDENCE.md](SQLSERVER_TABLE_RESULT_EVIDENCE.md); this
+route's constant-only DDL grammar and its denominators are unchanged.
+
 ## Validated implementation head — 2026-10-25
 
 Implementation commit **`1660a5a8cb0107abb3792788f3eed637987ac30b`** on

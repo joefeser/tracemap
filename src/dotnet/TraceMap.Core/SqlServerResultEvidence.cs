@@ -37,17 +37,21 @@ public static class SqlServerResultEvidence
     public const string RuleId = "database.sqlserver.result-column-comparison.v1";
     public const int MaxShapes = 256;
     public const int MaxColumns = 1024;
-    private static readonly Regex TypeFacet = new(@"^[A-Za-z_][A-Za-z0-9_]{0,63}(\([A-Za-z0-9]{1,5}(,[0-9]{1,3})?\))?$", RegexOptions.CultureInvariant);
+    internal static readonly Regex TypeFacet = new(@"^[A-Za-z_][A-Za-z0-9_]{0,63}(\([A-Za-z0-9]{1,5}(,[0-9]{1,3})?\))?$", RegexOptions.CultureInvariant);
     private static readonly Regex ReasonSlug = new("^[a-z0-9][a-z0-9-]{0,63}$", RegexOptions.CultureInvariant);
     private static void Require([System.Diagnostics.CodeAnalysis.DoesNotReturnIf(false)] bool ok, string reason) { if (!ok) throw new ArgumentException("result-" + reason); }
     private static bool Identity(SqlServerObjectIdentity? i) => i is not null && SqlServerSchemaEvidence.Identifier(i.Server)
         && SqlServerSchemaEvidence.Identifier(i.Database) && SqlServerSchemaEvidence.Identifier(i.Schema) && SqlServerSchemaEvidence.Identifier(i.Procedure);
 
     internal static void Validate(SqlServerResultDeclarations d, bool ddl = false)
+        => Validate(d, ddl ? "sqlserver-ddl-result-declarations/1" : "sqlserver-result-declarations/1",
+            ddl ? "public-synthetic-tsql-ddl-result" : "independent-synthetic-result-declarations");
+
+    /// <summary>Shared shape validation; each origin names its own exact declaration version and origin label.</summary>
+    internal static void Validate(SqlServerResultDeclarations d, string version, string origin)
     {
         Require(d.Provenance is null || SqlServerSchemaEvidence.Sha(d.Provenance.GeneratorSha256) && SqlServerSchemaEvidence.Sha(d.Provenance.BoundedInputSha256), "invalid-input-provenance");
-        Require(d.Version == (ddl ? "sqlserver-ddl-result-declarations/1" : "sqlserver-result-declarations/1")
-            && d.Origin == (ddl ? "public-synthetic-tsql-ddl-result" : "independent-synthetic-result-declarations")
+        Require(d.Version == version && d.Origin == origin
             && d.IdentifierPolicy == "ordinal-exact-no-aliases", "unsupported-declaration-contract");
         Require(SqlServerSchemaEvidence.PathSafe(d.Repo) && !d.Repo.Contains('/') && SqlServerSchemaEvidence.Sha(d.Revision, 40), "invalid-repo-or-revision");
         Require(d.Shapes is { Count: > 0 and <= MaxShapes }, "shape-limit");
