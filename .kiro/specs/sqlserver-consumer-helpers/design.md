@@ -10,7 +10,7 @@
   Fill's document. Callers therefore must be enumerable from that one document.
 ## Decisions
 - **Where the evidence lives.** A new sibling property `sqlServerHelperResultState`
-  (`sqlserver-helper-result/1`) on every `data-adapter-fill` fact (same fact, site, rule, tier).
+  (`sqlserver-helper-result/2`) on every `data-adapter-fill` fact (same fact, site, rule, tier).
   The helper execution (command, adapter, Fill overload, table name) is recorded once; each call
   site is one `callers[i]` entry with its own line span, calling member, procedure-argument hash,
   gap and returned-consumer accesses. No new fact type and no caller-side fact.
@@ -65,7 +65,7 @@ implicit receiver, local uses, rows, accesses.
 ## Contracts
 | Contract | Meaning |
 | --- | --- |
-| `sqlserver-helper-result/1` | `sqlServerHelperResultState` on every Fill fact: version, coverage, gap, resultKind (`datatable`/`dataset`), commandType, commandTextSource (`constructor-parameter`/`command-text-parameter`), adapterAssociation, fillOverload, tableName (DataSet only), helperLine, adapterLine, resultLine, callers (source order). Caller: line, endLine, caller (calling member display string), coverage, gap, commandTextHash (SHA-256 of the constant procedure argument), resultLine, selectors, guards, accesses (Phase 2 DataRow access record). |
+| `sqlserver-helper-result/2` | `sqlServerHelperResultState` on every Fill fact: version, coverage, gap, resultKind (`datatable`/`dataset`), commandType, commandTextSource (`constructor-parameter`/`command-text-parameter`), adapterAssociation, fillOverload, tableName (DataSet only), helperLine, adapterLine, resultLine, callers (source order). Caller: line, endLine, caller (calling member display string), coverage, gap, commandTextHash (SHA-256 of the constant procedure argument), resultLine, selectors, guards, accesses (Phase 2 DataRow access record). |
 | `sqlserver-helper-result-bindings/1` | per call: `factId`, `callerIndex`, `commandText`, four-part `identity`, `helperResultEvidenceSha256`. |
 | `sqlserver-helper-result-comparison/1` | rule `database.sqlserver.helper-result-column-comparison.v1`; rows carry factId, callerIndex, caller line span, accessIndex and the admitted-shape provenance as in the DataSet route. |
 CLI (compare only): `tracemap sqlserver-helper-result compare --origin result-schema --declarations <json> | --origin ddl-result|ddl-table-result --input <manifest> --source-root <root>`, then `--schema --bindings --facts --repo --revision --out` → `helper-result-column-comparison.json`, `report.md`.
@@ -79,7 +79,7 @@ access with the shared Phase 2 decision, or `no-bounded-column-access`. Rows are
 for match/mismatch and Tier4Unknown otherwise; source tier kept; coverage `partial`, verdict
 `no-aggregate-clean-verdict`.
 ## Extractor versions
-C# `csharp-semantic/0.22.16`, VB `vb-semantic/0.10.19` (additive sibling property on Fill facts).
+C# `csharp-semantic/0.22.17`, VB `vb-semantic/0.10.20` (additive sibling property on Fill facts).
 ## Independent native matrix (authored before running the extractor)
 Fixture `samples/sqlserver-helper-result-evidence/{csharp,vb}`, same names in both languages.
 Bounded helpers: `ReadTable(procedure)`; `ReadSet(procedure)`; `ReadNamedSet(procedure)`

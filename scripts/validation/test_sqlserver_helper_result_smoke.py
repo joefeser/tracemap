@@ -20,7 +20,7 @@ CALLER = {"line": 30, "endLine": 30, "caller": "HelperCases.TwoCallers(string, i
 
 
 def state(callers=(), **fields):
-    value = {"version": "sqlserver-helper-result/1", "coverage": "bounded", "gap": None, "resultKind": "datatable", "commandType": "StoredProcedure",
+    value = {"version": "sqlserver-helper-result/2", "coverage": "bounded", "gap": None, "resultKind": "datatable", "commandType": "StoredProcedure",
              "commandTextSource": "constructor-parameter", "adapterAssociation": "constructor-command", "fillOverload": "fill-datatable",
              "tableName": None, "helperLine": 3, "adapterLine": 5, "resultLine": 6, "callers": list(callers)}
     value.update(fields)
@@ -151,7 +151,7 @@ class HelperResultSmokeGuards(unittest.TestCase):
             SMOKE.HELPERS.write(schema, {"version": "x"})
             row = {"factId": "f", "callerIndex": 1, "status": X, "reasons": [], "ruleId": SMOKE.RULE, "tier": "Tier2Structural", "sourceTier": "Tier1Semantic"}
             other = dict(row, callerIndex=0, status=U, tier="Tier4Unknown", reasons=["binding-missing"])
-            report = {"version": "sqlserver-helper-result-comparison/1", "consumerVersion": "sqlserver-helper-result/1",
+            report = {"version": "sqlserver-helper-result-comparison/1", "consumerVersion": "sqlserver-helper-result/2",
                       "bindingsVersion": "sqlserver-helper-result-bindings/1", "schemaRoute": "result-schema",
                       "origin": "independent-synthetic-result-declarations", "coverage": "partial", "verdict": "no-aggregate-clean-verdict",
                       "generatorSha256": "a" * 64, "schemaEvidenceSha256": SMOKE.HELPERS.digest({"version": "x"}), "comparisons": [other, row]}

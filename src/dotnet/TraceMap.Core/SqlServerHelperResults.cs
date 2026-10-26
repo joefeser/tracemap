@@ -34,7 +34,7 @@ public sealed record SqlServerHelperResultState(string Version, string Coverage,
 /// </summary>
 internal static class SqlServerHelperResults
 {
-    internal const string Version = "sqlserver-helper-result/1";
+    internal const string Version = "sqlserver-helper-result/2";
     internal const int MaxCallers = 64;
     private const string DataTableType = "System.Data.DataTable";
     private const string DataSetType = "System.Data.DataSet";

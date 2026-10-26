@@ -21,7 +21,7 @@ public sealed partial class SqlServerHelperResultEvidenceTests
     private static SqlServerDataTableAccess Ordinal(int? ordinal) => new("ordinal-indexer", "Item", "row-local", 0, null, ordinal, 12, 12, null);
     private static SqlServerHelperCaller Caller(string procedure, params SqlServerDataTableAccess[] accesses)
         => new(11, 11, "Example.Use()", "bounded", null, FactFactory.Hash(procedure, 64), 11, [], [], accesses);
-    private static SqlServerHelperResultState State(params SqlServerHelperCaller[] callers) => new("sqlserver-helper-result/1", "bounded", null, "datatable",
+    private static SqlServerHelperResultState State(params SqlServerHelperCaller[] callers) => new("sqlserver-helper-result/2", "bounded", null, "datatable",
         "StoredProcedure", "constructor-parameter", "constructor-command", "fill-datatable", null, 3, 5, 6, callers);
     private static CodeFact Fact(SqlServerHelperResultState? state, string id = "fact", string? version = null, SqlServerDataTableState? table = null, SqlServerDataSetState? set = null)
     {
@@ -83,7 +83,7 @@ public sealed partial class SqlServerHelperResultEvidenceTests
         Assert.Equal(expected == U ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier2Structural, row.Tier);
         Assert.Equal((EvidenceTiers.Tier1Semantic, SqlServerHelperResultEvidence.RuleId, (int?)11, (string?)"Example.Use()"), (row.SourceTier, row.RuleId, row.CallerStartLine, row.Caller));
         Assert.Equal(("partial", "no-aggregate-clean-verdict"), (report.Coverage, report.Verdict));
-        Assert.Equal(("sqlserver-helper-result-comparison/1", "sqlserver-helper-result/1", "sqlserver-helper-result-bindings/1", "result-schema"),
+        Assert.Equal(("sqlserver-helper-result-comparison/1", "sqlserver-helper-result/2", "sqlserver-helper-result-bindings/1", "result-schema"),
             (report.Version, report.ConsumerVersion, report.BindingsVersion, report.SchemaRoute));
         if (mode == "missing") Assert.Equal(["missing-column:Title"], row.Reasons);
         if (mode == "case-only") Assert.Equal(["column-case-policy-unknown:name"], row.Reasons);
@@ -112,6 +112,20 @@ public sealed partial class SqlServerHelperResultEvidenceTests
         Assert.Contains("ConfidentialExample.Work()", markdown);
         Assert.Contains("not a sanitized shareable export", json);
         Assert.Contains("Do not publish private-input reports", markdown);
+    }
+
+    [Theory]
+    [InlineData("sqlserver-helper-result/1", null)]
+    [InlineData("sqlserver-helper-result/2", "csharp-semantic/0.22.16")]
+    [InlineData("sqlserver-helper-result/2", "vb-semantic/0.10.19")]
+    public void Retained_pre_repair_bounded_facts_cannot_bypass_stricter_body_admission(string stateVersion, string? extractor)
+    {
+        // v1 could emit this bounded state even for a helper containing a second trusted provider execution.
+        // The comparison has no source body: rejecting its old provenance is mandatory, even with a valid binding digest.
+        var state = State(Caller("dbo.ReadItems", Name("Name"))) with { Version = stateVersion };
+        var report = Compare(Fact(state, version: extractor));
+        Assert.All(report.Comparisons, r => Assert.Equal(U, r.Status));
+        Assert.Contains(Assert.Single(report.Comparisons).Reasons, r => r is "helper-result-state-unavailable" or "unsupported-source-extractor-or-tier");
     }
 
     [Fact]

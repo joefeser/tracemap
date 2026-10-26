@@ -29,7 +29,7 @@ least:
 - whether caller completeness remains explicitly unclaimed (reflection, delegates) and how
   method-group references in other documents make the helper unknown.
 Preserve every Phase 2, Phase 3 and Phase 4 refusal and output. Distinct versioned state (or a
-versioned successor of `sqlserver-helper-result/1` with historical records kept), digest and
+versioned successor of `sqlserver-helper-result/2` with historical records kept), digest and
 bindings; never let DataSet, DataTable, reader, parameter or Phase 4 bindings substitute. Bump
 extractor versions.
 ## Evidence and validation gates
