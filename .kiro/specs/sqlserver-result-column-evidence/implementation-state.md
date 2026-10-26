@@ -106,7 +106,15 @@ conditional command state refusal, converted ordinal semantics, and privacy-
 projected result bindings across JSON and DDL reports. C#/VB extractors advance
 to 0.22.11 / 0.10.14. Added 13 regression cases (including both languages,
 if/while and CommandText/CommandType/Connection variations). Initial focused
-result gate: 155 passed. Frozen committed-head full validation is pending.
+result gate: 155 passed; final result/Razor gate: 160 passed. At frozen repair
+commit 0221dadd7b42becc0c8a9d976a6b1a7408e3a7ae, full Debug -warnaserror passed
+4,944 tests, zero failures, three expected skips (27m 42s). All 26 Python guards
+passed. Sequential JSON/DDL parameter smokes retained 52 cases each (8/12/32).
+Result smoke retained JSON 36/10/36 and DDL 36/10/58, deterministic reports,
+and all 20 refusals. Pinned C#/VB OSS smoke passed with reduced coverage;
+neither public repository contains SQL calls, so reader-specific coverage remains
+synthetic/direct-test evidence. No SQL or private application was executed.
+This validation readback is docs-only after the frozen repair commit.
 
 ### Pre-PR catalog correction and revalidation
 
