@@ -153,6 +153,41 @@ other clauses, expressions, temporary tables, table variables, functions, dynami
 conditional/multiple result sets, ALTER/migration scripts, DataTable/DataSet, adapters, ORMs,
 DNN hydration and provider wrappers. This is not a SQL interpreter.
 
+## Follow-up work log
+
+This is a bounded backlog, not an authorization to widen this PR. Related tracking:
+[#870](https://github.com/joefeser/tracemap/issues/870) (schema contracts),
+[#908](https://github.com/joefeser/tracemap/issues/908) (DNN validation), and
+[#864](https://github.com/joefeser/tracemap/issues/864) /
+[#865](https://github.com/joefeser/tracemap/issues/865) (extraction coverage).
+
+1. **Next priority, after Phase 1 merges:** bounded C#/VB SqlDataAdapter.Fill to
+   DataTable/DataRow column reads. Use the committed
+   [Phase 2 prompt](../../prompts/continue-sqlserver-datatable-consumers.md).
+   Require exact command/Fill/table/row bindings, independent positive/negative
+   fixtures and retained parameter/reader/table smokes. DataSet and reader-returning
+   helpers remain separate later slices.
+2. **Later grammar expansion:** consider single-table WHERE predicates first.
+   Although filtering does not ordinarily change projection names, admission must
+   define supported predicate syntax and reject hidden subqueries, function calls
+   and unsupported dependencies; do not simply remove the current clause guard.
+   Independently test complete-shape versus unknown behavior. ORDER BY, TOP and
+   other clauses need their own explicit decisions. SELECT *, views, joins, CTEs,
+   expressions, dynamic SQL and multiple results remain outside this phase.
+3. **Later contract semantics:** type/nullability comparison, richer table DDL,
+   RETURN/OUTPUT/scalar distinctions and versioned catalog evidence require separate
+   contracts and negative controls. Current key/type syntax admission does not
+   prove those semantics or deployed correspondence.
+4. **Real-application validation:** DNN still needs exact provider/wrapper and
+   schema-qualifier binding plus hydration modeling. Private acceptance needs
+   separately supplied authorized artifacts. Synthetic success is not either form
+   of acceptance. Live SQL remains separately authorized and disposable-only.
+5. **Deferred engineering work:** investigate splitting long-running tests to
+   reduce wall-clock time after the two priority SQL slices. Baseline full gate:
+   34m 4s test duration at c28dbd3df. Measure test/fixture costs before changing
+   project or concurrency boundaries; preserve denominators, isolation and frozen
+   build provenance. Do not weaken gates or fold that refactor into Phase 2.
+
 ## Validated implementation head — 2026-10-26
 
 Implementation commit **`c28dbd3df38ee80da684914677829dfee9a35644`** on
