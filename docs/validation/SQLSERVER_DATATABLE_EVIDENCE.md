@@ -8,7 +8,7 @@ method, container or remote host. Every report is `partial` / `no-aggregate-clea
 ## Contracts and route
 | Contract | Meaning |
 | --- | --- |
-| `sqlserver-datatable/1` (`sqlServerDataTableState`) | Source consumer state on every `data-adapter-fill` DatabaseOperationCandidate (the existing Fill fact; no new fact type). Separate from `sqlServerReaderState` and `sqlServerParameterState`. C# `csharp-semantic/0.22.14`, VB `vb-semantic/0.10.17`. |
+| `sqlserver-datatable/1` (`sqlServerDataTableState`) | Source consumer state on every `data-adapter-fill` DatabaseOperationCandidate (the existing Fill fact; no new fact type). Separate from `sqlServerReaderState` and `sqlServerParameterState`. Introduced at C# `csharp-semantic/0.22.14`, VB `vb-semantic/0.10.17`; current C# 0.22.15 / VB 0.10.18 add only the sibling [DataSet state](SQLSERVER_DATASET_EVIDENCE.md), DataTable state unchanged. |
 | `sqlserver-datatable-bindings/1` | Exact `factId`, two-part command text, four-part identity and `dataTableEvidenceSha256` (digest of a contract-tagged DataTable projection; never equal to the reader or parameter digests). |
 | `sqlserver-datatable-comparison/1` | Rows under `database.sqlserver.datatable-column-comparison.v1`; binds the admitted shape export (route, version, generator, bounded input, extractor, rule, tier, origin, export SHA-256). |
 ```sh

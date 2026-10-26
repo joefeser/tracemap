@@ -1,0 +1,40 @@
+using System.Globalization;
+using System.Net;
+using System.Text;
+using TraceMap.Core;
+namespace TraceMap.Reporting;
+/// <summary>Presentation of a DataSet first-table column report; never a second verdict.</summary>
+public static class SqlServerDataSetReportWriter
+{
+    private static string E(string value) => WebUtility.HtmlEncode(value).Replace("|", "&#124;", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
+    public static string Build(SqlServerDataSetComparisonReport report)
+    {
+        var s = new StringBuilder("# SQL Server DataSet first-table column comparison\n\nCoverage: partial. No aggregate clean verdict. First result set and first DataSet table; column identity and ordinal bounds only; Fill execution, tables, rows and later result sets are not claimed.\n\n");
+        s.AppendLine($"Consumer: {E(report.ConsumerVersion)}; bindings: {E(report.BindingsVersion)}; rule: {SqlServerDataSetEvidence.RuleId}.");
+        s.AppendLine($"Shapes: route {E(report.SchemaRoute)}; origin {E(report.Origin)}; schema {E(report.SchemaVersion)} / {E(report.SchemaRuleId)} / {E(report.SchemaTier)} / {E(report.SchemaExtractorVersion)}.");
+        s.AppendLine($"Schema generator SHA-256: {report.SchemaGeneratorSha256}; schema bounded input SHA-256: {report.SchemaInputSha256}; admitted export SHA-256: {report.SchemaEvidenceSha256}.");
+        s.AppendLine($"Repo: {E(report.Repo)}; revision: {E(report.Revision)}; generator SHA-256: {report.GeneratorSha256}; public bounded input SHA-256: {report.BoundedInputSha256}.\n");
+        foreach (var shape in report.Shapes)
+            s.AppendLine($"- First result shape: {Identity(shape.Identity)} at {E(shape.FilePath)}:{shape.StartLine}–{shape.EndLine}; {E(shape.Completeness)}"
+                + (shape.UnknownReason is null ? "" : " (" + E(shape.UnknownReason) + ")") + $"; {shape.Columns.Count} columns.");
+        s.AppendLine("\n| Source Fill / first-table DataRow access | Result shape / column | Status / rule / tier | Reasons | Uncompared facets |\n| --- | --- | --- | --- | --- |");
+        foreach (var row in report.Comparisons)
+        {
+            var source = $"{E(row.SourcePath)}:{row.SourceStartLine}–{row.SourceEndLine} ({E(row.SourceExtractorVersion)}; {E(row.SourceRuleId)}; {E(row.SourceTier)})";
+            if (row.Access is { } a)
+                source += $" access #{row.AccessIndex} {E(a.Kind)} {E(a.Member)} via {E(a.RowSource)}"
+                    + (a.RowIndex is { } r ? " row " + r.ToString(CultureInfo.InvariantCulture) : "") + " "
+                    + (a.Name is not null ? "name " + E(a.Name) : a.Ordinal is { } o ? "ordinal " + o.ToString(CultureInfo.InvariantCulture) : "dynamic")
+                    + $" at line {a.Line}–{a.EndLine}";
+            var shape = row.Shape is { } sh
+                ? $"{Identity(sh.Identity)} {E(sh.FilePath)}:{sh.StartLine}–{sh.EndLine} ({E(sh.Completeness)}, {sh.ColumnCount} columns)"
+                    + (row.Column is { } c ? $"; column {E(c.Name)} ordinal {c.Ordinal} line {c.Line}" : "")
+                : "unavailable";
+            s.AppendLine($"| {source} | {shape} | {row.Status} / {row.RuleId} / {row.Tier} | {E(string.Join("; ", row.Reasons))} | {E(string.Join("; ", row.UncomparedFacets))} |");
+        }
+        s.AppendLine("\nLimitations:\n");
+        foreach (var limit in report.Limitations) s.AppendLine("- " + E(limit));
+        return s.ToString();
+    }
+    private static string Identity(SqlServerObjectIdentity i) => E(i.Server + "." + i.Database + "." + i.Schema + "." + i.Procedure);
+}

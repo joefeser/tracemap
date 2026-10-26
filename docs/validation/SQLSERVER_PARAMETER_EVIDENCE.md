@@ -161,6 +161,8 @@ independent `sqlServerReaderState`; parameter state and its digest projection ar
 ([result-column evidence](SQLSERVER_RESULT_COLUMN_EVIDENCE.md)). The DataTable slice bumps
 them to C# 0.22.14 / VB 0.10.17 for the additive, Fill-only `sqlServerDataTableState`
 ([DataTable evidence](SQLSERVER_DATATABLE_EVIDENCE.md)); parameter and reader state are unchanged.
+The DataSet slice bumps them to C# 0.22.15 / VB 0.10.18 for the sibling Fill-only
+`sqlServerDataSetState` ([DataSet evidence](SQLSERVER_DATASET_EVIDENCE.md)).
 
 ```sh
 dotnet build src/dotnet/TraceMap.Cli -c Debug -warnaserror
