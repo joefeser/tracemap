@@ -18,3 +18,20 @@ other worktrees were not touched.
 - The net10.0 reference pack forwards `DataRowExtensions`/`DataTableExtensions` from
   System.Data.DataSetExtensions to System.Data.Common; the Phase 2 note about the
   DataSetExtensions token applies to .NET Framework targets.
+- First fixture build (before any extractor run) failed on fixture-authoring compile errors
+  only: the C# methods `MissingSchemaAction`/`MissingMappingAction` shadowed the enum names
+  (now `System.Data.`-qualified), VB rejected the keyword `Alias` as a local name (`aliased`) and
+  a local named like its function (`Relations` → `relationSet`). No expectation changed.
+- The first extractor run matched every authored expectation: 37/37 new tests on the first run
+  (both native theories 78/12/88). A deliberate two-cell expectation mutation made both native
+  theories fail with the exact key and gap; it was then restored.
+## Development validation (dirty tree at 5060e95c3; not acceptance)
+- Clean-fixture check: every `samples/sqlserver-*-evidence/{csharp,vb}` `bin/`/`obj/` moved out
+  of the worktree, then the normal `dotnet test ... TraceMap.Tests.csproj -c Debug -warnaserror`
+  (no separate fixture restore) restored and built all eight SQL fixture projects through the
+  test-project graph; focused lane (DataSet + DataTable + table + result + DDL + parameter +
+  catalog + DNN + Razor) 596 passed.
+- Dev DataSet smoke `/tmp/tm-ds-smoke-dev`: 169 cases per language, 156 / 24 / 176 (expected =
+  observed), 0 gaps, 24/24 refusals each for its intended reason, 159 s.
+- Python guards: 32 `test_sqlserver_*` (7 new) + 17 DNN passed; private-path guard and
+  `git diff --check` passed.
