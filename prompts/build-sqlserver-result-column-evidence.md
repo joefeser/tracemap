@@ -129,7 +129,7 @@ branch and one consolidated follow-up prompt, reporting exactly what can now
 be compared and what remains unknown. No repeated work-machine round trips.
 Do not close #908/#870 or claim real DNN/SQL-A acceptance from synthetic results.
 
-No private/FFP/work-machine inputs, credentials, containers/image pulls, remote
+No private application or work-machine inputs, credentials, containers/image pulls, remote
 hosts, SQL execution, database provisioning, full DNN installer, deployment,
 paid review requests, policy changes or merge are authorized. If later asked
 for a PR, use the current pr-review-loop skill, canonical ACK preflight and
