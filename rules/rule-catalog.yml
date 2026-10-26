@@ -7939,7 +7939,7 @@ rules:
     emits:
       - SqlServerResultComparison
     limitations:
-      - Opt-in sqlserver-result-schema and sqlserver-ddl-result commands only; reports are always partial with no aggregate clean verdict and do not extend closed call-path receipts or clear scan gaps and truncation.
+      - Opt-in sqlserver-result-schema, sqlserver-ddl-result and sqlserver-ddl-table-result commands only; reports are always partial with no aggregate clean verdict and do not extend closed call-path receipts or clear scan gaps and truncation.
       - Column identity/existence and ordinal bounds only. No CLR/SQL type conversion, nullability, row cardinality, value, execution or runtime-exception claim, including for typed getters and IsDBNull.
       - Exact-case unique names only. Case-only, collation-dependent and duplicate names, dynamic names/ordinals, unknown or incomplete shapes and ambiguous bindings remain unknown; a missing name or out-of-range ordinal is a mismatch only against an admitted complete shape.
       - Every row binds one exact execution fact and reader instance through sqlserver-result-bindings/1 and its reader-evidence digest; parameter bindings, procedure names, methods or nearby calls never join a reader to a shape.
@@ -7966,3 +7966,17 @@ rules:
       - Opt-in sqlserver-ddl-result-input/1 manifest over the pinned ScriptDom 170.191.0 TSql160 parser and the unchanged DDL parameter admission core; malformed SQL, SQLCMD text, digest mismatches, identity ambiguity and bounds reject the whole input.
       - IF, dynamic SQL/EXEC, multiple statements, SET options, SELECT *, FROM/table/view dependencies, joins, UNION, SELECT assignment, RETURN, nested blocks, non-constant or unaliased projections and duplicate/case-only aliases are explicit unknown shapes with Tier4 unsupported records, never partial column lists.
       - Literal values and body text are never retained; CAST target spellings are visible uncompared facets. No catalog, migration ordering or deployed correspondence is claimed.
+  - id: database.sqlserver.ddl-table-result-shape.v1
+    name: Bounded public synthetic T-SQL table-backed first-result projection
+    description: Admits bounded CREATE TABLE definitions with procedures from one explicitly hashed public synthetic manifest and derives a first-result shape only from one unconditional SELECT of direct column references from exactly one schema-qualified admitted table.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlServerDdlTableResultExport
+      - SqlServerDdlTableUnsupported
+      - SqlServerDdlResultUnsupported
+    limitations:
+      - Opt-in sqlserver-ddl-table-result-input/1 manifest and sqlserver-ddl-table-result command only, over the pinned ScriptDom 170.191.0 TSql160 parser on its 64 MiB parser thread and the unchanged DDL admission core; malformed SQL, SQLCMD text, digest mismatches, ALTER TABLE, views and other statements, unqualified/temporary/three-part table names, duplicate or case-only table/procedure identities and bounds reject the whole input. The parameter and constant result routes still reject CREATE TABLE.
+      - Exact manifest-bound server/database plus explicit two-part schema/object identity; the admitted files are one unordered definition set with no migration ordering, short-name join, USE/connection inference or deployment claim.
+      - Tables support identifier columns with one-part built-in types, NULL/NOT NULL, IDENTITY and PRIMARY KEY/UNIQUE without index options or placement. Computed columns, defaults, COLLATE, alias/CLR/xml types, CHECK/FOREIGN KEY, column options, table options, indexes, duplicate or case-only columns make the table unknown with a Tier4 record and no columns; it never backs a shape.
+      - A complete shape needs every projected element to be a direct column reference (optional identifier output alias, optional qualifier equal to the one simple table alias) that resolves exactly against a supported table. SELECT *, joins/APPLY, views, CTEs, subqueries, UNION, temporary tables, table variables, functions, hints, WHERE and other clauses, expressions, COLLATE, string aliases, missing/case-only/cross-database references, duplicate output names, dynamic SQL/EXEC and conditional or multiple statements are explicit unknown shapes, never partial column lists.
+      - Output order and names plus the backing table column per output are retained; table column type spellings are visible uncompared facets. Nullability, keys, defaults, rows, values and body text are never compared or retained. Admission binds exact generator, parser and bounded-input SHA-256 plus file digests; hashes establish integrity, not authenticity, and no SQL execution occurs.

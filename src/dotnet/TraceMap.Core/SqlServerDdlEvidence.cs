@@ -62,9 +62,15 @@ public static class SqlServerDdlEvidence
     /// parameter vocabulary). The optional visitor sees each admitted procedure after its identity is
     /// fixed; it never changes parameter admission or the parameter export.
     /// </summary>
+    /// <param name="tableVisitor">
+    /// Only the opt-in table-backed result route supplies this. When null (the parameter and constant result routes),
+    /// CREATE TABLE stays a whole-input <c>top-level-statement-unsupported</c> rejection exactly as before.
+    /// </param>
     internal static SqlServerDdlExport ProduceCore(string inputJson, IReadOnlyDictionary<string, string> sources, string inputVersion,
-        Action<SqlServerObjectIdentity, string, ProcedureStatementBody>? visitor)
+        Action<SqlServerObjectIdentity, string, ProcedureStatementBody>? visitor,
+        Action<SqlServerObjectIdentity, string, CreateTableStatement>? tableVisitor = null)
     {
+        var tables = 0;
         var input = ReadInput(inputJson, inputVersion);
         Require(sources.Count == input.Files.Count && sources.Keys.Order(StringComparer.Ordinal).SequenceEqual(
             input.Files.Select(f => f.Path).Order(StringComparer.Ordinal), StringComparer.Ordinal), "source-set-mismatch");
@@ -119,6 +125,19 @@ public static class SqlServerDdlEvidence
             Require(errors.Count == 0 && script is not null, "malformed-sql");
             foreach (var statement in script!.Batches.SelectMany(b => b.Statements))
             {
+                if (tableVisitor is not null && statement is CreateTableStatement table)
+                {
+                    var tableName = table.SchemaObjectName;
+                    Require(tableName is not null && tableName.Identifiers.Count == 2 && tableName.SchemaIdentifier is not null
+                        && SqlServerSchemaEvidence.Identifier(tableName.SchemaIdentifier.Value) && SqlServerSchemaEvidence.Identifier(tableName.BaseIdentifier.Value),
+                        "explicit-bounded-schema-required");
+                    var tableIdentity = new SqlServerObjectIdentity(input.Server, input.Database, tableName!.SchemaIdentifier.Value, tableName.BaseIdentifier.Value);
+                    // Tables and procedures share one schema namespace; case-only duplicates are ambiguous.
+                    Require(identities.Add(SqlServerSchemaEvidence.Json(tableIdentity)), "ambiguous-object");
+                    Require(++tables <= 256, "declaration-limit");
+                    tableVisitor(tableIdentity, file.Path, table);
+                    continue;
+                }
                 Require(statement is CreateProcedureStatement or AlterProcedureStatement or CreateOrAlterProcedureStatement, "top-level-statement-unsupported");
                 var proc = (ProcedureStatementBody)statement;
                 var name = proc.ProcedureReference?.Name;
