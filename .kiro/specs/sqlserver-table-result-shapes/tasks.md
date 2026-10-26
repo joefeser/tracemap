@@ -6,6 +6,6 @@
 - [x] 4. Table-backed shape analysis, contracts, admission, comparison wrapper, Markdown and `sqlserver-ddl-table-result` CLI.
 - [x] 5. Public synthetic table/procedure templates; independently authored expected matrix in tests and a new native smoke (retained smokes unchanged).
 - [x] 6. Focused tests, Python guards, rule catalog and docs.
-- [ ] 7. Commit implementation; frozen full Debug `-warnaserror`.
-- [ ] 8. Sequential committed-head retained JSON/DDL parameter smokes, retained result smoke, new table smoke; privacy/whitespace guards.
-- [ ] 9. Record results (docs-only commit), Phase 2 continuation prompt, push branch. No PR.
+- [x] 7. Commit implementation; frozen full Debug `-warnaserror`.
+- [x] 8. Sequential committed-head retained JSON/DDL parameter smokes, retained result smoke, new table smoke; privacy/whitespace guards.
+- [x] 9. Record results (docs-only commit), Phase 2 continuation prompt, push branch. No PR.
