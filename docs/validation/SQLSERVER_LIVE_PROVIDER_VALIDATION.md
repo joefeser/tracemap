@@ -78,3 +78,15 @@ attempts were cleaned up; an obsolete retry was interrupted and cleanup verified
 Next: connect this runtime oracle to modern-provider C#/VB scanner fixtures and
 an independently authored static-versus-runtime expectation matrix. Runtime
 success alone does not prove TraceMap recognizes these source shapes.
+
+## Committed-head repeat
+
+Repeated successfully at implementation commit `3970f8fa5` with unchanged source
+and published client bytes: SQL setup/metadata/execution passed, **20/20 provider
+checks passed**, version **16.0.4205.1**, owned container removed, and no remaining
+harness containers. Receipt:
+`/tmp/tracemap-sql-live-provider-committed-20261026/receipt.json`.
+All **32 SQL + 19 harness Python guards** passed. This documentation-only readback
+follows the validated implementation. No full scanner suite or private acceptance
+is claimed. The branch is based on the unmerged DataSet implementation and must
+not be presented as an independent dev-based patch until that dependency lands.
