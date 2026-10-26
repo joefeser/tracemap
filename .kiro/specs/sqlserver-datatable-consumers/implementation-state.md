@@ -30,3 +30,17 @@ checkout (`codex/sqlserver-result-column-prompt`) and all other worktrees were n
   `implicit-receiver-unsupported` instead of the matrix's `adapter-initializer-unsupported`.
   Construction checks now precede the implicit-receiver check; the order line in design.md was
   corrected to match. No expectation was changed to fit output.
+- The CLI facts input initially reused the 4 MiB public-artifact bound; the new fixture's scan
+  `facts.ndjson` is ~7 MiB, so the first dev smoke failed `input-size-limit`. The DataTable
+  route now reads facts with an explicit 64 MiB bound; the existing routes are unchanged (their
+  fixtures stay below 4 MiB).
+- `rows-count+foreach` was the first combined guard spelling; System.Text.Json escapes `+`
+  (`\u002B`), so the Python mirror's digest disagreed with Core. Renamed to
+  `rows-count-and-foreach` before any acceptance run.
+## Development validation (dirty tree at d3bce6012; not acceptance)
+- Dev DataTable smoke `/tmp/tm-dt-smoke-dev3`: 148 cases per language, 108 / 24 / 176 (expected =
+  observed), 0 gaps, 22/22 refusals each for its intended reason, ~2m18s.
+- New test class 59 passed on first run; a deliberate two-row expectation mutation made both
+  native theories fail (then restored). Focused lane (new + table + result + DDL + parameter +
+  catalog + DNN + Razor + SQL matrix + VB data boundary) 581 passed with `-warnaserror`.
+- Python guards: 24 `test_sqlserver_*` (6 new) + 17 DNN passed.

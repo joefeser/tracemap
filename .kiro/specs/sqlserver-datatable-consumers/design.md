@@ -39,7 +39,7 @@ members, accesses.
 ## Contracts
 | Contract | Meaning |
 | --- | --- |
-| `sqlserver-datatable/1` | Property `sqlServerDataTableState` on every `data-adapter-fill` DatabaseOperationCandidate (the existing Fill fact: same site, rule, tier; no new fact type). Fields: version, coverage (`bounded`/`unknown`), gap, commandType, commandTextHash, adapterAssociation (`constructor-command`/`select-command-property`), adapter/table lines, guard (`none`, `rows-count`, `foreach`, `rows-count+foreach`), accesses. |
+| `sqlserver-datatable/1` | Property `sqlServerDataTableState` on every `data-adapter-fill` DatabaseOperationCandidate (the existing Fill fact: same site, rule, tier; no new fact type). Fields: version, coverage (`bounded`/`unknown`), gap, commandType, commandTextHash, adapterAssociation (`constructor-command`/`select-command-property`), adapter/table lines, guard (`none`, `rows-count`, `foreach`, `rows-count-and-foreach`), accesses. |
 | `sqlserver-datatable-bindings/1` | `factId`, `commandText`, four-part `identity`, `dataTableEvidenceSha256` = digest of the contract-tagged DataTable projection of the fact (never equal to the reader or parameter digest). |
 | `sqlserver-datatable-comparison/1` | Report under rule `database.sqlserver.datatable-column-comparison.v1`; binds the admitted shape export (version, generator, input, extractor, rule, tier, origin, export digest). |
 CLI (compare only; shapes are produced by the existing routes):
