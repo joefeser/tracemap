@@ -2,7 +2,7 @@
 - [x] 1. Verify base (#915 and #916 merged; fresh origin/dev `834d74fe8` is the ancestor), dedicated worktree/branch, read AGENTS/VALIDATION/SQL docs/specs/code/smokes and the #916 linked harness.
 - [x] 2. Author the accepted syntax matrix, decisions, contracts, independent native matrix and linked static/runtime extension (design.md) before implementation.
 - [x] 3. Sibling `sqlServerHelperResultState` walker on Fill facts (helper execution once, one entry per call site); Phase 2/3 helpers shared without changing their output; extractor version bumps; direct Roslyn tests for supported/refused cells, multiple callers and different procedures.
-- [ ] 4. Helper bindings (one per call site), three-origin comparison route, Markdown, `sqlserver-helper-result` CLI, rule catalog entry; substitution tests.
+- [x] 4. Helper bindings (one per call site), three-origin comparison route, Markdown, `sqlserver-helper-result` CLI, rule catalog entry; substitution tests.
 - [ ] 5. Public synthetic C#/VB fixtures wired into the normal test-project graph; native tests and a new native smoke carrying the authored expectations (retained smokes unchanged); Python guards; docs.
 - [ ] 6. Extend the linked Microsoft.Data.SqlClient static/runtime matrix with C#/VB helper cases (authored expectations, same methods scanned and executed, 42 runtime assertions).
 - [ ] 7. Verify fixtures restore/build/scan through the normal test project with no pre-existing fixture `bin/`/`obj/`; focused lanes.
