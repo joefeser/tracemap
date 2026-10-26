@@ -99,6 +99,15 @@ commit; source was unchanged between the final focused run and the commit.
 
 ## Delivery
 
+### PR #912 exact-head repair
+
+Four authorized findings repaired together: selected-reader guard identity,
+conditional command state refusal, converted ordinal semantics, and privacy-
+projected result bindings across JSON and DDL reports. C#/VB extractors advance
+to 0.22.11 / 0.10.14. Added 13 regression cases (including both languages,
+if/while and CommandText/CommandType/Connection variations). Initial focused
+result gate: 155 passed. Frozen committed-head full validation is pending.
+
 ### Pre-PR catalog correction and revalidation
 
 Added the missing DDL parameter rule entry and a catalog regression guard in

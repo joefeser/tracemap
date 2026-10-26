@@ -15,7 +15,7 @@ def fact(name, line, state=None):
     return {"factId": f"id-{name}-{line}", "repo": "synthetic", "commitSha": "1" * 40, "ruleId": "database.operation.call-pattern.v1",
             "evidenceTier": "Tier1Semantic", "sourceSymbol": f"ResultCases.{name}(string, int, bool)",
             "evidence": {"filePath": "Results.cs", "startLine": line, "endLine": line, "extractorId": "CSharpSemanticExtractor",
-                         "extractorVersion": "csharp-semantic/0.22.10"}, "properties": properties}
+                         "extractorVersion": "csharp-semantic/0.22.11"}, "properties": properties}
 
 
 class ResultSmokeGuards(unittest.TestCase):
