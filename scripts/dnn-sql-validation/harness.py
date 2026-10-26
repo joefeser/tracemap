@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import re
+import secrets
 import subprocess
 import sys
 import time
@@ -66,6 +67,23 @@ def validate(args):
         raise ValueError('new local output directory required (existing outputs are preserved)')
 
 
+def provider_inputs(directory):
+    """Only a bounded, link-free self-contained public test publish is admitted."""
+    root = Path(directory)
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError('provider publish directory required; no links')
+    files = sorted(root.rglob('*'))
+    if any(p.is_symlink() for p in files):
+        raise ValueError('provider publish links refused')
+    files = [p for p in files if p.is_file()]
+    if len(files) > 512 or sum(p.stat().st_size for p in files) > 256 * 1024**2:
+        raise ValueError('provider publish exceeds bounds')
+    names = {p.relative_to(root).as_posix(): sha(p.read_bytes()) for p in files}
+    if not {'ProviderChecks', 'ProviderChecks.dll', 'Microsoft.Data.SqlClient.dll'} <= names.keys():
+        raise ValueError('self-contained provider test publish incomplete')
+    return names
+
+
 class Docker:
     def __init__(self, context, password=''):
         self.context, self.password = context, password
@@ -86,7 +104,7 @@ class Docker:
         if result.returncode:
             # Do not echo daemon messages which may include environment or credential data.
             raise RuntimeError(f'Docker operation {args[0]} failed with exit {result.returncode}; inspect the approved resource')
-        return stdout.strip()
+        return (stdout + stderr if args[0] == 'logs' else stdout).strip()
 
 
 def preflight(docker, endpoint):
@@ -108,10 +126,13 @@ def preflight(docker, endpoint):
 
 def run(args):
     validate(args)  # Must run before any subprocess, password prompt, or mutation.
+    provider = getattr(args, 'provider_directory', None)
+    provider_hashes = provider_inputs(provider) if provider else None
     payloads = {name: (SQL / name).read_bytes() for name in FILES}
     docker = Docker(args.context)
     image_id = preflight(docker, args.expected_endpoint)
-    password = getpass.getpass('Disposable SA password (not stored): ')
+    password = ('Aa1!' + secrets.token_urlsafe(32) if getattr(args, 'generate_password', False)
+                else getpass.getpass('Disposable SA password (not stored): '))
     if len(password) < 16 or not all(re.search(pattern, password) for pattern in ('[A-Z]', '[a-z]', '[0-9]', '[^A-Za-z0-9]')):
         raise ValueError('use at least 16 characters with upper/lower/digit/symbol')
     docker.password = password
@@ -121,13 +142,18 @@ def run(args):
     name = 'tracemap-dnn-' + owner
     container = None
     receipt = plan(payloads)
+    if provider_hashes:
+        receipt['providerInputs'] = provider_hashes
+        receipt['providerBoundedInputSha256'] = sha(canonical(provider_hashes))
+        receipt['provenance']['boundedInputSha256'] = sha(canonical({
+            'sql': receipt['provenance']['inputs'], 'provider': provider_hashes}))
     receipt.update(status='FAILED', owner=owner, imageId=image_id, cleanup='not-yet-created')
     (output / 'receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
     try:
         container = docker.run('create', '--pull=never', '--name', name,
             '--label', f'{LABEL}={owner}', '--network', 'none', '--cpus', '2',
             '--memory', '6g', '--memory-swap', '6g', '--pids-limit', '512',
-            '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
+            '--cap-drop', 'ALL', '--cap-add', 'NET_BIND_SERVICE', '--security-opt', 'no-new-privileges',
             '--tmpfs', '/var/opt/mssql:rw,nosuid,nodev,size=2147483648,uid=10001,gid=0,mode=0770',
             '-e', 'ACCEPT_EULA=Y', '-e', 'MSSQL_PID=Developer',
             '-e', 'MSSQL_MEMORY_LIMIT_MB=2048', '-e', 'MSSQL_SA_PASSWORD', IMAGE)
@@ -138,13 +164,15 @@ def run(args):
         docker.run('start', container)
         def sql(text, readiness=False, scalar=False):
             return docker.run('exec', '-i', '-e', 'SQLCMDPASSWORD', container,
-                '/opt/mssql-tools18/bin/sqlcmd', '-S', 'localhost', '-U', 'sa', '-C',
+                '/opt/mssql-tools18/bin/sqlcmd', '-S', 'tcp:127.0.0.1,1433', '-U', 'sa', '-C',
                 '-b', '-l', '3' if readiness else '5', '-t', '3' if readiness else '20',
                 *(['-h', '-1', '-W'] if scalar else []),
                 input=text, timeout=10 if readiness else 45)
         receipt['phase'] = 'readiness'
         ready = False
-        for _ in range(12):
+        for _ in range(60):
+            if docker.run('inspect', container, '--format', '{{.State.Running}}') != 'true':
+                raise RuntimeError('SQL container exited before readiness; inspect container.log')
             try:
                 sql('SELECT 1;\nGO\n', readiness=True)
                 ready = True
@@ -152,7 +180,7 @@ def run(args):
             except RuntimeError:
                 time.sleep(2)
         if not ready:
-            raise RuntimeError('SQL readiness failed after 12 bounded attempts; inspect container.log')
+            raise RuntimeError('SQL readiness failed after 60 bounded attempts; inspect container.log')
         receipt['phase'] = 'create-owned-database'
         sql('CREATE DATABASE TraceMapSynthetic908;\nGO\n')
         prefix = 'USE TraceMapSynthetic908;\nGO\n'
@@ -160,6 +188,20 @@ def run(args):
             receipt['phase'] = phase
             result = sql(prefix + payloads[phase].decode('utf-8'))
             (output / (phase + '.log')).write_text(result + '\n')
+        if provider:
+            receipt['phase'] = 'microsoft-data-sqlclient-runtime'
+            if provider_inputs(provider) != provider_hashes:
+                raise ValueError('provider publish changed before copy')
+            docker.run('cp', str(Path(provider).resolve()), container + ':/tmp/provider', timeout=120)
+            result = docker.run('exec', '-e', 'SQLCMDPASSWORD', container,
+                                '/tmp/provider/ProviderChecks', timeout=120)
+            if provider_inputs(provider) != provider_hashes:
+                raise ValueError('provider publish changed during execution')
+            lines = result.splitlines()
+            if lines[-1:] != ['PROVIDER_CHECKS_PASSED 20'] or sum(s.startswith('PASS ') for s in lines) != 20:
+                raise ValueError('provider test denominator mismatch')
+            (output / 'provider.log').write_text(result + '\n')
+            receipt['providerRuntime'] = '20 checks passed; observed execution only, not static acceptance'
         receipt['phase'] = 'server-version'
         version = parse_version(sql("SET NOCOUNT ON;\nSELECT CONVERT(nvarchar(128),SERVERPROPERTY('ProductVersion'));\nGO\n", scalar=True))
         receipt.update(status='PASSED synthetic SQL checks', testedVersion=version,
@@ -196,6 +238,8 @@ def main(argv=None):
     parser.add_argument('--context')
     parser.add_argument('--expected-endpoint')
     parser.add_argument('--output')
+    parser.add_argument('--provider-directory', help='Optional reviewed self-contained linux-x64 ProviderChecks publish')
+    parser.add_argument('--generate-password', action='store_true', help='Generate a throwaway secret in memory; never print or persist it')
     for gate in ('approve-host', 'approve-resources', 'accept-eula', 'approve-disposable'):
         parser.add_argument('--' + gate, action='store_true')
     args = parser.parse_args(argv)
