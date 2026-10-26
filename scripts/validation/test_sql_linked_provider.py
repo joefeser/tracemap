@@ -87,7 +87,7 @@ class LinkedProviderTests(unittest.TestCase):
 
     def test_runtime_proof_rejects_missing_duplicate_extra_stale_or_unclean(self):
         rows = [{'language': language, 'case': name} for language in ('csharp', 'vb') for name in h.CASES]
-        lines = [f"PASS linked-{r['language']}-{r['case']}" for r in rows] + ['PROVIDER_CHECKS_PASSED 32']
+        lines = [f"PASS linked-{r['language']}-{r['case']}" for r in rows] + [f'PROVIDER_CHECKS_PASSED {h.RUNTIME_CHECKS}']
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             def write(log, cleanup='owned-container-removed'):
@@ -125,9 +125,46 @@ class LinkedProviderTests(unittest.TestCase):
 
     def test_authored_denominator_preserves_unknowns(self):
         counts = Counter(status for _, status in h.CASES.values())
-        self.assertEqual({'bounded-match': 3, 'mismatch': 1, 'unknown': 2}, counts)
+        self.assertEqual({'bounded-match': 6, 'mismatch': 2, 'unknown': 3}, counts)
         self.assertEqual(('datatable', 'unknown'), h.CASES['CaseOnly'])
         self.assertEqual(('dataset', 'unknown'), h.CASES['LaterTable'])
+        # A runtime-successful later table through the helper stays a static unknown with its authored reason.
+        self.assertEqual(('helper', 'unknown'), h.CASES['HelperLaterTable'])
+        self.assertEqual('99', h.RUNTIME['HelperLaterTable'])
+        self.assertEqual('dataset-later-table-unsupported', h.REASONS['HelperLaterTable'])
+        self.assertEqual(42, h.RUNTIME_CHECKS)
+        self.assertEqual(20 + 2 * len(h.CASES), h.RUNTIME_CHECKS)
+        helper_cases = {name for name, (route, _) in h.CASES.items() if route == 'helper'}
+        self.assertEqual(helper_cases, set(h.HELPER_SITES))
+        # Two call sites of one helper with different procedures are separate cases.
+        self.assertEqual(('ReadTable', 'ReadItems'), h.HELPER_SITES['HelperTableName'])
+        self.assertEqual(('ReadTable', 'ReadOther'), h.HELPER_SITES['HelperOtherProcedure'])
+        self.assertEqual('other', h.RUNTIME['HelperOtherProcedure'])
+
+    def test_helper_call_sites_bind_separately_and_refuse_missing_or_duplicate_sites(self):
+        route = h.load('linked_helper_test', h.ROOT / 'scripts/sqlserver-helper-result-evidence/smoke.py')
+        caller = {'line': 3, 'endLine': 3, 'coverage': 'bounded', 'gap': None, 'commandTextHash': 'a' * 64, 'resultLine': 3,
+                  'selectors': [], 'guards': [], 'accesses': []}
+        state = {'version': 'sqlserver-helper-result/2', 'coverage': 'bounded', 'gap': None, 'callers': [
+            dict(caller, caller='LinkedCSharp.Cases.HelperTableName(Microsoft.Data.SqlClient.SqlConnection)'),
+            dict(caller, line=7, caller='LinkedCSharp.Cases.HelperOtherProcedure(Microsoft.Data.SqlClient.SqlConnection)')]}
+        fact = {'factId': 'f', 'repo': 'r', 'commitSha': '1' * 40, 'ruleId': 'x', 'evidenceTier': 'Tier1Semantic',
+                'evidence': {'filePath': 'Linked.cs', 'startLine': 1, 'endLine': 1, 'extractorId': 'e', 'extractorVersion': 'v'},
+                'properties': {'sqlServerHelperResultState': json.dumps(state)}}
+        self.assertEqual(0, h.helper_site(route, fact, 'HelperTableName'))
+        self.assertEqual(1, h.helper_site(route, fact, 'HelperOtherProcedure'))
+        first = h.helper_binding(route, fact, 0, 'ReadItems', '1' * 40)['calls'][0]
+        second = h.helper_binding(route, fact, 1, 'ReadOther', '1' * 40)['calls'][0]
+        self.assertEqual((0, 'dbo.ReadItems', 1, 'dbo.ReadOther'), (first['callerIndex'], first['commandText'], second['callerIndex'], second['commandText']))
+        self.assertNotEqual(first['helperResultEvidenceSha256'], second['helperResultEvidenceSha256'])
+        with self.assertRaisesRegex(ValueError, 'exactly one call site'):
+            h.helper_site(route, fact, 'HelperSetName')
+        duplicate = dict(fact, properties={'sqlServerHelperResultState': json.dumps(dict(state, callers=state['callers'][:1] * 2))})
+        with self.assertRaisesRegex(ValueError, 'exactly one call site'):
+            h.helper_site(route, duplicate, 'HelperTableName')
+        unknown = dict(fact, properties={'sqlServerHelperResultState': json.dumps(dict(state, coverage='unknown', gap='helper-recursion'))})
+        with self.assertRaisesRegex(ValueError, 'not bounded'):
+            h.helper_site(route, unknown, 'HelperTableName')
 
     def test_both_fixture_assemblies_are_runtime_project_references(self):
         project = (h.SAMPLE / 'ProviderChecks.csproj').read_text()
@@ -136,7 +173,9 @@ class LinkedProviderTests(unittest.TestCase):
         program = (h.SAMPLE / 'Program.cs').read_text()
         self.assertIn('typeof(LinkedCSharp.Cases)', program)
         self.assertIn('typeof(LinkedVisualBasic.Cases)', program)
-        self.assertIn('PROVIDER_CHECKS_PASSED 32', program)
+        self.assertIn('PROVIDER_CHECKS_PASSED 42', program)
+        for name in h.CASES:
+            self.assertIn(f'["{name}"]', program)
 
     def test_input_inventory_excludes_generated_build_outputs(self):
         inputs = h.inputs()

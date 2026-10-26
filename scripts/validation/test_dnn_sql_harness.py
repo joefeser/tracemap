@@ -230,6 +230,13 @@ class HarnessTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'links'):
                 h.provider_inputs(root)
 
+    def test_provider_denominator_matches_the_linked_runner_and_client(self):
+        self.assertEqual(42, h.PROVIDER_CHECKS)
+        self.assertEqual(h.PROVIDER_CHECKS, load_script('linked_provider').RUNTIME_CHECKS)
+        program = (h.ROOT / 'samples/sqlserver-live-provider/Program.cs').read_text()
+        self.assertIn(f'PROVIDER_CHECKS_PASSED {h.PROVIDER_CHECKS}', program)
+        self.assertIn(f'count != {h.PROVIDER_CHECKS}', program)
+        self.assertNotIn('PROVIDER_CHECKS_PASSED 32', SCRIPT.read_text())
     def test_container_stderr_logs_are_retained_and_secret_redacted(self):
         from unittest.mock import Mock
         result = Mock(returncode=0, stdout='banner\n', stderr='startup failed secret-value\n')

@@ -126,7 +126,7 @@ internal static class SqlServerDataSetConsumers
     }
 
     /// <summary>Classifies one <c>set.Tables[...]</c> selector against the first-result table name.</summary>
-    private static string? SelectorGap(IPropertyReferenceOperation indexer, string tableName, out string kind)
+    internal static string? SelectorGap(IPropertyReferenceOperation indexer, string tableName, out string kind)
     {
         kind = "";
         var parameters = indexer.Property.Parameters;
@@ -155,7 +155,7 @@ internal static class SqlServerDataSetConsumers
     }
 
     /// <summary>One use of the filled DataSet local other than the Fill argument.</summary>
-    private static string? DataSetUse(ILocalReferenceOperation reference, List<IPropertyReferenceOperation> rows, HashSet<IOperation> guarded,
+    internal static string? DataSetUse(ILocalReferenceOperation reference, List<IPropertyReferenceOperation> rows, HashSet<IOperation> guarded,
         List<ILocalSymbol> tableLocals)
     {
         var parent = reference.Parent;
@@ -197,18 +197,18 @@ internal static class SqlServerDataSetConsumers
     }
 
     /// <summary>The signed <c>set.Tables</c> property when <paramref name="operation"/> is exactly that collection.</summary>
-    private static IPropertyReferenceOperation? TablesOf(IOperation? operation, ILocalSymbol set)
+    internal static IPropertyReferenceOperation? TablesOf(IOperation? operation, ILocalSymbol set)
         => Unwrap(operation) is IPropertyReferenceOperation { Property.Name: "Tables" } tables && Same(Local(tables.Instance), set) && Trusted(tables.Property) ? tables : null;
 
     /// <summary><c>set.Tables.Count &gt; 0</c> on the filled DataSet only; returns its Tables reference.</summary>
-    private static IPropertyReferenceOperation? TablesCountGuard(IOperation? condition, ILocalSymbol set)
+    internal static IPropertyReferenceOperation? TablesCountGuard(IOperation? condition, ILocalSymbol set)
         => Unwrap(condition) is IBinaryOperation { OperatorKind: BinaryOperatorKind.GreaterThan, OperatorMethod: null, IsLifted: false } comparison
             && comparison.RightOperand.ConstantValue is { HasValue: true, Value: 0 }
             && Unwrap(comparison.LeftOperand) is IPropertyReferenceOperation { Property.Name: "Count" } count && Trusted(count.Property)
             && TablesOf(count.Instance, set) is { } tables && count.Instance == tables ? tables : null;
 
-    private static IOperation? Argument(IInvocationOperation call, int ordinal) => call.Arguments.SingleOrDefault(a => a.Parameter?.Ordinal == ordinal)?.Value;
-    private static ILocalSymbol? Declared(IVariableInitializerOperation initializer)
+    internal static IOperation? Argument(IInvocationOperation call, int ordinal) => call.Arguments.SingleOrDefault(a => a.Parameter?.Ordinal == ordinal)?.Value;
+    internal static ILocalSymbol? Declared(IVariableInitializerOperation initializer)
         => (initializer.Parent as IVariableDeclaratorOperation
             ?? (initializer.Parent is IVariableDeclarationOperation { Declarators.Length: 1 } declaration ? declaration.Declarators[0] : null))?.Symbol;
 }

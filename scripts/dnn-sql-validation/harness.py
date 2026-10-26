@@ -21,6 +21,8 @@ IMAGE = 'mcr.microsoft.com/mssql/server@sha256:7c29dfbac885ad7519e219c7fe4aee0e6
 TAG = '2022-CU20-ubuntu-22.04'
 LABEL = 'tools.tracemap.dnn-sql-validation'
 FILES = ('schema.sql', 'seed.sql', 'metadata.sql', 'execution.sql')
+# Provider oracle denominator: 20 original checks plus 22 linked static/runtime method checks.
+PROVIDER_CHECKS = 42
 
 
 def sha(data):
@@ -198,10 +200,10 @@ def run(args):
             if provider_inputs(provider) != provider_hashes:
                 raise ValueError('provider publish changed during execution')
             lines = result.splitlines()
-            if lines[-1:] != ['PROVIDER_CHECKS_PASSED 32'] or sum(s.startswith('PASS ') for s in lines) != 32:
+            if lines[-1:] != [f'PROVIDER_CHECKS_PASSED {PROVIDER_CHECKS}'] or sum(s.startswith('PASS ') for s in lines) != PROVIDER_CHECKS:
                 raise ValueError('provider test denominator mismatch')
             (output / 'provider.log').write_text(result + '\n')
-            receipt['providerRuntime'] = '32 checks passed; observed execution only, not static acceptance'
+            receipt['providerRuntime'] = f'{PROVIDER_CHECKS} checks passed; observed execution only, not static acceptance'
         receipt['phase'] = 'server-version'
         version = parse_version(sql("SET NOCOUNT ON;\nSELECT CONVERT(nvarchar(128),SERVERPROPERTY('ProductVersion'));\nGO\n", scalar=True))
         receipt.update(status='PASSED synthetic SQL checks', testedVersion=version,

@@ -159,3 +159,46 @@ its required artifact arguments; those 32 setup errors were an invocation error,
 not a passing gate. The explicit focused invocation above supersedes that attempt
 for this slice. No production scanner code changed and no full .NET test-suite
 claim is made.
+
+## Phase 4 helper extension (authored before execution)
+
+`matrix.md` now adds five helper cases per language over two private static
+helpers, `ReadTable(connection, procedure)` and `ReadSet(connection, procedure)`,
+in the same Microsoft.Data.SqlClient fixture pair that the runtime client
+references: HelperTableName and HelperOtherProcedure (the same helper with
+`dbo.ReadItems` and `dbo.ReadOther`), HelperSetName, HelperMissingName and
+HelperLaterTable. Each helper is one Fill fact; each call site is bound
+separately through `sqlserver-helper-result-bindings/1` and compared by the
+`sqlserver-helper-result` route. Runtime setup additionally creates
+`dbo.ReadOther AS SELECT N'other' AS Title`.
+
+The combined linked denominator is **22 cases = 12 bounded matches / 4 mismatches /
+6 unknowns**, and the runtime oracle asserts **42** checks (the original 20 plus 22
+linked method observations; `harness.PROVIDER_CHECKS`). HelperLaterTable returns
+99 at runtime but must stay a static unknown with `dataset-later-table-unsupported`;
+static rows are fixed before the runtime receipt is joined and runtime success
+never changes a status. Pinned image, network-none isolation, Developer/EULA
+settings, transient credentials, resource limits, ownership-checked cleanup and
+failed-run evidence preservation are unchanged.
+
+### Phase 4 linked committed-head validation — 2026-10-26
+
+At implementation head `d39acb8cd` with the CLI built by the frozen full suite, after a
+read-only revalidation of the reviewed context (endpoint `ssh://dockercache`, native
+linux/x86_64, 8 CPUs, ~30.6 GiB, enforceable memory/swap/CFS/PID limits, 359 GiB free on the
+Docker data filesystem, pinned image present by RepoDigest, no pre-existing harness
+containers):
+
+- C# and VB scans built; eight semantic execution sites each (six direct, two helper Fills).
+- All 22 static verdicts matched: **12 bounded matches / 4 mismatches / 6 unknowns**;
+  HelperLaterTable stayed unknown with `dataset-later-table-unsupported`.
+- Repeated JSON and Markdown comparisons were byte-identical.
+- **42/42 runtime assertions passed** on SQL Server 16.0.4205.1 (2 CPUs, 6 GiB memory/swap,
+  SQL 2 GiB, 2 GiB tmpfs, network none, no ports); owned container removed; source and CLI bytes
+  unchanged; no credential text in either receipt; 106 s.
+- 20 harness + 11 linked-runner Python guards passed.
+
+Local linked receipt: `/tmp/tracemap-linked-provider-hr-d39acb8/linked-receipt.json`
+(SHA-256 `ac750b24d02616d515e92b8edf23568d7b48487ca2b348f691046618b976e8c3`). This remains a
+narrow synthetic matrix, not modern-provider parity, DNN, private-application or deployment
+acceptance.

@@ -81,14 +81,21 @@ using (var adapter = new SqlDataAdapter(command)) {
 Check(count == 19, "case-denominator");
 using (var setup = new SqlCommand("CREATE PROCEDURE dbo.ReadItems AS SELECT 1 AS Id, N'sample' AS Name, 2 AS Total; SELECT 99 AS Value;", connection))
     setup.ExecuteNonQuery();
+using (var setup = new SqlCommand("CREATE PROCEDURE dbo.ReadOther AS SELECT N'other' AS Title;", connection))
+    setup.ExecuteNonQuery();
+// Authored runtime expectations (matrix.md); runtime success never promotes a static unknown.
+var expected = new Dictionary<string, object?> {
+    ["ReaderName"] = "sample", ["TableName"] = "sample", ["SetName"] = "sample", ["MissingName"] = null, ["CaseOnly"] = "sample", ["LaterTable"] = 99,
+    ["HelperTableName"] = "sample", ["HelperOtherProcedure"] = "other", ["HelperSetName"] = "sample", ["HelperMissingName"] = null, ["HelperLaterTable"] = 99
+};
 foreach (var (language, type) in new[] { ("csharp", typeof(LinkedCSharp.Cases)), ("vb", typeof(LinkedVisualBasic.Cases)) }) {
-    foreach (var method in new[] { "ReaderName", "TableName", "SetName", "MissingName", "CaseOnly", "LaterTable" }) {
-        object? value = null;
+    foreach (var (method, value) in expected) {
+        object? observed = null;
         var missing = false;
-        try { value = type.GetMethod(method)!.Invoke(null, [connection]); }
-        catch (System.Reflection.TargetInvocationException error) when (method == "MissingName" && error.InnerException is ArgumentException) { missing = true; }
-        Check(method == "MissingName" ? missing : method == "LaterTable" ? Equals(value, 99) : Equals(value, "sample"), "linked-" + language + "-" + method);
+        try { observed = type.GetMethod(method)!.Invoke(null, [connection]); }
+        catch (System.Reflection.TargetInvocationException error) when (value is null && error.InnerException is ArgumentException) { missing = true; }
+        Check(value is null ? missing : Equals(observed, value), "linked-" + language + "-" + method);
     }
 }
-if (count != 32) throw new InvalidOperationException("Linked denominator mismatch");
-Console.WriteLine("PROVIDER_CHECKS_PASSED 32");
+if (count != 42) throw new InvalidOperationException("Linked denominator mismatch");
+Console.WriteLine("PROVIDER_CHECKS_PASSED 42");
