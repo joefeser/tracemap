@@ -18,7 +18,7 @@ The current batch binds separate artifact inputs, reconstructs native input and
 case/report contracts, validates exact refusal IDs, isolates committed source and
 build outputs, and atomically publishes the packet. Linked reader scans were
 already included; literal argv with shell disabled was already safe. Tests pin
-those two dispositions. Full final gate and fresh replay are pending at this entry.
+those two dispositions. Final repair-gate results are recorded below.
 
 Development validation: 20 public acceptance guards pass, including canonical
 CRLF/Git-blob identity, transient original-checkout edits and independent build
@@ -138,3 +138,41 @@ to the same frozen implementation, rather than editing the generated packet.
 HEAD/source and CLI/Core/Reporting DLL hashes stayed unchanged through all gates.
 The following results commit is docs/tasks only. No DNN runtime, private inputs,
 application/migration acceptance, ACK policy edits, review spend or merge.
+
+## PR #920 bounded review repair validation
+
+Frozen implementation `66bde05ee75ca0355d18ba6c0e4cc5c7e1a482bb` includes the
+normal dev merge and the owner-authorized evidence-integrity repairs. Full Debug
+`-warnaserror`: **5,419 passed, 3 expected skips, zero failures**, 36m 55s;
+TRX `/tmp/pr920-full-66bde05/pr920-final.trx`. Python guards: 20 public acceptance,
+59 retained SQL, 20 DNN and 13 linked-provider = **112 passed**. Sixteen additional
+in-memory mutations of the fresh native receipts (digest, case, fact and report
+substitution in each route) were all rejected without modifying the receipts.
+
+The first isolated replay at `e60ed948f` failed while building the CLI (17 missing
+SQLite type errors). Canonicalizing the macOS temporary checkout path removed
+the `/var` versus `/private/var` alias from the build inputs. The subsequent fresh
+run at `66bde05ee` built successfully and passed all gates. The failed attempt is
+retained at `/tmp/pr920-public-repaired-20261027.log`, not counted as acceptance.
+
+Fresh isolated replay `/tmp/pr920-public-repaired-20261027b`:
+- Parameter 52 cases, 8/12/32; reader 158 cases, 72/20/94 and 20 refusals;
+  helper 230 cases, 84/30/116 and 24 refusals; Field 150 cases, 78/36/42 and
+  **52 refusals (26 per language)**. Exact case/report/input reconstruction passed.
+- Eight same-execution pairs passed. Fresh pinned DNN inspection retained the
+  same four explicit blockers; no SQL or upstream application execution.
+- Packet SHA-256 `c54604d04e8aabab83aa2b83168679c5cc2515ff885135c94650153599cb9b41`.
+
+After the full suite, original-checkout smokes ran sequentially under
+`/tmp/pr920-66bde05-*`: fresh parameter and DDL parameter 8/12/32 each;
+table 44/10/88 (24 refusals); DataTable 108/24/176 (22); DataSet 156/24/176 (24);
+internal helper 72/24/60 (24). Pinned OSS C#/VB scans passed at 12,949/114,806
+facts with reduced coverage and no SQL calls. Original-checkout DLL hashes stayed
+unchanged through those smokes. The isolated replay's binaries are a separate
+build, with their own recorded hashes, at the same exact source commit; do not
+claim byte identity between the two builds.
+
+No new live SQL/container run occurred in this repair-only batch. Earlier live
+results remain historical evidence, not a fresh-head runtime claim. DNN/private
+acceptance and migration readiness remain unproven. The following results commit
+changes only documentation/tasks; no policy edits, extra review spend or merge.
