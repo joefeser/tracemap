@@ -217,4 +217,14 @@ built CLI. Producer scripts, public fixtures and acceptance changes trigger it.
 No new full-suite job, SQL execution, container or upstream DNN fetch is added.
 Literal filenames and workflow trigger/runner coverage are pinned by tests.
 Focused guards: 27 public + 59 SQL + 20 DNN + 13 linked = **119 passed**.
-Fresh committed-head replay remains pending at this implementation checkpoint.
+Fresh isolated replay at `6ddb40f8b` passed all four unchanged native denominators,
+all eight same-execution links and the four expected DNN blockers. Packet
+`/tmp/pr920-public-case-ci-6ddb40f8b/public-acceptance.json` SHA-256:
+`ab6f19e8190d00a2f37fb2fbb56d0dc81b5b7baef74bb3a239a4a1a0af75efad`.
+The shared `native_gates` implementation is exercised by this replay; the new CI
+entry point's Windows execution remains for CI. A follow-up workflow/test-only
+change pins canonical LF checkout through checkout-scoped Git environment settings.
+Both workflow YAML files parse; all 27 public guards pass after that change.
+Actionlint was unavailable in PATH and at the Homebrew path; no actionlint pass
+is claimed. No failed native replay occurred. The unchanged .NET core retains
+the exact `66bde05ee` full-suite evidence; this is not a new full-suite result.
