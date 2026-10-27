@@ -104,6 +104,14 @@ class PublicAcceptanceTests(unittest.TestCase):
             A.write(target, {'second': True})
         self.assertEqual(target.read_bytes(), before)
 
+    def test_intentional_refusal_inputs_are_not_promoted_or_followed(self):
+        refusal = self.root / 'refusals'
+        refusal.mkdir()
+        (refusal / 'source.sql').symlink_to(self.root / 'does-not-exist')
+        self.verify()
+        with self.assertRaises(ValueError):
+            A.regular_tree(self.root)
+
 
 if __name__ == '__main__':
     unittest.main()
