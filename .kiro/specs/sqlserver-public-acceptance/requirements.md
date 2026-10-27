@@ -16,10 +16,12 @@ fixtures, contracts, tests, runtime harness, or completion claims.
    parameters (52 selected rows), reader results (82 JSON + 104 DDL rows), private
    helpers (230 rows), and Field reads (156 rows). These are synthetic controls,
    never additional real DNN operations. Preserve per-case outcomes and refusals.
-3. Produce one deterministic local evidence packet with script/input/binary
+3. Produce one canonical local evidence packet with script/input/binary
    hashes, exact revision, per-leg counts, typed real-application blockers and
    explicit no-aggregate-clean verdict. Do not join separate fixture facts by
    short procedure names or substitute parameter bindings for consumer bindings.
+   Native comparisons repeat byte-identically; the outer packet binds actual
+   run-specific scan/log bytes, so fresh-run clocks need not yield identical hashes.
 4. One command performs all offline steps from committed public sources. No
    application method, SQL, container, SSH or full DNN build executes. Public DNN
    fetch is explicit; no private source or previously generated arbitrary receipt

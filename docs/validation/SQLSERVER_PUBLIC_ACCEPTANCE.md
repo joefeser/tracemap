@@ -72,3 +72,26 @@ they do not establish runtime behavior for these same-execution fixture methods.
 Issues #908 and #870 remain open for their wider scope.
 
 Later handoff: [validate-sql-evidence-consolidated.md](../../prompts/validate-sql-evidence-consolidated.md).
+
+## Checkpoint at implementation head 78e8f6a4a
+
+Fresh public replay passed: parameter **8/12/32**, reader JSON+DDL **72/20/94**,
+helper **84/30/116**, Field **78/36/42**, with **70 admission refusals**. Eight
+same-execution pairs matched the independently authored matrix. DNN retained
+6,031 facts and the three incidental nonquery candidates; its one selected reader
+route remains explicitly blocked, not validated by the synthetic controls.
+
+The composition exposed and fixed one genuine integration defect: a result-local
+initializer was incorrectly classified as a parameter-state alias/escape. Only
+the exact current invocation is exempted, before conversion unwrapping. C#
+0.22.21 / VB 0.10.24; ten new direct regressions. **311 focused tests** and **102
+Python guards** pass. Private-path and whitespace guards pass. Parent remained
+unchanged at the recorded SHA throughout this checkpoint.
+
+Native comparison repeats are byte-identical. The outer local packet binds actual
+scan/log bytes, including run-specific metadata; it is not promised identical
+across fresh runs and is not a public privacy-projected export.
+
+Full Debug, other retained smokes, pinned OSS adapters and live regression remain
+pending a coordinated final slot. No SQL/container/application method ran. This
+checkpoint is not merge readiness, deployment proof or private acceptance.
