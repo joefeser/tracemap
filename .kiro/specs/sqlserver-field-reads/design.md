@@ -68,7 +68,7 @@ whole Field-mode analysis (direct origins) or that caller (helper origins) unkno
 | Argument | compile-time constant name in the identifier vocabulary or constant ordinal | access-level `dynamic-column-name`, `column-name-outside-identifier-vocabulary`, `dynamic-ordinal` (unchanged Phase 2 vocabulary) |
 | Type argument | renderable (see Decisions) | access-level `field-type-argument-unsupported` |
 | Receiver row | rows-index, row-local, foreach-row of the bound table (unchanged Phase 2-5 rules) | unchanged Phase 2-5 gaps; rows of other tables are never bound (`field-read-absent` when no bound Field read remains) |
-| Ownership | — | `AsEnumerable()` / LINQ pipelines → unchanged `ambiguous-row-ownership` |
+| Ownership | — | `AsEnumerable()` (including `table.AsEnumerable().First().Field<T>(...)`) → unchanged `ambiguous-row-ownership`; LINQ lambdas/query pipelines and `row?.Field<T>` → unchanged `unsupported-control-flow` (method-wide flow runs first) |
 | Helper body | — | Field read inside a helper body → `helper-body-unsupported` (Field mode does not widen helper bodies) |
 Access kinds `field-name` / `field-ordinal`, member `Field`, plus the Phase 2 kinds for indexer and
 `IsNull` reads at the same site.
@@ -112,7 +112,7 @@ origin (`FieldCallers` in `Callers`): InternalFieldName M; InternalFieldOrdinal 
 State cells (table DDL only, one unknown row each; Fill-keyed): TableFieldColumn
 `datatable:datacolumn-access-unsupported`; TableFieldVersion
 `datatable:row-version-access-unsupported`; TableSetField `datatable:datatable-mutation`;
-TableFieldAsEnumerable `datatable:ambiguous-row-ownership`; TableFieldStatic
+TableFieldAsEnumerable (`table.AsEnumerable().First().Field<string>("Name")`) `datatable:ambiguous-row-ownership`; TableFieldStatic
 `datatable:datarow-field-static-call-unsupported`; TableFieldUnbound (Field read on a second,
 unfilled table) site `field-read-absent`; TableNoField (indexer only) site `field-read-absent`;
 SetFieldLaterTable `dataset:dataset-later-table-unsupported`; ReadBody (Field read in the helper

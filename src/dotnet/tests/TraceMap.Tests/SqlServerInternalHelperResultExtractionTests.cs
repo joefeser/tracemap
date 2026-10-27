@@ -8,7 +8,8 @@ namespace TraceMap.Tests;
 /// </summary>
 public sealed class SqlServerInternalHelperResultExtractionTests
 {
-    internal sealed record Site(string Path, SqlServerInternalHelperResultState Internal, SqlServerHelperResultState Helper);
+    /// <param name="Field">The Phase 6 field-read sibling over the same registered scope (additive; Phase 5 assertions ignore it).</param>
+    internal sealed record Site(string Path, SqlServerInternalHelperResultState Internal, SqlServerHelperResultState Helper, SqlServerFieldReadState Field);
 
     private const string CsUsings = "#pragma warning disable CS0618, CS0219, CS0168\nusing System; using System.Data; using System.Data.SqlClient;\n";
     private const string VbImports = "Imports System\nImports System.Data\nImports System.Data.SqlClient\n";
@@ -69,7 +70,7 @@ public sealed class SqlServerInternalHelperResultExtractionTests
                 return tree.GetRoot().DescendantNodes().Select(n => model.GetOperation(n)).OfType<Microsoft.CodeAnalysis.Operations.IInvocationOperation>()
                     .Where(o => o.TargetMethod.Name == "Fill").Distinct()
                     .Select(o => (Path: Path.GetRelativePath(repo, tree.FilePath).Replace('\\', '/'), o.Syntax.SpanStart,
-                        Site: new Site(Path.GetRelativePath(repo, tree.FilePath).Replace('\\', '/'), SqlServerInternalHelperResults.Extract(o), SqlServerHelperResults.Extract(o))));
+                        Site: new Site(Path.GetRelativePath(repo, tree.FilePath).Replace('\\', '/'), SqlServerInternalHelperResults.Extract(o), SqlServerHelperResults.Extract(o), SqlServerFieldReads.Extract(o))));
             }).OrderBy(s => s.Path, StringComparer.Ordinal).ThenBy(s => s.SpanStart).Select(s => s.Site).ToArray();
         }
         finally
