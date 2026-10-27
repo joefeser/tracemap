@@ -8,6 +8,14 @@ process exit alone as application acceptance.
 
 Evidence legs are deliberately separate:
 
+Additional same-execution check: existing independently authored `WithParameter`
+in both reader fixtures adds `@Id Int`, initializes a reader from ExecuteReader,
+and accesses Name. Compare that exact fact through distinct parameter and reader
+digests. Four independently authored variants per language: good (M/M), parameter
+BigInt declaration mismatch (X/M), renamed result (M/X), absent database identity
+(U/U). Expected statuses were fixed before execution. This adds eight linked
+pairs, not a new application denominator, and uses no helper for the direct route.
+
 | Leg | Public synthetic denominator | Expected bounded match / mismatch / unknown |
 | --- | --- | --- |
 | Parameter declarations and explicit call bindings | 52 rows | 8 / 12 / 32 |

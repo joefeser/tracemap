@@ -68,10 +68,15 @@ def command(*args, timeout=1200):
     return result.stdout
 
 
-def regular_tree(root):
+def regular_tree(root, exclude_refusal_inputs=False):
     require(root.is_dir() and not any(p.is_symlink() for p in (root, *root.parents)), 'linked root refused')
     files = {}
     for path in sorted(root.rglob('*')):
+        if exclude_refusal_inputs and path.relative_to(root).parts[0] == 'refusals':
+            # Native negative controls intentionally retain malformed files and
+            # a symlink. Their named refusal outcomes are in the hashed receipt;
+            # never follow or promote these inputs as successful evidence.
+            continue
         require(not path.is_symlink(), 'linked artifact refused')
         if path.is_file():
             files[path.relative_to(root).as_posix()] = sha(path)
@@ -110,7 +115,7 @@ def verify_gate(root, label, revision, helpers):
     refusals = receipt.get('refusals', [])
     require(len(refusals) == refusal_count and all(r.get('refused') is True for r in refusals), 'gate refusal checks incomplete')
     helpers.verify_scan_hashes(root, receipt)
-    tree = regular_tree(root)
+    tree = regular_tree(root, exclude_refusal_inputs=True)
     report_hashes = {value for name, value in tree.items() if '/report/' in name and name.endswith('.json')}
     require(all(r.get('reportSha256') in report_hashes for r in rows), 'native report missing or changed')
     return {'caseReports': cases, 'rowCounts': dict(actual), 'refusalChecks': refusal_count,
@@ -217,15 +222,19 @@ def run(args):
     command(sys.executable, ROOT / 'scripts/dnn-sql-validation/validate_slice.py', '--slice', output / 'dnn-source', '--scan', output / 'dnn-scan')
     require(source_snapshot() == (revision, before), 'source drift during acceptance')
     require(binaries == {p.name: sha(p) for p in cli.parent.glob('*.dll')}, 'binary drift during acceptance')
-    # Hash generated evidence, not the upstream .git database or machine-specific logs.
-    evidence = {label: regular_tree(output / label) for label in (*GATES, 'same-execution')}
+    # Local-only hashes include scan/log bytes, never the upstream .git database.
+    evidence = {label: regular_tree(output / label, exclude_refusal_inputs=label in GATES)
+                for label in (*GATES, 'same-execution')}
+    dnn_artifacts = {name: sha(output / 'dnn-scan' / name) for name in reader.HELPERS.SCAN_FILES}
     dnn_setup = json.loads((output / 'dnn-source/public-slice.json').read_bytes())
     receipt = {'version': 'sqlserver-public-acceptance/1', 'generatorSha256': sha(__file__),
-               'boundedInputSha256': digest({'sources': before, 'binaries': binaries, 'evidence': evidence, 'dnn': dnn_setup}),
+               'boundedInputSha256': digest({'sources': before, 'binaries': binaries, 'evidence': evidence,
+                                            'dnn': dnn_setup, 'dnnArtifacts': dnn_artifacts}),
                'revision': revision, 'parentRevision': PARENT, 'coverage': 'partial', 'verdict': 'no-aggregate-clean-verdict',
                'syntheticGates': gates, 'sameExecutionRoutes': links, 'sourceHashes': before, 'binaryHashes': binaries,
                'dnn': {'operation': 'GetRoleGroups', 'operationCount': 1, 'revision': dnn_setup['revision'],
                        'status': 'blocked', 'blockers': list(DNN_BLOCKERS), 'publicInputSha256': dnn_setup['boundedInputSha256'],
+                       'scanArtifactSha256': dnn_artifacts,
                        'callerHelper': 'source-inspected-not-bound', 'commandParameters': 'unavailable',
                        'admittedContract': 'unavailable', 'resultConsumer': 'unavailable', 'runtimeLink': 'not-run'},
                'sqlExecution': 'not-run', 'fullSuite': 'pending-coordinated-slot', 'liveGate': 'pending-coordinated-slot'}
