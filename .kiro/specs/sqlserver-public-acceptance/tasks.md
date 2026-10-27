@@ -5,4 +5,4 @@
 - [x] Add guard tests and consolidated operator prompt.
 - [x] Commit, build child CLI and run focused guards/native public replay without touching parent.
 - [x] Record parent divergence and exact results; push child branch only.
-- [ ] Final integrated full/live gates after coordinated parent completion (pending; not implied by focused validation).
+- [x] Final integrated full/live gates after coordinated parent completion (recorded at frozen 9d486e208; not inferred from focused validation).
