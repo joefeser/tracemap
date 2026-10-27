@@ -30,3 +30,29 @@ Coordinator scope checkpoint requested before expensive final validation: this i
 a partial foundation, not resolution of constructor-field/property forwarding,
 interprocedural parameter/DataSet object substitution or Merge/field schema
 consumers. Do not ask the work machine to retry those unimplemented capabilities.
+
+## Frozen final validation
+
+Implementation head `fa347703efa4b535b2617feec5b9dadc443da4dc` remained frozen for
+full Debug `-warnaserror`: 5,433 passed, zero failed, three existing skips, 36m11s,
+exit 0/no warnings. Expanded IL lane: 178 passed/one Windows-only skip; final narrow
+shape/Razor lane: 26 passed. No full-suite failure or retry.
+
+New actual native C#/VB replay ran twice with byte-identical facts and expected
+20 entry / two local shape / 20 whole-path unknown denominator. All nine retained
+SQL smokes passed their unchanged counts/refusals, including Field's 52 refusals.
+Pinned public OSS C#/VB scans passed artifact checks with 12,949/114,806 facts,
+reduced analysis and failed/partial application build status; neither has SQL calls.
+Four Python guards and private-path/whitespace checks passed. CLI/Core/Reporting
+hashes stayed unchanged (full hashes in the validation document).
+
+Local receipts: `/tmp/sql-compiled-fa347703e-full.log`,
+`/tmp/tracemap-compiled-fa347703e-a/`, `/tmp/tracemap-compiled-fa347703e-b/`,
+the nine `/tmp/tracemap-cw-fa347703e-*` SQL outputs, and
+`/tmp/tracemap-cw-fa347703e-oss.log`. No private or runtime acceptance is implied.
+The larger 96-output framework CLI sweep and non-.NET lanes were deferred; this
+package changes an opt-in IL derivation, covered by the full/IL/native gates.
+
+Results-only documentation follows the frozen implementation. The required
+whole-path heap/substitution/Merge legs remain unimplemented; this package is a
+validated foundation, not resolution of the application fit gap.

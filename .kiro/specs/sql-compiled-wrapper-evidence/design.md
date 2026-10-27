@@ -8,7 +8,7 @@ signed .NET Framework 4.8 reference metadata. Compilation is not execution.
 | Direct | fresh SqlParameter(name,type,size), exact Add attachment | fresh DataSet filled and returned | local column read |
 | Forwarded | wrapper SqlParameter argument attached, caller constructor separately evidenced | same | local read; cross-method substitution must be explicit |
 | FieldObject | custom object constructor stores fields, wrapper reads fields into SqlParameter | same | local read; field forwarding initially blocked |
-| PropertyObject | custom object constructor/setter/getter forwarding | same | local read; property flow initially blocked |
+| PropertyObject | custom object constructor-backed property/getter forwarding | same | local read; property flow initially blocked |
 | Mutated | constructor parameter then Size mutation | same | candidate must not retain stale size |
 | Escaped | parameter passed to unknown helper before Add | same | unknown effects must prevent positive parameter shape |
 | Branch | differing parameter size paths | same | unknown parameter shape unless exact convergence proved |

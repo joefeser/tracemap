@@ -69,4 +69,38 @@ now preserves it while admitting only recognized encoded calls. The next four
 passed. Existing IL lane: 172 passed, one existing Windows-only skip. A later native
 test build correctly failed `-warnaserror` on xUnit2031 despite ten passing tests;
 the assertion was repaired, then 12 focused tests passed. The development native
-replay produced the exact 20/2/20 denominator. Final frozen gates pending.
+replay produced the exact 20/2/20 denominator. The expanded IL lane passed 178 tests
+with one existing Windows-only skip; the final narrow shape/Razor lane passed 26.
+
+Frozen implementation: `fa347703efa4b535b2617feec5b9dadc443da4dc`.
+
+- Full Debug `-warnaserror`: **5,433 passed, zero failed, three existing skips**;
+  36m11s, exit 0, no warnings. No full-suite retry.
+- Native replay ran twice: **20 entries, two local shapes, 20 whole-path unknowns**.
+  C# and VB `facts.ndjson` files were byte-identical between runs.
+- Nine retained offline SQL smokes passed with unchanged match/mismatch/unknown
+  counts: parameter and DDL 8/12/32 each; result JSON 36/10/36 and DDL 36/10/58;
+  table 44/10/88; DataTable 108/24/176; DataSet 156/24/176; helper 84/30/116;
+  internal helper 72/24/60; Field 78/36/42. Refusal expectations were unchanged,
+  including the corrected 52 Field-read refusals.
+- Pinned public C#/VB compatibility smoke: 12,949 / 114,806 facts, both reduced
+  coverage with failed/partial application build status. Neither contains SQL
+  calls. This verifies scanner artifact compatibility, not those applications'
+  builds or compiled SQL coverage.
+- Four Python smoke guards, private-path guard and whitespace checks passed.
+
+CLI/Core/Reporting bytes were frozen throughout (SHA-256):
+
+```text
+CLI       0b1222ca93b59d36dddfa85d76a31a16fbdee54e1aa7ae2ba59917c2ebcc6984
+Core      c2d2185288d3b8c2c5ada6ce97926c7b349916126b5850c91f3e19e4c9e565cd
+Reporting 378bb1f0713752435af56437c1c1ec31f9edb18592172555488e2fa6b5eaeaba
+```
+
+No SQL Server, container, fixture method, private application or Windows runtime
+execution occurred. The broader 96-output multi-framework CLI sweep and non-.NET
+lanes were not rerun; coverage here is the full .NET suite, existing IL lane,
+new actual C#/VB compiled corpus, retained SQL smokes and pinned source adapters.
+Results documentation follows the frozen implementation in a docs-only commit.
+The consolidated continuation is `prompts/continue-sql-compiled-wrapper-evidence.md`;
+it is a local capability prompt, **not** a work-machine acceptance retry.
