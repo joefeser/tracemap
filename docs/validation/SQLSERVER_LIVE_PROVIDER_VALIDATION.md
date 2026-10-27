@@ -230,3 +230,19 @@ helper) M / `sample`. The 22 retained cases keep their routes and outcomes. **34
 20 match / 6 mismatch / 8 unknown; 54 runtime checks** (20 original + 34 linked).
 `Program.cs`, `harness.py` (`PROVIDER_CHECKS`), `linked_provider.py` and their guards change
 together. Runtime success never promotes a static unknown.
+## Phase 6 extended run — 2026-10-26
+At implementation head `6aa8c40e9` with the CLI built by the frozen full suite, after a read-only
+revalidation of the reviewed context (`tracemap-sql-validation` → `ssh://dockercache`; native
+linux/x86_64, 8 CPUs, ~30.6 GiB, memory/swap/CFS/PID limits enforceable, Docker 29.9.2, 348 GiB
+free on the Docker data filesystem; pinned image present by RepoDigest, linux/amd64; no
+pre-existing harness containers): exit 0, 86 s. **34 linked cases = 20 match / 6 mismatch / 8
+unknown** as authored (the 22 retained cases unchanged: 12 / 4 / 6), **54/54 runtime checks**,
+SQL Server 16.0.4205.1, 2 CPUs / 6 GiB memory / SQL 2 GiB / 2 GiB tmpfs, network none, no published
+ports, no persistent volume, cleanup **owned-container-removed**, no harness containers afterwards,
+no credential text in either receipt. Linked receipt
+`/tmp/tracemap-linked-provider-fr-6aa8c40/linked-receipt.json` (SHA-256
+`2df2bcca439abd1a8274e2f6a237e9f67a7ad4abed444c912fe0a463956b49a0`, generator `f87fd471…`,
+bounded input `7d3d5bc6…`); runtime receipt `runtime/receipt.json` (SHA-256
+`1a459b27cc33300f4168ff62c033f34ea7039ec9a801b98231050758d465adec`, harness `d6afac05…`). Runtime
+success for FieldCaseOnly (`sample`) did not promote its static unknown. A narrow synthetic matrix,
+not modern-provider parity, DNN, private-application or deployment acceptance.
