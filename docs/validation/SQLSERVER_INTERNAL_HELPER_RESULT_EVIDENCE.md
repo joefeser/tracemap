@@ -126,7 +126,10 @@ compilations, reader-returning helpers, `Field<T>`, named/typed DataSets,
 `DataColumn`/`DataRowVersion` access, ORMs, DNN hydration and provider wrappers.
 ## Follow-up work log
 Bounded backlog, not an authorization to widen this branch.
-1. 2. **Deferred decisions:** linking a cross-document internal helper into the disposable runtime
+1. **Next slice:** `Field<T>` / `Field(Of T)` column-identity reads are the separate Phase 6
+   state, documented in [SQLSERVER_FIELD_READ_EVIDENCE.md](SQLSERVER_FIELD_READ_EVIDENCE.md);
+   this Phase 5 state is unchanged.
+2. **Deferred decisions:** linking a cross-document internal helper into the disposable runtime
    matrix, multi-level and wrapper helpers, reader-returning helpers, callers in other
    compilations, named/typed DataSets, `new DataTable(name)`, later result sets.
 3. **Deferred engineering work:** test wall-clock restructuring stays deferred.

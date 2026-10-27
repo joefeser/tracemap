@@ -21,6 +21,12 @@ claimed for that multiple-SELECT body.
 | HelperSetName | helper (ReadSet, dbo.ReadItems) | bounded-match | sample |
 | HelperMissingName | helper (ReadTable, dbo.ReadItems) | mismatch | ArgumentException |
 | HelperLaterTable | helper (ReadSet, dbo.ReadItems) | unknown (`dataset-later-table-unsupported`) | 99 (outside first-result scope) |
+| FieldTableName | field (DataTable, `Field<string>("Name")`) | bounded-match | sample |
+| FieldOrdinal | field (DataTable, `Field<int>(0)`) | bounded-match | 1 |
+| FieldSetName | field (DataSet, `Tables[0]`, `Field<string>("Name")`) | bounded-match | sample |
+| FieldMissingName | field (DataTable, `Field<string>("Missing")`) | mismatch | ArgumentException |
+| FieldCaseOnly | field (DataTable, `Field<string>("name")`) | unknown | sample (runtime case fallback) |
+| InternalFieldName | field (internal helper ReadShared in `Shared`, dbo.ReadItems) | bounded-match | sample |
 
 The helper rows (Phase 4) use two private static helpers, `ReadTable(connection,
 procedure)` and `ReadSet(connection, procedure)`, each scanned once as a Fill fact
@@ -28,8 +34,13 @@ whose call sites are bound separately through `sqlserver-helper-result-bindings/
 HelperTableName and HelperOtherProcedure call the same helper with different
 procedures.
 
-Eleven reports per language, one selected row each: 6 match / 2 mismatch / 3
-unknown; both languages 12 / 4 / 6. Runtime results never convert unknown into
+The Field rows (Phase 6) are compared through `sqlserver-field-read` with
+`sqlserver-field-read-bindings/1`, one site each; the Field type argument is never
+compared. `ReadShared(connection, procedure)` is an internal (`Friend`) static helper
+in its own document (`Shared`), called once from `Cases`, so its call site is
+enumerated across the compilation.
+Seventeen reports per language, one selected row each: 10 match / 3 mismatch / 4
+unknown; both languages 20 / 6 / 8. Runtime results never convert unknown into
 static match. Exact code/binary and receipt hashes must be verified before joining
-the two evidence layers. The existing 20 runtime checks remain; 22 linked method
-checks bring the total to 42.
+the two evidence layers. The existing 20 runtime checks remain; 34 linked method
+checks (22 retained + 12 Field) bring the total to 54.

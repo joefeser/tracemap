@@ -86,7 +86,9 @@ using (var setup = new SqlCommand("CREATE PROCEDURE dbo.ReadOther AS SELECT N'ot
 // Authored runtime expectations (matrix.md); runtime success never promotes a static unknown.
 var expected = new Dictionary<string, object?> {
     ["ReaderName"] = "sample", ["TableName"] = "sample", ["SetName"] = "sample", ["MissingName"] = null, ["CaseOnly"] = "sample", ["LaterTable"] = 99,
-    ["HelperTableName"] = "sample", ["HelperOtherProcedure"] = "other", ["HelperSetName"] = "sample", ["HelperMissingName"] = null, ["HelperLaterTable"] = 99
+    ["HelperTableName"] = "sample", ["HelperOtherProcedure"] = "other", ["HelperSetName"] = "sample", ["HelperMissingName"] = null, ["HelperLaterTable"] = 99,
+    ["FieldTableName"] = "sample", ["FieldOrdinal"] = 1, ["FieldSetName"] = "sample", ["FieldMissingName"] = null, ["FieldCaseOnly"] = "sample",
+    ["InternalFieldName"] = "sample"
 };
 foreach (var (language, type) in new[] { ("csharp", typeof(LinkedCSharp.Cases)), ("vb", typeof(LinkedVisualBasic.Cases)) }) {
     foreach (var (method, value) in expected) {
@@ -97,5 +99,5 @@ foreach (var (language, type) in new[] { ("csharp", typeof(LinkedCSharp.Cases)),
         Check(value is null ? missing : Equals(observed, value), "linked-" + language + "-" + method);
     }
 }
-if (count != 42) throw new InvalidOperationException("Linked denominator mismatch");
-Console.WriteLine("PROVIDER_CHECKS_PASSED 42");
+if (count != 54) throw new InvalidOperationException("Linked denominator mismatch");
+Console.WriteLine("PROVIDER_CHECKS_PASSED 54");

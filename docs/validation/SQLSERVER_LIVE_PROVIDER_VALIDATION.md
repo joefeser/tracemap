@@ -217,3 +217,32 @@ no credential text in either receipt. Linked receipt
 unchanged, bounded input `40ebc2f2…`); runtime receipt `runtime/receipt.json` (SHA-256
 `ebc5fe43919650f05695f98a697a38fe40422b3356a5fbae8a27b9aa686d2b92`, harness generator
 `3df876f7…` unchanged). Regression evidence only; no internal helper is linked.
+## Phase 6 Field<T> extension (authored before running) — 2026-10-26
+The `Field<T>` / `Field(Of T)` slice extends this matrix under the unchanged harness safeguards
+(reviewed context, pinned image digest, no pull, network none, no published ports, no volumes,
+CPU/memory/PID limits, transient credential via environment, ownership-checked cleanup and
+failed-run evidence). `samples/sqlserver-live-provider/{csharp,vb}` gain a second document
+`Shared` with one internal (`Friend`) static helper `ReadShared(connection, procedure)` and six
+`Cases` methods compared through `sqlserver-field-read`: FieldTableName M / `sample`,
+FieldOrdinal M / `1`, FieldSetName M / `sample`, FieldMissingName X / `ArgumentException`,
+FieldCaseOnly U / `sample` (runtime case fallback), InternalFieldName (cross-document internal
+helper) M / `sample`. The 22 retained cases keep their routes and outcomes. **34 linked cases =
+20 match / 6 mismatch / 8 unknown; 54 runtime checks** (20 original + 34 linked).
+`Program.cs`, `harness.py` (`PROVIDER_CHECKS`), `linked_provider.py` and their guards change
+together. Runtime success never promotes a static unknown.
+## Phase 6 extended run — 2026-10-26
+At implementation head `6aa8c40e9` with the CLI built by the frozen full suite, after a read-only
+revalidation of the reviewed context (`tracemap-sql-validation` → `ssh://dockercache`; native
+linux/x86_64, 8 CPUs, ~30.6 GiB, memory/swap/CFS/PID limits enforceable, Docker 29.9.2, 348 GiB
+free on the Docker data filesystem; pinned image present by RepoDigest, linux/amd64; no
+pre-existing harness containers): exit 0, 86 s. **34 linked cases = 20 match / 6 mismatch / 8
+unknown** as authored (the 22 retained cases unchanged: 12 / 4 / 6), **54/54 runtime checks**,
+SQL Server 16.0.4205.1, 2 CPUs / 6 GiB memory / SQL 2 GiB / 2 GiB tmpfs, network none, no published
+ports, no persistent volume, cleanup **owned-container-removed**, no harness containers afterwards,
+no credential text in either receipt. Linked receipt
+`/tmp/tracemap-linked-provider-fr-6aa8c40/linked-receipt.json` (SHA-256
+`2df2bcca439abd1a8274e2f6a237e9f67a7ad4abed444c912fe0a463956b49a0`, generator `f87fd471…`,
+bounded input `7d3d5bc6…`); runtime receipt `runtime/receipt.json` (SHA-256
+`1a459b27cc33300f4168ff62c033f34ea7039ec9a801b98231050758d465adec`, harness `d6afac05…`). Runtime
+success for FieldCaseOnly (`sample`) did not promote its static unknown. A narrow synthetic matrix,
+not modern-provider parity, DNN, private-application or deployment acceptance.

@@ -21,8 +21,8 @@ IMAGE = 'mcr.microsoft.com/mssql/server@sha256:7c29dfbac885ad7519e219c7fe4aee0e6
 TAG = '2022-CU20-ubuntu-22.04'
 LABEL = 'tools.tracemap.dnn-sql-validation'
 FILES = ('schema.sql', 'seed.sql', 'metadata.sql', 'execution.sql')
-# Provider oracle denominator: 20 original checks plus 22 linked static/runtime method checks.
-PROVIDER_CHECKS = 42
+# Provider oracle denominator: 20 original checks plus 34 linked static/runtime method checks (22 + 12 Phase 6 Field reads).
+PROVIDER_CHECKS = 54
 
 
 def sha(data):

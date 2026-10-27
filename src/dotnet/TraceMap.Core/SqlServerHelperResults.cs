@@ -23,9 +23,13 @@ public sealed record SqlServerHelperResultState(string Version, string Coverage,
     string? CommandTextSource, string? AdapterAssociation, string? FillOverload, string? TableName, int? HelperLine, int? AdapterLine,
     int? ResultLine, IReadOnlyList<SqlServerHelperCaller> Callers);
 
-/// <summary>Shared helper analysis before projection into the Phase 4 or internal-helper state; Path is null in Phase 4 mode.</summary>
+/// <summary>
+/// Shared helper analysis before projection into the Phase 4, internal-helper or Phase 6 field-read state; Path is null in Phase 4
+/// mode. Accesses are each caller's superset access records (identical to Caller.Accesses unless the Field mode recorded a Field read).
+/// </summary>
 internal sealed record SqlServerHelperAnalysis(string? Gap, string? ResultKind, string? CommandType, string? CommandTextSource, string? AdapterAssociation,
-    string? FillOverload, string? TableName, int? HelperLine, int? AdapterLine, int? ResultLine, IReadOnlyList<(string? Path, SqlServerHelperCaller Caller)> Callers);
+    string? FillOverload, string? TableName, int? HelperLine, int? AdapterLine, int? ResultLine,
+    IReadOnlyList<(string? Path, SqlServerHelperCaller Caller, IReadOnlyList<SqlServerFieldReadAccess> Accesses)> Callers);
 
 /// <summary>
 /// Independent fail-closed helper-boundary state for one Fill invocation: exactly one level, a non-virtual, non-generic
@@ -62,9 +66,10 @@ internal static class SqlServerHelperResults
     /// <summary>
     /// Shared helper analysis. <paramref name="internalMode"/> false is Phase 4 (private helper, call sites in its document);
     /// true admits exactly an internal / Friend helper whose call sites are enumerated across the registered compilation scope,
-    /// with every other helper-body, signature and caller rule unchanged.
+    /// with every other helper-body, signature and caller rule unchanged. <paramref name="fieldReads"/> (Phase 6 only) admits
+    /// Field&lt;T&gt; name/ordinal reads in the shared row rules; it never widens the helper body.
     /// </summary>
-    internal static SqlServerHelperAnalysis Analyze(IInvocationOperation call, bool internalMode)
+    internal static SqlServerHelperAnalysis Analyze(IInvocationOperation call, bool internalMode, bool fieldReads = false)
     {
         var method = call.TargetMethod;
         var declaring = method.ContainingType.ToDisplayString();
@@ -194,7 +199,7 @@ internal static class SqlServerHelperResults
         }
         // Any remaining use (a row read, a selected table, Dispose) is a consumer inside the helper, outside this boundary;
         // row-level mutations keep their Phase 2 gap.
-        if (rows.Count > 0) return Unknown(RowsAndAccesses(all, rows, [], [], []) ?? "helper-body-unsupported");
+        if (rows.Count > 0) return Unknown(RowsAndAccesses(all, rows, [], [], [], fieldReads) ?? "helper-body-unsupported");
         if (consumed) return Unknown("helper-body-unsupported");
         if (unsupportedBody) return Unknown("helper-body-unsupported");
 
@@ -202,7 +207,11 @@ internal static class SqlServerHelperResults
         var ordered = scope is null ? callers.OrderBy(c => c.Syntax.SpanStart).Select(c => (Path: (string?)null, Call: c)).ToArray()
             : callers.Select(c => (Path: scope.Document(c.Syntax.SyntaxTree).Path, Call: c))
                 .OrderBy(c => c.Path, StringComparer.Ordinal).ThenBy(c => c.Call.Syntax.SpanStart).ToArray();
-        var entries = ordered.Select(c => (c.Path, Caller(c.Call, procedure, connection, resultType, tableName))).ToArray();
+        var entries = ordered.Select(c =>
+        {
+            var (entry, accesses) = Caller(c.Call, procedure, connection, resultType, tableName, fieldReads);
+            return (Path: c.Path, Caller: entry, Accesses: accesses);
+        }).ToArray();
         return new(null, table ? "datatable" : "dataset", commandType, textSource, association, overload, tableName,
             Line(helper.DeclaringSyntaxReferences[0].GetSyntax()), Line(adapterDeclarator.Syntax), Line(resultDeclarator!.Syntax), entries);
     }
@@ -285,13 +294,14 @@ internal static class SqlServerHelperResults
     }
 
     /// <summary>One caller entry: constant positional procedure argument, a fresh exact local, then the Phase 2/3 consumer rules on it.</summary>
-    private static SqlServerHelperCaller Caller(IInvocationOperation call, IParameterSymbol procedure, IParameterSymbol? connection, string resultType, string? tableName)
+    private static (SqlServerHelperCaller Caller, IReadOnlyList<SqlServerFieldReadAccess> Accesses) Caller(IInvocationOperation call, IParameterSymbol procedure,
+        IParameterSymbol? connection, string resultType, string? tableName, bool fieldReads)
     {
         var (line, end) = Lines(call);
         ISymbol? member = call.SemanticModel?.GetEnclosingSymbol(call.Syntax.SpanStart);
         while (member is IMethodSymbol { MethodKind: MethodKind.AnonymousFunction or MethodKind.LocalFunction }) member = member.ContainingSymbol;
         var callerName = member?.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
-        SqlServerHelperCaller Unknown(string gap) => new(line, end, callerName, "unknown", gap, null, null, [], [], []);
+        (SqlServerHelperCaller, IReadOnlyList<SqlServerFieldReadAccess>) Unknown(string gap) => (new(line, end, callerName, "unknown", gap, null, null, [], [], []), []);
 
         if (call.Arguments.Any(Named)) return Unknown("helper-named-argument-unsupported");
         var procedureArgument = call.Arguments.Single(a => Same(a.Parameter?.OriginalDefinition, procedure));
@@ -338,11 +348,12 @@ internal static class SqlServerHelperResults
                 return Unknown(useGap);
         foreach (var reference in all.OfType<ILocalReferenceOperation>().Where(r => tableLocals.Any(t => Same(t, r.Local))))
             if (TableUse(reference, rows, allowDispose: false) is { } tableGap) return Unknown(tableGap);
-        var accesses = new List<(int Position, SqlServerDataTableAccess Access)>();
-        if (RowsAndAccesses(all, rows, guarded, foreachRows, accesses) is { } rowGap) return Unknown(rowGap);
+        var accesses = new List<(int Position, SqlServerFieldReadAccess Access)>();
+        if (RowsAndAccesses(all, rows, guarded, foreachRows, accesses, fieldReads) is { } rowGap) return Unknown(rowGap);
         if (accesses.Count > SqlServerDataTableConsumers.MaxAccesses) return Unknown("access-limit");
-        return new(line, end, callerName, "bounded", null, hash, Line(declarator.Syntax), selectorKinds.ToArray(), guards.ToArray(),
-            accesses.OrderBy(a => a.Position).Select(a => a.Access).ToArray());
+        var ordered = Ordered(accesses);
+        return (new(line, end, callerName, "bounded", null, hash, Line(declarator.Syntax), selectorKinds.ToArray(), guards.ToArray(),
+            ordered.Select(a => a.ToDataTableAccess()).ToArray()), ordered);
     }
 
     /// <summary>The command text is exactly the procedure parameter: the associated command's cmdText argument or its one CommandText write.</summary>
