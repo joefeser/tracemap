@@ -4,15 +4,21 @@ This package stacks on Field reads; it is not a promise to implement all SQL.
 It supplies one local offline replay before another work-machine round trip.
 The exact source/helper/parameter/contract/consumer links are reported separately.
 
-## One command after a clean committed build
+## One command from a clean committed checkout
 
 ```sh
-dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -c Debug -warnaserror
 python3 scripts/dnn-sql-validation/public_acceptance.py --fetch-public-dnn --output /tmp/sql-public-acceptance-new
 python3 -m unittest discover -s scripts/validation -p test_sql_public_acceptance.py -v
 ```
 
-Use a new external output directory. The runner performs fresh native parameter,
+Use a new external output directory. Each invocation clones the exact local commit
+into a private temporary checkout, disables checkout newline conversion, verifies
+source bytes against Git blobs, and builds its own CLI and fixture intermediates.
+It neither reuses nor writes the caller's binaries. Concurrent replays use separate
+checkouts; edits or builds in the caller checkout do not become replay inputs.
+This is isolation from normal concurrent development, not protection against a
+host administrator or hostile process that can modify another process's files.
+The runner performs fresh native parameter,
 reader, helper and Field smokes sequentially, then compares **the same**
 `WithParameter` execution fact through independent parameter and reader bindings
 in C# and VB. Four pre-authored variants per language are good (match/match),
@@ -31,6 +37,14 @@ public GitHub fetch may use the network. No private-input mode is provided.
 `public-acceptance.json` is a local evidence packet with exact generator, input,
 source, tool and child-receipt hashes. Native facts/reports keep their provenance.
 Source/build/receipt integrity is not authentication or deployment correspondence.
+Each child input digest is reconstructed from its committed declarations/templates
+and retained source projections. Each case must match its exact source identity,
+planned report path and statuses, not merely any report with the same hash.
+Refusal IDs must match the exact named set (including both Field languages).
+Linked declarations and bindings have separate digests covering their effective
+documents, bases and appropriate parameter or reader projections. The final receipt
+is atomically published without replacing an existing winner; reader scan artifacts
+remain included in its evidence-tree hash.
 The packet remains partial, with no aggregate clean verdict. Interrupted/failed
 output is preserved; no successful packet is written. Retry at a new destination.
 

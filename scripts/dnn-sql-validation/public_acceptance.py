@@ -11,6 +11,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parents[2]
 PARENT = '6aa8c40e975b9277418aa3bc4b561073887c7f3e'
@@ -48,8 +50,26 @@ def digest(value):
 
 
 def write(path, value):
-    with Path(path).open('xb') as stream:
-        stream.write(canonical(value) + b'\n')
+    path = Path(path)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=path.parent, prefix='.receipt-', delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(canonical(value) + b'\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        # A hard link publishes complete bytes atomically without replacing a winner.
+        os.link(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def artifact_provenance(kind, case, base, projection, document):
+    effective = {k: v for k, v in document.items() if k != 'provenance'}
+    return {'generatorSha256': sha(ROOT / 'scripts/dnn-sql-validation/public_acceptance.py'),
+            'boundedInputSha256': digest({'artifact': kind, 'case': case, 'base': base,
+                                         'source': projection, 'effectiveDocument': effective})}
 
 
 def load(name, path):
@@ -62,6 +82,8 @@ def load(name, path):
 def command(*args, timeout=1200):
     env = dict(os.environ)
     env.pop('PYTHONOPTIMIZE', None)  # Retained native smoke assertions must execute.
+    # Literal argv, never shell parsing: path metacharacters remain argument data.
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
     result = subprocess.run([str(a) for a in args], cwd=ROOT, env=env,
                             capture_output=True, text=True, timeout=timeout, shell=False)
     require(result.returncode == 0, 'command failed: ' + result.stdout[-3000:] + result.stderr[-3000:])
@@ -91,12 +113,32 @@ def source_snapshot():
     command('git', 'merge-base', '--is-ancestor', PARENT, revision)
     paths = command('git', 'ls-files', 'scripts', 'samples', 'src/dotnet', 'rules',
                     'Directory.Build.*', 'Directory.Packages.props', 'global.json').splitlines()
-    values = {}
+    values = committed_hashes(revision, paths)
     for name in paths:
         path = ROOT / name
         require(path.is_file() and not any(p.is_symlink() for p in (path, *path.parents)), 'source link/missing file')
-        values[name] = sha(path)
+        require(sha(path) == values[name], 'checkout differs from canonical committed source')
     return revision, values
+
+
+def committed_hashes(revision, paths):
+    requests = ''.join(f'{revision}:{name}\n' for name in paths).encode()
+    result = subprocess.run(['git', 'cat-file', '--batch'], input=requests, cwd=ROOT,
+                            capture_output=True, timeout=120, shell=False)
+    require(result.returncode == 0, 'committed source read failed')
+    raw, offset, values = result.stdout, 0, {}
+    for name in paths:
+        end = raw.find(b'\n', offset)
+        require(end >= offset, 'missing committed blob header')
+        header = raw[offset:end].split()
+        require(len(header) == 3 and header[1] == b'blob', 'non-blob committed source')
+        size = int(header[2])
+        start = end + 1
+        require(raw[start + size:start + size + 1] == b'\n', 'incomplete committed blob')
+        values[name] = hashlib.sha256(raw[start:start + size]).hexdigest()
+        offset = start + size + 1
+    require(offset == len(raw), 'unexpected committed blob data')
+    return values
 
 
 def verify_gate(root, label, revision, helpers):
@@ -116,8 +158,10 @@ def verify_gate(root, label, revision, helpers):
     require(len(refusals) == refusal_count and all(r.get('refused') is True for r in refusals), 'gate refusal checks incomplete')
     helpers.verify_scan_hashes(root, receipt)
     tree = regular_tree(root, exclude_refusal_inputs=True)
-    report_hashes = {value for name, value in tree.items() if '/report/' in name and name.endswith('.json')}
-    require(all(r.get('reportSha256') in report_hashes for r in rows), 'native report missing or changed')
+    contracts = load('acceptance_contracts', ROOT / 'scripts/dnn-sql-validation/acceptance_contracts.py')
+    # Explicit API object avoids reliance on an import-time module registration.
+    from types import SimpleNamespace
+    contracts.verify(SimpleNamespace(**globals()), root, label, receipt)
     return {'caseReports': cases, 'rowCounts': dict(actual), 'refusalChecks': refusal_count,
             'receiptSha256': sha(root / 'smoke-receipt.json'), 'artifactsSha256': digest(tree)}
 
@@ -162,11 +206,13 @@ def linked_static(output, reader_root, cli, revision, reader):
             if name == 'AbsentIdentity':
                 bindings['calls'][0]['identity']['database'] = 'AbsentDatabase'
                 result_binding['calls'][0]['identity']['database'] = 'AbsentDatabase'
-            provenance = {'generatorSha256': sha(__file__), 'boundedInputSha256': digest({'case': name, 'fact': projected})}
-            for filename, doc in (('parameters', declarations), ('parameter-bindings', bindings),
-                                  ('results', shapes), ('result-bindings', result_binding)):
-                doc['provenance'] = provenance
-                helpers.write(work / f'{filename}.json', doc)
+            for filename, doc, source_base, source_projection in (
+                    ('parameters', declarations, base, projected),
+                    ('parameter-bindings', bindings, None, projected),
+                    ('results', shapes, shape_base, reader.reader_projection(fact)),
+                    ('result-bindings', result_binding, None, reader.reader_projection(fact))):
+                doc['provenance'] = artifact_provenance(filename, name, source_base, source_projection, doc)
+                write(work / f'{filename}.json', doc)
             compared = []
             for route, declaration, binding, filename in (
                     ('sqlserver-schema', 'parameters', 'parameter-bindings', 'parameter-comparison.json'),
@@ -193,7 +239,38 @@ def linked_static(output, reader_root, cli, revision, reader):
     return rows
 
 
+@contextmanager
+def isolated_source():
+    """Use committed canonical bytes and private build intermediates for every replay."""
+    global ROOT
+    original = ROOT
+    require(not command('git', 'status', '--porcelain', '--untracked-files=all').strip(),
+            'clean committed child required')
+    revision = command('git', 'rev-parse', 'HEAD').strip()
+    with tempfile.TemporaryDirectory(prefix='tracemap-public-replay-') as temporary:
+        snapshot = Path(temporary) / 'source'
+        command('git', 'clone', '--local', '--no-hardlinks', '--no-checkout', original, snapshot)
+        try:
+            ROOT = snapshot
+            command('git', 'config', 'core.autocrlf', 'false')
+            command('git', 'checkout', '--detach', revision)
+            # Remove the local source path from the snapshot's remote metadata.
+            command('git', 'remote', 'set-url', 'origin', 'https://github.com/joefeser/tracemap.git')
+            yield
+        finally:
+            ROOT = original
+
+
 def run(args):
+    require(args.fetch_public_dnn, 'explicit public DNN fetch required; no private-input mode')
+    require(not args.output.resolve().is_relative_to(ROOT.resolve()), 'external output required')
+    with isolated_source():
+        command('dotnet', 'build', ROOT / 'src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj',
+                '-c', 'Debug', '-warnaserror', '--nologo')
+        replay(args)
+
+
+def replay(args):
     require(args.fetch_public_dnn, 'explicit public DNN fetch required; no private-input mode')
     output = args.output.resolve()
     require(not output.is_relative_to(ROOT.resolve()) and not output.exists(), 'new external output required')
@@ -227,7 +304,7 @@ def run(args):
                 for label in (*GATES, 'same-execution')}
     dnn_artifacts = {name: sha(output / 'dnn-scan' / name) for name in reader.HELPERS.SCAN_FILES}
     dnn_setup = json.loads((output / 'dnn-source/public-slice.json').read_bytes())
-    receipt = {'version': 'sqlserver-public-acceptance/1', 'generatorSha256': sha(__file__),
+    receipt = {'version': 'sqlserver-public-acceptance/1', 'generatorSha256': sha(ROOT / 'scripts/dnn-sql-validation/public_acceptance.py'),
                'boundedInputSha256': digest({'sources': before, 'binaries': binaries, 'evidence': evidence,
                                             'dnn': dnn_setup, 'dnnArtifacts': dnn_artifacts}),
                'revision': revision, 'parentRevision': PARENT, 'coverage': 'partial', 'verdict': 'no-aggregate-clean-verdict',
