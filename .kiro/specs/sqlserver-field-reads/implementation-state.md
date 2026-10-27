@@ -1,6 +1,6 @@
 # Implementation state — Phase 6
 
-## PR #919 review repair (validation in progress)
+## PR #919 review repair
 
 Exact-head ACK 0.5.9 authorized five independent/mixed findings at `035f4890d`.
 Repairs: reject bounded state/site with non-null gap; run and report the 26
@@ -24,7 +24,22 @@ the historical record is corrected rather than relabeled as a VB pass.
 Extractor versions 0.22.22 / 0.10.25 avoid colliding with the stacked child's
 already-recorded 0.22.21 / 0.10.24. Child integration must retain these newer
 versions and update its aggregate Field refusal expectation from 26 to 52.
-Full Debug and committed-head smokes pending; no push/settlement claim yet.
+Frozen repair implementation `edc67537ddf694f3938292e05112cf3ff32b034e`:
+- Full Debug `-warnaserror`: 5,407 passed, 3 expected skips, zero failures,
+  33m 20s. TRX: `/tmp/tracemap-pr919-review-full/pr919-full.trx`.
+- Field smoke: 78/36/42 unchanged; 26 C# + 26 VB refusals (52 total), all
+  refused and language-labelled; repeated reports byte-identical.
+- Retained DataTable 108/24/176 (22 refusals), DataSet 156/24/176 (24), private
+  helper 84/30/116 (24), internal helper 72/24/60 (24), unchanged and passing.
+- Pinned OSS C#/VB: 12,949 / 114,806 facts, expected reduced/partial analysis;
+  no SQL calls in these repositories, so no new SQL coverage claim.
+- 61 focused tests and 59 Python SQL guards; private-path/whitespace checks pass.
+- Source/HEAD/CLI/Core bytes frozen throughout final gates. Outputs under
+  `/tmp/pr919-edc675-{field,datatable,dataset,helper,internal,oss}`.
+This result record is docs-only. No live SQL rerun: this repair changes admission,
+metadata emission and test evidence, not the provider/runtime matrix. No private
+inputs, child checkout changes, ACK policy changes, new review spend or merge.
+Settlement remains a separate exact-head ACK operation after the validated push.
 
 ## Original implementation history
 Branch `codex/sqlserver-field-reads`, worktree `~/.codex/worktrees/sqlserver-field-reads/tracemap`,
