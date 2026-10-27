@@ -233,11 +233,37 @@ class AcceptanceReconstructionTests(unittest.TestCase):
         self.contracts = A.load('real_contracts_test', A.ROOT / 'scripts/dnn-sql-validation/acceptance_contracts.py')
         self.matrix = self.contracts.MATRIX
 
+    def test_ci_runs_native_compatibility_for_producer_and_consumer_changes(self):
+        workflow = (A.ROOT / '.github/workflows/sql-database-compatibility.yml').read_text()
+        for path in ('scripts/sqlserver-*-evidence/**', 'samples/sqlserver-*-evidence/**',
+                     'scripts/dnn-sql-validation/**'):
+            self.assertEqual(workflow.count("'" + path + "'"), 2)
+        self.assertIn('python scripts/dnn-sql-validation/native_compatibility.py --output', workflow)
+        self.assertIn('timeout-minutes: 20', workflow)
+        self.assertIn('fetch-depth: 0', workflow)
+
+    def test_native_gate_runs_each_actual_producer_before_verification(self):
+        events = []
+        def command(*args):
+            events.append(('command', tuple(str(arg) for arg in args)))
+        def verify(root, label, revision, helpers):
+            self.assertEqual(revision, 'frozen-head')
+            self.assertEqual(events[-1][1][-2:], ('--output', str(root)))
+            self.assertIn(f'sqlserver-{A.GATES[label][0]}-evidence/smoke.py', events[-1][1][1])
+            events.append(('verified', label))
+            return label
+        with patch.object(A, 'command', side_effect=command), patch.object(A, 'verify_gate', side_effect=verify):
+            result = A.native_gates(self.root, 'frozen-head', object())
+        self.assertEqual(list(result), ['parameter', 'reader', 'helper', 'field'])
+        self.assertEqual([event[1] for event in events if event[0] == 'verified'], list(result))
+
     def fixture(self, label):
         root = self.root / label
         matrix = self.matrix
+        expected = []
         for language in matrix.LANGUAGES:
             facts = []
+            by_key = {}
 
             def fact(key, properties):
                 number = len(facts) + 1
@@ -249,6 +275,7 @@ class AcceptanceReconstructionTests(unittest.TestCase):
                                            'startLine': number, 'endLine': number,
                                            'extractorId': language + '-semantic', 'extractorVersion': 'synthetic'},
                               'properties': properties})
+                by_key[key] = facts[-1]['factId']
 
             if label in ('parameter', 'reader'):
                 for key in matrix.PARAMETER if label == 'parameter' else matrix.READER:
@@ -274,7 +301,42 @@ class AcceptanceReconstructionTests(unittest.TestCase):
                 path.parent.mkdir(exist_ok=True)
                 path.write_text('public synthetic guard input')
             (scan / 'facts.ndjson').write_text(''.join(json.dumps(f) + '\n' for f in facts))
-        bounded, expected = self.contracts.reconstruct(A, root, label)
+            # This oracle uses authored fixture identities, not reconstructed output,
+            # source-member parsing, keying helpers, or MATRIX.plan/REPORTS.
+            def add(key, path, statuses, **identity):
+                expected.append((dict(language=language, factId=by_key[key], **identity), path, list(statuses)))
+            if label == 'parameter':
+                for n, (key, (statuses, _)) in enumerate(matrix.PARAMETER.items()):
+                    name = key.split('#')[0]
+                    add(key, f'{language}/{n:02}-{name}/report/parameter-comparison.json', statuses, case=name)
+            elif label == 'reader':
+                for n, (key, (statuses, _)) in enumerate(matrix.READER.items()):
+                    for origin, template in [('json', None), ('ddl', matrix.READER_TEMPLATES.get(key, 'base.sql'))] + (
+                            [('ddl', t) for t in matrix.READER_BODIES] if key == 'NameMatch' else []):
+                        add(key, f'{language}/{origin}/{n:02}-{key.replace("#", "-")}/{template or "declarations"}/report/result-column-comparison.json',
+                            [A.U] if template in matrix.READER_BODIES else statuses, case=key, origin=origin, template=template)
+            else:
+                groups = [('caller', matrix.HELPER_CALLERS)] if label == 'helper' else [('fill', matrix.FIELD_FILLS), ('site', matrix.FIELD_SITES)]
+                plan = [(kind, key, origin, variant, statuses) for kind, entries in groups
+                        for key, (statuses, variant) in entries.items() for origin in ('result-schema', 'ddl-result', 'ddl-table-result')]
+                unknowns = [('helper', matrix.HELPER_UNKNOWN), ('caller', matrix.CALLER_UNKNOWN)] if label == 'helper' else [('fill', matrix.FIELD_UNKNOWN), ('site', matrix.FIELD_SITE_UNKNOWN)]
+                plan += [(kind, key, 'ddl-table-result', None, [A.U]) for kind, names in unknowns for key in names]
+                for n, (kind, key, origin, variant, statuses) in enumerate(plan):
+                    if label == 'helper':
+                        index = [*matrix.HELPER_CALLERS, *matrix.CALLER_UNKNOWN].index(key) if kind == 'caller' else None
+                        source = 'ReadTable' if kind == 'caller' else key
+                        extra = dict(callerIndex=index)
+                        filename = 'helper-result-column-comparison.json'
+                        path_key = key.replace('#', '-')
+                    else:
+                        source = next((name for name, callers in matrix.FIELD_HELPERS.items() if key in callers), key)
+                        index = matrix.FIELD_HELPERS[source].index(key) if kind == 'site' else (0 if key in matrix.FIELD_FILLS or key in matrix.FIELD_HAS_UNKNOWN_SITE else None)
+                        extra = dict(siteIndex=index, sitePath=f'{language}/Callers' if source.startswith('ReadShared') else None)
+                        filename, path_key = 'field-read-column-comparison.json', key
+                    add(source, f'{language}/{n:03}-{kind}-{path_key}-{origin}-{variant or "base"}/report/{filename}', statuses,
+                        kind=kind, case=key, origin=origin, variant=variant, **extra)
+        bounded, actual = self.contracts.reconstruct(A, root, label)
+        self.assertEqual(actual, expected, 'independent per-case reconstruction contract')
         rows = []
         for identity, relative, statuses in expected:
             path = root / relative
@@ -298,6 +360,8 @@ class AcceptanceReconstructionTests(unittest.TestCase):
         return root, receipt, expected, helpers
 
     def test_real_reconstruction_all_routes_and_report_paths(self):
+        self.assertEqual(self.matrix.REPORTS, {'helper': 'helper-result-column-comparison.json',
+                                              'field': 'field-read-column-comparison.json'})
         totals = {'parameter': (52, 8, 12, 32), 'reader': (158, 72, 20, 94),
                   'helper': (230, 84, 30, 116), 'field': (150, 78, 36, 42)}
         for label, (cases, matches, mismatches, unknowns) in totals.items():
@@ -313,6 +377,23 @@ class AcceptanceReconstructionTests(unittest.TestCase):
                     self.assertEqual(expected[0][1], 'csharp/json/00-NameMatch/declarations/report/result-column-comparison.json')
                 else:
                     self.assertIn('/000-', expected[0][1])
+
+    def test_reconstruction_swaps_fail_before_reports_are_generated(self):
+        real = self.contracts.reconstruct
+        for label in A.GATES:
+            for component in ('identity', 'path', 'statuses'):
+                with self.subTest(label=label, component=component):
+                    def swapped(*args):
+                        bounded, rows = real(*args)
+                        first = next(i for i, row in enumerate(rows) if row[2] == [A.M])
+                        second = next(i for i, row in enumerate(rows) if row[2] == [A.X])
+                        rows = [list(row) for row in rows]
+                        column = {'identity': 0, 'path': 1, 'statuses': 2}[component]
+                        rows[first][column], rows[second][column] = rows[second][column], rows[first][column]
+                        return bounded, [tuple(row) for row in rows]
+                    with patch.object(self.contracts, 'reconstruct', side_effect=swapped), self.assertRaisesRegex(AssertionError, 'independent per-case'):
+                        self.fixture(label)
+                    shutil.rmtree(self.root / label)
 
     def test_regenerated_count_preserving_status_swaps_are_rejected(self):
         for label in A.GATES:

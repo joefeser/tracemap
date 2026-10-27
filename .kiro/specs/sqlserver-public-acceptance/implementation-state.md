@@ -201,3 +201,20 @@ Packet `/tmp/pr920-public-oracle-0b419429f/public-acceptance.json` has SHA-256
 `1b107027407a707d086a03518e2d40405ef22c20ad6ab1bd2eff2f2c717b0419`.
 No failed attempt occurred in this follow-up. The following commit is results
 documentation only; the earlier full/core and live-run boundaries remain intact.
+
+## Per-case independence and automated producer compatibility
+
+Two distinct later Baz findings exposed remaining circular fixture construction
+and missing native-producer CI execution. Expectations now use fixture-authored
+fact IDs, caller/site indexes and explicit per-case paths/statuses assembled
+without reconstruction, before any reports are written. Twelve mutations swap
+identities, paths or statuses inside reconstruction across all four routes; each
+fails the independent assertion despite unchanged aggregate counts.
+
+The existing SQL compatibility workflow runs the same four native producers and
+strict acceptance verifier as local replay, bounded to 20 minutes and reusing its
+built CLI. Producer scripts, public fixtures and acceptance changes trigger it.
+No new full-suite job, SQL execution, container or upstream DNN fetch is added.
+Literal filenames and workflow trigger/runner coverage are pinned by tests.
+Focused guards: 27 public + 59 SQL + 20 DNN + 13 linked = **119 passed**.
+Fresh committed-head replay remains pending at this implementation checkpoint.

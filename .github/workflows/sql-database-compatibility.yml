@@ -2,9 +2,9 @@ name: SQL database public compatibility
 on:
   push:
     branches: [dev, main, codex/sql-database-matrix-864]
-    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/*migration*/**', 'samples/projectless-sql-parameter-association/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', 'docs/validation/MIGRATION_REGRESSION_COVERAGE.md', '.github/workflows/sql-database-compatibility.yml']
+    paths: ['scripts/sqlserver-*-evidence/**', 'samples/sqlserver-*-evidence/**', 'scripts/dnn-sql-validation/**', 'src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/*migration*/**', 'samples/projectless-sql-parameter-association/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', 'docs/validation/MIGRATION_REGRESSION_COVERAGE.md', '.github/workflows/sql-database-compatibility.yml']
   pull_request:
-    paths: ['src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/*migration*/**', 'samples/projectless-sql-parameter-association/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', 'docs/validation/MIGRATION_REGRESSION_COVERAGE.md', '.github/workflows/sql-database-compatibility.yml']
+    paths: ['scripts/sqlserver-*-evidence/**', 'samples/sqlserver-*-evidence/**', 'scripts/dnn-sql-validation/**', 'src/dotnet/**', 'samples/sql-database-matrix/**', 'samples/*migration*/**', 'samples/projectless-sql-parameter-association/**', 'scripts/diagnostics/SqlReferenceMatrix/**', 'scripts/diagnostics/RecoverSqlCommandText/**', 'scripts/validation/*sql*', 'scripts/sql-wrapper-report.py', 'scripts/validate-adapter-artifacts.py', 'scripts/test_validate_adapter_artifacts.py', 'rules/**', 'prompts/*sql*', 'prompts/accept-integrated-migration-report.md', 'prompts/plan-backend-api-extraction.md', 'docs/validation/SQL_DATABASE_MATRIX.md', 'docs/validation/MIGRATION_REGRESSION_COVERAGE.md', '.github/workflows/sql-database-compatibility.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,6 +25,12 @@ jobs:
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --filter "FullyQualifiedName~ProjectlessParameterCandidateTests|FullyQualifiedName~SqlDatabaseMatrixTests|FullyQualifiedName~SqlWrapperRouteTests|FullyQualifiedName~ProjectlessSqlReportingTests|FullyQualifiedName~DatabaseCommandStateTests|FullyQualifiedName~GroupedCompiledPathHandoffTests|FullyQualifiedName~BackendExtractionSampleTests|FullyQualifiedName~VisualBasicExternalBoundaryTests|FullyQualifiedName~VisualBasicDataBoundaryTests|FullyQualifiedName~FrameworkSignatureCandidateTests" -warnaserror
       - name: Independent named oracle mutation guards
         run: python scripts/validation/test_sql_matrix_expectations.py
+      - name: Independent public acceptance per-case guards
+        run: python -m unittest discover -s scripts/validation -p test_sql_public_acceptance.py -v
+      - name: Native SQL producer and acceptance compatibility (no SQL execution)
+        timeout-minutes: 20
+        shell: pwsh
+        run: python scripts/dnn-sql-validation/native_compatibility.py --output "$env:RUNNER_TEMP/sql-native-acceptance"
       - name: Report projection and review regression guards
         run: dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --filter "FullyQualifiedName~MarkdownReportWriterTests|FullyQualifiedName~SqlReviewRegressionTests" -warnaserror
       - name: Integrated WebForms SQL and HTTP boundary acceptance

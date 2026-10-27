@@ -152,3 +152,12 @@ expected statuses from that contract; native helpers are reused only for source
 serialization. Offline integration guards exercise real reconstruction, including
 regenerated, count-preserving verdict swaps and changes to bounded source,
 declaration and template inputs. Mocked unit checks are not the integration gate.
+
+Per-case reconstruction tests assert fixture-authored fact identities, indexes,
+paths and statuses before constructing serialized test reports; reconstruction
+cannot act as its own oracle. Identity/path/verdict swaps are tested in every route.
+The existing SQL compatibility CI workflow additionally runs all four real native
+producers through `native_compatibility.py` and verifies their serialized bytes,
+paths and statuses against the checked-in case contract. Its producer/sample
+path triggers prevent silent compatibility drift. This bounded step uses the
+already-built CLI, does not run SQL, and does not replace full/static/runtime gates.

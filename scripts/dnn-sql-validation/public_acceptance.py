@@ -280,18 +280,7 @@ def replay(args):
     binaries = {p.name: sha(p) for p in cli.parent.glob('*.dll')}
     output.mkdir(parents=True)
     reader = load('acceptance_reader', ROOT / 'scripts/sqlserver-result-column-evidence/smoke.py')
-    gates = {}
-    for label, (kind, *_rest) in GATES.items():
-        print('Running offline gate: ' + label, flush=True)
-        # Fresh worktrees have no fixture assets. Restore/build only these public
-        # compile-only projects, never a second full solution or upstream DNN.
-        sample = ROOT / f'samples/sqlserver-{kind}-evidence'
-        for extension in ('csproj', 'vbproj'):
-            projects = list(sample.glob(f'*/*.{extension}'))
-            require(len(projects) == 1, 'fixture project denominator changed')
-            command('dotnet', 'build', projects[0], '-c', 'Debug', '-warnaserror', '--nologo')
-        command(sys.executable, ROOT / f'scripts/sqlserver-{kind}-evidence/smoke.py', '--output', output / label)
-        gates[label] = verify_gate(output / label, label, revision, reader.HELPERS)
+    gates = native_gates(output, revision, reader.HELPERS)
     links = linked_static(output / 'same-execution', output / 'reader', cli, revision, reader)
     print('Checking pinned public DNN operation (no upstream build)', flush=True)
     command(sys.executable, ROOT / 'scripts/dnn-sql-validation/public_slice.py', '--fetch', '--destination', output / 'dnn-source')
@@ -317,6 +306,23 @@ def replay(args):
                'sqlExecution': 'not-run', 'fullSuite': 'pending-coordinated-slot', 'liveGate': 'pending-coordinated-slot'}
     write(output / 'public-acceptance.json', receipt)
     print('Verified public synthetic gates and 8 same-execution pairs; DNN remains BLOCKED; SQL NOT RUN')
+
+
+def native_gates(output, revision, helpers):
+    """Same bounded producer/consumer compatibility gate for local replay and CI."""
+    gates = {}
+    for label, (kind, *_rest) in GATES.items():
+        print('Running offline gate: ' + label, flush=True)
+        # Fresh worktrees have no fixture assets. Restore/build only these public
+        # compile-only projects, never a second full solution or upstream DNN.
+        sample = ROOT / f'samples/sqlserver-{kind}-evidence'
+        for extension in ('csproj', 'vbproj'):
+            projects = list(sample.glob(f'*/*.{extension}'))
+            require(len(projects) == 1, 'fixture project denominator changed')
+            command('dotnet', 'build', projects[0], '-c', 'Debug', '-warnaserror', '--nologo')
+        command(sys.executable, ROOT / f'scripts/sqlserver-{kind}-evidence/smoke.py', '--output', output / label)
+        gates[label] = verify_gate(output / label, label, revision, helpers)
+    return gates
 
 
 if __name__ == '__main__':
