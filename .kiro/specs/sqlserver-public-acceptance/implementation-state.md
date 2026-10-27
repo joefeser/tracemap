@@ -7,9 +7,26 @@ preserves both histories. The only conflicts were extractor versions and the Raz
 version assertion; retain parent C# 0.22.23 / VB 0.10.26. Public packet Field refusal
 expectation is now 52 (26 per language), preserving the corrected parent contract.
 Focused integration includes initializer, Razor, Field scope/cache and near-limit
-regressions before any full-suite rerun. Validation pending. ACK before integration
+regressions before any full-suite rerun: 213 passed, plus 11 public and 59 SQL Python
+guards. ACK before integration
 reported 10 unresolved threads and a failed Sourcery review check; reviewer batch
 and quorum settled but review patch authority was blocked pending owner decision.
+
+Owner explicitly authorized one bounded verified repair/validation/push batch;
+this does not override merge readiness, policy, reviewer spending or failed checks.
+The current batch binds separate artifact inputs, reconstructs native input and
+case/report contracts, validates exact refusal IDs, isolates committed source and
+build outputs, and atomically publishes the packet. Linked reader scans were
+already included; literal argv with shell disabled was already safe. Tests pin
+those two dispositions. Full final gate and fresh replay are pending at this entry.
+
+Development validation: 20 public acceptance guards pass, including canonical
+CRLF/Git-blob identity, transient original-checkout edits and independent build
+directories. All four retained native receipts pass the new strict verifier.
+An overbroad `test_sql*.py` discovery invocation also selected 32 command-text
+tests whose required CLI CONFIG was not initialized; those errored before test
+execution. This is a failed invocation, not a passing gate. The targeted standalone
+SQL smoke guards are run separately with their supported invocation below.
 
 Branch `codex/sqlserver-public-acceptance`; parent frozen at
 `6aa8c40e975b9277418aa3bc4b561073887c7f3e` (`codex/sqlserver-field-reads`).
