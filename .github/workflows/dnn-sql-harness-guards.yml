@@ -1,10 +1,10 @@
 name: DNN SQL harness static guards
 on:
   pull_request:
-    paths: ['scripts/dnn-sql-validation/**', 'scripts/validation/test_dnn_sql_harness.py', 'scripts/validation/test_sql_public_acceptance.py', 'samples/dnn-sql-validation/**', '.gitattributes', '.github/workflows/dnn-sql-harness-guards.yml']
+    paths: ['scripts/sqlserver-*-evidence/**', 'samples/sqlserver-*-evidence/**', 'scripts/dnn-sql-validation/**', 'scripts/validation/test_dnn_sql_harness.py', 'scripts/validation/test_sql_public_acceptance.py', 'samples/dnn-sql-validation/**', '.gitattributes', '.github/workflows/dnn-sql-harness-guards.yml']
   push:
     branches: [dev, main]
-    paths: ['scripts/dnn-sql-validation/**', 'scripts/validation/test_dnn_sql_harness.py', 'scripts/validation/test_sql_public_acceptance.py', 'samples/dnn-sql-validation/**', '.gitattributes', '.github/workflows/dnn-sql-harness-guards.yml']
+    paths: ['scripts/sqlserver-*-evidence/**', 'samples/sqlserver-*-evidence/**', 'scripts/dnn-sql-validation/**', 'scripts/validation/test_dnn_sql_harness.py', 'scripts/validation/test_sql_public_acceptance.py', 'samples/dnn-sql-validation/**', '.gitattributes', '.github/workflows/dnn-sql-harness-guards.yml']
 permissions:
   contents: read
 jobs:
