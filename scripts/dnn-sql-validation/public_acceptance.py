@@ -201,6 +201,13 @@ def run(args):
     gates = {}
     for label, (kind, *_rest) in GATES.items():
         print('Running offline gate: ' + label, flush=True)
+        # Fresh worktrees have no fixture assets. Restore/build only these public
+        # compile-only projects, never a second full solution or upstream DNN.
+        sample = ROOT / f'samples/sqlserver-{kind}-evidence'
+        for extension in ('csproj', 'vbproj'):
+            projects = list(sample.glob(f'*/*.{extension}'))
+            require(len(projects) == 1, 'fixture project denominator changed')
+            command('dotnet', 'build', projects[0], '-c', 'Debug', '-warnaserror', '--nologo')
         command(sys.executable, ROOT / f'scripts/sqlserver-{kind}-evidence/smoke.py', '--output', output / label)
         gates[label] = verify_gate(output / label, label, revision, reader.HELPERS)
     links = linked_static(output / 'same-execution', output / 'reader', cli, revision, reader)
