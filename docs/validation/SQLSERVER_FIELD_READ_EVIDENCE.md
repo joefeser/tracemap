@@ -43,10 +43,12 @@ Type arguments render as namespace-qualified names without keywords, generic arg
 brackets, arrays as `[]` / `[,]` (`System.String`, `System.Nullable[System.Int32]`, `System.Byte[]`),
 at most 256 characters in `[A-Za-z0-9_.,[]]`. Rows add `field-type-argument-not-compared:<T>`.
 ## Decisions
-- Presence: omit the sibling payload only when a bounded compilation-wide token check proves
+- Presence: omit the sibling payload only for a currently registered, complete, error-free scope when a bounded compilation-wide token check proves
   no possible Field read exists. Cross-document callers, escaped names, unresolved/lookalike
   calls and uncertain/oversized scopes remain conservative. Existing 64 MiB whole-facts and
   4 MiB per-record bounds are unchanged. No new positive evidence follows from omission.
+  Scope metadata is never cached: registration/re-registration is checked before the syntax cache.
+  Reduced, errored and unregistered scopes preserve their explicit helper refusal gaps.
 - Provenance boundary: raw Field state is an embedded scan fact property, not a standalone
   derived export. It retains the fact's repo/revision, rule/tier, source span and extractor
   version. Its per-site binding digest covers the complete projected state/site; the derived
