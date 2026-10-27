@@ -1,4 +1,32 @@
 # Implementation state — Phase 6
+
+## PR #919 review repair (validation in progress)
+
+Exact-head ACK 0.5.9 authorized five independent/mixed findings at `035f4890d`.
+Repairs: reject bounded state/site with non-null gap; run and report the 26
+refusals independently for C# and VB (52 total); test unsigned trusted-name
+lookalike assemblies; conservatively omit Field state only when bounded
+compilation-wide token inspection proves absence of any possible Field call.
+Uncertain scopes and possible cross-document calls keep all refusal analysis.
+No facts/record bound was raised. Native C#/VB tests accept just below 64 MiB
+and refuse above it. Their first development form incorrectly padded one record
+beyond the independent 4 MiB record bound; fixed the synthetic test shape, not
+either production limit. First attempt: two test failures; corrected focused
+gate: 61 passed. SQL Python guards: 59 passed.
+
+Raw-state provenance feedback is dispositioned architecturally: an embedded scan
+property is not a new standalone derived export. Existing site digests and the
+derived report bind the complete projection and exact generator; a new regression
+checks generator identity, stable input hash and changed-state hash sensitivity.
+No raw-fact authenticity claim was added. Prior 26-refusal evidence was C# only;
+the historical record is corrected rather than relabeled as a VB pass.
+
+Extractor versions 0.22.22 / 0.10.25 avoid colliding with the stacked child's
+already-recorded 0.22.21 / 0.10.24. Child integration must retain these newer
+versions and update its aggregate Field refusal expectation from 26 to 52.
+Full Debug and committed-head smokes pending; no push/settlement claim yet.
+
+## Original implementation history
 Branch `codex/sqlserver-field-reads`, worktree `~/.codex/worktrees/sqlserver-field-reads/tracemap`,
 created from freshly fetched `origin/dev` = `7e96bca84aed04258577f1b02b6505186863bcfa` (the #918
 merge commit itself, so the Phase 5 merge and its escaped-identifier and unavailable-input
@@ -25,7 +53,7 @@ never to `dev`. The user checkout and every other worktree were not touched.
   `command-binding-conflict` (Phase 5 adds the conflict for unknown callers too; the Field route
   keeps the reason list to the site's own refusal). 49 Field tests passed.
 - Step 6.5: first dev smoke run (working tree on top of `3244949a2`) matched every authored cell:
-  75 cases per language, 78 / 36 / 42 both languages, 26/26 refusals each for its intended reason,
+  75 cases per language, 78 / 36 / 42 both languages, 26/26 C# refusal checks (not per-language; corrected by PR review),
   ~75 s. Native theories 2/2; Python guards 59 (`test_sqlserver_*`, 9 new).
 - Step 6.6 static-only dry run of the extended linked runner at `94a62b0cd` (runtime stubbed,
   output deleted, no receipt): 34 rows = 20 / 6 / 8 as authored; Field rows match their

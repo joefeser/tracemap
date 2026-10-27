@@ -27,7 +27,12 @@
   superset record `SqlServerFieldReadAccess` (the Phase 2 fields plus `typeArgument`); the
   Phase 2-5 states project it to `SqlServerDataTableAccess` losslessly because the mode-off
   path never records a Field access.
-- **Origin.** The sibling runs the four analyses in Field mode and takes the one bounded origin,
+- **Presence gate.** A cached bounded compilation-wide token check may omit the sibling
+  payload only when no case-insensitive `Field` value token exists. It includes cross-document
+  callers and escaped identifiers; uncertainty or scope bounds retain all original analysis.
+  This preserves the 64 MiB facts bound without inflating no-Field scans. It is conservative:
+  a token does not prove a bound Field call, and irrelevant tokens may retain extra state.
+- **Origin.** When retained, the sibling runs the four analyses in Field mode and takes the one bounded origin,
   in this order: `datatable`, `dataset`, `helper` (Phase 4 private), `internal-helper` (Phase 5).
   They are mutually exclusive by construction (overload, returned local, accessibility); two
   bounded origins would be `field-read-origin-ambiguous`. With none bounded the state is
