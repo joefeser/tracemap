@@ -515,7 +515,7 @@ public sealed class SqlServerDataTableEvidenceTests
         var members = language == "cs"
             ? "static object M() { var command = new SqlCommand(\"dbo.ReadItems\"); command.CommandType = CommandType.StoredProcedure; var adapter = new SqlDataAdapter(command); var table = new DataTable(); adapter.Fill(table); return table.Rows[0][\"Name\"]; }"
             : "Function M() As Object\nDim command = New SqlCommand(\"dbo.ReadItems\")\ncommand.CommandType = CommandType.StoredProcedure\nDim adapter = New SqlDataAdapter(command)\nDim table = New DataTable()\nadapter.Fill(table)\nReturn table.Rows(0)(\"Name\")\nEnd Function";
-        var extracted = Assert.Single(SqlServerFieldReadExtractionTests.Extract(language, members));
+        var extracted = Assert.Single(SqlServerFieldReadExtractionTests.Extract(language, members, register: true));
         Assert.False(extracted.Properties.ContainsKey("sqlServerFieldReadState"));
         var fact = Fact(extracted.DataTable) with { Properties = extracted.Properties,
             Evidence = Fact(extracted.DataTable).Evidence with { StartLine = 1, EndLine = 1 } };
