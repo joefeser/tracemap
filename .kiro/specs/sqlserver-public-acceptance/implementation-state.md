@@ -56,3 +56,17 @@ Pending final integration: full Debug suite, remaining retained SQL smokes,
 pinned OSS adapters and coordinated live regression. Do not call this merge-ready
 or real-DNN/private acceptance. No PR/merge/review spend/ACK edits; no SQL or
 container execution. Results documentation is a subsequent docs-only commit.
+
+## Parent integration and first full attempt
+
+Fetched and verified parent final `035f4890d7e2cc48ff5f2d761592d586df5e694a`:
+only five docs/tasks/prompt files differ from the original base. Normal merge
+`17b9ea9a1d24cd20a667f998ebc5e7032729236b` preserves both histories. The inherited
+DataColumn prompt is optional future work, not the next required acceptance gate.
+
+First merged-head full run failed the Razor version-contract assertion (expected
+C# 0.22.20, actual repaired 0.22.21). Updated that sole stale test pin; no expected
+behavior or denominator weakened. The owned run was cancelled after verifying its
+PID/child-worktree provenance; cancellation exit 1, not a completed full result.
+This attempt remains historical failed/cancelled evidence. A fresh committed-head
+full run is required after the touched focused gate.
