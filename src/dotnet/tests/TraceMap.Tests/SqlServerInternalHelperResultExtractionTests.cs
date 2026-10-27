@@ -8,7 +8,8 @@ namespace TraceMap.Tests;
 /// </summary>
 public sealed class SqlServerInternalHelperResultExtractionTests
 {
-    internal sealed record Site(string Path, SqlServerInternalHelperResultState Internal, SqlServerHelperResultState Helper);
+    /// <param name="Field">The Phase 6 field-read sibling over the same registered scope (additive; Phase 5 assertions ignore it).</param>
+    internal sealed record Site(string Path, SqlServerInternalHelperResultState Internal, SqlServerHelperResultState Helper, SqlServerFieldReadState Field, bool FieldStatePresent);
 
     private const string CsUsings = "#pragma warning disable CS0618, CS0219, CS0168\nusing System; using System.Data; using System.Data.SqlClient;\n";
     private const string VbImports = "Imports System\nImports System.Data\nImports System.Data.SqlClient\n";
@@ -33,7 +34,8 @@ public sealed class SqlServerInternalHelperResultExtractionTests
     /// own exclusion path, registers the compilation scope, and returns both helper states of every Fill site in (path, position) order.
     /// </summary>
     internal static Site[] Extract(string language, (string Path, string Text)[] documents, bool register = true, string[]? exclude = null,
-        bool allowErrors = false, Func<Compilation, Compilation>? mutate = null, string? unavailablePath = null, bool fileAppeared = false)
+        bool allowErrors = false, Func<Compilation, Compilation>? mutate = null, string? unavailablePath = null, bool fileAppeared = false,
+        Action<Compilation, Project>? beforeRegister = null)
     {
         var repo = Directory.CreateTempSubdirectory("tracemap-internal-helper-").FullName;
         try
@@ -61,6 +63,7 @@ public sealed class SqlServerInternalHelperResultExtractionTests
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllText(path, documents.Single(d => d.Path == unavailablePath).Text);
             }
+            beforeRegister?.Invoke(compilation, project);
             if (register) SqlServerCompilationScopes.Register(repo, project, compilation,
                 compilation.GetDiagnostics().Any(d => d.Severity == DiagnosticSeverity.Error), inputs);
             return compilation.SyntaxTrees.SelectMany(tree =>
@@ -68,8 +71,15 @@ public sealed class SqlServerInternalHelperResultExtractionTests
                 var model = compilation.GetSemanticModel(tree, ignoreAccessibility: true);
                 return tree.GetRoot().DescendantNodes().Select(n => model.GetOperation(n)).OfType<Microsoft.CodeAnalysis.Operations.IInvocationOperation>()
                     .Where(o => o.TargetMethod.Name == "Fill").Distinct()
-                    .Select(o => (Path: Path.GetRelativePath(repo, tree.FilePath).Replace('\\', '/'), o.Syntax.SpanStart,
-                        Site: new Site(Path.GetRelativePath(repo, tree.FilePath).Replace('\\', '/'), SqlServerInternalHelperResults.Extract(o), SqlServerHelperResults.Extract(o))));
+                    .Select(o =>
+                    {
+                        var properties = new SortedDictionary<string, string>();
+                        SqlServerFieldReads.Add(properties, o);
+                        var present = properties.TryGetValue("sqlServerFieldReadState", out var json);
+                        return (Path: Path.GetRelativePath(repo, tree.FilePath).Replace('\\', '/'), o.Syntax.SpanStart,
+                            Site: new Site(Path.GetRelativePath(repo, tree.FilePath).Replace('\\', '/'), SqlServerInternalHelperResults.Extract(o), SqlServerHelperResults.Extract(o),
+                                present ? SqlServerSchemaEvidence.Read<SqlServerFieldReadState>(json!) : SqlServerFieldReads.Extract(o), present));
+                    });
             }).OrderBy(s => s.Path, StringComparer.Ordinal).ThenBy(s => s.SpanStart).Select(s => s.Site).ToArray();
         }
         finally

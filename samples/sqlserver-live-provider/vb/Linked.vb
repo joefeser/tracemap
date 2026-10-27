@@ -110,5 +110,65 @@ Public Module Cases
         Dim results = ReadSet(connection, "dbo.ReadItems")
         Return results.Tables(1).Rows(0)("Value")
     End Function
+    ' Phase 6: Field(Of T) name/ordinal reads on rows the unchanged DataTable/DataSet/internal-helper rules bind.
+    Public Function FieldTableName(connection As SqlConnection) As Object
+        Using command As New SqlCommand("dbo.ReadItems")
+            command.CommandType = CommandType.StoredProcedure
+            command.Connection = connection
+            Using adapter As New SqlDataAdapter(command)
+                Dim table As New DataTable()
+                adapter.Fill(table)
+                Return table.Rows(0).Field(Of String)("Name")
+            End Using
+        End Using
+    End Function
+    Public Function FieldOrdinal(connection As SqlConnection) As Object
+        Using command As New SqlCommand("dbo.ReadItems")
+            command.CommandType = CommandType.StoredProcedure
+            command.Connection = connection
+            Using adapter As New SqlDataAdapter(command)
+                Dim table As New DataTable()
+                adapter.Fill(table)
+                Return table.Rows(0).Field(Of Integer)(0)
+            End Using
+        End Using
+    End Function
+    Public Function FieldSetName(connection As SqlConnection) As Object
+        Using command As New SqlCommand("dbo.ReadItems")
+            command.CommandType = CommandType.StoredProcedure
+            command.Connection = connection
+            Using adapter As New SqlDataAdapter(command)
+                Dim results As New DataSet()
+                adapter.Fill(results)
+                Return results.Tables(0).Rows(0).Field(Of String)("Name")
+            End Using
+        End Using
+    End Function
+    Public Function FieldMissingName(connection As SqlConnection) As Object
+        Using command As New SqlCommand("dbo.ReadItems")
+            command.CommandType = CommandType.StoredProcedure
+            command.Connection = connection
+            Using adapter As New SqlDataAdapter(command)
+                Dim table As New DataTable()
+                adapter.Fill(table)
+                Return table.Rows(0).Field(Of String)("Missing")
+            End Using
+        End Using
+    End Function
+    Public Function FieldCaseOnly(connection As SqlConnection) As Object
+        Using command As New SqlCommand("dbo.ReadItems")
+            command.CommandType = CommandType.StoredProcedure
+            command.Connection = connection
+            Using adapter As New SqlDataAdapter(command)
+                Dim table As New DataTable()
+                adapter.Fill(table)
+                Return table.Rows(0).Field(Of String)("name")
+            End Using
+        End Using
+    End Function
+    Public Function InternalFieldName(connection As SqlConnection) As Object
+        Dim table = SharedData.ReadShared(connection, "dbo.ReadItems")
+        Return table.Rows(0).Field(Of String)("Name")
+    End Function
 End Module
 End Namespace

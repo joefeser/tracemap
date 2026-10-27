@@ -11,6 +11,17 @@ namespace TraceMap.Core;
 /// <param name="Gap">Access-level unknown reason; null when the name or ordinal is a compile-time constant.</param>
 public sealed record SqlServerDataTableAccess(string Kind, string Member, string RowSource, int? RowIndex, string? Name, int? Ordinal,
     int Line, int EndLine, string? Gap);
+/// <summary>
+/// Superset of <see cref="SqlServerDataTableAccess"/> used by the shared row rules and the Phase 6 field-read state: Field reads
+/// (kinds field-name / field-ordinal, member Field) also record the rendered generic type argument, which is never compared.
+/// </summary>
+/// <param name="TypeArgument">Field reads only: the bounded type-argument rendering; null for indexer and IsNull reads.</param>
+public sealed record SqlServerFieldReadAccess(string Kind, string Member, string RowSource, int? RowIndex, string? Name, int? Ordinal,
+    string? TypeArgument, int Line, int EndLine, string? Gap)
+{
+    /// <summary>The Phase 2-5 record; lossless because the mode-off rules never record a Field read.</summary>
+    internal SqlServerDataTableAccess ToDataTableAccess() => new(Kind, Member, RowSource, RowIndex, Name, Ordinal, Line, EndLine, Gap);
+}
 /// <param name="AdapterAssociation">constructor-command or select-command-property.</param>
 /// <param name="Guard">none, rows-count, foreach or rows-count-and-foreach; guards are bound to the selected table only.</param>
 public sealed record SqlServerDataTableState(string Version, string Coverage, string? Gap, string? CommandType, string? CommandTextHash,
@@ -48,8 +59,15 @@ internal static class SqlServerDataTableConsumers
 
     private static SqlServerDataTableState Unknown(string gap) => new(Version, "unknown", gap, null, null, null, null, null, "none", []);
 
-    internal static SqlServerDataTableState Extract(IInvocationOperation call)
+    internal static SqlServerDataTableState Extract(IInvocationOperation call) => Extract(call, fieldReads: false, out _);
+
+    /// <summary>
+    /// The Phase 2 analysis. <paramref name="fieldReads"/> false is the unchanged Phase 2 state; true admits only the Phase 6
+    /// Field&lt;T&gt; name/ordinal reads in the shared row rules and returns the superset accesses in source order.
+    /// </summary>
+    internal static SqlServerDataTableState Extract(IInvocationOperation call, bool fieldReads, out IReadOnlyList<SqlServerFieldReadAccess> fieldAccesses)
     {
+        fieldAccesses = [];
         var method = call.TargetMethod;
         if (method.Name != "Fill" || method.Parameters.Length != 1 || !IsType(method.Parameters[0].Type, "System.Data.DataTable")
             || method.ContainingType.ToDisplayString() != "System.Data.Common.DbDataAdapter" || !DatabaseOperationApi.Trusted(method.ContainingAssembly))
@@ -91,16 +109,21 @@ internal static class SqlServerDataTableConsumers
             if (reference.Syntax.SpanStart < fillEnd) return Unknown("table-use-before-fill");
         }
 
-        var accesses = new List<(int Position, SqlServerDataTableAccess Access)>();
-        if (RowsAndAccesses(all, rows, guardRows, foreachRows, accesses) is { } rowGap) return Unknown(rowGap);
+        var accesses = new List<(int Position, SqlServerFieldReadAccess Access)>();
+        if (RowsAndAccesses(all, rows, guardRows, foreachRows, accesses, fieldReads) is { } rowGap) return Unknown(rowGap);
         if (accesses.Count > MaxAccesses) return Unknown("access-limit");
         var adapterLine = adapterDeclarator.Syntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
         var tableLine = tableDeclarator!.Syntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
         bool countGuard = guards.Contains("rows-count"), foreachGuard = guards.Contains("foreach");
         var guard = countGuard && foreachGuard ? "rows-count-and-foreach" : countGuard ? "rows-count" : foreachGuard ? "foreach" : "none";
+        fieldAccesses = Ordered(accesses);
         return new(Version, "bounded", null, commandType, textHash, associationKind, adapterLine, tableLine, guard,
-            accesses.OrderBy(a => a.Position).Select(a => a.Access).ToArray());
+            fieldAccesses.Select(a => a.ToDataTableAccess()).ToArray());
     }
+
+    /// <summary>Accesses in source order (stable for equal positions).</summary>
+    internal static SqlServerFieldReadAccess[] Ordered(List<(int Position, SqlServerFieldReadAccess Access)> accesses)
+        => accesses.OrderBy(a => a.Position).Select(a => a.Access).ToArray();
 
     // ---------------------------------------------------------------- Shared adapter-consumer rules (DataTable and DataSet)
 
@@ -280,9 +303,12 @@ internal static class SqlServerDataTableConsumers
         return "datatable-alias-or-escape";
     }
 
-    /// <summary>Rows: constant row index, guard Count or guard foreach collection only; then every DataRow use records an access.</summary>
+    /// <summary>
+    /// Rows: constant row index, guard Count or guard foreach collection only; then every DataRow use records an access.
+    /// <paramref name="fieldReads"/> (Phase 6 only) additionally admits Field&lt;T&gt; name/ordinal reads; off, the rules are Phase 2's.
+    /// </summary>
     internal static string? RowsAndAccesses(IOperation[] all, List<IPropertyReferenceOperation> rows, HashSet<IOperation> guardRows,
-        List<ILocalSymbol> foreachRows, List<(int Position, SqlServerDataTableAccess Access)> accesses)
+        List<ILocalSymbol> foreachRows, List<(int Position, SqlServerFieldReadAccess Access)> accesses, bool fieldReads = false)
     {
         var rowLocals = new Dictionary<ILocalSymbol, (string Source, int? Index)>(SymbolEqualityComparer.Default);
         foreach (var row in foreachRows) rowLocals[row] = ("foreach-row", null);
@@ -304,7 +330,7 @@ internal static class SqlServerDataTableConsumers
                     rowLocals[local] = ("row-local", index);
                     continue;
                 }
-                if (RowUse(indexer, "rows-index", index, accesses) is { } direct) return direct;
+                if (RowUse(indexer, "rows-index", index, accesses, fieldReads) is { } direct) return direct;
                 continue;
             }
             if (parent is IInvocationOperation invocation && invocation.Instance == property)
@@ -316,13 +342,13 @@ internal static class SqlServerDataTableConsumers
         {
             if (reference.Parent is IForEachLoopOperation loop && loop.NextVariables.Contains(reference)) continue;
             var (source, index) = rowLocals[reference.Local];
-            if (RowUse(reference, source, index, accesses) is { } gap) return gap;
+            if (RowUse(reference, source, index, accesses, fieldReads) is { } gap) return gap;
         }
         return null;
     }
 
     /// <summary>Classifies one use of a DataRow-valued expression; returns a whole-state gap or null after recording an access.</summary>
-    private static string? RowUse(IOperation row, string source, int? index, List<(int, SqlServerDataTableAccess)> accesses)
+    private static string? RowUse(IOperation row, string source, int? index, List<(int, SqlServerFieldReadAccess)> accesses, bool fieldReads)
     {
         var parent = row.Parent;
         if (parent is IPropertyReferenceOperation { Property.IsIndexer: true } indexer && indexer.Instance == row)
@@ -332,43 +358,123 @@ internal static class SqlServerDataTableConsumers
             var parameters = indexer.Property.Parameters;
             if (parameters.Any(p => IsType(p.Type, "System.Data.DataColumn"))) return "datacolumn-access-unsupported";
             if (parameters.Length != 1) return "row-version-access-unsupported";
-            return Record(parameters[0].Type.SpecialType, "Item", indexer.Arguments[0].Value, indexer, "name-indexer", "ordinal-indexer");
+            return Record(parameters[0].Type.SpecialType, "Item", indexer.Arguments[0].Value, indexer, "name-indexer", "ordinal-indexer", null);
         }
         if (parent is IInvocationOperation invocation && invocation.Instance == row)
         {
             var target = invocation.TargetMethod;
             // VB represents reduced extension calls with the receiver as Instance.
-            if (Extension(target, "System.Data.DataRowExtensions")) return target.Name == "SetField" ? "datatable-mutation" : "datarow-field-extension-unsupported";
+            if (Extension(target, "System.Data.DataRowExtensions"))
+                return target.Name == "SetField" ? "datatable-mutation" : fieldReads ? FieldRead(invocation, null) : "datarow-field-extension-unsupported";
             if (target.Name != "IsNull" || !DatabaseOperationApi.Trusted(target.ContainingAssembly)) return "unsupported-row-member";
             if (target.Parameters.Any(p => IsType(p.Type, "System.Data.DataColumn"))) return "datacolumn-access-unsupported";
             if (target.Parameters.Length != 1) return "row-version-access-unsupported";
-            return Record(target.Parameters[0].Type.SpecialType, "IsNull", invocation.Arguments[0].Value, invocation, "isnull-name", "isnull-ordinal");
+            return Record(target.Parameters[0].Type.SpecialType, "IsNull", invocation.Arguments[0].Value, invocation, "isnull-name", "isnull-ordinal", null);
         }
-        if (parent is IArgumentOperation { Parent: IInvocationOperation { TargetMethod: var extension } } && Extension(extension, "System.Data.DataRowExtensions"))
-            return extension.Name == "SetField" ? "datatable-mutation" : "datarow-field-extension-unsupported";
+        if (parent is IArgumentOperation { Parent: IInvocationOperation { TargetMethod: var extension } call } receiver && Extension(extension, "System.Data.DataRowExtensions"))
+            return extension.Name == "SetField" ? "datatable-mutation" : fieldReads ? FieldRead(call, receiver) : "datarow-field-extension-unsupported";
         if (parent is IPropertyReferenceOperation other && other.Instance == row) return "unsupported-row-member";
         if (row is ILocalReferenceOperation && parent is ISimpleAssignmentOperation reassigned && reassigned.Target == row) return "row-reassignment";
         return "row-alias-or-escape";
 
-        string? Record(SpecialType type, string member, IOperation argument, IOperation site, string nameKind, string ordinalKind)
+        // Phase 6 only: DataRowExtensions.Field<T>(string) / Field<T>(int) on this bound row; every other Field shape is a typed gap.
+        // receiver is the C# unreduced extension argument; null for the VB reduced form (receiver as Instance).
+        string? FieldRead(IInvocationOperation invocation, IArgumentOperation? receiver)
+        {
+            var target = invocation.TargetMethod;
+            if (target.Name != "Field") return "datarow-field-extension-unsupported";
+            if (!FieldAssembly((target.ReducedFrom ?? target).ContainingAssembly)) return "datarow-field-extension-untrusted";
+            // Only receiver.Field<T>(...) syntax: C# member access on the row itself, VB reduced; explicit static calls are outside the matrix.
+            if (receiver is not null && (receiver.Parameter?.Ordinal != 0 || invocation.Syntax is not Microsoft.CodeAnalysis.CSharp.Syntax.InvocationExpressionSyntax
+                    { Expression: Microsoft.CodeAnalysis.CSharp.Syntax.MemberAccessExpressionSyntax access }
+                || Unparenthesized(access.Expression) != row.Syntax))
+                return "datarow-field-static-call-unsupported";
+            var parameters = receiver is null ? target.Parameters : target.Parameters.RemoveAt(0);
+            var arguments = invocation.Arguments.Where(a => a != receiver).ToArray();
+            if (parameters.Any(p => IsType(p.Type, "System.Data.DataColumn"))) return "datacolumn-access-unsupported";
+            if (parameters.Length != 1 || arguments.Length != 1) return "row-version-access-unsupported";
+            var typeArgument = target.TypeArguments.Length == 1 ? TypeArgument(target.TypeArguments[0]) : null;
+            return Record(parameters[0].Type.SpecialType, "Field", arguments[0].Value, invocation, "field-name", "field-ordinal", typeArgument,
+                typeArgument is null ? "field-type-argument-unsupported" : null);
+        }
+
+        string? Record(SpecialType type, string member, IOperation argument, IOperation site, string nameKind, string ordinalKind, string? typeArgument,
+            string? accessGap = null)
         {
             var (line, end) = Lines(site);
             if (type == SpecialType.System_String)
             {
-                var access = argument.ConstantValue is not { HasValue: true, Value: string name } ? new SqlServerDataTableAccess(nameKind, member, source, index, null, null, line, end, "dynamic-column-name")
+                var access = accessGap is not null ? new SqlServerFieldReadAccess(nameKind, member, source, index, null, null, typeArgument, line, end, accessGap)
+                    : argument.ConstantValue is not { HasValue: true, Value: string name } ? new(nameKind, member, source, index, null, null, typeArgument, line, end, "dynamic-column-name")
                     // Only the bounded identifier vocabulary is retained; arbitrary constant text is not copied into facts.
-                    : SqlServerSchemaEvidence.Identifier(name) ? new(nameKind, member, source, index, name, null, line, end, null)
-                    : new(nameKind, member, source, index, null, null, line, end, "column-name-outside-identifier-vocabulary");
+                    : SqlServerSchemaEvidence.Identifier(name) ? new(nameKind, member, source, index, name, null, typeArgument, line, end, null)
+                    : new(nameKind, member, source, index, null, null, typeArgument, line, end, "column-name-outside-identifier-vocabulary");
                 accesses.Add((site.Syntax.SpanStart, access));
                 return null;
             }
             if (type != SpecialType.System_Int32) return "unsupported-row-member";
-            accesses.Add((site.Syntax.SpanStart, argument.ConstantValue is { HasValue: true, Value: int ordinal }
-                ? new(ordinalKind, member, source, index, null, ordinal, line, end, null)
-                : new(ordinalKind, member, source, index, null, null, line, end, "dynamic-ordinal")));
+            accesses.Add((site.Syntax.SpanStart, accessGap is not null ? new(ordinalKind, member, source, index, null, null, typeArgument, line, end, accessGap)
+                : argument.ConstantValue is { HasValue: true, Value: int ordinal }
+                ? new(ordinalKind, member, source, index, null, ordinal, typeArgument, line, end, null)
+                : new(ordinalKind, member, source, index, null, null, typeArgument, line, end, "dynamic-ordinal")));
             return null;
         }
     }
+
+    private static SyntaxNode Unparenthesized(Microsoft.CodeAnalysis.CSharp.Syntax.ExpressionSyntax expression)
+    {
+        while (expression is Microsoft.CodeAnalysis.CSharp.Syntax.ParenthesizedExpressionSyntax parenthesized) expression = parenthesized.Expression;
+        return expression;
+    }
+
+    /// <summary>
+    /// The defining assembly of <c>DataRowExtensions</c>: System.Data.Common on .NET (the System.Data.DataSetExtensions reference
+    /// assembly forwards it) or System.Data.DataSetExtensions on .NET Framework. Field reads only; Trusted is not widened.
+    /// </summary>
+    internal static bool FieldAssembly(IAssemblySymbol assembly)
+    {
+        var token = Convert.ToHexStringLower(assembly.Identity.PublicKeyToken.ToArray());
+        return (assembly.Identity.Name == "System.Data.Common" && token == "b03f5f7f11d50a3a")
+            || (assembly.Identity.Name == "System.Data.DataSetExtensions" && token == "b77a5c561934e089");
+    }
+
+    /// <summary>
+    /// Bounded, language-neutral rendering of a Field type argument that is recorded but never compared: namespace-qualified names
+    /// without keywords, generic arguments in square brackets, arrays as [] / [,], type parameters by name. Null when not renderable.
+    /// </summary>
+    internal static string? TypeArgument(ITypeSymbol type)
+    {
+        var text = Render(type, 0);
+        return BoundedTypeArgument(text) ? text : null;
+
+        static string? Render(ITypeSymbol type, int depth)
+        {
+            if (depth > 8) return null;
+            switch (type)
+            {
+                case IArrayTypeSymbol array:
+                    return Render(array.ElementType, depth + 1) is { } element ? element + "[" + new string(',', array.Rank - 1) + "]" : null;
+                case ITypeParameterSymbol parameter:
+                    return parameter.Name;
+                case INamedTypeSymbol { TypeKind: not TypeKind.Error } named:
+                    var name = named.ToDisplayString(QualifiedName);
+                    if (!named.IsGenericType) return name;
+                    var arguments = named.TypeArguments.Select(a => Render(a, depth + 1)).ToArray();
+                    return arguments.Any(a => a is null) ? null : name + "[" + string.Join(",", arguments) + "]";
+                default:
+                    return null;
+            }
+        }
+    }
+
+    /// <summary>The type-argument vocabulary: at most 256 characters of [A-Za-z0-9_.,[]], starting with a letter or underscore.</summary>
+    internal static bool BoundedTypeArgument(string? text)
+        => text is { Length: > 0 and <= 256 } && text.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or ',' or '[' or ']')
+            && (char.IsAsciiLetter(text[0]) || text[0] == '_');
+
+    private static readonly SymbolDisplayFormat QualifiedName = new(globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Omitted,
+        typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.ExpandNullable | SymbolDisplayMiscellaneousOptions.ExpandValueTuple);
 
     /// <summary>The selected table's Rows property when <paramref name="operation"/> is exactly that collection.</summary>
     private static IPropertyReferenceOperation? RowsOf(IOperation? operation, Func<IOperation?, bool> selected)

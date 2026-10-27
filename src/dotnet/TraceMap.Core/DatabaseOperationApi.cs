@@ -78,6 +78,8 @@ internal static class DatabaseOperationApi
             SqlServerHelperResults.Add(properties, call);
             // Sibling internal-helper boundary: the same rules, call sites enumerated across the registered compilation scope.
             SqlServerInternalHelperResults.Add(properties, call);
+            // Sibling Field<T> read state: the Phase 2-5 row rules with Field name/ordinal reads admitted; those states are unchanged.
+            SqlServerFieldReads.Add(properties, call);
         }
         // Only inline construction is local to this call. Mutable receiver history is
         // retained elsewhere; it must not silently become current command state.
