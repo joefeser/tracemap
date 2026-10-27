@@ -30,3 +30,29 @@ Shared Core change requires a final full suite after parent coordination.
   their named refusal outcomes remain bound by the hashed native receipt.
 - Same-execution development check exposed the parameter defect above; expected
   match/mismatch matrix was not weakened.
+
+## Committed-head checkpoint
+
+Implementation head `78e8f6a4ad5ea8499746d21575df2446786b5a9c`:
+- Focused Debug `-warnaserror`: 311 passed, zero failures/skips (parameter, reader,
+  Field and DNN). Earlier parameter-only repair gate: 91 passed, ten new cases.
+- Python guards: 59 SQL smoke + 20 DNN harness + 13 linked provider + 10 public
+  acceptance = 102 passed; no SQL/network in these guards.
+- Fresh consolidated native replay passed with source/revision/CLI bytes frozen:
+  parameter 8/12/32; reader JSON+DDL 72/20/94; helper 84/30/116;
+  Field 78/36/42 (match/mismatch/unknown); 20+24+26 refusal checks passed.
+- Eight same-execution pairs (four cases in each language) matched their authored
+  parameter/reader statuses. Only Good is M/M; the negative variants remain X/M,
+  M/X and U/U. Same fact IDs and distinct digest-specific bindings are preserved.
+- Fresh pinned public DNN scan: 6,031 facts, three incidental Tier3 nonquery
+  candidates, one inspected operation, selected reader join unavailable; all
+  original source/license/inventory checks passed. Four blockers remain explicit.
+- Receipt local-only: `/tmp/sql-public-acceptance-78e8f6a/public-acceptance.json`,
+  SHA-256 `4527af595f2edecdad13ab0cc390385124dc4ef9b36f1e08636264a7f854aaee`.
+- Parent ref rechecked after replay: still exact `6aa8c40e975b9277418aa3bc4b561073887c7f3e`;
+  no divergence, no parent merge/rebase or parent output changes.
+
+Pending final integration: full Debug suite, remaining retained SQL smokes,
+pinned OSS adapters and coordinated live regression. Do not call this merge-ready
+or real-DNN/private acceptance. No PR/merge/review spend/ACK edits; no SQL or
+container execution. Results documentation is a subsequent docs-only commit.
