@@ -28,6 +28,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="../../../../samples/sql-compiled-wrapper-evidence/csharp/caller/Caller.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
+    <ProjectReference Include="../../../../samples/sql-compiled-wrapper-evidence/vb/caller/Caller.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../../../../samples/fixture-build/deep-projectless/DeepWebsite.vbproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />
     <ProjectReference Include="../../../../samples/compiled-dotnet-evidence/constructed-generics/caller/ConstructedGenerics.Caller.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/dnn-sql-validation/csharp/Contracts.csproj" ReferenceOutputAssembly="false" />

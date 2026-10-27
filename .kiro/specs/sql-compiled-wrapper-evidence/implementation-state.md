@@ -7,8 +7,26 @@ changes. No private input, SQL or container execution authorized in this package
 Existing IL command candidate deliberately excludes parameter propagation; field
 loads are unknown. Existing source DataSet routes refuse Merge and field-held
 results. These are architectural boundaries, not missing input paths.
-Current semantic versions C# 0.22.23 / VB 0.10.26; IL body 0.2.0. GLM class-split
+Current semantic versions C# 0.22.23 / VB 0.10.26; IL body changes from 0.2.0 to 0.2.1. GLM class-split
 and hosted shard infrastructure already exists and will not be changed here.
 Initial scope sent to coordinator: bounded proven compiled observations plus exact
 blocker outcomes, not a claim that custom heap/property forwarding or merged-schema
-comparison is completed. Validation not yet run for this branch.
+comparison is completed.
+
+Corpus/spec commit: `8273d10cb`. Both net48 compile-only fixture pairs built cleanly.
+Prototype now emits a separate Tier3 local constructor/attachment/Fill-return fact,
+with native exact call/body provenance and an independent bounded derivation budget.
+Legacy command gaps and source comparison contracts are unchanged.
+
+Development gates: initial four prototype tests failed on the generic call-effects
+gap, then four passed after retaining that gap while recognizing only exact API
+shapes. Existing IL lane passed 172 tests with one Windows-only skip. Native test
+build then failed xUnit2031 under -warnaserror (ten tests passed but gate failed);
+the assertion was fixed and twelve tests passed. Native public replay passed its
+20 entry / two local shape / 20 whole-path unknown denominator. Four Python guards
+pass. Expanded bound/refusal regression lane is running; final frozen gates pending.
+
+Coordinator scope checkpoint requested before expensive final validation: this is
+a partial foundation, not resolution of constructor-field/property forwarding,
+interprocedural parameter/DataSet object substitution or Merge/field schema
+consumers. Do not ask the work machine to retry those unimplemented capabilities.

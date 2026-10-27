@@ -172,6 +172,8 @@ internal static class IlBodyEvidenceExtractor
                 IlArgumentAlternatives.MaxAlternatives, IlArgumentAlternatives.MaxEncodedLength },
             valueDerivationAggregateWorkPerReader = limits.MaxTotalWorkUnits,
             maxRetainedReturnSites = IlCallValueExtractor.MaxRetainedReturnSites,
+            sqlShapeLimits = new { IlSqlShapeExtractor.Schema, IlSqlShapeExtractor.MaxCalls,
+                IlSqlShapeExtractor.MaxParameters, aggregateWork = limits.MaxTotalWorkUnits },
             outcomes = outcomes.Select(item => new
             {
                 item.SafeLocator,
@@ -432,6 +434,7 @@ internal static class IlBodyEvidenceExtractor
         // observations. Its aggregate bound uses the policy-bound work limit;
         // it never consumes or upgrades the body-admission receipt.
         var commandBudget = new IlWorkBudget(provenance.EffectiveLimits.MaxTotalWorkUnits);
+        var sqlShapeBudget = new IlWorkBudget(provenance.EffectiveLimits.MaxTotalWorkUnits);
         foreach (var input in evaluation.Inputs.OrderBy(item => item.Outcome.SafeLocator, StringComparer.Ordinal))
         {
             var outcome = input.Outcome;
@@ -617,6 +620,40 @@ internal static class IlBodyEvidenceExtractor
                             ("metadataToken", body.MetadataToken), ("ilBodyFactId", bodyFact.FactId),
                             ("gapKind", gap), ("commandBindingSchema", IlCommandBindingExtractor.Schema),
                             ("limitation", IlCommandBindingExtractor.Limitation)
+                        })));
+                var sqlShapes = IlSqlShapeExtractor.Extract(body, commandBindings, sqlShapeBudget);
+                foreach (var shape in sqlShapes.Observations)
+                {
+                    var endpoint = callFactsByOffset[shape.EndpointOffset];
+                    var parameters = shape.Parameters.Select(parameter => new
+                    {
+                        parameter.Origin, parameter.Name, parameter.SqlDbType, parameter.Size,
+                        constructorCallFactId = callFactsByOffset[parameter.ConstructorOffset].FactId,
+                        attachmentCallFactId = callFactsByOffset[parameter.AttachmentOffset].FactId
+                    }).ToArray();
+                    facts.Add(FactFactory.Create(manifest, FactTypes.ManagedIlSqlShapeCandidate,
+                        RuleIds.DotNetIlSqlShape, EvidenceTiers.Tier3SyntaxOrTextual,
+                        IlEvidence(outcome.SafeLocator), targetSymbol: endpoint.TargetSymbol,
+                        contractElement: "il-sql-shape-candidate",
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("metadataToken", body.MetadataToken), ("ilBodyFactId", bodyFact.FactId),
+                            ("ilCallFactId", endpoint.FactId), ("sqlShapeSchema", IlSqlShapeExtractor.Schema),
+                            ("dataSetOrigin", System.Text.Json.JsonSerializer.Serialize(shape.DataSetOrigin)),
+                            ("returnOffset", shape.ReturnOffset.ToString(CultureInfo.InvariantCulture)),
+                            ("parameterShapes", System.Text.Json.JsonSerializer.Serialize(parameters)),
+                            ("limitation", IlSqlShapeExtractor.Limitation)
+                        })));
+                }
+                foreach (var gap in sqlShapes.Gaps)
+                    facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlSqlShape,
+                        EvidenceTiers.Tier4Unknown, IlEvidence(outcome.SafeLocator),
+                        targetSymbol: body.BodyIdentity, contractElement: gap,
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("metadataToken", body.MetadataToken), ("ilBodyFactId", bodyFact.FactId),
+                            ("gapKind", gap), ("sqlShapeSchema", IlSqlShapeExtractor.Schema),
+                            ("limitation", IlSqlShapeExtractor.Limitation)
                         })));
             }
         }

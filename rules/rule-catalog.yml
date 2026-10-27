@@ -310,6 +310,19 @@ rules:
       - The supported command constructors model the standard Text enum default only as an encoded-framework API contract candidate; command-type assignments override it in the same straight-line region. Missing type and parameter propagation remain explicit gaps.
       - At most 128 receiver states and 200000 work units are admitted per body. The derivation phase also shares an aggregate bound equal to the policy-bound IL MaxTotalWorkUnits across all inputs. Exhaustion withholds all command candidates for that body without revoking admitted body/call facts.
 
+  - id: dotnet.compiled.il-sql-shape.v1
+    status: active
+    name: Bounded encoded SQL parameter and Fill-return shape
+    description: Separately records exact encoded System.Data parameter construction and attachment to a fresh command, one adapter Fill into a fresh local DataSet, and that same DataSet return operand, with independently agreed body and call identities and native generator/input hashes.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [ManagedIlSqlShapeCandidate, AnalysisGap]
+    limitations:
+      - This is encoded metadata and operand evidence, not authenticated provider semantics, SQL contract comparison, source-to-binary equivalence, deployment or runtime proof. It never upgrades source evidence or legacy command-binding gaps.
+      - Only one acyclic branch-free exception-free body with one Fill endpoint is admitted. Exact encoded System.Data SqlParameter string/SqlDbType/Int32 size construction, command Parameters getter and typed Add are recognized. Names are exact UTF-16 hashes; values, direction, runtime defaults and SQL type compatibility are not proven.
+      - Caller-supplied parameters, custom constructor field/property forwarding, aliases escaping the body, mutation, unknown calls, additional executions, unresolved operands and ambiguous returns are withheld. DataSet Merge and field-held consumers are not inferred from the returned allocation.
+      - The body admits at most 256 calls and 16 constructed parameters. A separate aggregate derivation budget equal to the provenance-bound IL MaxTotalWorkUnits preserves the existing command derivation budget and contracts. Exhaustion emits an explicit unknown.
+      - Generic IL call-effects limitations remain present; recognizing an encoded API shape does not establish the runtime effect of the call. Missing candidate facts are not proof of absence.
+
   - id: combined.paths.compiled-command-value.v1
     status: active
     name: Encoded IL call-path command argument candidate
