@@ -1,5 +1,11 @@
 # Finite public SQL acceptance checkpoint
 
+Latest review-repair validation: `66bde05ee`, full Debug `-warnaserror`
+**5,419 passed / 3 expected skips / 0 failures**; 112 Python guards; fresh isolated
+public replay and all retained static smokes passed. Field now checks 52 named
+refusals across both languages. The exact attempts, distinct build provenance and
+remaining DNN/runtime limits are in the spec's implementation-state record.
+
 This package stacks on Field reads; it is not a promise to implement all SQL.
 It supplies one local offline replay before another work-machine round trip.
 The exact source/helper/parameter/contract/consumer links are reported separately.
