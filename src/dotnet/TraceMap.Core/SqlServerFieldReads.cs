@@ -31,8 +31,29 @@ internal static class SqlServerFieldReads
     internal const string AbsentGap = "field-read-absent";
     internal static readonly string[] Origins = ["datatable", "dataset", "helper", "internal-helper"];
 
+    private sealed record CandidateScope(bool MayContainField);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Compilation, CandidateScope> CandidateScopes = new();
+
     internal static void Add(SortedDictionary<string, string> properties, IInvocationOperation call)
-        => properties["sqlServerFieldReadState"] = SqlServerSchemaEvidence.Json(Extract(call));
+    {
+        // A conservative compilation-wide presence check includes cross-document helper callers,
+        // escaped identifiers, unresolved/lookalike calls and unsupported overloads. Absence is
+        // the only omission proof; uncertain/oversized scopes retain the original refusal state.
+        // Scope registration can change independently of the immutable compilation. Check it
+        // on every call, outside the syntax-only cache (including after a previous absence).
+        if (call.SemanticModel is { } model
+            && SqlServerCompilationScopes.Find(model.Compilation) is { Reduced: false, HasErrors: false }
+            && !CandidateScopes.GetValue(model.Compilation, Candidate).MayContainField) return;
+        properties["sqlServerFieldReadState"] = SqlServerSchemaEvidence.Json(Extract(call));
+    }
+
+    private static CandidateScope Candidate(Compilation compilation)
+    {
+        var trees = compilation.SyntaxTrees.Take(SqlServerCompilationScope.MaxTrees + 1).ToArray();
+        if (trees.Length > SqlServerCompilationScope.MaxTrees || trees.Sum(t => (long)t.Length) > SqlServerCompilationScope.MaxCharacters)
+            return new(true);
+        return new(trees.Any(t => t.GetRoot().DescendantTokens().Any(token => string.Equals(token.ValueText, "Field", StringComparison.OrdinalIgnoreCase))));
+    }
 
     private static SqlServerFieldReadState Unknown(string gap, IReadOnlyList<string> originGaps)
         => new(Version, "unknown", gap, null, originGaps, null, null, null, null, null, null, []);

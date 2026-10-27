@@ -131,7 +131,9 @@ public sealed class SqlServerFieldReadEvidenceTests
         foreach (var tampered in new[] { Direct(Indexer("Name")), Direct(Field("Name", type: "System.Nullable<System.Int32>")), Direct(Field("Name") with { Member = "Item" }),
             Direct(Indexer("Name") with { TypeArgument = "System.String" }), Direct(Field("Name") with { Gap = null, TypeArgument = null }),
             Direct(Field("Name")) with { Sites = [Site("dbo.ReadItems", "proj/Tables.cs", Field("Name"))] },
-            Direct(Field("Name")) with { OriginGaps = ["datatable:x"] }, Direct(Field("Name")) with { ResultKind = "dataset" } })
+            Direct(Field("Name")) with { OriginGaps = ["datatable:x"] }, Direct(Field("Name")) with { ResultKind = "dataset" },
+            Direct(Field("Name")) with { Gap = "contradictory-gap" },
+            Direct(Field("Name")) with { Sites = [Site("dbo.ReadItems", null, Field("Name")) with { Gap = "contradictory-gap" }] } })
             Assert.Contains("invalid-field-read-state", Only(Compare(Fact(tampered))).Reasons);
         foreach (var path in new[] { "/abs/Callers.cs", "../Callers.cs", "proj/My Callers.cs", "proj\\Callers.cs" })
             Assert.Contains("invalid-field-read-state", Only(Compare(Fact(Internal(Site("dbo.ReadItems", path, Field("Name")))))).Reasons);
@@ -141,6 +143,20 @@ public sealed class SqlServerFieldReadEvidenceTests
             Assert.Equal((U, version), (old.Status, old.SourceExtractorVersion));
             Assert.Contains("unsupported-source-extractor-or-tier", old.Reasons);
         }
+    }
+
+    [Fact]
+    public void Derived_report_binds_exact_generator_and_field_projection_without_claiming_raw_fact_authentication()
+    {
+        var fact = Fact(Direct(Field("Name")));
+        var report = Compare(fact);
+        Assert.Equal(SqlServerSchemaEvidence.GeneratorSha256, report.GeneratorSha256);
+        Assert.Matches("^[0-9a-f]{64}$", report.BoundedInputSha256);
+        Assert.Equal(report.BoundedInputSha256, Compare(fact).BoundedInputSha256);
+        var changed = Fact(Direct(Field("Name", type: "System.Int32")));
+        Assert.NotEqual(SqlServerFieldReadEvidence.FieldReadDigest(fact, 0), SqlServerFieldReadEvidence.FieldReadDigest(changed, 0));
+        Assert.NotEqual(report.BoundedInputSha256, Compare(changed).BoundedInputSha256);
+        Assert.Contains(report.Limitations, l => l.Contains("integrity only, not authenticity", StringComparison.Ordinal));
     }
 
     [Fact]

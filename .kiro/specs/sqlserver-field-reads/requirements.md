@@ -19,7 +19,8 @@ command rule is unchanged.
    rules did not bind, Field reads inside helper bodies, unrenderable type arguments and
    declaring-assembly identity mismatches.
 4. Evidence: a distinct sibling property `sqlServerFieldReadState` (`sqlserver-field-read/1`) on
-   every Fill DatabaseOperationCandidate. The Phase 2-5 properties, refusals, outputs and
+   Fill DatabaseOperationCandidate unless a bounded compilation-wide token check proves no
+   possible Field read exists. Unknown/oversized scopes retain analysis. The Phase 2-5 properties, refusals, outputs and
    denominators stay unchanged for every input (with or without `Field<T>`): Field reads remain
    `datarow-field-extension-unsupported` there. Distinct bindings `sqlserver-field-read-bindings/1`
    bind one `(factId, siteIndex)` each; DataTable, DataSet, helper, internal-helper, reader and

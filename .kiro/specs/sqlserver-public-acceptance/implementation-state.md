@@ -1,5 +1,16 @@
 # Implementation state
 
+## PR #920 integration after #919 merge
+
+Normal merge of `origin/dev` at `c61e764021b39eea65ab6891caa3fba7c6ed33ed`
+preserves both histories. The only conflicts were extractor versions and the Razor
+version assertion; retain parent C# 0.22.23 / VB 0.10.26. Public packet Field refusal
+expectation is now 52 (26 per language), preserving the corrected parent contract.
+Focused integration includes initializer, Razor, Field scope/cache and near-limit
+regressions before any full-suite rerun. Validation pending. ACK before integration
+reported 10 unresolved threads and a failed Sourcery review check; reviewer batch
+and quorum settled but review patch authority was blocked pending owner decision.
+
 Branch `codex/sqlserver-public-acceptance`; parent frozen at
 `6aa8c40e975b9277418aa3bc4b561073887c7f3e` (`codex/sqlserver-field-reads`).
 Stacked package: offline public acceptance replay and tested blockers, not another

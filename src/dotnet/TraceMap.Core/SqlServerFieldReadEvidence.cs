@@ -74,7 +74,7 @@ public static class SqlServerFieldReadEvidence
 
     private static bool InvalidState(SqlServerFieldReadState state)
     {
-        if (state.Sites is null || state.OriginGaps is not { Count: 0 } || state.Sites.Any(s => s is null)) return true;
+        if (state.Gap is not null || state.Sites is null || state.OriginGaps is not { Count: 0 } || state.Sites.Any(s => s is null)) return true;
         var direct = state.Origin is "datatable" or "dataset";
         if (direct ? state.Sites.Count != 1 || state.CommandTextSource is not null
                 : state.Origin is not ("helper" or "internal-helper") || state.Sites.Count > SqlServerHelperResults.MaxCallers
@@ -86,7 +86,7 @@ public static class SqlServerFieldReadEvidence
     }
 
     private static bool InvalidSite(SqlServerFieldReadState state, SqlServerFieldReadSite site, int startLine)
-        => (state.Origin == "internal-helper" ? !SqlServerSchemaEvidence.PathSafe(site.Path) : site.Path is not null)
+        => site.Gap is not null || (state.Origin == "internal-helper" ? !SqlServerSchemaEvidence.PathSafe(site.Path) : site.Path is not null)
             || site.Line <= 0 || site.EndLine < site.Line || site.CommandTextHash is not { Length: 64 } || site.Selectors is null || site.Guards is null
             || site.Selectors.Any(s => state.ResultKind == "datatable" || s is not ("table-local" or "tables-index" or "tables-name"))
             || site.Guards.Any(g => g is not ("foreach" or "rows-count") && !(g == "tables-count" && state.ResultKind == "dataset"))

@@ -507,6 +507,59 @@ public sealed class SqlServerDataTableEvidenceTests
         Assert.False(Directory.Exists(Path.Combine(temp.Path, "x1")) || Directory.Exists(Path.Combine(temp.Path, "x2")));
     }
 
+    [Theory]
+    [InlineData("cs")]
+    [InlineData("vb")]
+    public async Task Non_field_fill_keeps_near_limit_facts_admissible_without_raising_the_bound(string language)
+    {
+        var members = language == "cs"
+            ? "static object M() { var command = new SqlCommand(\"dbo.ReadItems\"); command.CommandType = CommandType.StoredProcedure; var adapter = new SqlDataAdapter(command); var table = new DataTable(); adapter.Fill(table); return table.Rows[0][\"Name\"]; }"
+            : "Function M() As Object\nDim command = New SqlCommand(\"dbo.ReadItems\")\ncommand.CommandType = CommandType.StoredProcedure\nDim adapter = New SqlDataAdapter(command)\nDim table = New DataTable()\nadapter.Fill(table)\nReturn table.Rows(0)(\"Name\")\nEnd Function";
+        var extracted = Assert.Single(SqlServerFieldReadExtractionTests.Extract(language, members, register: true));
+        Assert.False(extracted.Properties.ContainsKey("sqlServerFieldReadState"));
+        var fact = Fact(extracted.DataTable) with { Properties = extracted.Properties,
+            Evidence = Fact(extracted.DataTable).Evidence with { StartLine = 1, EndLine = 1 } };
+        using var temp = new TempDirectory();
+        var facts = Path.Combine(temp.Path, "facts.ndjson");
+        File.WriteAllText(facts, SqlServerSchemaEvidence.Json(fact) + "\n");
+        const int bound = 64 * 1024 * 1024;
+        Assert.Equal(bound, SqlServerDataTableCommand.MaxFactsBytes);
+        // Whitespace is valid JSON and simulates unrelated retained scan bytes without
+        // changing the selected execution/binding. One unnecessary sibling payload
+        // would exceed the exact established whole-facts bound.
+        using (var stream = new FileStream(facts, FileMode.Append))
+        {
+            var unrelated = System.Text.Encoding.UTF8.GetBytes(SqlServerSchemaEvidence.Json(fact with
+            {
+                FactType = "SyntheticPadding", Properties = new Dictionary<string, string> { ["padding"] = new string('x', 1024 * 1024) }
+            }) + "\n");
+            while (stream.Length + unrelated.Length < bound - 1) stream.Write(unrelated);
+            // Keep each record below the separate 4 MiB JSON record bound.
+            stream.Write(System.Text.Encoding.UTF8.GetBytes(SqlServerSchemaEvidence.Json(fact with { FactType = "SyntheticPadding" })));
+            var spaces = Enumerable.Repeat((byte)' ', 8192).ToArray();
+            while (stream.Length < bound - 1) stream.Write(spaces, 0, (int)Math.Min(spaces.Length, bound - 1 - stream.Length));
+        }
+        Assert.True(SqlServerSchemaEvidence.Json(extracted.Field).Length > 1);
+        var declarations = Declarations();
+        var input = Path.Combine(temp.Path, "declarations.json");
+        var schema = Path.Combine(temp.Path, "schema.json");
+        var bindings = Path.Combine(temp.Path, "bindings.json");
+        File.WriteAllText(input, SqlServerSchemaEvidence.Json(declarations));
+        File.WriteAllText(schema, SqlServerSchemaEvidence.Json(SqlServerResultEvidence.Produce(File.ReadAllText(input))));
+        File.WriteAllText(bindings, SqlServerSchemaEvidence.Json(Bindings(fact)));
+        string[] command = ["sqlserver-datatable-result", "compare", "--origin", "result-schema", "--declarations", input,
+            "--schema", schema, "--bindings", bindings, "--facts", facts, "--repo", fact.Repo, "--revision", fact.CommitSha,
+            "--out", Path.Combine(temp.Path, "accepted")];
+        var error = new StringWriter();
+        Assert.True(await TraceMapCommand.RunAsync(command, TextWriter.Null, error) == 0, error.ToString());
+        var report = SqlServerSchemaEvidence.Read<SqlServerDataTableComparisonReport>(File.ReadAllText(Path.Combine(command[^1], "datatable-column-comparison.json")));
+        Assert.Equal([M], Statuses(report));
+        File.AppendAllText(facts, "  ");
+        command[^1] = Path.Combine(temp.Path, "refused");
+        Assert.NotEqual(0, await TraceMapCommand.RunAsync(command, TextWriter.Null, error));
+        Assert.False(Directory.Exists(command[^1]));
+    }
+
     [Fact]
     public void DataTable_rule_has_one_catalog_entry_with_evidence_and_limits()
     {
