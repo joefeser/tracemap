@@ -15,6 +15,10 @@ class CompiledWrapperSmokeGuards(unittest.TestCase):
                                             "Mutated", "Escaped", "Branch", "MergeFresh", "MergeExisting", "MergeMutated"])
         self.assertEqual(MODULE.CASES["MergeExisting"], ("Direct", "existing-destination-schema-unavailable"))
         self.assertEqual(MODULE.CASES["FieldObject"], ("FieldObject", "constructor-field-forwarding-unavailable"))
+        self.assertEqual(MODULE.SUPPORTED_OBJECT_PATHS,
+                         {"Direct", "Forwarded", "FieldObject", "PropertyObject", "MergeFresh"})
+        self.assertEqual(set(MODULE.CASES) - MODULE.SUPPORTED_OBJECT_PATHS,
+                         {"Mutated", "Escaped", "Branch", "MergeExisting", "MergeMutated"})
 
     def test_missing_native_evidence_fails(self):
         with self.assertRaises(ValueError):

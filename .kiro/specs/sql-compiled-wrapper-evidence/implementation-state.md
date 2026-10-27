@@ -59,3 +59,30 @@ validated foundation, not resolution of the application fit gap.
 
 Branch pushed to origin after validation. A fresh post-push fetch confirmed
 `origin/dev` still equals the recorded base (zero divergence). No PR or merge.
+
+## Authorized object-path continuation
+
+The foundation statements above are historical. Owner authorized a bounded closed
+object protocol for the existing finite corpus, not a general heap/ORM engine.
+New sibling rule `dotnet.compiled.il-sql-object-path.v1`, IL version 0.2.2, retains
+dual-reader-agreed bounded instructions/private fields and exact unique compiled
+call frames. Constructor scalar stores/getter loads, incoming parameter objects,
+returned DataSet and fresh-empty private-field Merge now connect to first-table/
+row named consumers. Merge keeps distinct filled/destination identities; all
+evidence stays Tier3 and legacy SQL/source routes remain unchanged.
+
+Independently authored expected denominator before interpreter execution:
+Direct/Forwarded/FieldObject/PropertyObject/MergeFresh positive in each language;
+Mutated/Escaped/Branch/MergeExisting/MergeMutated unknown in each language. Native
+CLI replay confirms 10 static paths, 10 unknowns and two unchanged local shapes.
+No SQL contract is admitted or compared. Complex DDL with locals/joins/computed
+projections/ordering and four-part server identity remain separate blockers;
+manual/private declarations must never be relabeled synthetic-independent.
+
+Development failures preserved: first matrix had C# Direct fail on the inherited
+DbCommand.set_CommandType encoded signature (VB passed); diagnostic rerun repeated
+the same failure. Added that exact framework signature, then both passed. No
+expectation changed. Native tests plus shape tests passed 20; expanded IL/command/
+SQL/Razor lane now passes 193 with one existing Windows-only skip. Four Python
+guards, private-path and whitespace checks pass. Final frozen full/retained/pinned
+gates still pending. No SQL, private input or container execution occurred.

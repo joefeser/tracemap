@@ -4,7 +4,56 @@ This is a finite compile-only corpus and a **partial** native evidence addition,
 not completed SQL-A acceptance. No SQL, provider methods, containers or private
 application inputs execute. Source fixtures are not proof of deployed binaries.
 
-## Denominator and implementation
+## Current object-path continuation
+
+The independent `dotnet.compiled.il-sql-object-path.v1` route connects the authored
+finite corpus across caller and separately compiled wrapper: **10 bounded static
+candidates and 10 unknowns**, plus the unchanged two local shape facts. C# and VB
+each support Direct, Forwarded, FieldObject, PropertyObject and MergeFresh.
+Mutation, escape, conditional parameter flow, existing Merge destination and
+post-Merge mutation remain refused.
+
+Custom constructor stores and getter loads use dual-reader-agreed IL metadata,
+fresh allocation identities and positional invocation frames. Every retained site
+binds binary hash, body fact, IL offset and invocation. A unique admitted
+binary/body is required; competing bytes for an assembly reference, missing
+bodies, recursion, virtual/generic bodies, exceptional/conditional flow, unknown
+calls and exhausted limits are unknown. This is a closed static protocol, not a
+general heap engine or executed provider; encoded provider names are unauthenticated.
+
+The consumer names a constant hashed column on first table/row. An optional
+private destination field must be freshly assigned in the root invocation. Merge
+records distinct filled and consumer allocations with
+`fresh-empty-schema-union-candidate`, never original-result aliasing, schema
+comparison, value/row/type/nullability or runtime-ownership proof.
+
+IL version is `0.2.2`; source versions and legacy routes are unchanged. New bounds:
+4096 indexed bodies, 256 instructions/body, 64 fields, 2048 steps, depth 16,
+64 allocations, 256 sites, 16 parameters and 64 stack/local slots. Retained object
+metadata has a separate per-reader character budget capped at 1048576 and
+MaxTotalWorkUnits; interpretation has its own aggregate MaxTotalWorkUnits budget.
+Bounds participate in the native bounded-input digest.
+
+### Remaining acceptance requirements
+
+The three compiled-flow legs are implemented for this corpus, not arbitrary
+private wrappers. Actual acceptance additionally requires:
+
+1. Supported result-schema admission and explicit server/database/schema/procedure
+   identity. Complex bodies with locals, joins, computed projections and ordering
+   remain outside existing DDL admission. This is a separate capability gap, not
+   missing paths or permission to implement a general parser.
+2. Exact private binary/source selection and owner-supplied identity, then a
+   bounded fit check. Public static candidates are not deployed equivalence.
+3. An independent admitted contract and comparison bound to these exact execution
+   and consumer candidates before declaring parameter/column matches. Manual
+   declarations must retain their real origin, never synthetic-independent labels.
+   Case-only names remain unknown under existing contracts.
+
+Do not rerun the work-machine loop simply to rediscover known contract-admission
+and comparison blockers. No SQL, containers or private inputs run in this package.
+
+## Foundation denominator and implementation (historical)
 
 Two separate assemblies per language: a C#/VB caller and wrapper, built against
 .NET Framework 4.8 reference assemblies. Ten independently authored entry cases
@@ -39,12 +88,12 @@ python3 scripts/validation/sql-compiled-wrapper-smoke.py --cli src/dotnet/TraceM
 ```
 
 The output directory must not exist. The native scans and local-only matrix retain
-input and generator hashes. Expected: **20 entry cases, two native local shapes,
-20 whole-path unknowns**. A shape reached by multiple entries is not counted as
+input and generator hashes. Current expectation: **20 entries, two local shapes,
+10 bounded static object paths and 10 unknowns**. A shape reached by multiple entries is not counted as
 multiple successful bindings. Whole-path status cannot become clean merely because
 the smoke's expected unknowns reproduce.
 
-## Finite remaining requirements (not optional SQL expansion)
+## Foundation remaining requirements (historical; superseded above)
 
 1. Constructor-to-field/property forwarding needs actual compiled heap-store/load
    evidence and exact caller/callee identity, not a wrapper-name exemption.

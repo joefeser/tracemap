@@ -19,6 +19,7 @@ CASES = {
     "MergeExisting": ("Direct", "existing-destination-schema-unavailable"),
     "MergeMutated": ("Direct", "merged-destination-mutation-unavailable"),
 }
+SUPPORTED_OBJECT_PATHS = frozenset(("Direct", "Forwarded", "FieldObject", "PropertyObject", "MergeFresh"))
 
 
 def digest(path):
@@ -66,6 +67,9 @@ def inspect(facts, language, assembly_hashes):
             if call["properties"][key] != props[key]:
                 raise ValueError("shape provenance mismatch")
     rows = []
+    object_paths = [fact for fact in facts if fact["factType"] == "ManagedIlSqlObjectPathCandidate"]
+    if len(object_paths) != 5:
+        raise ValueError("wrong object path denominator")
     for name, (target, blocker) in CASES.items():
         caller = body("caller", name)
         callee = body("wrapper", target)
@@ -74,10 +78,53 @@ def inspect(facts, language, assembly_hashes):
                     and fact["properties"]["ilBodyFactId"] == caller["factId"]
                     and f"PublicSql.{language}.wrapper" in fact["properties"]["targetIdentity"]
                     and f"|member:{len(target)}:{target}|" in fact["properties"]["targetIdentity"]), name)
+        candidates = [fact for fact in object_paths if fact["targetSymbol"] == caller["targetSymbol"]]
+        if name in SUPPORTED_OBJECT_PATHS:
+            candidate = one(candidates, name + " object path")
+            evidence = candidate["properties"]
+            if (candidate["evidenceTier"] != "Tier3SyntaxOrTextual"
+                    or candidate["ruleId"] != "dotnet.compiled.il-sql-object-path.v1"
+                    or evidence["rootBodyFactId"] != caller["factId"]
+                    or evidence["sqlObjectPathSchema"] != "il-sql-object-path.v1"):
+                raise ValueError("wrong object path identity/tier")
+            for key in ("rawFileSha256", "ilGeneratorSha256", "ilBoundedInputSha256"):
+                if evidence[key] != caller["properties"][key]:
+                    raise ValueError("object path provenance mismatch")
+            parameter_shape = one(json.loads(evidence["parameterShapes"]), "object parameter")
+            for key in ("Name", "SqlDbType", "Size"):
+                if parameter_shape[key] != parameter[key]:
+                    raise ValueError("wrong forwarded parameter shape")
+            for key, value in (("commandText", "public.lookup"), ("columnIdentity", "Name")):
+                expected = {"Kind": "constant-string-hash", "Identity": f"str:{len(value)}:" + hashlib.sha256(value.encode("utf-16-le")).hexdigest()}
+                if json.loads(evidence[key]) != expected:
+                    raise ValueError("wrong object scalar identity")
+            sites = json.loads(evidence["sites"])
+            one((site for site in sites if site["Action"] == "fill"), "one Fill execution")
+            one((site for site in sites if site["Action"] == "column-consumer"), "one consumer")
+            if {site["BinarySha256"] for site in sites} != set(assembly_hashes.values()):
+                raise ValueError("missing cross-binary path")
+            for site in sites:
+                linked = by_id[site["bodyFactId"]]
+                if (linked["factType"] != "ManagedIlBodyDeclared" or linked["targetSymbol"] != site["BodyIdentity"]
+                        or linked["properties"]["rawFileSha256"] != site["BinarySha256"]):
+                    raise ValueError("wrong object body link")
+            merge = name == "MergeFresh"
+            if ((evidence["filledDataSetIdentity"] != evidence["consumerDataSetIdentity"]) != merge
+                    or evidence["consumerRelation"] != ("fresh-empty-schema-union-candidate" if merge else "same-returned-dataset-candidate")):
+                raise ValueError("wrong Merge identity/relation")
+            status, path_id, gap = "BOUNDED_STATIC_CANDIDATE", candidate["factId"], None
+        else:
+            if candidates:
+                raise ValueError("unsafe object path accepted")
+            gap_fact = one((fact for fact in facts if fact["factType"] == "AnalysisGap"
+                            and fact["ruleId"] == "dotnet.compiled.il-sql-object-path.v1"
+                            and fact["targetSymbol"] == caller["targetSymbol"]), name + " refusal")
+            status, path_id, gap = "UNKNOWN", None, gap_fact["contractElement"]
         rows.append({"language": language, "case": name, "callerBodyFactId": caller["factId"],
                      "encodedWrapperCallFactId": call["factId"], "inspectedWrapperBodyFactId": callee["factId"],
                      "localShapeFactId": shape["factId"] if target == "Direct" else None,
-                     "wholePathStatus": "UNKNOWN", "firstUnimplementedLeg": blocker,
+                     "wholePathStatus": status, "objectPathFactId": path_id, "objectPathGap": gap,
+                     "foundationBlocker": blocker,
                      "sqlContractStatus": "NOT_ADMITTED", "runtimeStatus": "NOT_RUN"})
     return rows
 
@@ -107,16 +154,16 @@ def main():
         rows.extend(inspect(facts, language, hashes))
         inputs[language] = {"assemblies": hashes, "factsSha256": digest(facts_path),
                             "manifestSha256": digest(scan / "scan-manifest.json")}
-    report = {"schema": "public-compiled-wrapper-matrix/1", "artifactVisibility": "local-only",
+    report = {"schema": "public-compiled-wrapper-matrix/2", "artifactVisibility": "local-only",
               "generatorSha256": digest(pathlib.Path(__file__)), "cliSha256": digest(cli),
               "boundedInputSha256": hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
               "inputs": inputs, "rows": rows, "coverage": "Partial",
-              "summary": {"entryCases": 20, "nativeLocalShapes": 2, "wholePathUnknown": 20},
-              "limitations": "Encoded call/member observations are not source/binary/deployed equivalence or runtime proof. Custom-object forwarding and merged-field consumers remain unimplemented. No SQL contract admitted."}
+              "summary": {"entryCases": 20, "nativeLocalShapes": 2, "wholePathStaticCandidates": 10, "wholePathUnknown": 10},
+              "limitations": "Encoded static paths are not source/binary/deployed equivalence, SQL contract matches or runtime proof. Fresh-empty Merge is a distinct schema-union candidate, never original result identity. Complex DDL and server/database identity remain unadmitted."}
     temporary = output / "matrix.json.tmp"
     temporary.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temporary.replace(output / "matrix.json")
-    print("PASS: 20 entry cases; 2 local IL shapes; 20 explicit whole-path unknowns; no SQL execution")
+    print("PASS: 20 entry cases; 2 local IL shapes; 10 bounded static paths; 10 explicit unknowns; no SQL execution")
 
 
 if __name__ == "__main__":

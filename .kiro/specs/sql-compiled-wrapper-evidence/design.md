@@ -32,3 +32,16 @@ parameter alias/escape, duplicate attachments, unsupported control flow, multipl
 executions/returns, body/work bounds and stale/malformed provenance. No candidate
 is upgraded to Tier1 or substituted for the existing source parameter/reader/Fill
 comparison bindings.
+
+## Authorized object-path continuation denominator
+
+Authored before running the new interpreter: Direct, Forwarded, FieldObject,
+PropertyObject and MergeFresh must each yield one Tier3 static dataflow candidate
+in each language (10 total). Mutated, Escaped, Branch, MergeExisting and
+MergeMutated must each remain unknown (10 total). These are NOT SQL contract
+matches. MergeFresh explicitly records distinct filled and consumer allocations
+and a fresh-empty-schema-union-candidate relation, never original result identity.
+The route follows only fully inspected unique nonvirtual bodies and refuses all
+unrecognized calls, exceptional/conditional flow, object mutations and escapes.
+Local aliases are usable only when every use is inspected; no uninspected alias
+or preexisting field ownership is inferred. Scalar strings remain hashed.

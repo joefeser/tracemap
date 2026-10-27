@@ -109,7 +109,12 @@ internal sealed record IlBodyObservation(
     string BodySha256,
     IReadOnlyList<IlCallObservation> Calls,
     IReadOnlyList<string>? DiagnosticInstructions = null,
-    IlValueFlowObservation? ValueFlow = null);
+    IlValueFlowObservation? ValueFlow = null,
+    IlObjectBody? ObjectBody = null);
+
+internal sealed record IlObjectBody(IReadOnlyList<string> Instructions, string MemberReference,
+    string OwnerType, string Name, int ParameterCount, bool HasThis, bool ReturnsValue,
+    bool IsVirtual, bool IsGeneric, IReadOnlyList<string> PrivateInstanceFields);
 
 internal sealed record EvaluatedIlInput(
     IlInputOutcome Outcome,

@@ -78,6 +78,8 @@ internal static class IlBodyEvidenceExtractor
         // body/call admission budget or retire independently decoded bodies.
         var srmValueBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
         var cecilValueBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
+        var srmObjectBudget = new IlWorkBudget(Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
+        var cecilObjectBudget = new IlWorkBudget(Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
         foreach (var artifact in admitted)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -98,8 +100,8 @@ internal static class IlBodyEvidenceExtractor
                 // The raw reader runs first so every bound (opcode table,
                 // operand extent, switch table, string limit) is validated
                 // before Mono.Cecil materializes the same operand.
-                var srm = ReadSystemReflectionMetadataBodies(bytes, limits, workBudget, cancellationToken, valueBudget: srmValueBudget);
-                var cecil = ReadCecilBodies(bytes, limits, workBudget, cancellationToken, valueBudget: cecilValueBudget);
+                var srm = ReadSystemReflectionMetadataBodies(bytes, limits, workBudget, cancellationToken, valueBudget: srmValueBudget, objectBudget: srmObjectBudget);
+                var cecil = ReadCecilBodies(bytes, limits, workBudget, cancellationToken, valueBudget: cecilValueBudget, objectBudget: cecilObjectBudget);
                 var disagreements = CompareBodies(cecil, srm);
                 cecil = cecil with { Bodies = AgreeValueFlows(cecil.Bodies, srm.Bodies) };
                 if (disagreements.Count > 0)
@@ -174,6 +176,11 @@ internal static class IlBodyEvidenceExtractor
             maxRetainedReturnSites = IlCallValueExtractor.MaxRetainedReturnSites,
             sqlShapeLimits = new { IlSqlShapeExtractor.Schema, IlSqlShapeExtractor.MaxCalls,
                 IlSqlShapeExtractor.MaxParameters, aggregateWork = limits.MaxTotalWorkUnits },
+            sqlObjectLimits = new { IlSqlObjectPathExtractor.Schema, IlSqlObjectPathExtractor.MaxSteps,
+                IlSqlObjectPathExtractor.MaxFrames, IlSqlObjectPathExtractor.MaxObjects, IlSqlObjectPathExtractor.MaxSites,
+                maxIndexedBodies = 4096, maxInstructions = 256, maxFields = 64,
+                retainedCharacterBudgetPerReader = Math.Min(limits.MaxTotalWorkUnits, 1_048_576),
+                aggregateWork = limits.MaxTotalWorkUnits },
             outcomes = outcomes.Select(item => new
             {
                 item.SafeLocator,
@@ -658,7 +665,55 @@ internal static class IlBodyEvidenceExtractor
             }
         }
 
+        EmitSqlObjectPaths(manifest, evaluation, provenance, facts);
         return facts;
+    }
+
+    private static void EmitSqlObjectPaths(ScanManifest manifest, IlBodyEvaluation evaluation, IlBodyProvenance provenance, List<CodeFact> facts)
+    {
+        var bodies = evaluation.Inputs.OrderBy(input => input.Outcome.SafeLocator, StringComparer.Ordinal)
+            .SelectMany(input => input.Bodies.Select(body => new IlSqlObjectPathExtractor.Body(body, input.Outcome))).ToArray();
+        var bodyFacts = facts.Where(fact => fact.FactType == FactTypes.ManagedIlBodyDeclared)
+            .GroupBy(fact => (fact.Properties["rawFileSha256"], fact.TargetSymbol!))
+            .ToDictionary(group => group.Key, group => group.First());
+        var budget = new IlWorkBudget(provenance.EffectiveLimits.MaxTotalWorkUnits);
+        foreach (var root in bodies.Where(body => IlSqlObjectPathExtractor.IsRoot(body.Observation)))
+        {
+            var common = CommonProperties(provenance, root.Input);
+            var result = IlSqlObjectPathExtractor.Extract(root, bodies, budget);
+            foreach (var path in result.Paths)
+            {
+                var sites = path.Sites.Select(site => new
+                {
+                    site.BodyIdentity, site.BinarySha256, site.Offset, site.Frame, site.Action,
+                    bodyFactId = bodyFacts[(site.BinarySha256, site.BodyIdentity)].FactId
+                }).ToArray();
+                facts.Add(FactFactory.Create(manifest, FactTypes.ManagedIlSqlObjectPathCandidate,
+                    RuleIds.DotNetIlSqlObjectPath, EvidenceTiers.Tier3SyntaxOrTextual, IlEvidence(root.Input.SafeLocator),
+                    targetSymbol: root.Observation.BodyIdentity, contractElement: "il-sql-object-path-candidate",
+                    properties: CopyToSorted(common, new (string Key, string Value)[]
+                    {
+                        ("sqlObjectPathSchema", IlSqlObjectPathExtractor.Schema),
+                        ("rootBodyFactId", bodyFacts[(root.Input.RawFileSha256!, root.Observation.BodyIdentity)].FactId),
+                        ("executionIdentity", path.ExecutionIdentity),
+                        ("commandText", System.Text.Json.JsonSerializer.Serialize(path.CommandText)),
+                        ("commandType", System.Text.Json.JsonSerializer.Serialize(path.CommandType)),
+                        ("parameterShapes", System.Text.Json.JsonSerializer.Serialize(path.Parameters)),
+                        ("columnIdentity", System.Text.Json.JsonSerializer.Serialize(path.Column)),
+                        ("filledDataSetIdentity", path.FilledDataSetIdentity), ("consumerDataSetIdentity", path.ConsumerDataSetIdentity),
+                        ("consumerRelation", path.Relation), ("sites", System.Text.Json.JsonSerializer.Serialize(sites)),
+                        ("limitation", IlSqlObjectPathExtractor.Limitation)
+                    })));
+            }
+            foreach (var gap in result.Gaps)
+                facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlSqlObjectPath,
+                    EvidenceTiers.Tier4Unknown, IlEvidence(root.Input.SafeLocator), targetSymbol: root.Observation.BodyIdentity,
+                    contractElement: gap, properties: CopyToSorted(common, new (string Key, string Value)[]
+                    {
+                        ("sqlObjectPathSchema", IlSqlObjectPathExtractor.Schema), ("gapKind", gap),
+                        ("limitation", IlSqlObjectPathExtractor.Limitation)
+                    })));
+        }
     }
 
     internal static List<string> CompareBodies(IlReaderResult cecil, IlReaderResult srm)
@@ -717,7 +772,9 @@ internal static class IlBodyEvidenceExtractor
             && body.Calls.Count == other.Calls.Count
             && body.Calls.Zip(other.Calls, (left, right) => left.StackShape == right.StackShape).All(equal => equal)
             && System.Text.Json.JsonSerializer.Serialize(body.ValueFlow) == System.Text.Json.JsonSerializer.Serialize(other.ValueFlow)
-                ? body : body with { ValueFlow = new([], ["IlValueReaderDisagreementOrLimit"]) }).ToArray();
+                ? body with { ObjectBody = System.Text.Json.JsonSerializer.Serialize(body.ObjectBody)
+                    == System.Text.Json.JsonSerializer.Serialize(other.ObjectBody) ? body.ObjectBody : null }
+                : body with { ValueFlow = new([], ["IlValueReaderDisagreementOrLimit"]), ObjectBody = null }).ToArray();
     }
 
     // Addresses are used internally for conservative object exposure, never
@@ -732,9 +789,10 @@ internal static class IlBodyEvidenceExtractor
         IlWorkBudget budget,
         CancellationToken cancellationToken,
         bool retainDiagnosticInstructions = false,
-        IlWorkBudget? valueBudget = null)
+        IlWorkBudget? valueBudget = null, IlWorkBudget? objectBudget = null)
     {
         valueBudget ??= new IlWorkBudget(limits.MaxTotalWorkUnits);
+        objectBudget ??= new IlWorkBudget(Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
         using var stream = new MemoryStream(bytes, writable: false);
         using var resolver = new ManagedMetadataExtractor.RejectingAssemblyResolver();
         using var module = CecilModuleDefinition.ReadModule(stream, new ReaderParameters
@@ -768,7 +826,7 @@ internal static class IlBodyEvidenceExtractor
                     MetadataTokens.MethodDefinitionHandle(checked((int)method.MetadataToken.RID)));
                 var rawIl = rawPe.GetMethodBody(rawMethod.RelativeVirtualAddress).GetILBytes()
                     ?? throw new IlEvidenceException("MalformedIlBody");
-                bodies.Add(ReadCecilBody(method, rawIl, assemblyIdentity, limits, budget, retainDiagnosticInstructions, valueBudget));
+                bodies.Add(ReadCecilBody(method, rawIl, assemblyIdentity, limits, budget, retainDiagnosticInstructions, valueBudget, objectBudget));
             }
         }
         return new IlReaderResult(assemblyIdentity, module.Name, module.Mvid.ToString("D", CultureInfo.InvariantCulture), bodies);
@@ -781,7 +839,7 @@ internal static class IlBodyEvidenceExtractor
         IlBodyLimits limits,
         IlWorkBudget budget,
         bool retainDiagnosticInstructions,
-        IlWorkBudget valueBudget)
+        IlWorkBudget valueBudget, IlWorkBudget objectBudget)
     {
         var body = method.Body;
         var memberKind = method.IsConstructor ? "constructor" : "method";
@@ -847,7 +905,15 @@ internal static class IlBodyEvidenceExtractor
             bodySha256,
             calls,
             retainDiagnosticInstructions ? instructions : null,
-            ExtractCallValues(instructions, calls, body.MaxStackSize, handlers, valueBudget));
+            ExtractCallValues(instructions, calls, body.MaxStackSize, handlers, valueBudget),
+            instructions.Count <= 256 && method.DeclaringType.Fields.Count <= 64
+                && objectBudget.TryConsume(instructions.Sum(item => (long)item.Length) + (long)method.DeclaringType.Fields.Count * limits.MaxTextLength)
+                ? new IlObjectBody(instructions, $"memberref|type:{ScopedNamedType(method.DeclaringType)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(method.Name)}|{signature}",
+                    ScopedNamedType(method.DeclaringType), method.Name, method.Parameters.Count, method.HasThis,
+                    method.ReturnType.FullName != "System.Void", method.IsVirtual,
+                    method.HasGenericParameters || method.DeclaringType.HasGenericParameters,
+                    method.DeclaringType.Fields.Where(field => field.IsPrivate && !field.IsStatic)
+                        .Select(field => CecilFieldIdentity(field)["fielddef|".Length..]).Order(StringComparer.Ordinal).ToArray()) : null);
     }
 
     // Cecil and Reflection.Emit may use different display names for an opcode.
@@ -1144,9 +1210,10 @@ internal static class IlBodyEvidenceExtractor
         IlWorkBudget budget,
         CancellationToken cancellationToken,
         bool retainDiagnosticInstructions = false,
-        IlWorkBudget? valueBudget = null)
+        IlWorkBudget? valueBudget = null, IlWorkBudget? objectBudget = null)
     {
         valueBudget ??= new IlWorkBudget(limits.MaxTotalWorkUnits);
+        objectBudget ??= new IlWorkBudget(Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
         using var stream = new MemoryStream(bytes, writable: false);
         using var pe = new PEReader(stream, PEStreamOptions.LeaveOpen);
         var reader = pe.GetMetadataReader();
@@ -1178,7 +1245,7 @@ internal static class IlBodyEvidenceExtractor
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
             bodies.Add(ReadSrmBody(pe, reader, provider, handle, method, assemblyIdentity, limits, budget,
-                retainDiagnosticInstructions, valueBudget));
+                retainDiagnosticInstructions, valueBudget, objectBudget));
         }
         return new IlReaderResult(assemblyIdentity, moduleName, reader.GetGuid(moduleDefinition.Mvid).ToString("D", CultureInfo.InvariantCulture), bodies);
     }
@@ -1193,7 +1260,7 @@ internal static class IlBodyEvidenceExtractor
         IlBodyLimits limits,
         IlWorkBudget budget,
         bool retainDiagnosticInstructions,
-        IlWorkBudget valueBudget)
+        IlWorkBudget valueBudget, IlWorkBudget objectBudget)
     {
         var body = pe.GetMethodBody(method.RelativeVirtualAddress);
         var il = body.GetILBytes() ?? throw new IlEvidenceException("MalformedIlBody");
@@ -1300,7 +1367,21 @@ internal static class IlBodyEvidenceExtractor
             bodySha256,
             calls,
             retainDiagnosticInstructions ? instructions : null,
-            ExtractCallValues(instructions, calls, body.MaxStack, handlers, valueBudget));
+            ExtractCallValues(instructions, calls, body.MaxStack, handlers, valueBudget),
+            instructions.Count <= 256 && reader.GetTypeDefinition(declaringTypeHandle).GetFields().Count <= 64
+                && objectBudget.TryConsume(instructions.Sum(item => (long)item.Length) + (long)reader.GetTypeDefinition(declaringTypeHandle).GetFields().Count * limits.MaxTextLength)
+                ? new IlObjectBody(instructions, $"memberref|type:{provider.GetTypeFromEntityHandle(declaringTypeHandle)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(name)}|{signature}",
+                    provider.GetTypeFromEntityHandle(declaringTypeHandle), name, decoded.ParameterTypes.Length,
+                    decoded.Header.IsInstance, decoded.ReturnType != "type(namespace:6:System|names:4:Void)",
+                    (method.Attributes & System.Reflection.MethodAttributes.Virtual) != 0,
+                    method.GetGenericParameters().Count != 0 || reader.GetTypeDefinition(declaringTypeHandle).GetGenericParameters().Count != 0,
+                    reader.GetTypeDefinition(declaringTypeHandle).GetFields().Where(fieldHandle =>
+                    {
+                        var attributes = reader.GetFieldDefinition(fieldHandle).Attributes;
+                        return (attributes & System.Reflection.FieldAttributes.FieldAccessMask) == System.Reflection.FieldAttributes.Private
+                            && (attributes & System.Reflection.FieldAttributes.Static) == 0;
+                    }).Select(fieldHandle => SrmFieldIdentity(reader, provider, fieldHandle)["fielddef|".Length..])
+                        .Order(StringComparer.Ordinal).ToArray()) : null);
     }
 
     private static (string Kind, string Token, string Identity) SrmBoundedTarget(string kind, string token, string identity, IlBodyLimits limits)
