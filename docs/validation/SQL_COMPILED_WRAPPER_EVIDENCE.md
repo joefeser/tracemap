@@ -33,6 +33,9 @@ IL version is `0.2.2`; source versions and legacy routes are unchanged. New boun
 metadata has a separate per-reader character budget capped at 1048576 and
 MaxTotalWorkUnits; interpretation has its own aggregate MaxTotalWorkUnits budget.
 Bounds participate in the native bounded-input digest.
+Allocation and execution IDs are invocation-path-local: bind them together with
+the root body fact and the binary/body/offset/frame site tuple. Never join a bare
+frame/allocation string across different root facts.
 
 ### Remaining acceptance requirements
 
@@ -52,6 +55,67 @@ private wrappers. Actual acceptance additionally requires:
 
 Do not rerun the work-machine loop simply to rediscover known contract-admission
 and comparison blockers. No SQL, containers or private inputs run in this package.
+
+### New application-shape fit requirements (not implemented)
+
+Additional shape evidence arrived after the implementation freeze. It does not
+change the validated 20-root denominator and is not exact executable source:
+
+- A holder property receives a fresh DataSet and two named tables. The first
+  result table of two **different DataSet-returning functions** is merged into
+  destination tables zero and one. Keep two execution lineages; neither repeated
+  fetch identity nor snapshot-copy equivalence is established.
+- DataTable.Merge, table creation, holder property/alias ownership and index one
+  are not covered by the current single DataSet.Merge/first-table route.
+- Data access constructs four custom parameter objects in an ArrayList and has
+  open/execute, catch/logging, finally/close and a fallback DataSet. Exceptional
+  alternatives, effects and collection propagation need separately bounded proof.
+- Helpers intervene before consumption. One visible pattern uses a literal
+  DataTable.Select predicate, then a dynamic key-based Select and guarded row
+  value assignments. Retain predicate reads, RHS column reads and LHS writes
+  separately. Value writes alone do not prove schema mutation or preserve value
+  lineage; unknown helper effects and holder aliases remain unknown.
+- An auxiliary DataSet is application-authored: a named table with seven typed
+  Columns.Add declarations, distinct keys, derived counter values and Rows.Add.
+  It is not a stored-procedure result schema. Refresh clears class state then
+  assigns a builder result. One observed save caller does not prove save-only
+  initialization, caller completeness or state availability; commented code is
+  not initialization evidence.
+
+These require independently authored public C#/VB fit fixtures before widening
+analysis. Preserve supported/unsupported legs and initialization/value/schema
+distinctions; never copy private code or turn an OCR shape into exact source.
+
+### Continuation validation
+
+Frozen implementation `48ae738fb75062eb55af3b87eae3e9b5921cb871`:
+
+- Full Debug `-warnaserror`: **5,443 passed, zero failed, three existing skips**,
+  33m34s, exit 0, no warnings. No full-suite retry.
+- Focused IL/command/SQL/Razor lane: **193 passed, one existing Windows-only skip**.
+- Native matrix twice: 20 roots, two local shapes, 10 static object paths and 10
+  unknowns; C# and VB facts byte-identical between runs.
+- Nine retained offline smokes unchanged: parameter/DDL 8/12/32; result JSON
+  36/10/36, DDL 36/10/58; table 44/10/88; DataTable 108/24/176; DataSet 156/24/176;
+  helper 84/30/116; internal helper 72/24/60; Field 78/36/42 with 52 refusals.
+- Pinned C#/VB: 12,949/114,806 facts, reduced coverage, FailedOrPartial application
+  builds and zero SQL calls. Artifact validators pass; no application/SQL proof.
+- Four Python guards, private-path and whitespace checks passed.
+
+Development matrix initially failed C# Direct on the inherited DbCommand setter
+signature (VB passed); a diagnostic repeat confirmed the same failure. The exact
+encoded signature was added, with no expectation changes, before final gates.
+CLI/Core/Reporting SHA-256 stayed unchanged across final gates:
+
+```text
+CLI       600837d659efa1322a3190dcf08780dbdd5641870d7a948b77bba2c42003e9e5
+Core      64caae16b3c47225aecededf5f7708b115c36e495f2271d50e310880e402a2a5
+Reporting ea79e1ca7124aacf3c669fffe194684e2ba5b5e08031d09a7673656888e1617d
+```
+
+Results/fit-note documentation follows the frozen implementation. The broader
+96-output framework sweep, non-.NET, Windows, runtime and private acceptance
+remain deferred. No SQL, container or fixture method was executed.
 
 ## Foundation denominator and implementation (historical)
 
@@ -82,7 +146,7 @@ remain visible even on the admitted encoded shape.
 Build the normal test project (it builds both compile-only fixture pairs), then:
 
 ```sh
-dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --filter FullyQualifiedName~IlSqlShapeExtractorTests
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --filter 'FullyQualifiedName~IlSqlShapeExtractorTests|FullyQualifiedName~IlSqlObjectPathExtractorTests'
 python3 -m unittest discover -s scripts/validation -p test_sql_compiled_wrapper_smoke.py
 python3 scripts/validation/sql-compiled-wrapper-smoke.py --cli src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll --out /tmp/public-compiled-wrapper-new-run
 ```

@@ -15,4 +15,11 @@
 - [x] Preserve returned DataSet execution identity through unique compiled wrapper calls.
 - [x] Emit positive bounded consumer paths, including only fresh-empty destination Merge with distinct union identity; refuse existing/mutated/escaped destination state.
 - [x] Add independent native positive/negative matrices, identity/provenance/limits controls and rule limitations.
-- [ ] Run focused gates before one frozen full gate, relevant retained/pinned smokes, and push same branch with updated consolidated prompt.
+- [x] Run focused gates before one frozen full gate and relevant retained/pinned smokes; update consolidated prompt and validation records for publication.
+
+## Newly supplied application fit (separate follow-up, not current completion)
+- [ ] Independently author property-held/two-table/two-distinct-function Merge and Select/helper-effect fixtures.
+- [ ] Bound ArrayList custom-parameter and exceptional cleanup/fallback alternatives.
+- [ ] Separate predicate/RHS reads, LHS value writes and schema identity; retain unknown alias/helper effects.
+- [ ] Separate application-authored auxiliary table schema/derived values from SQL contracts and cross-method initialization.
+- [ ] Design explicit complex-DDL admission and compiled-candidate-to-contract binding with owner identity inputs; no general parser or false acceptance.

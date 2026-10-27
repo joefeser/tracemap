@@ -86,3 +86,29 @@ expectation changed. Native tests plus shape tests passed 20; expanded IL/comman
 SQL/Razor lane now passes 193 with one existing Windows-only skip. Four Python
 guards, private-path and whitespace checks pass. Final frozen full/retained/pinned
 gates still pending. No SQL, private input or container execution occurred.
+
+### Final continuation gates
+
+Frozen implementation `48ae738fb75062eb55af3b87eae3e9b5921cb871`: full Debug
+`-warnaserror` 5,443 passed/0 failed/3 existing skips, 33m34s, exit 0/no warnings.
+No full retry. Native replay twice produced byte-identical facts and the exact
+20-root/two-local-shape/10-static-path/10-unknown matrix. All nine retained SQL
+smokes passed unchanged, including Field's 52 refusals. Pinned public C#/VB scans
+and artifact validators passed (12,949/114,806 facts, reduced, FailedOrPartial
+application builds, zero SQL calls). CLI/Core/Reporting hashes stayed unchanged;
+full hashes are recorded in the validation document. Python/private-path/whitespace
+guards passed. Local receipts use `/tmp/tracemap-object-48ae738fb-*`.
+
+New sanitized application-shape evidence arrived during the frozen gate. It is
+NOT covered by single-fetch MergeFresh: property-held DataSet, two named tables,
+two different function executions, DataTable.Merge, index one, Select predicates,
+intervening helper effects, ArrayList parameters and exceptional cleanup/fallback.
+Application-authored auxiliary schema/derived values and class-state refresh must
+remain distinct from SQL result contracts. One observed save caller is not
+exclusive initialization; commented code is not evidence. Follow-up tasks and
+the consolidated prompt record these without private names/code or widening the
+validated denominator. Complex DDL admission/identity/comparison remain separate.
+
+This results-only update follows the frozen implementation; no source changes
+occurred during final gates. Ready to publish the branch, not a PR/merge or private
+application acceptance. No SQL/container/private-input execution occurred.

@@ -45,6 +45,30 @@ own scope; do not implement a general parser or silently relabel manual schema a
 independent synthetic declarations. Case-only names remain unknown. Do not request
 another private run merely to rediscover these known capability gaps.
 
+## Newly supplied fit shape: next public fixture, not current coverage
+
+Read the new application-shape section in the validation document. Before further
+implementation, independently author C#/VB fixtures for a holder property assigned
+a fresh DataSet with two named tables; two DIFFERENT DataSet-returning functions
+whose first tables are merged into destination indices zero and one; and later
+Select/filter/enrichment helpers. Preserve separate execution lineage, never a
+snapshot-copy assertion. Current route refuses these extensions.
+
+Add explicit controls for four custom parameters collected in ArrayList,
+open/execute/catch/log/finally-close and fresh fallback DataSet alternatives,
+holder aliases and helper exposure. Separate Select predicate reads, RHS column
+reads and LHS value writes; do not infer schema mutation merely from value writes
+or preserve overwritten value lineage. Unknown helper effects remain unknown.
+
+Keep an application-authored auxiliary table with seven typed columns, distinct
+keys, derived values and Rows.Add separate from stored-procedure result contracts.
+Model cross-method/class-state refresh initialization separately. One observed
+save caller does not prove save-only initialization or caller completeness, and
+commented initialization supplies no evidence. These are public-safe shape
+requirements, not exact private/OCR source to copy. Do not expand the frozen
+20-root success denominator or claim private fit until this new corpus is tested.
+Obtain the coordinator's implementation scope before widening the protocol.
+
 Use both existing C# and VB cases and their mutation/escape/branch/Merge controls.
 Add independent negatives for wrong assembly/key, stale hashes, missing/ambiguous
 bodies, changed constructor/store/load, limits and unsupported destinations before
