@@ -9,3 +9,4 @@
 - [x] Integrate merged #919 and repair the verified #920 evidence-integrity findings as one owner-authorized batch; full/static replay results at 66bde05ee (no new live-runtime claim).
 - [x] Separate the finite acceptance oracle from native smoke expectations and exercise real reconstruction offline (116 Python guards).
 - [x] Replay the independent oracle at frozen `0b419429f`; all four native gates, eight links and four retained DNN blockers confirmed.
+- [x] Assert every reconstructed case independently, reject 12 reconstruction swaps, and add bounded native-producer CI compatibility; 119 guards and fresh replay at `6ddb40f8b` passed.

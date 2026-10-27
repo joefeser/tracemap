@@ -241,6 +241,8 @@ class AcceptanceReconstructionTests(unittest.TestCase):
         self.assertIn('python scripts/dnn-sql-validation/native_compatibility.py --output', workflow)
         self.assertIn('timeout-minutes: 20', workflow)
         self.assertIn('fetch-depth: 0', workflow)
+        self.assertIn('GIT_CONFIG_KEY_0: core.autocrlf', workflow)
+        self.assertIn("GIT_CONFIG_VALUE_0: 'false'", workflow)
 
     def test_native_gate_runs_each_actual_producer_before_verification(self):
         events = []
