@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+import shutil
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 SPEC = importlib.util.spec_from_file_location('public_acceptance', Path(__file__).resolve().parents[1] / 'dnn-sql-validation/public_acceptance.py')
@@ -13,6 +15,7 @@ SPEC.loader.exec_module(A)
 
 
 class PublicAcceptanceTests(unittest.TestCase):
+    """Small verifier unit tests; real reconstruction is covered separately below."""
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
@@ -218,6 +221,157 @@ class PublicAcceptanceTests(unittest.TestCase):
             self.assertFalse(first.exists())
             self.assertEqual(A.ROOT, source)
             self.assertFalse((source / 'bin').exists())
+
+
+class AcceptanceReconstructionTests(unittest.TestCase):
+    """Real reconstruction over authored source-fact fixtures; no CLI or reconstruction mocks."""
+
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name).resolve()
+        self.contracts = A.load('real_contracts_test', A.ROOT / 'scripts/dnn-sql-validation/acceptance_contracts.py')
+        self.matrix = self.contracts.MATRIX
+
+    def fixture(self, label):
+        root = self.root / label
+        matrix = self.matrix
+        for language in matrix.LANGUAGES:
+            facts = []
+
+            def fact(key, properties):
+                number = len(facts) + 1
+                facts.append({'factId': f'{language}-{number}', 'factType': 'DatabaseOperationCandidate',
+                              'repo': 'public-synthetic-fixture', 'commitSha': '1' * 40,
+                              'sourceSymbol': 'Fixture.' + key.split('#')[0] + '()',
+                              'ruleId': 'database.operation.invocation.v1', 'evidenceTier': 'Tier1Semantic',
+                              'evidence': {'filePath': 'Fixture.' + ('cs' if language == 'csharp' else 'vb'),
+                                           'startLine': number, 'endLine': number,
+                                           'extractorId': language + '-semantic', 'extractorVersion': 'synthetic'},
+                              'properties': properties})
+
+            if label in ('parameter', 'reader'):
+                for key in matrix.PARAMETER if label == 'parameter' else matrix.READER:
+                    fact(key, {'sqlServerParameterState': '{"coverage":"bounded","parameters":[]}',
+                               'sqlServerReaderState': '{"coverage":"bounded","accesses":[]}'})
+            elif label == 'helper':
+                callers = [dict(caller='Fixture.' + key.split('#')[0] + '()', line=100 + i)
+                           for i, key in enumerate([*matrix.HELPER_CALLERS, *matrix.CALLER_UNKNOWN])]
+                for key in (*matrix.BOUNDED_HELPERS, *matrix.HELPER_UNKNOWN):
+                    fact(key, {'operationKind': 'data-adapter-fill', 'sqlServerHelperResultState':
+                               json.dumps({'callers': callers if key == 'ReadTable' else []})})
+            else:
+                for key in (*matrix.FIELD_FILLS, *matrix.FIELD_UNKNOWN, *matrix.FIELD_HELPERS):
+                    names = matrix.FIELD_HELPERS.get(key, (key,) if key in matrix.FIELD_FILLS or key in matrix.FIELD_HAS_UNKNOWN_SITE else ())
+                    sites = [dict(caller='Fixture.' + name + '()', line=100 + i,
+                                  path=f'{language}/Callers' if key.startswith('ReadShared') else None)
+                             for i, name in enumerate(names)]
+                    fact(key, {'operationKind': 'data-adapter-fill', 'sqlServerFieldReadState': json.dumps({'sites': sites})})
+            scan = root / language / 'scan'
+            scan.mkdir(parents=True)
+            for name in ('scan-manifest.json', 'index.sqlite', 'report.md', 'logs/analyzer.log'):
+                path = scan / name
+                path.parent.mkdir(exist_ok=True)
+                path.write_text('public synthetic guard input')
+            (scan / 'facts.ndjson').write_text(''.join(json.dumps(f) + '\n' for f in facts))
+        bounded, expected = self.contracts.reconstruct(A, root, label)
+        rows = []
+        for identity, relative, statuses in expected:
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            report = {'coverage': 'partial', 'verdict': 'no-aggregate-clean-verdict', 'comparisons': [
+                dict(factId=identity['factId'], status=s,
+                     **{k: identity[k] for k in ('callerIndex', 'siteIndex') if k in identity}) for s in statuses]}
+            path.write_text(json.dumps({'comparison': report} if label == 'reader' and identity['origin'] == 'ddl' else report))
+            rows.append(dict(identity, reportSha256=A.sha(path),
+                             **({'status': statuses[0]} if label == 'parameter' else {'statuses': statuses})))
+        kind, version, *_ = A.GATES[label]
+        helpers = A.load('real_scan_hashes', A.ROOT / 'scripts/sqlserver-parameter-evidence/smoke.py')
+        languages = matrix.LANGUAGES if label == 'field' else (None,)
+        receipt = {'version': version, 'revision': '1' * 40,
+                   'generatorSha256': A.sha(A.ROOT / f'scripts/sqlserver-{kind}-evidence/smoke.py'),
+                   'boundedInputSha256': bounded, 'results': rows, 'sqlExecution': 'not-run',
+                   'scanArtifactSha256': {lang: helpers.scan_hashes(root, lang) for lang in matrix.LANGUAGES},
+                   'refusals': [dict(case=name, refused=True, **({'language': lang} if lang else {}))
+                                for lang in languages for name in self.contracts.REFUSALS[label].split()]}
+        (root / 'smoke-receipt.json').write_text(json.dumps(receipt))
+        return root, receipt, expected, helpers
+
+    def test_real_reconstruction_all_routes_and_report_paths(self):
+        totals = {'parameter': (52, 8, 12, 32), 'reader': (158, 72, 20, 94),
+                  'helper': (230, 84, 30, 116), 'field': (150, 78, 36, 42)}
+        for label, (cases, matches, mismatches, unknowns) in totals.items():
+            with self.subTest(label=label):
+                root, receipt, expected, helpers = self.fixture(label)
+                result = A.verify_gate(root, label, '1' * 40, helpers)
+                self.assertEqual(result['caseReports'], cases)
+                self.assertEqual(result['rowCounts'], {A.M: matches, A.X: mismatches, A.U: unknowns})
+                self.assertEqual(len({path for _, path, _ in expected}), cases)
+                if label == 'parameter':
+                    self.assertEqual(expected[0][1], 'csharp/00-Good/report/parameter-comparison.json')
+                elif label == 'reader':
+                    self.assertEqual(expected[0][1], 'csharp/json/00-NameMatch/declarations/report/result-column-comparison.json')
+                else:
+                    self.assertIn('/000-', expected[0][1])
+
+    def test_regenerated_count_preserving_status_swaps_are_rejected(self):
+        for label in A.GATES:
+            root, receipt, expected, helpers = self.fixture(label)
+            positions = [next(i for i, (_, _, statuses) in enumerate(expected) if statuses == [s]) for s in (A.M, A.X)]
+            for i, status in zip(positions, (A.X, A.M)):
+                row = receipt['results'][i]
+                row['status' if label == 'parameter' else 'statuses'] = status if label == 'parameter' else [status]
+                path = root / expected[i][1]
+                report = json.loads(path.read_bytes())
+                inner = report.get('comparison', report)
+                inner['comparisons'][0]['status'] = status
+                path.write_text(json.dumps(report))
+                row['reportSha256'] = A.sha(path)
+            (root / 'smoke-receipt.json').write_text(json.dumps(receipt))
+            with self.subTest(label=label), self.assertRaisesRegex(ValueError, 'statuses'):
+                A.verify_gate(root, label, '1' * 40, helpers)
+
+    def test_native_expectation_and_keying_changes_do_not_change_acceptance_oracle(self):
+        for label, (kind, *_) in A.GATES.items():
+            root, _, expected, _ = self.fixture(label)
+            native = A.load('mutated_native', A.ROOT / f'scripts/sqlserver-{kind}-evidence/smoke.py')
+            for name in ('EXPECTED', 'SOURCE_CASES', 'BODY_MATRIX', 'DDL_TEMPLATES'):
+                setattr(native, name, {'forged': [A.M]})
+            native.REPORT = 'forged-comparison.json'
+            for name in ('case_plan', 'case_keys', 'fill_keys', 'caller_keys', 'site_keys', 'check_fill_state'):
+                setattr(native, name, Mock(side_effect=AssertionError('native oracle must not be consulted')))
+            api = SimpleNamespace(**vars(A))
+            api.load = lambda *_: native
+            self.assertEqual(self.contracts.reconstruct(api, root, label)[1], expected)
+
+    def test_real_input_digest_tracks_source_bases_and_templates(self):
+        for label in A.GATES:
+            root, receipt, _, _ = self.fixture(label)
+            path = root / 'csharp/scan/facts.ndjson'
+            facts = [json.loads(line) for line in path.read_text().splitlines()]
+            facts[0]['evidence']['extractorVersion'] = 'changed'
+            path.write_text(''.join(json.dumps(f) + '\n' for f in facts))
+            self.assertNotEqual(self.contracts.reconstruct(A, root, label)[0], receipt['boundedInputSha256'])
+            fixture_root = self.root / ('inputs-' + label)
+            for sample in ('sqlserver-parameter-evidence', 'sqlserver-result-column-evidence'):
+                shutil.copytree(A.ROOT / 'samples' / sample, fixture_root / 'samples' / sample,
+                                ignore=shutil.ignore_patterns('bin', 'obj'))
+            api = SimpleNamespace(**vars(A))
+            api.ROOT = fixture_root
+            api.load = lambda name, path: A.load(name, A.ROOT / path.relative_to(fixture_root))
+            before = self.contracts.reconstruct(api, root, label)[0]
+            sample, filename = ('sqlserver-parameter-evidence', 'declarations-base.json') if label == 'parameter' else (
+                'sqlserver-result-column-evidence', 'result-declarations-base.json')
+            base = fixture_root / 'samples' / sample / filename
+            doc = json.loads(base.read_bytes())
+            doc['revision'] = 'changed'
+            base.write_text(json.dumps(doc))
+            self.assertNotEqual(self.contracts.reconstruct(api, root, label)[0], before)
+            if label != 'parameter':
+                before = self.contracts.reconstruct(api, root, label)[0]
+                template = fixture_root / 'samples/sqlserver-result-column-evidence/ddl/base.sql'
+                template.write_text(template.read_text() + '\n-- changed public template\n')
+                self.assertNotEqual(self.contracts.reconstruct(api, root, label)[0], before)
 
 
 if __name__ == '__main__':

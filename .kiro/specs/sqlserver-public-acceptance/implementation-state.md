@@ -176,3 +176,20 @@ No new live SQL/container run occurred in this repair-only batch. Earlier live
 results remain historical evidence, not a fresh-head runtime claim. DNN/private
 acceptance and migration readiness remain unproven. The following results commit
 changes only documentation/tasks; no policy edits, extra review spend or merge.
+
+## Independent acceptance-oracle follow-up
+
+Two later exact-head Baz findings identified shared test-oracle data and a mocked
+reconstruction boundary. The bounded repair adds `acceptance_matrix.py`, an
+independently maintained literal contract transcribed from the authored design
+matrices. Native scripts supply source serialization only, not case plans,
+expected verdicts, names, report paths or refusal identities.
+
+Four offline integration tests execute real reconstruction for all four routes:
+case/report paths, count-preserving verdict swaps with regenerated report hashes,
+native-oracle corruption, and source/base/template input-digest changes. The
+existing isolated unit tests remain explicitly unit-scoped. Focused Python gates:
+24 public + 59 retained SQL + 20 DNN + 13 linked-provider = **116 passed**.
+No .NET source or extractor changes; the full 5,419-pass gate at `66bde05ee`
+continues to describe the unchanged core, not a newly executed full suite.
+Fresh committed-head public replay is pending at this implementation checkpoint.
