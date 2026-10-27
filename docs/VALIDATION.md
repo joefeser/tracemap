@@ -1,4 +1,20 @@
 # TraceMap Validation Guide
+## Bounded offline SQL Server internal-helper-returned DataTable/DataSet evidence (cross-document callers)
+[SQLSERVER_INTERNAL_HELPER_RESULT_EVIDENCE.md](validation/SQLSERVER_INTERNAL_HELPER_RESULT_EVIDENCE.md)
+documents the additive sibling `sqlServerInternalHelperResultState` on Fill facts (C# 0.22.18 /
+VB 0.10.21): one `internal` / `Friend` static helper execution plus one entry per call site in
+any ordinary document of the same registered compilation, each with its repo-relative path, the
+separate `sqlserver-internal-helper-result-bindings/1` digest per `(factId, callerIndex)` and the
+`sqlserver-internal-helper-result` route. Both adapters register a compilation document scope.
+Shared Core and both adapters change: run the new tests with the retained SQL/DNN tests and
+Python guards, commit, then the frozen full Debug -warnaserror suite. Afterwards, sequentially at
+the committed head: the seven retained SQL smokes with unchanged denominators (52-case 8/12/32;
+result JSON 36/10/36, DDL 36/10/58, 20 refusals; table per language 22/5/44, 24 refusals;
+DataTable per language 54/12/88 over 148 cases, 22 refusals; DataSet per language 78/12/88 over
+169 cases, 24 refusals; helper per language 42/15/58 over 115 cases, 24 refusals), the new
+internal-helper smoke (per language 36/12/30 over 78 cases, 24 refusals), the pinned C#/VB OSS
+adapter smoke (reduced coverage; no SQL calls there) and, only on the reviewed disposable
+context, the unchanged linked live harness (12/4/6, 42 runtime checks).
 ## Bounded offline SQL Server helper-returned DataTable/DataSet evidence (one helper level)
 [SQLSERVER_HELPER_RESULT_EVIDENCE.md](validation/SQLSERVER_HELPER_RESULT_EVIDENCE.md) documents
 the additive sibling `sqlServerHelperResultState` on Fill facts (C# 0.22.17 / VB 0.10.20): one

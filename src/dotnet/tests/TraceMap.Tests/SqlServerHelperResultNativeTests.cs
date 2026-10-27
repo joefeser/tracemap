@@ -7,7 +7,7 @@ namespace TraceMap.Tests;
 /// <summary>Native fixture matrix for the Phase 4 helper boundary; mirrors design.md and scripts/sqlserver-helper-result-evidence/smoke.py.</summary>
 public sealed partial class SqlServerHelperResultEvidenceTests
 {
-    private static readonly string[] Origins = ["result-schema", "ddl-result", "ddl-table-result"];
+    internal static readonly string[] Origins = ["result-schema", "ddl-result", "ddl-table-result"];
     // Core caller cells (authored before running the extractor): statuses and shape variant, against all three origins.
     private static readonly Dictionary<string, (string[] Statuses, string? Variant)> CoreCases = new()
     {
@@ -46,9 +46,9 @@ public sealed partial class SqlServerHelperResultEvidenceTests
         ["CallerNoReads"] = "bounded:no-bounded-column-access"
     };
     private static readonly string[] BoundedHelpers = ["ReadTable", "ReadSet", "ReadNamedSet", "ReadTableText", "ReadTableUsing"];
-    private static readonly Regex MemberName = new(@"\.([A-Za-z]+)(?:<[^>]*>|\(Of [^)]*\))?\(", RegexOptions.CultureInvariant);
+    internal static readonly Regex MemberName = new(@"\.([A-Za-z]+)(?:<[^>]*>|\(Of [^)]*\))?\(", RegexOptions.CultureInvariant);
 
-    private static Dictionary<string, T> Keyed<T>(IEnumerable<(string Name, T Item)> items)
+    internal static Dictionary<string, T> Keyed<T>(IEnumerable<(string Name, T Item)> items)
     {
         var all = items.ToArray();
         var counts = all.GroupBy(i => i.Name).ToDictionary(g => g.Key, g => g.Count());
@@ -62,7 +62,7 @@ public sealed partial class SqlServerHelperResultEvidenceTests
         }
         return keyed;
     }
-    private static (string Json, string Schema, IReadOnlyDictionary<string, string> Sources) Origin(string origin, string? variant, string repo, string revision)
+    internal static (string Json, string Schema, IReadOnlyDictionary<string, string> Sources) Origin(string origin, string? variant, string repo, string revision)
     {
         var shapes = Path.Combine(RepoRoot(), "samples/sqlserver-result-column-evidence");
         if (origin == "result-schema")

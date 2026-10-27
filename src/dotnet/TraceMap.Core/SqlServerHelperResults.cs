@@ -23,6 +23,10 @@ public sealed record SqlServerHelperResultState(string Version, string Coverage,
     string? CommandTextSource, string? AdapterAssociation, string? FillOverload, string? TableName, int? HelperLine, int? AdapterLine,
     int? ResultLine, IReadOnlyList<SqlServerHelperCaller> Callers);
 
+/// <summary>Shared helper analysis before projection into the Phase 4 or internal-helper state; Path is null in Phase 4 mode.</summary>
+internal sealed record SqlServerHelperAnalysis(string? Gap, string? ResultKind, string? CommandType, string? CommandTextSource, string? AdapterAssociation,
+    string? FillOverload, string? TableName, int? HelperLine, int? AdapterLine, int? ResultLine, IReadOnlyList<(string? Path, SqlServerHelperCaller Caller)> Callers);
+
 /// <summary>
 /// Independent fail-closed helper-boundary state for one Fill invocation: exactly one level, a non-virtual, non-generic
 /// <c>private</c> static helper in a single-declaration type whose body is one Phase 2 (<c>Fill(DataTable)</c>) or Phase 3
@@ -43,9 +47,24 @@ internal static class SqlServerHelperResults
     internal static void Add(SortedDictionary<string, string> properties, IInvocationOperation call)
         => properties["sqlServerHelperResultState"] = SqlServerSchemaEvidence.Json(Extract(call));
 
-    private static SqlServerHelperResultState Unknown(string gap) => new(Version, "unknown", gap, null, null, null, null, null, null, null, null, null, []);
+    private static SqlServerHelperAnalysis Unknown(string gap) => new(gap, null, null, null, null, null, null, null, null, null, []);
 
+    /// <summary>The Phase 4 private same-document state; unchanged by the internal-helper widening.</summary>
     internal static SqlServerHelperResultState Extract(IInvocationOperation call)
+    {
+        var analysis = Analyze(call, internalMode: false);
+        return analysis.Gap is { } gap ? new(Version, "unknown", gap, null, null, null, null, null, null, null, null, null, [])
+            : new(Version, "bounded", null, analysis.ResultKind, analysis.CommandType, analysis.CommandTextSource, analysis.AdapterAssociation,
+                analysis.FillOverload, analysis.TableName, analysis.HelperLine, analysis.AdapterLine, analysis.ResultLine,
+                analysis.Callers.Select(c => c.Caller).ToArray());
+    }
+
+    /// <summary>
+    /// Shared helper analysis. <paramref name="internalMode"/> false is Phase 4 (private helper, call sites in its document);
+    /// true admits exactly an internal / Friend helper whose call sites are enumerated across the registered compilation scope,
+    /// with every other helper-body, signature and caller rule unchanged.
+    /// </summary>
+    internal static SqlServerHelperAnalysis Analyze(IInvocationOperation call, bool internalMode)
     {
         var method = call.TargetMethod;
         var declaring = method.ContainingType.ToDisplayString();
@@ -88,8 +107,20 @@ internal static class SqlServerHelperResults
         if (helper.IsGenericMethod || types.Any(t => t.IsGenericType)) return Unknown("helper-generic-unsupported");
         if (helper.IsAsync || helper.IsIterator) return Unknown("helper-async-unsupported");
         if (helper.IsExtensionMethod) return Unknown("helper-extension-unsupported");
-        // Only private helpers have every call site inside their single type declaration (one document, one compilation).
-        if (helper.DeclaredAccessibility != Accessibility.Private) return Unknown("helper-accessibility-unsupported");
+        if (!internalMode)
+        {
+            // Only private helpers have every call site inside their single type declaration (one document, one compilation).
+            if (helper.DeclaredAccessibility != Accessibility.Private) return Unknown("helper-accessibility-unsupported");
+        }
+        else
+        {
+            // Private helpers stay Phase 4 evidence; only internal / Friend is enumerated across the compilation.
+            if (helper.DeclaredAccessibility == Accessibility.Private) return Unknown("helper-private-phase4-scope");
+            if (helper.DeclaredAccessibility != Accessibility.Internal) return Unknown("helper-accessibility-unsupported");
+            // Other compilations may call internal members only through InternalsVisibleTo (or reflection, never claimed).
+            if (helper.ContainingAssembly.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.InternalsVisibleToAttribute"))
+                return Unknown("helper-internals-visible-to-unsupported");
+        }
         if (helper.PartialDefinitionPart is not null || helper.PartialImplementationPart is not null || helper.DeclaringSyntaxReferences.Length != 1
             || types.Any(t => t.DeclaringSyntaxReferences.Length != 1)) return Unknown("helper-partial-type-unsupported");
         if (helper.ContainingType.GetMembers(helper.Name).Length != 1) return Unknown("helper-overload-ambiguous");
@@ -105,7 +136,16 @@ internal static class SqlServerHelperResults
         }
         if (procedure is null) return Unknown("helper-parameter-unsupported");
         if (!IsType(helper.ReturnType, resultType)) return Unknown("helper-return-type-unsupported");
-        var (referenceGap, callers) = References(model, helper);
+        SqlServerCompilationScope? scope = null;
+        string? referenceGap;
+        List<IInvocationOperation> callers;
+        if (internalMode)
+        {
+            scope = SqlServerCompilationScopes.Find(model.Compilation);
+            if (ScopeGap(scope, model) is { } scopeGap) return Unknown(scopeGap);
+            (referenceGap, callers) = CompilationReferences(model, helper, scope!);
+        }
+        else (referenceGap, callers) = References(model, helper);
         if (referenceGap is not null) return Unknown(referenceGap);
 
         // Body: the Phase 2/3 rules with no guard, read or other call; the filled local's only other use is the one return.
@@ -158,9 +198,46 @@ internal static class SqlServerHelperResults
         if (consumed) return Unknown("helper-body-unsupported");
         if (unsupportedBody) return Unknown("helper-body-unsupported");
 
-        var entries = callers.OrderBy(c => c.Syntax.SpanStart).Select(c => Caller(c, procedure, connection, resultType, tableName)).ToArray();
-        return new(Version, "bounded", null, table ? "datatable" : "dataset", commandType, textSource, association, overload, tableName,
+        // Phase 4: source order in the one document. Internal: (repo-relative caller path, source order) across documents.
+        var ordered = scope is null ? callers.OrderBy(c => c.Syntax.SpanStart).Select(c => (Path: (string?)null, Call: c)).ToArray()
+            : callers.Select(c => (Path: scope.Document(c.Syntax.SyntaxTree).Path, Call: c))
+                .OrderBy(c => c.Path, StringComparer.Ordinal).ThenBy(c => c.Call.Syntax.SpanStart).ToArray();
+        var entries = ordered.Select(c => (c.Path, Caller(c.Call, procedure, connection, resultType, tableName))).ToArray();
+        return new(null, table ? "datatable" : "dataset", commandType, textSource, association, overload, tableName,
             Line(helper.DeclaringSyntaxReferences[0].GetSyntax()), Line(adapterDeclarator.Syntax), Line(resultDeclarator!.Syntax), entries);
+    }
+
+    /// <summary>The compilation must have a registered, complete, error-free, bounded scope, and the helper an ordinary document.</summary>
+    private static string? ScopeGap(SqlServerCompilationScope? scope, SemanticModel model)
+    {
+        if (scope is null) return "helper-compilation-scope-unavailable";
+        if (scope.Reduced) return "helper-compilation-reduced";
+        var trees = model.Compilation.SyntaxTrees.ToArray();
+        if (trees.Length > SqlServerCompilationScope.MaxTrees || trees.Sum(t => (long)t.Length) > SqlServerCompilationScope.MaxCharacters)
+            return "helper-compilation-limit";
+        if (scope.Document(model.SyntaxTree).Gap is { } documentGap) return documentGap;
+        return scope.HasErrors ? "helper-compilation-errors" : null;
+    }
+
+    /// <summary>
+    /// Every reference to an internal helper in every document of the compilation, in path order. A reference in a generated,
+    /// linked or path-unsafe document makes the whole helper unknown with that document's gap; recursion and escapes win.
+    /// </summary>
+    private static (string? Gap, List<IInvocationOperation> Callers) CompilationReferences(SemanticModel model, IMethodSymbol helper, SqlServerCompilationScope scope)
+    {
+        var callers = new List<IInvocationOperation>();
+        bool recursion = false, escape = false;
+        string? documentGap = null;
+        foreach (var tree in model.Compilation.SyntaxTrees.OrderBy(t => t.FilePath, StringComparer.Ordinal))
+        {
+            // Decode identifiers before filtering: C# Unicode escapes can spell a reference without the raw helper name.
+            // VB names are case-insensitive and the semantic symbol check stays exact.
+            if (!tree.GetRoot().DescendantTokens().Any(t => string.Equals(t.ValueText, helper.Name, StringComparison.OrdinalIgnoreCase))) continue;
+            var treeModel = tree == model.SyntaxTree ? model : model.Compilation.GetSemanticModel(tree, ignoreAccessibility: true);
+            if (ScanReferences(treeModel, helper, callers, ref recursion, ref escape, out var found)) return ("helper-caller-limit", []);
+            if (found && documentGap is null) documentGap = scope.Document(tree).Gap;
+        }
+        return (recursion ? "helper-recursion" : escape ? "helper-reference-escape" : documentGap, callers);
     }
 
     /// <summary>
@@ -170,8 +247,16 @@ internal static class SqlServerHelperResults
     private static (string? Gap, List<IInvocationOperation> Callers) References(SemanticModel model, IMethodSymbol helper)
     {
         var callers = new List<IInvocationOperation>();
-        var seen = new HashSet<Microsoft.CodeAnalysis.Text.TextSpan>();
         bool recursion = false, escape = false;
+        if (ScanReferences(model, helper, callers, ref recursion, ref escape, out _)) return ("helper-caller-limit", []);
+        return (recursion ? "helper-recursion" : escape ? "helper-reference-escape" : callers.Count > MaxCallers ? "helper-caller-limit" : null, callers);
+    }
+
+    /// <summary>Scans one tree for helper references; returns true when a unique invocation beyond <see cref="MaxCallers"/> is found.</summary>
+    private static bool ScanReferences(SemanticModel model, IMethodSymbol helper, List<IInvocationOperation> callers, ref bool recursion, ref bool escape, out bool found)
+    {
+        found = false;
+        var seen = new HashSet<Microsoft.CodeAnalysis.Text.TextSpan>();
         foreach (var token in model.SyntaxTree.GetRoot().DescendantTokens())
         {
             // VB names are case-insensitive; the symbol check below is exact either way.
@@ -180,6 +265,7 @@ internal static class SqlServerHelperResults
             // nameof and other method-group uses bind only as candidates; any binding to the helper is a reference.
             var info = model.GetSymbolInfo(node);
             if (!(info.Symbol is { } symbol ? [symbol] : info.CandidateSymbols).Any(s => Same(s.OriginalDefinition, helper))) continue;
+            found = true;
             for (var enclosing = model.GetEnclosingSymbol(node.SpanStart); enclosing is not null; enclosing = enclosing.ContainingSymbol)
                 if (Same(enclosing, helper)) recursion = true;
             IInvocationOperation? invocation = null;
@@ -191,11 +277,11 @@ internal static class SqlServerHelperResults
             if (invocation is null) escape = true;
             else if (seen.Add(invocation.Syntax.Span))
             {
-                if (callers.Count == MaxCallers) return ("helper-caller-limit", []);
+                if (callers.Count == MaxCallers) return true;
                 callers.Add(invocation);
             }
         }
-        return (recursion ? "helper-recursion" : escape ? "helper-reference-escape" : callers.Count > MaxCallers ? "helper-caller-limit" : null, callers);
+        return false;
     }
 
     /// <summary>One caller entry: constant positional procedure argument, a fresh exact local, then the Phase 2/3 consumer rules on it.</summary>

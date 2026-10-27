@@ -7,8 +7,8 @@ public sealed partial class SqlServerHelperResultEvidenceTests
 {
     private const string Revision = "1111111111111111111111111111111111111111";
     private const string M = "bounded-match", X = "mismatch", U = "unknown";
-    private static readonly SqlServerObjectIdentity Items = new("SyntheticServer", "SyntheticDatabase", "dbo", "ReadItems");
-    private static readonly SqlServerObjectIdentity Other = Items with { Procedure = "ReadOther" };
+    internal static readonly SqlServerObjectIdentity Items = new("SyntheticServer", "SyntheticDatabase", "dbo", "ReadItems");
+    internal static readonly SqlServerObjectIdentity Other = Items with { Procedure = "ReadOther" };
     private static SqlServerResultColumn Column(string name, int ordinal, string? type = null) => new(name, ordinal, 1, type);
     private static SqlServerResultShape Shape(SqlServerObjectIdentity identity, params SqlServerResultColumn[] columns)
         => new(identity, "declarations.json", 1, 1, "first", "complete", null, columns);

@@ -10,7 +10,7 @@ public sealed class SqlServerHelperResultExtractionTests
         while (repo is not null && !File.Exists(Path.Combine(repo.FullName, "AGENTS.md"))) repo = repo.Parent;
         return repo!.FullName;
     }
-    private static IEnumerable<Microsoft.CodeAnalysis.MetadataReference> References()
+    internal static IEnumerable<Microsoft.CodeAnalysis.MetadataReference> References()
     {
         using var assets = JsonDocument.Parse(File.ReadAllText(Path.Combine(RepoRoot(), "samples/sqlserver-parameter-evidence/csharp/obj/project.assets.json")));
         var package = assets.RootElement.GetProperty("libraries").GetProperty("System.Data.SqlClient/4.9.0").GetProperty("path").GetString()!;

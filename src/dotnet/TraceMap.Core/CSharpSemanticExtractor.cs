@@ -627,7 +627,12 @@ public static class CSharpSemanticExtractor
             return;
         }
 
+        var gapsBeforeDiagnostics = gaps.Count;
         AddCompilationDiagnostics(repoPath, projectPath, compilation, gaps);
+        // Whole-compilation document scope for internal-helper caller enumeration (Fill facts of this compilation only);
+        // every compilation error the adapter reports as a CompilationDiagnostic gap makes that enumeration unknown.
+        SqlServerCompilationScopes.Register(repoPath, project, compilation, hasErrors: gaps.Count > gapsBeforeDiagnostics,
+            compilationInputPaths: compilationInputPaths);
         progress?.FinishStage(
             ScanProgressReporter.ScanOperation,
             ScanProgressStages.Compilation,
@@ -721,10 +726,15 @@ public static class CSharpSemanticExtractor
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
 
-        return excludedDocuments.Length == 0
-            ? solution
-            : solution.RemoveDocuments(System.Collections.Immutable.ImmutableArray.CreateRange(
-                excludedDocuments.Select(document => document.Id)));
+        if (excludedDocuments.Length == 0)
+        {
+            return solution;
+        }
+        var filtered = solution.RemoveDocuments(System.Collections.Immutable.ImmutableArray.CreateRange(
+            excludedDocuments.Select(document => document.Id)));
+        // Internal-helper caller enumeration must not treat a compilation missing excluded documents as complete.
+        SqlServerCompilationScopes.MarkReduced(filtered, excludedDocuments.Select(document => document.Id.ProjectId));
+        return filtered;
     }
 
     private static SemanticFactCandidate CreateScanScopeExclusionGap(int excludedDocumentCount)
