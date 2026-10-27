@@ -125,14 +125,14 @@ class LinkedProviderTests(unittest.TestCase):
 
     def test_authored_denominator_preserves_unknowns(self):
         counts = Counter(status for _, status in h.CASES.values())
-        self.assertEqual({'bounded-match': 6, 'mismatch': 2, 'unknown': 3}, counts)
+        self.assertEqual({'bounded-match': 10, 'mismatch': 3, 'unknown': 4}, counts)
         self.assertEqual(('datatable', 'unknown'), h.CASES['CaseOnly'])
         self.assertEqual(('dataset', 'unknown'), h.CASES['LaterTable'])
         # A runtime-successful later table through the helper stays a static unknown with its authored reason.
         self.assertEqual(('helper', 'unknown'), h.CASES['HelperLaterTable'])
         self.assertEqual('99', h.RUNTIME['HelperLaterTable'])
         self.assertEqual('dataset-later-table-unsupported', h.REASONS['HelperLaterTable'])
-        self.assertEqual(42, h.RUNTIME_CHECKS)
+        self.assertEqual(54, h.RUNTIME_CHECKS)
         self.assertEqual(20 + 2 * len(h.CASES), h.RUNTIME_CHECKS)
         helper_cases = {name for name, (route, _) in h.CASES.items() if route == 'helper'}
         self.assertEqual(helper_cases, set(h.HELPER_SITES))
@@ -140,6 +140,13 @@ class LinkedProviderTests(unittest.TestCase):
         self.assertEqual(('ReadTable', 'ReadItems'), h.HELPER_SITES['HelperTableName'])
         self.assertEqual(('ReadTable', 'ReadOther'), h.HELPER_SITES['HelperOtherProcedure'])
         self.assertEqual('other', h.RUNTIME['HelperOtherProcedure'])
+        # Phase 6: Field reads keep a runtime-successful case-only read a static unknown; one site is a cross-document internal helper.
+        field_cases = {name for name, (route, _) in h.CASES.items() if route == 'field'}
+        self.assertEqual({'FieldTableName', 'FieldOrdinal', 'FieldSetName', 'FieldMissingName', 'FieldCaseOnly', 'InternalFieldName'}, field_cases)
+        self.assertEqual(('field', 'unknown'), h.CASES['FieldCaseOnly'])
+        self.assertEqual('sample', h.RUNTIME['FieldCaseOnly'])
+        self.assertEqual(('1', 'expected exception'), (h.RUNTIME['FieldOrdinal'], h.RUNTIME['FieldMissingName']))
+        self.assertEqual({'InternalFieldName': ('ReadShared', 'ReadItems')}, h.FIELD_SITES)
 
     def test_helper_call_sites_bind_separately_and_refuse_missing_or_duplicate_sites(self):
         route = h.load('linked_helper_test', h.ROOT / 'scripts/sqlserver-helper-result-evidence/smoke.py')
@@ -166,6 +173,39 @@ class LinkedProviderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'not bounded'):
             h.helper_site(route, unknown, 'HelperTableName')
 
+    def test_field_sites_bind_separately_and_refuse_unbounded_missing_or_duplicate_sites(self):
+        route = h.load('linked_field_test', h.ROOT / 'scripts/sqlserver-field-read-evidence/smoke.py')
+        site = {'path': 'Linked.cs', 'line': 3, 'endLine': 3, 'coverage': 'bounded', 'gap': None, 'commandTextHash': 'a' * 64,
+                'selectors': [], 'guards': [], 'accesses': [{'member': 'Field'}]}
+        state = {'version': 'sqlserver-field-read/1', 'coverage': 'bounded', 'gap': None, 'origin': 'internal-helper', 'originGaps': [], 'sites': [
+            dict(site, caller='LinkedCSharp.Cases.InternalFieldName(Microsoft.Data.SqlClient.SqlConnection)'),
+            dict(site, line=7, coverage='unknown', gap='field-read-absent', caller='LinkedCSharp.Cases.Other(Microsoft.Data.SqlClient.SqlConnection)')]}
+        fact = {'factId': 'f', 'repo': 'r', 'commitSha': '1' * 40, 'ruleId': 'x', 'evidenceTier': 'Tier1Semantic',
+                'evidence': {'filePath': 'Shared.cs', 'startLine': 1, 'endLine': 1, 'extractorId': 'e', 'extractorVersion': 'v'},
+                'properties': {'sqlServerFieldReadState': json.dumps(state)}}
+        self.assertEqual(0, h.field_site(route, fact, 'InternalFieldName'))
+        call = h.field_binding(route, fact, 0, 'ReadItems', '1' * 40)['calls'][0]
+        self.assertEqual((0, 'dbo.ReadItems'), (call['siteIndex'], call['commandText']))
+        self.assertEqual(route.HELPERS.digest(route.field_projection(fact, 0)), call['fieldReadEvidenceSha256'])
+        self.assertNotIn('callerIndex', call)
+        for name in ('Other', 'Missing', None):  # field-read-absent, absent and ambiguous sites never bind
+            with self.assertRaisesRegex(ValueError, 'exactly one bounded field site'):
+                h.field_site(route, fact, name)
+        direct = dict(fact, properties={'sqlServerFieldReadState': json.dumps(dict(state, origin='datatable', sites=state['sites'][:1]))})
+        self.assertEqual(0, h.field_site(route, direct))
+        unknown = dict(fact, properties={'sqlServerFieldReadState': json.dumps(dict(state, coverage='unknown', gap='field-read-origin-unbound', sites=[]))})
+        with self.assertRaisesRegex(ValueError, 'not bounded'):
+            h.field_site(route, unknown)
+    def test_shared_internal_helper_has_one_rule_specific_suppression_and_constant_callers(self):
+        import re
+        text = (h.SAMPLE / 'csharp/Shared.cs').read_text()
+        lines = [line for line in text.splitlines() if 'nosemgrep' in line]
+        self.assertEqual(['using var command = new SqlCommand(procedure); // nosemgrep: csharp.lang.security.sqli.csharp-sqli'], [l.strip() for l in lines])
+        self.assertIn('internal static DataTable ReadShared(SqlConnection connection, string procedure)', text)
+        for language, extension in (('csharp', 'cs'), ('vb', 'vb')):
+            linked = (h.SAMPLE / language / f'Linked.{extension}').read_text()
+            self.assertEqual(['connection, "dbo.ReadItems"'], re.findall(r'SharedData\.ReadShared\(([^)]*)\)', linked))
+        self.assertIn('Friend Function ReadShared(connection As SqlConnection, procedure As String) As DataTable', (h.SAMPLE / 'vb/Shared.vb').read_text())
     def test_both_fixture_assemblies_are_runtime_project_references(self):
         project = (h.SAMPLE / 'ProviderChecks.csproj').read_text()
         for language, extension in (('csharp', 'csproj'), ('vb', 'vbproj')):
@@ -173,7 +213,7 @@ class LinkedProviderTests(unittest.TestCase):
         program = (h.SAMPLE / 'Program.cs').read_text()
         self.assertIn('typeof(LinkedCSharp.Cases)', program)
         self.assertIn('typeof(LinkedVisualBasic.Cases)', program)
-        self.assertIn('PROVIDER_CHECKS_PASSED 42', program)
+        self.assertIn('PROVIDER_CHECKS_PASSED 54', program)
         for name in h.CASES:
             self.assertIn(f'["{name}"]', program)
 
@@ -181,6 +221,9 @@ class LinkedProviderTests(unittest.TestCase):
         inputs = h.inputs()
         self.assertIn('samples/sqlserver-live-provider/csharp/Linked.cs', inputs)
         self.assertIn('samples/sqlserver-live-provider/vb/Linked.vb', inputs)
+        self.assertIn('samples/sqlserver-live-provider/csharp/Shared.cs', inputs)
+        self.assertIn('samples/sqlserver-live-provider/vb/Shared.vb', inputs)
+        self.assertIn('scripts/sqlserver-field-read-evidence/smoke.py', inputs)
         self.assertIn('samples/sqlserver-live-provider/matrix.md', inputs)
         self.assertFalse(any({'bin', 'obj'} & set(Path(p).parts) for p in inputs))
 

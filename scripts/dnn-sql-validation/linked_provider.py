@@ -23,6 +23,13 @@ CASES = {
     'HelperSetName': ('helper', 'bounded-match'),
     'HelperMissingName': ('helper', 'mismatch'),
     'HelperLaterTable': ('helper', 'unknown'),
+    # Phase 6: Field<T> / Field(Of T) reads through the separate field-read route; one cross-document internal helper.
+    'FieldTableName': ('field', 'bounded-match'),
+    'FieldOrdinal': ('field', 'bounded-match'),
+    'FieldSetName': ('field', 'bounded-match'),
+    'FieldMissingName': ('field', 'mismatch'),
+    'FieldCaseOnly': ('field', 'unknown'),
+    'InternalFieldName': ('field', 'bounded-match'),
 }
 # Authored helper call sites: (helper Fill method, procedure), and the authored runtime observation per case.
 HELPER_SITES = {
@@ -30,9 +37,11 @@ HELPER_SITES = {
     'HelperSetName': ('ReadSet', 'ReadItems'), 'HelperMissingName': ('ReadTable', 'ReadItems'),
     'HelperLaterTable': ('ReadSet', 'ReadItems'),
 }
-RUNTIME = {name: 'expected exception' if 'Missing' in name else '99' if 'LaterTable' in name else 'other' if name == 'HelperOtherProcedure' else 'sample'
-           for name in CASES}
-RUNTIME_CHECKS = 42
+# Field sites reached through a helper call site: (helper Fill method, procedure); every other field case is a direct Fill site.
+FIELD_SITES = {'InternalFieldName': ('ReadShared', 'ReadItems')}
+RUNTIME = {name: 'expected exception' if 'Missing' in name else '99' if 'LaterTable' in name else 'other' if name == 'HelperOtherProcedure'
+           else '1' if name == 'FieldOrdinal' else 'sample' for name in CASES}
+RUNTIME_CHECKS = 54
 # Authored reason for the helper unknown: a later table stays unknown even though runtime returns 99.
 REASONS = {'HelperLaterTable': 'dataset-later-table-unsupported'}
 
@@ -57,7 +66,7 @@ def inputs():
               ROOT / 'samples/sqlserver-result-column-evidence/result-declarations-base.json']
     paths += list((ROOT / 'samples/dnn-sql-validation/sql').glob('*.sql'))
     paths += [ROOT / f'scripts/sqlserver-{kind}-evidence/smoke.py'
-              for kind in ('parameter', 'result-column', 'datatable', 'dataset', 'helper-result')]
+              for kind in ('parameter', 'result-column', 'datatable', 'dataset', 'helper-result', 'internal-helper-result', 'field-read')]
     require(not any(p.is_symlink() or any(parent.is_symlink() for parent in p.parents if parent.is_relative_to(ROOT))
                     for p in paths), 'source links refused')
     return {p.relative_to(ROOT).as_posix(): sha(p) for p in sorted(paths)}
@@ -101,6 +110,26 @@ def helper_binding(route, fact, index, procedure, revision):
                            'boundedInputSha256': route.HELPERS.digest(projected)}}
 
 
+def field_site(route, fact, name=None):
+    """The one bounded field-read site: the direct Fill's only site, or the helper call site whose calling member is the case."""
+    state = json.loads(fact['properties']['sqlServerFieldReadState'])
+    require(state['coverage'] == 'bounded' and state['gap'] is None, 'field-read state not bounded: ' + str(state['gap']))
+    sites = [i for i, site in enumerate(state['sites']) if name is None or (site['caller'] and route.PHASE4.member(site['caller']) == name)]
+    require(len(sites) == 1 and state['sites'][sites[0]]['coverage'] == 'bounded', f'expected exactly one bounded field site for {name}, observed {sites}')
+    return sites[0]
+
+
+def field_binding(route, fact, index, procedure, revision):
+    """One sqlserver-field-read-bindings/1 call naming this site's own procedure."""
+    identity = dict(route.RESULT.IDENTITY, procedure=procedure)
+    projected = route.field_projection(fact, index)
+    return {'version': route.BINDINGS_VERSION, 'repo': fact['repo'], 'revision': revision,
+            'calls': [{'factId': fact['factId'], 'siteIndex': index, 'commandText': f"{identity['schema']}.{identity['procedure']}",
+                       'identity': identity, 'fieldReadEvidenceSha256': route.HELPERS.digest(projected)}],
+            'provenance': {'generatorSha256': hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                           'boundedInputSha256': route.HELPERS.digest(projected)}}
+
+
 def summarize(rows):
     return dict(sorted(Counter(row['static'] for row in rows).items()))
 
@@ -131,6 +160,7 @@ def run(args):
     table = load('linked_table', ROOT / 'scripts/sqlserver-datatable-evidence/smoke.py')
     dataset = load('linked_dataset', ROOT / 'scripts/sqlserver-dataset-evidence/smoke.py')
     helper_route = load('linked_helper', ROOT / 'scripts/sqlserver-helper-result-evidence/smoke.py')
+    field_route = load('linked_field', ROOT / 'scripts/sqlserver-field-read-evidence/smoke.py')
     cli = ROOT / 'src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll'
     require(cli.exists(), 'build CLI before this run')
     cli_files = {p.name: sha(p) for p in cli.parent.glob('*.dll')}
@@ -154,8 +184,8 @@ def run(args):
         facts = [json.loads(line) for line in (scan / 'facts.ndjson').read_text().splitlines()]
         facts = [f for f in facts if f['factType'] == 'DatabaseOperationCandidate' and f['evidenceTier'] == 'Tier1Semantic']
         keyed = {k: f for f, k in helper.case_keys(facts)}
-        direct = {name for name, (route, _) in CASES.items() if route != 'helper'}
-        helpers = {name for name, _ in HELPER_SITES.values()}
+        direct = {name for name, (route, _) in CASES.items() if route != 'helper' and name not in FIELD_SITES}
+        helpers = {name for name, _ in HELPER_SITES.values()} | {name for name, _ in FIELD_SITES.values()}
         require(len(facts) == len(direct) + len(helpers) and set(keyed) == direct | helpers, 'missing/extra modern provider execution sites')
         base = json.loads((ROOT / 'samples/sqlserver-result-column-evidence/result-declarations-base.json').read_bytes())
         declarations = helper.declarations(base, None, facts[0]['repo'], revision, 'independent-public-shapes.json')
@@ -169,6 +199,11 @@ def run(args):
                 fact = keyed[HELPER_SITES[name][0]]
                 index = helper_site(helper_route, fact, name)
                 document = helper_binding(helper_route, fact, index, HELPER_SITES[name][1], revision)
+            elif route == 'field':
+                helper_fill, procedure = FIELD_SITES.get(name, (name, 'ReadItems'))
+                fact = keyed[helper_fill]
+                index = field_site(field_route, fact, name if name in FIELD_SITES else None)
+                document = field_binding(field_route, fact, index, procedure, revision)
             else:
                 fact = keyed[name]
                 projection, binding = {
@@ -181,9 +216,11 @@ def run(args):
             case.mkdir()
             bindings = case / 'bindings.json'
             helper.HELPERS.write(bindings, document)
-            cli_route = 'sqlserver-result-schema' if route == 'reader' else f'sqlserver-{route}-result'
+            cli_route = {'reader': 'sqlserver-result-schema', 'field': 'sqlserver-field-read'}.get(route, f'sqlserver-{route}-result')
             origin = [] if route == 'reader' else ['--origin', 'result-schema']
-            filename = {'reader': 'result-column-comparison.json', 'helper': 'helper-result-column-comparison.json'}.get(route, f'{route}-column-comparison.json')
+            filename = {'reader': 'result-column-comparison.json', 'helper': 'helper-result-column-comparison.json',
+                        'field': 'field-read-column-comparison.json'}.get(route, f'{route}-column-comparison.json')
+            site_key = 'siteIndex' if route == 'field' else 'callerIndex'
             for target in ('report', 'repeat'):
                 command('dotnet', cli, cli_route, 'compare', *origin, '--declarations', decl, '--schema', schema,
                         '--bindings', bindings, '--facts', scan / 'facts.ndjson', '--repo', fact['repo'],
@@ -191,13 +228,13 @@ def run(args):
             report = json.loads((case / 'report' / filename).read_bytes())
             for file in (filename, 'report.md'):
                 require((case / 'report' / file).read_bytes() == (case / 'repeat' / file).read_bytes(), 'report is not deterministic')
-            selected = [r for r in report['comparisons'] if r['factId'] == fact['factId'] and (index is None or r['callerIndex'] == index)]
+            selected = [r for r in report['comparisons'] if r['factId'] == fact['factId'] and (index is None or r[site_key] == index)]
             require([r['status'] for r in selected] == [expected], f'{language}/{name}: expected {expected}, observed {selected}')
             require(name not in REASONS or REASONS[name] in selected[0]['reasons'], f'{language}/{name}: reason drift {selected}')
             require(report['coverage'] == 'partial' and report['verdict'] == 'no-aggregate-clean-verdict', 'coverage widened')
             require(selected[0]['sourceTier'] == 'Tier1Semantic' and
                     selected[0]['tier'] == ('Tier4Unknown' if expected == 'unknown' else 'Tier2Structural'), 'tier widened')
-            rows.append({'language': language, 'case': name, 'route': route, 'callerIndex': index, 'static': selected[0]['status'],
+            rows.append({'language': language, 'case': name, 'route': route, site_key: index, 'static': selected[0]['status'],
                          'comparison': selected[0], 'limitations': report['limitations'],
                          'reportPath': (case / 'report' / filename).relative_to(args.output).as_posix()})
         for path in sorted(work.rglob('*')):

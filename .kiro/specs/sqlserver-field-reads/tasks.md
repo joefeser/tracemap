@@ -4,7 +4,7 @@
 - [x] 3. Field mode in the shared row rules (C# extension and VB reduced forms, assembly identity, static form, overloads, type-argument rendering); superset access record; sibling `sqlServerFieldReadState` with origin selection and site partition; extractor version bumps; direct Roslyn tests (mode-off Phase 2-5 output unchanged, every refusal, extern-alias identity mismatch).
 - [x] 4. Field bindings, three-origin comparison route, Markdown, `sqlserver-field-read` CLI, rule catalog entry; substitution tests.
 - [x] 5. Public synthetic C#/VB fixtures wired into the normal test-project graph; native tests and a new native smoke with the authored expectations (retained smokes unchanged); Python guards; docs.
-- [ ] 6. Extend the linked static/runtime matrix (fixtures, ProviderChecks, harness denominator, linked runner, guards, docs).
+- [x] 6. Extend the linked static/runtime matrix (fixtures, ProviderChecks, harness denominator, linked runner, guards, docs).
 - [ ] 7. Verify fixtures restore/build/scan through the normal test project with no pre-existing fixture `bin/`/`obj/`; focused lanes.
 - [ ] 8. Commit implementation; frozen full Debug `-warnaserror`.
 - [ ] 9. Sequential committed-head retained smokes, new smoke, Python guards, pinned OSS C#/VB smoke, extended linked live harness on the revalidated disposable context; privacy/whitespace guards.

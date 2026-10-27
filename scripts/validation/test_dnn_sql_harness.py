@@ -231,7 +231,7 @@ class HarnessTests(unittest.TestCase):
                 h.provider_inputs(root)
 
     def test_provider_denominator_matches_the_linked_runner_and_client(self):
-        self.assertEqual(42, h.PROVIDER_CHECKS)
+        self.assertEqual(54, h.PROVIDER_CHECKS)
         self.assertEqual(h.PROVIDER_CHECKS, load_script('linked_provider').RUNTIME_CHECKS)
         program = (h.ROOT / 'samples/sqlserver-live-provider/Program.cs').read_text()
         self.assertIn(f'PROVIDER_CHECKS_PASSED {h.PROVIDER_CHECKS}', program)

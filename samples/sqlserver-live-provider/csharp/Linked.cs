@@ -96,4 +96,54 @@ public static class Cases {
         var set = ReadSet(connection, "dbo.ReadItems");
         return set.Tables[1].Rows[0]["Value"];
     }
+    // Phase 6: Field<T> name/ordinal reads on rows the unchanged DataTable/DataSet/internal-helper rules bind.
+    public static object FieldTableName(SqlConnection connection) {
+        using var command = new SqlCommand("dbo.ReadItems");
+        command.CommandType = CommandType.StoredProcedure;
+        command.Connection = connection;
+        using var adapter = new SqlDataAdapter(command);
+        var table = new DataTable();
+        adapter.Fill(table);
+        return table.Rows[0].Field<string>("Name");
+    }
+    public static object FieldOrdinal(SqlConnection connection) {
+        using var command = new SqlCommand("dbo.ReadItems");
+        command.CommandType = CommandType.StoredProcedure;
+        command.Connection = connection;
+        using var adapter = new SqlDataAdapter(command);
+        var table = new DataTable();
+        adapter.Fill(table);
+        return table.Rows[0].Field<int>(0);
+    }
+    public static object FieldSetName(SqlConnection connection) {
+        using var command = new SqlCommand("dbo.ReadItems");
+        command.CommandType = CommandType.StoredProcedure;
+        command.Connection = connection;
+        using var adapter = new SqlDataAdapter(command);
+        var set = new DataSet();
+        adapter.Fill(set);
+        return set.Tables[0].Rows[0].Field<string>("Name");
+    }
+    public static object FieldMissingName(SqlConnection connection) {
+        using var command = new SqlCommand("dbo.ReadItems");
+        command.CommandType = CommandType.StoredProcedure;
+        command.Connection = connection;
+        using var adapter = new SqlDataAdapter(command);
+        var table = new DataTable();
+        adapter.Fill(table);
+        return table.Rows[0].Field<string>("Missing");
+    }
+    public static object FieldCaseOnly(SqlConnection connection) {
+        using var command = new SqlCommand("dbo.ReadItems");
+        command.CommandType = CommandType.StoredProcedure;
+        command.Connection = connection;
+        using var adapter = new SqlDataAdapter(command);
+        var table = new DataTable();
+        adapter.Fill(table);
+        return table.Rows[0].Field<string>("name");
+    }
+    public static object InternalFieldName(SqlConnection connection) {
+        var table = SharedData.ReadShared(connection, "dbo.ReadItems");
+        return table.Rows[0].Field<string>("Name");
+    }
 }
