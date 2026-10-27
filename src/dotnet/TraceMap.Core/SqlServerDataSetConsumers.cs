@@ -38,8 +38,15 @@ internal static class SqlServerDataSetConsumers
 
     private static SqlServerDataSetState Unknown(string gap) => new(Version, "unknown", gap, null, null, null, null, null, null, null, [], [], []);
 
-    internal static SqlServerDataSetState Extract(IInvocationOperation call)
+    internal static SqlServerDataSetState Extract(IInvocationOperation call) => Extract(call, fieldReads: false, out _);
+
+    /// <summary>
+    /// The Phase 3 analysis. <paramref name="fieldReads"/> false is the unchanged Phase 3 state; true admits only the Phase 6
+    /// Field&lt;T&gt; name/ordinal reads in the shared row rules and returns the superset accesses in source order.
+    /// </summary>
+    internal static SqlServerDataSetState Extract(IInvocationOperation call, bool fieldReads, out IReadOnlyList<SqlServerFieldReadAccess> fieldAccesses)
     {
+        fieldAccesses = [];
         var method = call.TargetMethod;
         var declaring = method.ContainingType.ToDisplayString();
         // SqlDataAdapter is sealed and declares no Fill: DataAdapter.Fill(DataSet) and its DbDataAdapter override dispatch alike.
@@ -116,13 +123,14 @@ internal static class SqlServerDataSetConsumers
         foreach (var reference in all.OfType<ILocalReferenceOperation>().Where(r => tableLocals.Any(t => Same(t, r.Local))))
             if (TableUse(reference, rows, allowDispose: false) is { } gap) return Unknown(gap);
 
-        var accesses = new List<(int Position, SqlServerDataTableAccess Access)>();
-        if (RowsAndAccesses(all, rows, guarded, foreachRows, accesses) is { } rowGap) return Unknown(rowGap);
+        var accesses = new List<(int Position, SqlServerFieldReadAccess Access)>();
+        if (RowsAndAccesses(all, rows, guarded, foreachRows, accesses, fieldReads) is { } rowGap) return Unknown(rowGap);
         if (accesses.Count > SqlServerDataTableConsumers.MaxAccesses) return Unknown("access-limit");
         var adapterLine = adapterDeclarator.Syntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
         var setLine = setDeclarator!.Syntax.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+        fieldAccesses = Ordered(accesses);
         return new(Version, "bounded", null, commandType, textHash, associationKind, overload, tableName, adapterLine, setLine,
-            selectorKinds.ToArray(), guards.ToArray(), accesses.OrderBy(a => a.Position).Select(a => a.Access).ToArray());
+            selectorKinds.ToArray(), guards.ToArray(), fieldAccesses.Select(a => a.ToDataTableAccess()).ToArray());
     }
 
     /// <summary>Classifies one <c>set.Tables[...]</c> selector against the first-result table name.</summary>
