@@ -45,6 +45,11 @@ internal static class SqlServerCommandParameters
             {
                 var value = variable.Initializer?.Value;
                 if (value is null && variable.Parent is IVariableDeclarationOperation declaration) value = declaration.Initializer?.Value;
+                // The declarator begins before its initializer's execution span.
+                // The exact current call does not alias or expose the command:
+                // it creates the execution result. Do not exempt wrappers,
+                // conversions, arrays, or any different/prior invocation.
+                if (ReferenceEquals(value, call)) continue;
                 value = Unwrap(value);
                 if (SymbolEqualityComparer.Default.Equals(variable.Symbol, receiver))
                 {

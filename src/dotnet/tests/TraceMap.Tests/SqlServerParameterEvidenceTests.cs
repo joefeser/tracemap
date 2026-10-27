@@ -304,6 +304,16 @@ public sealed class SqlServerParameterEvidenceTests
     [InlineData("vb", "initializer")]
     [InlineData("vb", "with-command")]
     [InlineData("vb", "with-parameter")]
+    [InlineData("cs", "execution-initializer")]
+    [InlineData("vb", "execution-initializer")]
+    [InlineData("cs", "reader-initializer")]
+    [InlineData("vb", "reader-initializer")]
+    [InlineData("cs", "execution-array")]
+    [InlineData("vb", "execution-array")]
+    [InlineData("cs", "execution-wrapper")]
+    [InlineData("vb", "execution-wrapper")]
+    [InlineData("cs", "execution-conversion")]
+    [InlineData("vb", "execution-conversion")]
     public void Extractor_refuses_unsupported_mutation_and_work_bounds(string language, string shape)
     {
         var repository = new DirectoryInfo(AppContext.BaseDirectory);
@@ -347,6 +357,15 @@ public sealed class SqlServerParameterEvidenceTests
         Microsoft.CodeAnalysis.SyntaxTree tree;
         var argument = shape switch { "argument-command" => "Mutate(command)", "argument-parameter" => "Mutate(parameter)", "argument-default" => language == "cs" ? "default(System.Threading.CancellationToken)" : "Nothing", _ => null };
         var execution = argument is null ? "command.ExecuteScalar()" : "command.ExecuteScalarAsync(" + argument + ")";
+        execution = shape switch
+        {
+            "execution-initializer" => language == "cs" ? "var result = command.ExecuteScalar()" : "Dim result = command.ExecuteScalar()",
+            "reader-initializer" => language == "cs" ? "var reader = command.ExecuteReader()" : "Dim reader = command.ExecuteReader()",
+            "execution-array" => language == "cs" ? "var results = new object[] { command.ExecuteScalar() }" : "Dim results = New Object() { command.ExecuteScalar() }",
+            "execution-wrapper" => language == "cs" ? "var result = Mutate(command.ExecuteScalar())" : "Dim result = Mutate(command.ExecuteScalar())",
+            "execution-conversion" => language == "cs" ? "var result = (string)command.ExecuteScalar()" : "Dim result = DirectCast(command.ExecuteScalar(), String)",
+            _ => execution
+        };
         if (language == "cs")
         {
             tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText("class Mutator { public Mutator(object o) {} } class Example { static void Helper(object o) {} static System.Threading.CancellationToken Mutate(object o) { return default; } static void Run(string input, bool flag) { " + cs + changes.Item1 + execution + "; } }");
@@ -359,11 +378,18 @@ public sealed class SqlServerParameterEvidenceTests
         }
         Assert.DoesNotContain(compilation.GetDiagnostics(), d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
         var model = compilation.GetSemanticModel(tree);
-        var call = Assert.Single(tree.GetRoot().DescendantNodes().Select(n => model.GetOperation(n)).OfType<Microsoft.CodeAnalysis.Operations.IInvocationOperation>(), o => o.TargetMethod.Name is "ExecuteScalar" or "ExecuteScalarAsync");
+        var call = Assert.Single(tree.GetRoot().DescendantNodes().Select(n => model.GetOperation(n)).OfType<Microsoft.CodeAnalysis.Operations.IInvocationOperation>(), o => o.TargetMethod.Name is "ExecuteScalar" or "ExecuteScalarAsync" or "ExecuteReader");
         var properties = new SortedDictionary<string, string>();
         SqlServerCommandParameters.Add(properties, call);
         var state = SqlServerSchemaEvidence.Read<SqlServerCallState>(properties["sqlServerParameterState"]);
-        Assert.Equal(shape is "good" or "argument-default" ? "bounded" : "unknown", state.Coverage);
+        Assert.Equal(shape is "good" or "argument-default" or "execution-initializer" or "reader-initializer" ? "bounded" : "unknown", state.Coverage);
+        if (shape is "execution-array" or "execution-wrapper" or "execution-conversion") Assert.Equal("nested-alias-or-escape", state.Gap);
+        if (shape is "execution-initializer" or "reader-initializer")
+        {
+            Assert.Equal("StoredProcedure", state.CommandType);
+            Assert.Equal("@Name", Assert.Single(state.Parameters).Name);
+            Assert.Equal(20, Assert.Single(state.Parameters).Size);
+        }
         if (shape is "argument-command" or "argument-parameter") Assert.Equal("unsupported-execution-argument", state.Gap);
         if (shape == "operation-limit") Assert.Equal("operation-limit", state.Gap);
         if (shape == "parameter-limit") Assert.Equal("parameter-limit-or-no-command", state.Gap);
