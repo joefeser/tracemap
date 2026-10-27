@@ -217,3 +217,16 @@ no credential text in either receipt. Linked receipt
 unchanged, bounded input `40ebc2f2…`); runtime receipt `runtime/receipt.json` (SHA-256
 `ebc5fe43919650f05695f98a697a38fe40422b3356a5fbae8a27b9aa686d2b92`, harness generator
 `3df876f7…` unchanged). Regression evidence only; no internal helper is linked.
+## Phase 6 Field<T> extension (authored before running) — 2026-10-26
+The `Field<T>` / `Field(Of T)` slice extends this matrix under the unchanged harness safeguards
+(reviewed context, pinned image digest, no pull, network none, no published ports, no volumes,
+CPU/memory/PID limits, transient credential via environment, ownership-checked cleanup and
+failed-run evidence). `samples/sqlserver-live-provider/{csharp,vb}` gain a second document
+`Shared` with one internal (`Friend`) static helper `ReadShared(connection, procedure)` and six
+`Cases` methods compared through `sqlserver-field-read`: FieldTableName M / `sample`,
+FieldOrdinal M / `1`, FieldSetName M / `sample`, FieldMissingName X / `ArgumentException`,
+FieldCaseOnly U / `sample` (runtime case fallback), InternalFieldName (cross-document internal
+helper) M / `sample`. The 22 retained cases keep their routes and outcomes. **34 linked cases =
+20 match / 6 mismatch / 8 unknown; 54 runtime checks** (20 original + 34 linked).
+`Program.cs`, `harness.py` (`PROVIDER_CHECKS`), `linked_provider.py` and their guards change
+together. Runtime success never promotes a static unknown.
