@@ -1,6 +1,31 @@
 """Reconstruct the four finite native smoke contracts without executing a CLI."""
 import json
 import re
+import importlib.util
+from pathlib import Path
+from collections import Counter
+
+SPEC = importlib.util.spec_from_file_location('independent_acceptance_matrix', Path(__file__).with_name('acceptance_matrix.py'))
+MATRIX = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MATRIX)
+
+
+def member(symbol):
+    match = re.search(r'\.([A-Za-z]+)(?:<[^>]*>|\(Of [^)]*\))?\(', symbol)
+    if match is None:
+        raise ValueError('unrecognized source member')
+    return match[1]
+
+
+def keyed(items):
+    items = list(items)
+    counts, seen = Counter(name for name, _ in items), Counter()
+    result = []
+    for name, item in items:
+        key = f'{name}#{seen[name]}' if counts[name] > 1 else name
+        seen[name] += 1
+        result.append((key, item))
+    return result
 
 REFUSALS = {
     'parameter': '',
@@ -48,54 +73,66 @@ def reconstruct(api, root, label):
     def add(language, path, fact, statuses, **fields):
         expected.append((dict(language=language, factId=fact['factId'], **fields), path, statuses))
 
-    for language in ('csharp', 'vb'):
+    for language in MATRIX.LANGUAGES:
         facts = [json.loads(line) for line in (root / language / 'scan/facts.ndjson').read_text().splitlines()]
         calls = [f for f in facts if f['factType'] == 'DatabaseOperationCandidate' and f['evidenceTier'] == 'Tier1Semantic'
                  and (label in ('parameter', 'reader') or f['properties'].get('operationKind') == 'data-adapter-fill')]
         if label == 'parameter':
-            repeated = 0
-            for number, fact in enumerate(sorted(calls, key=lambda f: f['evidence']['startLine'])):
-                name = re.search(r'\.([A-Za-z]+)\(', fact['sourceSymbol'])[1]
-                status = native.EXPECTED.get(name)
-                if name == 'TwoCommands':
-                    status = api.X if repeated == 0 else api.M
-                    repeated += 1
-                api.require(status is not None, 'unknown parameter case')
+            ordered = keyed((member(f['sourceSymbol']), f) for f in sorted(calls, key=lambda f: f['evidence']['startLine']))
+            api.require({k for k, _ in ordered} == set(MATRIX.PARAMETER), 'parameter source case contract changed')
+            for number, (key, fact) in enumerate(ordered):
+                name = key.split('#')[0]
+                status = MATRIX.PARAMETER[key][0][0]
                 inputs.append(helpers.projection(fact))
                 add(language, f'{language}/{number:02}-{name}/report/parameter-comparison.json', fact, [status], case=name)
         elif label == 'reader':
-            for number, (fact, key) in enumerate(native.case_keys(calls)):
-                api.require(key in native.SOURCE_CASES, 'unknown reader case')
+            ordered = keyed((member(f['sourceSymbol']), f) for f in sorted(calls, key=lambda f: f['evidence']['startLine']))
+            api.require({k for k, _ in ordered} == set(MATRIX.READER), 'reader source case contract changed')
+            for number, (key, fact) in enumerate(ordered):
                 inputs.append(native.reader_projection(fact))
-                origins = [('json', None), ('ddl', native.DDL_TEMPLATES.get(key, 'base.sql'))]
+                origins = [('json', None), ('ddl', MATRIX.READER_TEMPLATES.get(key, 'base.sql'))]
                 if key == 'NameMatch':
-                    origins += [('ddl', t) for t in native.BODY_MATRIX]
+                    origins += [('ddl', t) for t in MATRIX.READER_BODIES]
                 for origin, template in origins:
                     path = f"{language}/{origin}/{number:02}-{key.replace('#', '-')}/{template or 'declarations'}/report/result-column-comparison.json"
-                    add(language, path, fact, [api.U] if template in native.BODY_MATRIX else native.SOURCE_CASES[key],
+                    add(language, path, fact, [api.U] if template in MATRIX.READER_BODIES else MATRIX.READER[key][0],
                         case=key, origin=origin, template=template)
         else:
-            fills = native.fill_keys(calls)
+            ordering = (lambda f: (f['evidence']['filePath'], f['evidence']['startLine'])) if label == 'field' else (lambda f: f['evidence']['startLine'])
+            fills = keyed((member(f['sourceSymbol']), f) for f in sorted(calls, key=ordering))
+            known = (set(MATRIX.BOUNDED_HELPERS) | set(MATRIX.HELPER_UNKNOWN)) if label == 'helper' else (
+                set(MATRIX.FIELD_FILLS) | set(MATRIX.FIELD_UNKNOWN) | set(MATRIX.FIELD_HELPERS))
+            api.require({k for k, _ in fills} == known, 'consumer source case contract changed')
             selected = {}
+            sites = []
             for key, fact in fills:
                 if label == 'helper':
                     selected[('helper', key)] = (fact, None, None)
                     state = json.loads(fact['properties']['sqlServerHelperResultState'])
                     inputs.extend(native.helper_projection(fact, i) for i in range(len(state['callers'])))
+                    if key in MATRIX.BOUNDED_HELPERS:
+                        sites.extend((member(site['caller']), (fact, i, site)) for i, site in enumerate(state['callers']))
                 else:
-                    index, _ = native.check_fill_state(key, fact)
-                    if key not in native.HELPER_FILLS:
+                    state = json.loads(fact['properties']['sqlServerFieldReadState'])
+                    if key not in MATRIX.FIELD_HELPERS:
+                        index = 0 if key in MATRIX.FIELD_FILLS or key in MATRIX.FIELD_HAS_UNKNOWN_SITE else None
+                        api.require(len(state['sites']) == (1 if index == 0 else 0), 'direct Field site contract changed')
+                        if index == 0:
+                            api.require(member(state['sites'][0]['caller']) == key, 'direct Field caller changed')
                         selected[('fill', key)] = (fact, index, None)
-                    state = json.loads(fact['properties'][native.STATE])
+                    else:
+                        api.require(tuple(member(s['caller']) for s in state['sites']) == MATRIX.FIELD_HELPERS[key], 'Field helper caller contract changed')
+                        sites.extend((member(site['caller']), (fact, i, site)) for i, site in enumerate(state['sites']))
                     inputs.extend(native.field_projection(fact, i) for i in range(len(state['sites'])))
-            sites = native.caller_keys(fills) if label == 'helper' else native.site_keys(fills)
-            for key, (fact, index, site) in sites:
+            if label == 'helper':
+                sites.sort(key=lambda pair: pair[1][2]['line'])
+            for key, (fact, index, site) in keyed(sites):
                 selected[('caller' if label == 'helper' else 'site', key)] = (fact, index, site.get('path'))
-            for number, (kind, key, origin, variant, statuses) in enumerate(native.case_plan()):
+            for number, (kind, key, origin, variant, statuses) in enumerate(MATRIX.plan(label)):
                 api.require((kind, key) in selected, 'missing native case')
                 fact, index, site_path = selected[(kind, key)]
                 path_key = key.replace('#', '-') if label == 'helper' else key
-                path = f'{language}/{number:03}-{kind}-{path_key}-{origin}-{variant or "base"}/report/{native.REPORT}'
+                path = f'{language}/{number:03}-{kind}-{path_key}-{origin}-{variant or "base"}/report/{MATRIX.REPORTS[label]}'
                 extra = {'callerIndex': index} if label == 'helper' else {'siteIndex': index, 'sitePath': site_path}
                 add(language, path, fact, statuses, kind=kind, case=key, origin=origin, variant=variant, **extra)
     bounded = {'base': base}

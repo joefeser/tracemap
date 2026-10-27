@@ -7,3 +7,5 @@
 - [x] Record parent divergence and exact results; push child branch only.
 - [x] Final integrated full/live gates after coordinated parent completion (recorded at frozen 9d486e208; not inferred from focused validation).
 - [x] Integrate merged #919 and repair the verified #920 evidence-integrity findings as one owner-authorized batch; full/static replay results at 66bde05ee (no new live-runtime claim).
+- [x] Separate the finite acceptance oracle from native smoke expectations and exercise real reconstruction offline (116 Python guards).
+- [ ] Replay the independent oracle at its frozen committed head and record exact results.

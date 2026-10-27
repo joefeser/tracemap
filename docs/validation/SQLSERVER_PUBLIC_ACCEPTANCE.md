@@ -142,3 +142,13 @@ itself verify those runs. The spec implementation-state records their separate
 receipt paths and the frozen revision. Results documentation follows in a
 docs-only commit. The real DNN blockers and private-schema prerequisite remain;
 DataColumn and unrestricted ORM work are optional extensions, not new gates.
+
+### Independent acceptance oracle
+
+`scripts/dnn-sql-validation/acceptance_matrix.py` is a separately maintained,
+literal case contract from the authored design matrices. It must not be generated
+from native smoke receipts. Acceptance reconstructs identities, report paths and
+expected statuses from that contract; native helpers are reused only for source
+serialization. Offline integration guards exercise real reconstruction, including
+regenerated, count-preserving verdict swaps and changes to bounded source,
+declaration and template inputs. Mocked unit checks are not the integration gate.
