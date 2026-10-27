@@ -43,6 +43,16 @@ Type arguments render as namespace-qualified names without keywords, generic arg
 brackets, arrays as `[]` / `[,]` (`System.String`, `System.Nullable[System.Int32]`, `System.Byte[]`),
 at most 256 characters in `[A-Za-z0-9_.,[]]`. Rows add `field-type-argument-not-compared:<T>`.
 ## Decisions
+PR #919 follow-up at `bfe395d40`: current registered scope is required for absence
+omission; scope changes are checked outside the syntax cache. C#/VB matrix covers
+unregistered, excluded-caller/reduced, compiler-error and complete scopes, before
+registration and after cached absence. Full Debug `-warnaserror`: 5,409 passed,
+3 expected skips; 111 focused, 59 Python guards, all nine sequential SQL smokes and
+pinned OSS passed. Field remains 78/36/42 with 52 refusals; all retained denominators
+unchanged. Versions: C# 0.22.23 / VB 0.10.26. Earlier failed full gate (two unregistered
+near-limit fixture assertions) and CLI invocation error are recorded in implementation
+state; no artifact bound was changed. No new live/private application acceptance.
+
 - Presence: omit the sibling payload only for a currently registered, complete, error-free scope when a bounded compilation-wide token check proves
   no possible Field read exists. Cross-document callers, escaped names, unresolved/lookalike
   calls and uncertain/oversized scopes remain conservative. Existing 64 MiB whole-facts and

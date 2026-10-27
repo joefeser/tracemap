@@ -15,7 +15,17 @@ Both failures were the prior C#/VB near-limit fixture's omission assertion: that
 used an unregistered direct compilation. It now explicitly registers its complete synthetic
 document scope before expecting omission. Artifact limits and expected admission are unchanged.
 Failure receipt is retained at `/tmp/tracemap-pr919-scope-full/pr919-scope-full.trx`.
-Fresh full and smoke gates pending.
+Final frozen head `bfe395d40a613d59db1a133f94c1fc63313d8a60`: 111 focused passed;
+full Debug `-warnaserror` 5,409 passed, 3 expected skips, zero failures (38m59s).
+Fresh TRX: `/tmp/tracemap-pr919-scope-full-final/pr919-scope-full-final.trx`.
+All nine SQL smokes passed sequentially with unchanged denominators; Field 78/36/42
+and 52 refusals (26 per language). Pinned OSS: 12,949 / 114,806 facts, reduced coverage,
+no SQL calls; not SQL application evidence. Receipts: `/tmp/pr919-bfe395-*/`.
+59 Python guards and private-path/diff guards passed. One initial DDL smoke invocation
+omitted mandatory `--json-smoke` and exited at argument parsing; corrected invocation passed.
+Core hash `eab482c4e832c543c4ce9282ee4ee39ec286459b2777295cd922bcd342101340`
+matches the Field receipt after all gates. No live SQL rerun for this scope-metadata-only
+repair; prior live evidence is historical, not current-head runtime acceptance.
 
 ## PR #919 review repair
 
