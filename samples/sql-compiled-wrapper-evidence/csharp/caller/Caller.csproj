@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net48</TargetFramework><AssemblyName>PublicSql.csharp.caller</AssemblyName><RootNamespace></RootNamespace><LangVersion>latest</LangVersion><Nullable>disable</Nullable><OptionStrict>On</OptionStrict><Deterministic>true</Deterministic></PropertyGroup>
+  <ItemGroup><PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../wrapper/Wrapper.csproj" /></ItemGroup>
+</Project>
