@@ -43,6 +43,16 @@ Type arguments render as namespace-qualified names without keywords, generic arg
 brackets, arrays as `[]` / `[,]` (`System.String`, `System.Nullable[System.Int32]`, `System.Byte[]`),
 at most 256 characters in `[A-Za-z0-9_.,[]]`. Rows add `field-type-argument-not-compared:<T>`.
 ## Decisions
+- Presence: omit the sibling payload only when a bounded compilation-wide token check proves
+  no possible Field read exists. Cross-document callers, escaped names, unresolved/lookalike
+  calls and uncertain/oversized scopes remain conservative. Existing 64 MiB whole-facts and
+  4 MiB per-record bounds are unchanged. No new positive evidence follows from omission.
+- Provenance boundary: raw Field state is an embedded scan fact property, not a standalone
+  derived export. It retains the fact's repo/revision, rule/tier, source span and extractor
+  version. Its per-site binding digest covers the complete projected state/site; the derived
+  comparison report carries the exact Core generator SHA-256 and bounded input projection
+  SHA-256, including those projections. These hashes prove integrity, not raw-fact authenticity
+  or deployment correspondence; copying hashes into each raw property would not add that proof.
 - Distinct state: versioned successors of the four existing states would change every retained
   output. The Phase 2-5 states, refusals and denominators are unchanged for every input, and a
   Field read stays `datarow-field-extension-unsupported` there.
@@ -72,7 +82,7 @@ guards carry the same expectations, written before the extractor ran.
   exact gap asserted on the source state first.
 - Per language **75 case reports = 39 bounded matches / 18 mismatches / 21 unknowns**; both
   languages 78 / 36 / 42.
-26 refusal checks: DataTable, DataSet, Phase 4 helper, internal-helper, reader and parameter
+26 refusal checks per language (52 total): DataTable, DataSet, Phase 4 helper, internal-helper, reader and parameter
 bindings; DataTable and internal-helper digests; stale digest; site-index and site-digest
 substitution; out-of-range index; duplicate binding; stale revision; mutated access, type argument
 and procedure hash; field bindings in the DataTable, DataSet, helper, internal-helper and reader
@@ -132,7 +142,7 @@ competing build, smoke or commit ran in the worktree.
 | Retained DataSet smoke | 169 cases per language; 156 / 24 / 176, 24/24 refusals (160 s) |
 | Retained helper smoke | 115 cases per language; 84 / 30 / 116, 24/24 refusals (91 s) |
 | Retained internal-helper smoke | 78 cases per language; 72 / 24 / 60, 24/24 refusals (54 s) |
-| New Field-read smoke | 75 cases per language; 78 / 36 / 42, expected = observed, 0 gaps, 26/26 refusals, repeat bytes identical (54 s) |
+| New Field-read smoke | 75 cases per language; 78 / 36 / 42, expected = observed, 0 gaps, 26/26 C# refusals only (VB refusals were missing in this historical run), repeat bytes identical (54 s) |
 | Pinned C#/VB OSS adapter smoke | exit 0 (20 s); 12,949 / 114,806 facts at C# 0.22.20 / VB 0.10.23; both `Level1SemanticAnalysisReduced` / `FailedOrPartial`; no DatabaseOperationCandidate facts |
 | Extended linked live harness (reviewed disposable context) | 34 cases 20 / 6 / 8; 54/54 runtime checks; SQL Server 16.0.4205.1; owned container removed (86 s) |
 | Python guards; private-path guard; `git diff --check 7e96bca84..HEAD` | 59 + 20 + 13 passed; passed; passed |

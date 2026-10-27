@@ -24,7 +24,7 @@ public sealed class SqlServerFieldReadExtractionTests
 
     /// <summary>Compiles <paramref name="members"/> in one type and returns every Fill site's Field, DataTable, DataSet and helper states.</summary>
     internal static Site[] Extract(string language, string members, string extraTypes = "", Func<IEnumerable<MetadataReference>, IEnumerable<MetadataReference>>? references = null,
-        string? header = null)
+        string? header = null, string assemblyName = "Synthetic")
     {
         var refs = (references ?? (r => r))(SqlServerHelperResultExtractionTests.References()).ToArray();
         Compilation compilation;
@@ -32,7 +32,7 @@ public sealed class SqlServerFieldReadExtractionTests
         if (language == "cs")
         {
             tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText((header ?? CsPrefix) + "static class Example {\nstatic void Consume(object o) {}\n" + members + "\n}\n" + extraTypes);
-            compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create("Synthetic", [tree], refs, new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(assemblyName, [tree], refs, new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         }
         else
         {
@@ -47,7 +47,7 @@ public sealed class SqlServerFieldReadExtractionTests
             {
                 var p = new SortedDictionary<string, string>();
                 DatabaseOperationApi.AddProperties(p, o);
-                return new Site(SqlServerSchemaEvidence.Read<SqlServerFieldReadState>(p["sqlServerFieldReadState"]),
+                return new Site(p.TryGetValue("sqlServerFieldReadState", out var field) ? SqlServerSchemaEvidence.Read<SqlServerFieldReadState>(field) : SqlServerFieldReads.Extract(o),
                     SqlServerSchemaEvidence.Read<SqlServerDataTableState>(p["sqlServerDataTableState"]),
                     SqlServerSchemaEvidence.Read<SqlServerDataSetState>(p["sqlServerDataSetState"]),
                     SqlServerSchemaEvidence.Read<SqlServerHelperResultState>(p["sqlServerHelperResultState"]), p);
@@ -224,10 +224,25 @@ public sealed class SqlServerFieldReadExtractionTests
         const string lookalike = "namespace System.Data { static class DataRowExtensions { public static T Field<T>(this real::System.Data.DataRow row, string name) => default; } }\n";
         var body = "static object M() {\nvar command = new SqlCommand(\"dbo.ReadItems\");\ncommand.CommandType = real::System.Data.CommandType.StoredProcedure;\n"
             + "var adapter = new SqlDataAdapter(command);\nvar table = new real::System.Data.DataTable();\nadapter.Fill(table);\nreturn table.Rows[0].Field<string>(\"Name\");\n}\n";
-        var site = Assert.Single(Extract("cs", body, lookalike, refs => refs.Select(r =>
-            Path.GetFileName(((PortableExecutableReference)r).FilePath) == "System.Data.Common.dll" ? r.WithAliases(["real"]) : r), header));
-        Assert.Equal("datatable:datarow-field-extension-untrusted", site.Field.OriginGaps[0]);
-        Assert.Equal("datarow-field-extension-unsupported", site.DataTable.Gap);
+        foreach (var name in new[] { "Synthetic", "System.Data.Common", "System.Data.DataSetExtensions" })
+        {
+            var site = Assert.Single(Extract("cs", body, lookalike, refs => refs.Select(r =>
+                Path.GetFileName(((PortableExecutableReference)r).FilePath) == "System.Data.Common.dll" ? r.WithAliases(["real"]) : r), header, name));
+            Assert.Equal("datatable:datarow-field-extension-untrusted", site.Field.OriginGaps[0]);
+            Assert.Equal("datarow-field-extension-unsupported", site.DataTable.Gap);
+        }
+    }
+
+    [Theory]
+    [InlineData("cs")]
+    [InlineData("vb")]
+    public void Non_field_compilation_omits_sibling_payload_but_retains_existing_binding_state(string language)
+    {
+        var body = language == "cs" ? "return table.Rows[0][\"Name\"];" : "Return table.Rows(0)(\"Name\")";
+        var site = Assert.Single(Extract(language, Method(language, body)));
+        Assert.False(site.Properties.ContainsKey("sqlServerFieldReadState"));
+        Assert.Equal("bounded", site.DataTable.Coverage);
+        Assert.Equal("Name", Assert.Single(site.DataTable.Accesses).Name);
     }
 
     [Theory]
