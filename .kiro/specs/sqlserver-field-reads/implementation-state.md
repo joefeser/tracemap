@@ -27,3 +27,13 @@ never to `dev`. The user checkout and every other worktree were not touched.
 - Step 6.5: first dev smoke run (working tree on top of `3244949a2`) matched every authored cell:
   75 cases per language, 78 / 36 / 42 both languages, 26/26 refusals each for its intended reason,
   ~75 s. Native theories 2/2; Python guards 59 (`test_sqlserver_*`, 9 new).
+- Step 6.6 static-only dry run of the extended linked runner at `94a62b0cd` (runtime stubbed,
+  output deleted, no receipt): 34 rows = 20 / 6 / 8 as authored; Field rows match their
+  authored statuses in both languages (`missing-column:Missing`, `column-case-policy-unknown:name`).
+- Step 6.7 clean-fixture check: all 28 `bin/`/`obj/` directories of the fourteen
+  `samples/sqlserver-*-evidence/{csharp,vb}` projects (including the two new Field-read fixtures)
+  moved out of the worktree; the normal `dotnet test ... TraceMap.Tests.csproj -c Debug
+  -warnaserror` restored and built all fourteen through the test-project graph. Focused lane
+  (Field read + helper + internal helper + DataSet + DataTable + table + result + DDL + parameter
+  + catalog + DNN + Razor) **825 passed** (818 + 7). Python guards: 59 `test_sqlserver_*`, 20 DNN
+  harness, 13 linked provider passed.
