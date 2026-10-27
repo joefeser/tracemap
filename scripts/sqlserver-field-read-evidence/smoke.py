@@ -257,7 +257,9 @@ def check_report(case, fact, index, expected, origin, reason, core_hash, schema_
 def publish_receipt(root, receipt):
     require(not receipt["gaps"], receipt["gaps"])
     require(receipt["observedCounts"] == receipt["expectedCounts"], "aggregate counts")
-    require(len(receipt["refusals"]) == REFUSAL_COUNT and all(r["refused"] for r in receipt["refusals"]), "refusals")
+    require(all(len([r for r in receipt["refusals"] if r.get("language") == language]) == REFUSAL_COUNT
+                for language in ("csharp", "vb")) and len(receipt["refusals"]) == 2 * REFUSAL_COUNT
+            and all(r["refused"] for r in receipt["refusals"]), "per-language refusals")
     HELPERS.verify_scan_hashes(root, receipt)
     HELPERS.write(root / "smoke-receipt.json", receipt)
 
@@ -318,7 +320,8 @@ def main():
             statuses, digest = check_report(case, fact, index, expected, origin, reasons[(kind, key)], core_hash, schema, paths.get(key))
             results.append({"language": language, "kind": kind, "case": key, "origin": origin, "variant": variant, "factId": fact["factId"],
                             "siteIndex": index, "sitePath": paths.get(key), "statuses": statuses, "reportSha256": digest})
-    refusals = check_refusals(args.output, cli, revision, selected, shapes) if not gaps else []
+    refusals = [r for language in ("csharp", "vb")
+                for r in check_refusals(args.output, cli, revision, selected, shapes, language)] if not gaps else []
     counts = {s: sum(r["statuses"].count(s) for r in results) for s in (M, X, U)}
     expected_counts = {s: 2 * n for s, n in EXPECTED_TOTALS.items()}
     hashes = shapes.hashes if shapes else {}
@@ -335,14 +338,14 @@ def main():
           f"{len(refusals)} refusals; SQL NOT RUN")
 
 
-def check_refusals(root, cli, revision, selected, shapes):
+def check_refusals(root, cli, revision, selected, shapes, language):
     """Site, route, digest and type-argument substitution and whole-input failures must exit non-zero and publish nothing."""
-    work = root / "refusals"
-    work.mkdir()
-    fact, first = selected[("csharp", "site", "InternalFieldName")]
-    same, second = selected[("csharp", "site", "InternalFieldOrdinal")]
+    work = root / "refusals" / language
+    work.mkdir(parents=True)
+    fact, first = selected[(language, "site", "InternalFieldName")]
+    same, second = selected[(language, "site", "InternalFieldOrdinal")]
     require(same["factId"] == fact["factId"] and second != first, "two sites of one helper")
-    scan = root / "csharp/scan/facts.ndjson"
+    scan = root / language / "scan/facts.ndjson"
     good = binding(fact, first, "InternalFieldName", revision, field_projection(fact, first))
     HELPERS.write(work / "bindings.json", good)
     json_options, json_schema, _ = shapes.get("result-schema", None)
@@ -351,7 +354,7 @@ def check_refusals(root, cli, revision, selected, shapes):
 
     def record(name, *command, output):
         ok, why = RESULT.refused(*command, output=output)
-        checks.append({"case": name, "refused": ok, "message": why})
+        checks.append({"language": language, "case": name, "refused": ok, "message": why})
 
     def compare(name, origin="result-schema", options=None, schema=None, bindings=None, facts=scan, rev=revision, route=ROUTE):
         out = work / f"out-{name}"
@@ -427,7 +430,7 @@ def check_refusals(root, cli, revision, selected, shapes):
     result = RESULT.run_captured_cli("dotnet", cli, ROUTE, "compare", "--origin", "result-schema", *json_options,
                                      "--schema", json_schema, "--bindings", work / "bindings.json", "--facts", scan,
                                      "--repo", fact["repo"], "--revision", revision, "--out", existing)
-    checks.append({"case": "existing-output-not-replaced", "refused": result.returncode != 0
+    checks.append({"language": language, "case": "existing-output-not-replaced", "refused": result.returncode != 0
                    and sorted(p.name for p in existing.iterdir()) == ["keep.txt"] and (existing / "keep.txt").read_bytes() == b"prior winner\n",
                    "message": []})
     return checks

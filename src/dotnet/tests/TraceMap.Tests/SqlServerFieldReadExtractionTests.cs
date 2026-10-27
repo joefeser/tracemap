@@ -24,7 +24,7 @@ public sealed class SqlServerFieldReadExtractionTests
 
     /// <summary>Compiles <paramref name="members"/> in one type and returns every Fill site's Field, DataTable, DataSet and helper states.</summary>
     internal static Site[] Extract(string language, string members, string extraTypes = "", Func<IEnumerable<MetadataReference>, IEnumerable<MetadataReference>>? references = null,
-        string? header = null)
+        string? header = null, string assemblyName = "Synthetic", bool register = false)
     {
         var refs = (references ?? (r => r))(SqlServerHelperResultExtractionTests.References()).ToArray();
         Compilation compilation;
@@ -32,7 +32,7 @@ public sealed class SqlServerFieldReadExtractionTests
         if (language == "cs")
         {
             tree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText((header ?? CsPrefix) + "static class Example {\nstatic void Consume(object o) {}\n" + members + "\n}\n" + extraTypes);
-            compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create("Synthetic", [tree], refs, new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(assemblyName, [tree], refs, new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         }
         else
         {
@@ -40,6 +40,18 @@ public sealed class SqlServerFieldReadExtractionTests
             compilation = Microsoft.CodeAnalysis.VisualBasic.VisualBasicCompilation.Create("Synthetic", [tree], refs, new Microsoft.CodeAnalysis.VisualBasic.VisualBasicCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optionInfer: true));
         }
         Assert.DoesNotContain(compilation.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
+        if (register)
+        {
+            using var workspace = new AdhocWorkspace();
+            var root = Path.Combine(Path.GetTempPath(), "tracemap-field-synthetic");
+            tree = tree.WithFilePath(Path.Combine(root, language == "cs" ? "Input.cs" : "Input.vb"));
+            compilation = compilation.RemoveAllSyntaxTrees().AddSyntaxTrees(tree);
+            var projectId = ProjectId.CreateNewId();
+            var project = workspace.AddProject(ProjectInfo.Create(projectId, VersionStamp.Create(), "Synthetic", "Synthetic", compilation.Language,
+                filePath: Path.Combine(root, language == "cs" ? "Synthetic.csproj" : "Synthetic.vbproj"),
+                documents: [DocumentInfo.Create(DocumentId.CreateNewId(projectId), Path.GetFileName(tree.FilePath), filePath: tree.FilePath)]));
+            SqlServerCompilationScopes.Register(root, project, compilation, hasErrors: false);
+        }
         var model = compilation.GetSemanticModel(tree);
         return tree.GetRoot().DescendantNodes().Select(n => model.GetOperation(n)).OfType<IInvocationOperation>()
             .Where(o => o.TargetMethod.Name == "Fill").Distinct().OrderBy(o => o.Syntax.SpanStart)
@@ -47,7 +59,7 @@ public sealed class SqlServerFieldReadExtractionTests
             {
                 var p = new SortedDictionary<string, string>();
                 DatabaseOperationApi.AddProperties(p, o);
-                return new Site(SqlServerSchemaEvidence.Read<SqlServerFieldReadState>(p["sqlServerFieldReadState"]),
+                return new Site(p.TryGetValue("sqlServerFieldReadState", out var field) ? SqlServerSchemaEvidence.Read<SqlServerFieldReadState>(field) : SqlServerFieldReads.Extract(o),
                     SqlServerSchemaEvidence.Read<SqlServerDataTableState>(p["sqlServerDataTableState"]),
                     SqlServerSchemaEvidence.Read<SqlServerDataSetState>(p["sqlServerDataSetState"]),
                     SqlServerSchemaEvidence.Read<SqlServerHelperResultState>(p["sqlServerHelperResultState"]), p);
@@ -224,10 +236,73 @@ public sealed class SqlServerFieldReadExtractionTests
         const string lookalike = "namespace System.Data { static class DataRowExtensions { public static T Field<T>(this real::System.Data.DataRow row, string name) => default; } }\n";
         var body = "static object M() {\nvar command = new SqlCommand(\"dbo.ReadItems\");\ncommand.CommandType = real::System.Data.CommandType.StoredProcedure;\n"
             + "var adapter = new SqlDataAdapter(command);\nvar table = new real::System.Data.DataTable();\nadapter.Fill(table);\nreturn table.Rows[0].Field<string>(\"Name\");\n}\n";
-        var site = Assert.Single(Extract("cs", body, lookalike, refs => refs.Select(r =>
-            Path.GetFileName(((PortableExecutableReference)r).FilePath) == "System.Data.Common.dll" ? r.WithAliases(["real"]) : r), header));
-        Assert.Equal("datatable:datarow-field-extension-untrusted", site.Field.OriginGaps[0]);
-        Assert.Equal("datarow-field-extension-unsupported", site.DataTable.Gap);
+        foreach (var name in new[] { "Synthetic", "System.Data.Common", "System.Data.DataSetExtensions" })
+        {
+            var site = Assert.Single(Extract("cs", body, lookalike, refs => refs.Select(r =>
+                Path.GetFileName(((PortableExecutableReference)r).FilePath) == "System.Data.Common.dll" ? r.WithAliases(["real"]) : r), header, name));
+            Assert.Equal("datatable:datarow-field-extension-untrusted", site.Field.OriginGaps[0]);
+            Assert.Equal("datarow-field-extension-unsupported", site.DataTable.Gap);
+        }
+    }
+
+    [Theory]
+    [InlineData("cs")]
+    [InlineData("vb")]
+    public void Unregistered_non_field_compilation_retains_sibling_payload_and_existing_binding_state(string language)
+    {
+        var body = language == "cs" ? "return table.Rows[0][\"Name\"];" : "Return table.Rows(0)(\"Name\")";
+        var site = Assert.Single(Extract(language, Method(language, body)));
+        Assert.True(site.Properties.ContainsKey("sqlServerFieldReadState"));
+        Assert.Equal("bounded", site.DataTable.Coverage);
+        Assert.Equal("Name", Assert.Single(site.DataTable.Accesses).Name);
+    }
+
+    [Theory]
+    [InlineData("cs")]
+    [InlineData("vb")]
+    public void Presence_omission_requires_current_complete_registered_error_free_scope(string language)
+    {
+        var ext = language == "cs" ? "cs" : "vb";
+        foreach (var scope in new[] { "complete", "reduced", "errors", "unregistered" })
+        foreach (var cachedAbsence in new[] { false, true })
+        {
+            if (scope == "unregistered" && cachedAbsence) continue;
+            var helper = SqlServerInternalHelperResultExtractionTests.HelperDocument(language, language == "cs" ? "internal" : "Friend");
+            if (scope == "errors") helper += language == "cs" ? "class Broken { MissingType value; }" : "Class Broken\nDim value As MissingType\nEnd Class\n";
+            var caller = $"proj/Excluded.{ext}";
+            var documents = new[] { ($"proj/Helpers.{ext}", helper),
+                (caller, SqlServerInternalHelperResultExtractionTests.CallerDocument(language, "Callers",
+                    scope == "reduced" ? FieldCall(language) : SqlServerInternalHelperResultExtractionTests.Call(language))) };
+            var site = Assert.Single(SqlServerInternalHelperResultExtractionTests.Extract(language, documents,
+                register: scope != "unregistered", exclude: scope == "reduced" ? ["**/Excluded.*"] : null,
+                allowErrors: scope == "errors", beforeRegister: (compilation, project) =>
+                {
+                    var call = compilation.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes()
+                        .Select(n => compilation.GetSemanticModel(tree).GetOperation(n))).OfType<IInvocationOperation>()
+                        .First(o => o.TargetMethod.Name == "Fill");
+                    if (cachedAbsence)
+                    {
+                        // Register a complete snapshot first, then let the harness replace it with
+                        // the actual reduced/error scope. Only immutable syntax may be cached.
+                        using var cleanWorkspace = new AdhocWorkspace();
+                        var cleanProject = cleanWorkspace.AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Create(),
+                            "Clean", "Clean", compilation.Language, filePath: project.FilePath));
+                        var repo = Path.GetDirectoryName(Path.GetDirectoryName(project.FilePath!)!)!;
+                        SqlServerCompilationScopes.Register(repo, cleanProject, compilation, hasErrors: false);
+                    }
+                    var properties = new SortedDictionary<string, string>();
+                    SqlServerFieldReads.Add(properties, call);
+                    Assert.Equal(!cachedAbsence, properties.ContainsKey("sqlServerFieldReadState"));
+                }));
+            Assert.Equal(scope != "complete", site.FieldStatePresent);
+            if (scope != "complete")
+                Assert.Contains("internal-helper:" + (scope switch
+                {
+                    "reduced" => "helper-compilation-reduced",
+                    "errors" => "helper-compilation-errors",
+                    _ => "helper-compilation-scope-unavailable"
+                }), site.Field.OriginGaps);
+        }
     }
 
     [Theory]

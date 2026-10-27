@@ -71,6 +71,10 @@ class PublicAcceptanceTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.verify()
 
+    def test_field_refusal_contract_includes_both_languages(self):
+        self.assertEqual(A.GATES['field'], ('field-read', 'sqlserver-field-read-smoke/1',
+                                          150, (78, 36, 42), 52))
+
     def test_artifact_changes_and_links_refused(self):
         report = self.root / 'csharp/case/report/report.json'
         report.write_text('{"changed":true}')

@@ -177,9 +177,11 @@ class FieldReadSmokeGuards(unittest.TestCase):
                      ("InternalNoField", internal, 0, SITE, "csharp")):
             with self.subTest(args=args[0]), self.assertRaises(ValueError):
                 SMOKE.check_site_state(*args)
-        good = {"gaps": [], "observedCounts": {M: 1}, "expectedCounts": {M: 1}, "refusals": [{"refused": True}] * SMOKE.REFUSAL_COUNT}
+        good = {"gaps": [], "observedCounts": {M: 1}, "expectedCounts": {M: 1},
+                "refusals": [{"language": language, "refused": True} for language in ("csharp", "vb") for _ in range(SMOKE.REFUSAL_COUNT)]}
         for change in ({"gaps": ["missing:site:InternalFieldName"]}, {"observedCounts": {M: 2}}, {"refusals": []},
-                       {"refusals": [{"refused": False}] * SMOKE.REFUSAL_COUNT}):
+                       {"refusals": [{"refused": False}] * SMOKE.REFUSAL_COUNT},
+                       {"refusals": [{"language": "csharp", "refused": True}] * (2 * SMOKE.REFUSAL_COUNT)}):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
                 with mock.patch.object(SMOKE.HELPERS, "verify_scan_hashes") as verify:
                     with self.assertRaises(ValueError):

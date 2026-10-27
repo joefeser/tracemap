@@ -19,7 +19,7 @@ GATES = {
     'parameter': ('parameter', 'sqlserver-parameter-smoke/1', 52, (8, 12, 32), 0),
     'reader': ('result-column', 'sqlserver-result-column-smoke/1', 158, (72, 20, 94), 20),
     'helper': ('helper-result', 'sqlserver-helper-result-smoke/1', 230, (84, 30, 116), 24),
-    'field': ('field-read', 'sqlserver-field-read-smoke/1', 150, (78, 36, 42), 26),
+    'field': ('field-read', 'sqlserver-field-read-smoke/1', 150, (78, 36, 42), 52),
 }
 # Authored before execution. Same source execution, separately admitted contracts.
 LINK_CASES = {'Good': (M, M), 'ParameterTypeMismatch': (X, M),
