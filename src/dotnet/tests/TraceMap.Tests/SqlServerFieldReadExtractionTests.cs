@@ -236,13 +236,61 @@ public sealed class SqlServerFieldReadExtractionTests
     [Theory]
     [InlineData("cs")]
     [InlineData("vb")]
-    public void Non_field_compilation_omits_sibling_payload_but_retains_existing_binding_state(string language)
+    public void Unregistered_non_field_compilation_retains_sibling_payload_and_existing_binding_state(string language)
     {
         var body = language == "cs" ? "return table.Rows[0][\"Name\"];" : "Return table.Rows(0)(\"Name\")";
         var site = Assert.Single(Extract(language, Method(language, body)));
-        Assert.False(site.Properties.ContainsKey("sqlServerFieldReadState"));
+        Assert.True(site.Properties.ContainsKey("sqlServerFieldReadState"));
         Assert.Equal("bounded", site.DataTable.Coverage);
         Assert.Equal("Name", Assert.Single(site.DataTable.Accesses).Name);
+    }
+
+    [Theory]
+    [InlineData("cs")]
+    [InlineData("vb")]
+    public void Presence_omission_requires_current_complete_registered_error_free_scope(string language)
+    {
+        var ext = language == "cs" ? "cs" : "vb";
+        foreach (var scope in new[] { "complete", "reduced", "errors", "unregistered" })
+        foreach (var cachedAbsence in new[] { false, true })
+        {
+            if (scope == "unregistered" && cachedAbsence) continue;
+            var helper = SqlServerInternalHelperResultExtractionTests.HelperDocument(language, language == "cs" ? "internal" : "Friend");
+            if (scope == "errors") helper += language == "cs" ? "class Broken { MissingType value; }" : "Class Broken\nDim value As MissingType\nEnd Class\n";
+            var caller = $"proj/Excluded.{ext}";
+            var documents = new[] { ($"proj/Helpers.{ext}", helper),
+                (caller, SqlServerInternalHelperResultExtractionTests.CallerDocument(language, "Callers",
+                    scope == "reduced" ? FieldCall(language) : SqlServerInternalHelperResultExtractionTests.Call(language))) };
+            var site = Assert.Single(SqlServerInternalHelperResultExtractionTests.Extract(language, documents,
+                register: scope != "unregistered", exclude: scope == "reduced" ? ["**/Excluded.*"] : null,
+                allowErrors: scope == "errors", beforeRegister: (compilation, project) =>
+                {
+                    var call = compilation.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes()
+                        .Select(n => compilation.GetSemanticModel(tree).GetOperation(n))).OfType<IInvocationOperation>()
+                        .First(o => o.TargetMethod.Name == "Fill");
+                    if (cachedAbsence)
+                    {
+                        // Register a complete snapshot first, then let the harness replace it with
+                        // the actual reduced/error scope. Only immutable syntax may be cached.
+                        using var cleanWorkspace = new AdhocWorkspace();
+                        var cleanProject = cleanWorkspace.AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Create(),
+                            "Clean", "Clean", compilation.Language, filePath: project.FilePath));
+                        var repo = Path.GetDirectoryName(Path.GetDirectoryName(project.FilePath!)!)!;
+                        SqlServerCompilationScopes.Register(repo, cleanProject, compilation, hasErrors: false);
+                    }
+                    var properties = new SortedDictionary<string, string>();
+                    SqlServerFieldReads.Add(properties, call);
+                    Assert.Equal(!cachedAbsence, properties.ContainsKey("sqlServerFieldReadState"));
+                }));
+            Assert.Equal(scope != "complete", site.FieldStatePresent);
+            if (scope != "complete")
+                Assert.Contains("internal-helper:" + (scope switch
+                {
+                    "reduced" => "helper-compilation-reduced",
+                    "errors" => "helper-compilation-errors",
+                    _ => "helper-compilation-scope-unavailable"
+                }), site.Field.OriginGaps);
+        }
     }
 
     [Theory]

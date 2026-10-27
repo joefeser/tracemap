@@ -1,5 +1,16 @@
 # Implementation state — Phase 6
 
+## PR #919 scope-preservation follow-up
+
+ACK authorized one new Baz finding on `9980043fd`: the presence optimization did not
+consult registered coverage and could omit the explicit reduced-scope refusal.
+Omission now requires current registered, complete, error-free coverage before consulting
+the immutable syntax cache. Scope metadata is deliberately not cached. C#/VB tests cover
+complete absence, excluded Field caller, compiler errors and no registration, including
+pre-registration extraction and re-registration after cached absence. Extractor versions
+are 0.22.23 / 0.10.26. First development compile failed because the test used a nonexistent
+Project.WithFilePath API; corrected to ProjectInfo.Create. Final gates pending.
+
 ## PR #919 review repair
 
 Exact-head ACK 0.5.9 authorized five independent/mixed findings at `035f4890d`.

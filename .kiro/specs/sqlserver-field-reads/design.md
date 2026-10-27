@@ -28,7 +28,9 @@
   Phase 2-5 states project it to `SqlServerDataTableAccess` losslessly because the mode-off
   path never records a Field access.
 - **Presence gate.** A cached bounded compilation-wide token check may omit the sibling
-  payload only when no case-insensitive `Field` value token exists. It includes cross-document
+  payload only for a currently registered, complete, error-free scope when no case-insensitive `Field` value token exists.
+  Scope metadata is checked on every invocation outside the immutable syntax cache, so registration
+  or replacement cannot reuse a stale omission decision. It includes cross-document
   callers and escaped identifiers; uncertainty or scope bounds retain all original analysis.
   This preserves the 64 MiB facts bound without inflating no-Field scans. It is conservative:
   a token does not prove a bound Field call, and irrelevant tokens may retain extra state.

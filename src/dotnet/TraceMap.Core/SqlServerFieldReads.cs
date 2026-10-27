@@ -39,7 +39,11 @@ internal static class SqlServerFieldReads
         // A conservative compilation-wide presence check includes cross-document helper callers,
         // escaped identifiers, unresolved/lookalike calls and unsupported overloads. Absence is
         // the only omission proof; uncertain/oversized scopes retain the original refusal state.
-        if (call.SemanticModel is { } model && !CandidateScopes.GetValue(model.Compilation, Candidate).MayContainField) return;
+        // Scope registration can change independently of the immutable compilation. Check it
+        // on every call, outside the syntax-only cache (including after a previous absence).
+        if (call.SemanticModel is { } model
+            && SqlServerCompilationScopes.Find(model.Compilation) is { Reduced: false, HasErrors: false }
+            && !CandidateScopes.GetValue(model.Compilation, Candidate).MayContainField) return;
         properties["sqlServerFieldReadState"] = SqlServerSchemaEvidence.Json(Extract(call));
     }
 
