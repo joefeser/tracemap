@@ -86,7 +86,7 @@ def command(*args, timeout=1200):
     # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
     result = subprocess.run([str(a) for a in args], cwd=ROOT, env=env,
                             capture_output=True, text=True, timeout=timeout, shell=False)
-    require(result.returncode == 0, 'command failed: ' + result.stdout[-3000:] + result.stderr[-3000:])
+    require(result.returncode == 0, 'command failed: ' + result.stdout + result.stderr)
     return result.stdout
 
 
@@ -248,7 +248,7 @@ def isolated_source():
             'clean committed child required')
     revision = command('git', 'rev-parse', 'HEAD').strip()
     with tempfile.TemporaryDirectory(prefix='tracemap-public-replay-') as temporary:
-        snapshot = Path(temporary) / 'source'
+        snapshot = Path(temporary).resolve() / 'source'
         command('git', 'clone', '--local', '--no-hardlinks', '--no-checkout', original, snapshot)
         try:
             ROOT = snapshot
