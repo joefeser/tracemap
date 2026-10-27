@@ -1,5 +1,14 @@
 # Offline SQL Server synthetic parameter evidence
 
+Public acceptance integration repair: C# `0.22.21` / VB `0.10.24` recognizes an
+execution that is exactly the initializer of a fresh result local. The enclosing
+declarator begins before the execution span but is not a command alias. Only the
+exact current invocation is exempted; conversions, wrappers, arrays and prior
+executions retain their unknown outcomes. Ten C#/VB regressions pin this boundary.
+The same-execution public checkpoint compares parameter and reader evidence for
+one fact without substituting their distinct digests; see
+[SQLSERVER_PUBLIC_ACCEPTANCE.md](SQLSERVER_PUBLIC_ACCEPTANCE.md).
+
 This bounded continuation of #908 and the parameter portion of #870 adds native
 admission and parameter comparison. It does not complete either issue or establish
 private SQL-A acceptance. PR #909's inventory, scalar-version and deterministic
