@@ -251,7 +251,8 @@ class AcceptanceReconstructionTests(unittest.TestCase):
         def verify(root, label, revision, helpers):
             self.assertEqual(revision, 'frozen-head')
             self.assertEqual(events[-1][1][-2:], ('--output', str(root)))
-            self.assertIn(f'sqlserver-{A.GATES[label][0]}-evidence/smoke.py', events[-1][1][1])
+            self.assertEqual(Path(events[-1][1][1]),
+                             A.ROOT / f'scripts/sqlserver-{A.GATES[label][0]}-evidence/smoke.py')
             events.append(('verified', label))
             return label
         with patch.object(A, 'command', side_effect=command), patch.object(A, 'verify_gate', side_effect=verify):
