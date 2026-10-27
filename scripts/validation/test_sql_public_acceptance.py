@@ -236,7 +236,7 @@ class AcceptanceReconstructionTests(unittest.TestCase):
     def test_ci_runs_native_compatibility_for_producer_and_consumer_changes(self):
         workflow = (A.ROOT / '.github/workflows/sql-database-compatibility.yml').read_text()
         for path in ('scripts/sqlserver-*-evidence/**', 'samples/sqlserver-*-evidence/**',
-                     'scripts/dnn-sql-validation/**'):
+                     'scripts/dnn-sql-validation/**', '.gitattributes'):
             self.assertEqual(workflow.count("'" + path + "'"), 2)
         self.assertIn('python scripts/dnn-sql-validation/native_compatibility.py --output', workflow)
         self.assertIn('timeout-minutes: 20', workflow)
