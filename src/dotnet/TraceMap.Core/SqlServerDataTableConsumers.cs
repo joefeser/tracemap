@@ -445,8 +445,7 @@ internal static class SqlServerDataTableConsumers
     internal static string? TypeArgument(ITypeSymbol type)
     {
         var text = Render(type, 0);
-        return text is { Length: > 0 and <= 256 } && text.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or ',' or '[' or ']')
-            && (char.IsAsciiLetter(text[0]) || text[0] == '_') ? text : null;
+        return BoundedTypeArgument(text) ? text : null;
 
         static string? Render(ITypeSymbol type, int depth)
         {
@@ -467,6 +466,11 @@ internal static class SqlServerDataTableConsumers
             }
         }
     }
+
+    /// <summary>The type-argument vocabulary: at most 256 characters of [A-Za-z0-9_.,[]], starting with a letter or underscore.</summary>
+    internal static bool BoundedTypeArgument(string? text)
+        => text is { Length: > 0 and <= 256 } && text.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '.' or ',' or '[' or ']')
+            && (char.IsAsciiLetter(text[0]) || text[0] == '_');
 
     private static readonly SymbolDisplayFormat QualifiedName = new(globalNamespaceStyle: SymbolDisplayGlobalNamespaceStyle.Omitted,
         typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,

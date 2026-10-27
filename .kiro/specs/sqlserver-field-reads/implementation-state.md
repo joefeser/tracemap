@@ -21,3 +21,6 @@ never to `dev`. The user checkout and every other worktree were not touched.
   arguments needed `ExpandNullable` / `ExpandValueTuple` to stay inside the bounded vocabulary.
 ## Development validation (not acceptance)
 - Step 6.3: 44 new direct tests; SQL lane with Razor and the new tests 818 passed.
+- Step 6.4: an unknown site (no hash) bound by a field binding reports only its own gap, not
+  `command-binding-conflict` (Phase 5 adds the conflict for unknown callers too; the Field route
+  keeps the reason list to the site's own refusal). 49 Field tests passed.
