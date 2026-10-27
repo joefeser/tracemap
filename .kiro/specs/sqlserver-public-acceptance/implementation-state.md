@@ -192,4 +192,12 @@ existing isolated unit tests remain explicitly unit-scoped. Focused Python gates
 24 public + 59 retained SQL + 20 DNN + 13 linked-provider = **116 passed**.
 No .NET source or extractor changes; the full 5,419-pass gate at `66bde05ee`
 continues to describe the unchanged core, not a newly executed full suite.
-Fresh committed-head public replay is pending at this implementation checkpoint.
+Fresh isolated replay passed at frozen implementation
+`0b419429f8b52fc1d2dce64574a2582da0bbd144`: parameter 52 cases (8/12/32),
+reader 158 (72/20/94; 20 refusals), helper 230 (84/30/116; 24 refusals),
+Field 150 (78/36/42; 52 refusals), and all eight same-execution pairs.
+The pinned DNN inspection retained four blockers. No SQL was executed.
+Packet `/tmp/pr920-public-oracle-0b419429f/public-acceptance.json` has SHA-256
+`1b107027407a707d086a03518e2d40405ef22c20ad6ab1bd2eff2f2c717b0419`.
+No failed attempt occurred in this follow-up. The following commit is results
+documentation only; the earlier full/core and live-run boundaries remain intact.
