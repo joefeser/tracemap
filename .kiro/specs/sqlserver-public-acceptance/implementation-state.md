@@ -228,3 +228,11 @@ Both workflow YAML files parse; all 27 public guards pass after that change.
 Actionlint was unavailable in PATH and at the Homebrew path; no actionlint pass
 is claimed. No failed native replay occurred. The unchanged .NET core retains
 the exact `66bde05ee` full-suite evidence; this is not a new full-suite result.
+
+Windows CI run `40523519251`, job `122256718596`, failed one new guard at
+`9f42ddca7`: a POSIX slash substring was compared with a Windows producer path.
+The assertion now compares Path objects, preserving exact producer identity
+without separator assumptions. The other 26 guards passed in that failed run.
+All 27 public guards pass locally after the test-only repair; Windows rerun is
+still required. Native replay/core evidence is unchanged, not rerun for this
+assertion-only correction.
