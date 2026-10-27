@@ -56,3 +56,6 @@ package changes an opt-in IL derivation, covered by the full/IL/native gates.
 Results-only documentation follows the frozen implementation. The required
 whole-path heap/substitution/Merge legs remain unimplemented; this package is a
 validated foundation, not resolution of the application fit gap.
+
+Branch pushed to origin after validation. A fresh post-push fetch confirmed
+`origin/dev` still equals the recorded base (zero divergence). No PR or merge.
