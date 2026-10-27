@@ -9,7 +9,13 @@ the immutable syntax cache. Scope metadata is deliberately not cached. C#/VB tes
 complete absence, excluded Field caller, compiler errors and no registration, including
 pre-registration extraction and re-registration after cached absence. Extractor versions
 are 0.22.23 / 0.10.26. First development compile failed because the test used a nonexistent
-Project.WithFilePath API; corrected to ProjectInfo.Create. Final gates pending.
+Project.WithFilePath API; corrected to ProjectInfo.Create. Focused extraction gate: 109 passed.
+First full gate at `2095fea75`: 5,407 passed, 2 failed, 3 expected skips (34m54s).
+Both failures were the prior C#/VB near-limit fixture's omission assertion: that fixture
+used an unregistered direct compilation. It now explicitly registers its complete synthetic
+document scope before expecting omission. Artifact limits and expected admission are unchanged.
+Failure receipt is retained at `/tmp/tracemap-pr919-scope-full/pr919-scope-full.trx`.
+Fresh full and smoke gates pending.
 
 ## PR #919 review repair
 

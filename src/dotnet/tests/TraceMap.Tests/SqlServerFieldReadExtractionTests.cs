@@ -24,7 +24,7 @@ public sealed class SqlServerFieldReadExtractionTests
 
     /// <summary>Compiles <paramref name="members"/> in one type and returns every Fill site's Field, DataTable, DataSet and helper states.</summary>
     internal static Site[] Extract(string language, string members, string extraTypes = "", Func<IEnumerable<MetadataReference>, IEnumerable<MetadataReference>>? references = null,
-        string? header = null, string assemblyName = "Synthetic")
+        string? header = null, string assemblyName = "Synthetic", bool register = false)
     {
         var refs = (references ?? (r => r))(SqlServerHelperResultExtractionTests.References()).ToArray();
         Compilation compilation;
@@ -40,6 +40,18 @@ public sealed class SqlServerFieldReadExtractionTests
             compilation = Microsoft.CodeAnalysis.VisualBasic.VisualBasicCompilation.Create("Synthetic", [tree], refs, new Microsoft.CodeAnalysis.VisualBasic.VisualBasicCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optionInfer: true));
         }
         Assert.DoesNotContain(compilation.GetDiagnostics(), d => d.Severity == DiagnosticSeverity.Error);
+        if (register)
+        {
+            using var workspace = new AdhocWorkspace();
+            var root = Path.Combine(Path.GetTempPath(), "tracemap-field-synthetic");
+            tree = tree.WithFilePath(Path.Combine(root, language == "cs" ? "Input.cs" : "Input.vb"));
+            compilation = compilation.RemoveAllSyntaxTrees().AddSyntaxTrees(tree);
+            var projectId = ProjectId.CreateNewId();
+            var project = workspace.AddProject(ProjectInfo.Create(projectId, VersionStamp.Create(), "Synthetic", "Synthetic", compilation.Language,
+                filePath: Path.Combine(root, language == "cs" ? "Synthetic.csproj" : "Synthetic.vbproj"),
+                documents: [DocumentInfo.Create(DocumentId.CreateNewId(projectId), Path.GetFileName(tree.FilePath), filePath: tree.FilePath)]));
+            SqlServerCompilationScopes.Register(root, project, compilation, hasErrors: false);
+        }
         var model = compilation.GetSemanticModel(tree);
         return tree.GetRoot().DescendantNodes().Select(n => model.GetOperation(n)).OfType<IInvocationOperation>()
             .Where(o => o.TargetMethod.Name == "Fill").Distinct().OrderBy(o => o.Syntax.SpanStart)
