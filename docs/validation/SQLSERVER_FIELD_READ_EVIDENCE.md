@@ -53,6 +53,16 @@ at most 256 characters in `[A-Za-z0-9_.,[]]`. Rows add `field-type-argument-not-
   comparison report carries the exact Core generator SHA-256 and bounded input projection
   SHA-256, including those projections. These hashes prove integrity, not raw-fact authenticity
   or deployment correspondence; copying hashes into each raw property would not add that proof.
+
+PR #919 repair validation at `edc67537d`: full Debug `-warnaserror` **5,407 passed,
+3 expected skips**, no failures (33m 20s); 61 focused tests, 59 Python SQL guards.
+Field smoke remains **78/36/42**, now with **26 C# plus 26 VB refusals**. Retained
+DataTable/DataSet/private-helper/internal-helper counts and refusals are unchanged.
+Pinned C#/VB OSS smokes pass with their existing reduced coverage and no SQL calls.
+The first near-limit test fixture incorrectly padded one JSON record beyond the
+separate 4 MiB record bound; it was corrected to multiple bounded records, without
+changing either production limit. Source and CLI/Core bytes were frozen for all
+final gates. No live SQL or private inputs were used in this repair validation.
 - Distinct state: versioned successors of the four existing states would change every retained
   output. The Phase 2-5 states, refusals and denominators are unchanged for every input, and a
   Field read stays `datarow-field-extension-unsupported` there.
