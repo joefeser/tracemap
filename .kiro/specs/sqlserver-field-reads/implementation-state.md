@@ -37,3 +37,25 @@ never to `dev`. The user checkout and every other worktree were not touched.
   (Field read + helper + internal helper + DataSet + DataTable + table + result + DDL + parameter
   + catalog + DNN + Razor) **825 passed** (818 + 7). Python guards: 59 `test_sqlserver_*`, 20 DNN
   harness, 13 linked provider passed.
+## Committed-head acceptance (implementation head `6aa8c40e975b9277418aa3bc4b561073887c7f3e`)
+Implementation commits `c4f9936c0` (state), `3244949a2` (route), `c64677e3c` (fixtures/smoke),
+`94a62b0cd` (linked extension) and the development-notes commit `6aa8c40e9`. All gates ran at
+`6aa8c40e9` with source and HEAD frozen (`git status` empty before and after) and every
+CLI-directory DLL hash identical before and after the smokes and the linked run.
+- Full Debug solution `dotnet test src/dotnet/TraceMap.sln -c Debug -warnaserror`:
+  **5,402 passed, 0 failed, 3 expected skips** (Oracle full golden sweep opt-in,
+  HttpReportProvenanceInterop receipt env unset, Windows-only deep projectless ASP.NET
+  publish); 31 m tests, 1,871 s wall; zero compiler/analyzer warnings. No failure occurred, so no
+  rerun was needed or counted.
+- Retained smokes unchanged: 52-case 8/12/32 ×2; result JSON 36/10/36, DDL 36/10/58, 20/20;
+  table 44/10/88, 24/24; DataTable 108/24/176, 22/22; DataSet 156/24/176, 24/24; helper
+  84/30/116, 24/24; internal-helper 72/24/60, 24/24. New Field-read smoke 78/36/42 (per language
+  39/18/21 over 75 cases), 0 gaps, 26/26.
+- Pinned OSS smoke: exit 0; 12,949 / 114,806 facts, both `Level1SemanticAnalysisReduced` /
+  `FailedOrPartial`; no DatabaseOperationCandidate, so no Field-read state.
+- Extended linked live harness: 34 cases 20/6/8, 54/54 runtime checks, owned container removed.
+- Python guards 59 + 20 + 13; private-path guard; `git diff --check 7e96bca84..HEAD`.
+## Delivery
+Docs-only results commit on top of `6aa8c40e9`, next-slice prompt
+`prompts/continue-sqlserver-datacolumn-reads.md`, branch pushed. No PR, merge, ACK-policy change
+or review request. Not DNN, private-application, deployment or migration acceptance.

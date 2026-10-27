@@ -115,3 +115,35 @@ Bounded backlog, not an authorization to widen this branch.
    value comparison, LINQ `AsEnumerable()` pipelines, named/typed DataSets, `new DataTable(name)`,
    later result sets, multi-level helpers.
 3. **Deferred engineering work:** test wall-clock restructuring stays deferred.
+## Validated implementation head — 2026-10-26
+Implementation head **`6aa8c40e975b9277418aa3bc4b561073887c7f3e`** on
+`codex/sqlserver-field-reads`, from fresh `origin/dev` = #918 merge `7e96bca84`. Recorded by a
+separate documentation-only commit; no implementation change follows the gates. Source, HEAD and
+CLI-directory DLL hashes were identical before and after the smokes and the linked run; no
+competing build, smoke or commit ran in the worktree.
+| Gate | Result |
+| --- | --- |
+| Clean fixture graph (all fourteen SQL fixture `bin/`/`obj/` moved out, normal test-project build only) | all restored and built; focused lane 825 passed (774 retained + 51 new) |
+| Full Debug solution -warnaserror, frozen source/HEAD | 5,402 passed, 0 failed, 3 expected skips; 31 m tests (1,871 s wall); no warnings |
+| Retained JSON / DDL 52-case parameter smokes | 8 / 12 / 32 each (21 s / 30 s) |
+| Retained result smoke | JSON 36 / 10 / 36, DDL 36 / 10 / 58, 20/20 refusals (80 s) |
+| Retained table smoke | 64 cases per language; 44 / 10 / 88, 24/24 refusals (82 s) |
+| Retained DataTable smoke | 148 cases per language; 108 / 24 / 176, 22/22 refusals (149 s) |
+| Retained DataSet smoke | 169 cases per language; 156 / 24 / 176, 24/24 refusals (160 s) |
+| Retained helper smoke | 115 cases per language; 84 / 30 / 116, 24/24 refusals (91 s) |
+| Retained internal-helper smoke | 78 cases per language; 72 / 24 / 60, 24/24 refusals (54 s) |
+| New Field-read smoke | 75 cases per language; 78 / 36 / 42, expected = observed, 0 gaps, 26/26 refusals, repeat bytes identical (54 s) |
+| Pinned C#/VB OSS adapter smoke | exit 0 (20 s); 12,949 / 114,806 facts at C# 0.22.20 / VB 0.10.23; both `Level1SemanticAnalysisReduced` / `FailedOrPartial`; no DatabaseOperationCandidate facts |
+| Extended linked live harness (reviewed disposable context) | 34 cases 20 / 6 / 8; 54/54 runtime checks; SQL Server 16.0.4205.1; owned container removed (86 s) |
+| Python guards; private-path guard; `git diff --check 7e96bca84..HEAD` | 59 + 20 + 13 passed; passed; passed |
+Receipts are local (outside Git): `/tmp/tracemap-fr-6aa8c40-{json,ddl,result,table,datatable,dataset,helper,internal,field}/smoke-receipt.json`,
+`/tmp/tracemap-fr-6aa8c40-oss/` and `/tmp/tracemap-linked-provider-fr-6aa8c40/`. Field-read smoke
+generator `668916909ce9ebfb25a644c9e65cc0bb66b3e482cbfeaeaa85c4df10f32b932b`, bounded input
+`5e9ffc9d47ad10907427f179810e020e2e992e72f57eb4f70433086ea2ccda60`; Core
+`13fd3275c70fec0777a1af20c3e4b6ca63d23f4748475719a94430ccc3666ad7`; ScriptDom parser unchanged
+`2dcf224afac347fa1788eeaa6f8db78a17805b82338590b7e51448ab356a54ce`. The eight retained smoke
+scripts are byte-identical to `origin/dev`; their bounded inputs moved only through the extractor
+version strings and the additive `sqlServerFieldReadState` property in projected facts.
+Coverage honesty: the pinned public repositories contain no SQL calls; Field-read evidence is
+exercised by the synthetic corpus, direct tests and the disposable linked matrix only. Not DNN,
+private-application, catalog, deployment or migration acceptance.
