@@ -69,6 +69,14 @@ requirements, not exact private/OCR source to copy. Do not expand the frozen
 20-root success denominator or claim private fit until this new corpus is tested.
 Obtain the coordinator's implementation scope before widening the protocol.
 
+Include every correction control in the validation document: matched versus
+unmatched/skipped enrichment, unknown helper effects, failure before reset and
+after each merge, partial enrichment/list population, enclosing constructor
+catches, and explicit session-object replacement. Keep destination allocation,
+column/schema origin and read-time value origin separate. Never infer universal
+overwrite or an always-empty failure result from a single successful path.
+These controls are requirements, not already passing fixtures or supported routes.
+
 Use both existing C# and VB cases and their mutation/escape/branch/Merge controls.
 Add independent negatives for wrong assembly/key, stale hashes, missing/ambiguous
 bodies, changed constructor/store/load, limits and unsupported destinations before

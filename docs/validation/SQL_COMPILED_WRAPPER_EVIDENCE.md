@@ -86,6 +86,29 @@ These require independently authored public C#/VB fit fixtures before widening
 analysis. Preserve supported/unsupported legs and initialization/value/schema
 distinctions; never copy private code or turn an OCR shape into exact source.
 
+#### Required correction controls (not implemented coverage)
+
+The next synthetic matrix must distinguish three independent identities:
+destination allocation, merged column/schema origin, and value origin at a read.
+Creating an empty table locally does not erase the SQL origin of columns admitted
+through Merge. A conditional value assignment does not prove schema mutation.
+
+Pin these cases independently in both languages before widening evidence:
+
+| Case | Required bounded conclusion |
+| --- | --- |
+| Enrichment guard passes and key matches | Only the assigned cells have replacement-value evidence. |
+| Guard fails, key misses, or no rows qualify | No overwrite is established; incoming values may remain. |
+| A later read follows an unknown helper | Current value origin remains unknown. |
+| Failure before destination reset | Prior state may remain; do not assert fresh-empty state. |
+| Failure after allocation or either merge | Record that boundary's reachable state, not a blanket empty result. |
+| Failure during enrichment or list population | Partial mutation/population is possible. |
+| Dependency throws into an enclosing constructor catch | Later initialization is not assumed to execute. |
+| Session-held object is explicitly replaced | Session lifetime does not establish immutable object identity. |
+
+Keep these as public synthetic requirements, not confirmed private defects or
+runtime observations. Existing success/unknown denominators remain unchanged.
+
 ### Continuation validation
 
 Frozen implementation `48ae738fb75062eb55af3b87eae3e9b5921cb871`:

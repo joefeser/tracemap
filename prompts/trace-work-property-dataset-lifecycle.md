@@ -76,6 +76,17 @@ Record predicate-column reads, right-hand-side reads, left-hand-side writes,
 helper exposure, and mutation separately. Do not treat an application-created
 result table as a direct stored-procedure result; retain its upstream dependencies.
 
+An application-created destination does not make merged columns application-origin:
+track destination allocation, column/schema origin, and current value origin
+separately. For guarded updates, enumerate matched, unmatched, skipped and failed
+paths. Say "overwritten on matching rows when the guards pass", not "always
+overwritten" or "never surfaced", unless all relevant paths and consumers prove it.
+
+For caught exceptions, record the state at each failure boundary: before reset,
+after allocation, after each merge, during enrichment, and during list population.
+Do not collapse empty, populated and partially populated states into "empty cart".
+Trace enclosing catches before claiming a failed dependency lets later calls run.
+
 ## 5. Check identity and freshness
 
 - Determine whether identity/context comes from explicit arguments, the target
@@ -83,6 +94,8 @@ result table as a direct stored-procedure result; retain its upstream dependenci
 - Inspect impersonation and context/period changes where relevant.
 - Establish whether those changes invalidate or rebuild dependent state.
 - Distinguish a demonstrated mismatch from a possible stale-state risk.
+- Qualify lifetime claims by inspected paths; replacement, impersonation, explicit
+  refresh and key removal can invalidate a "fixed for the session" claim.
 - Do not claim authorization correctness from menu visibility.
 
 ## 6. Bound the investigation
@@ -111,5 +124,9 @@ For each suspected defect, state the triggering condition and supporting
 evidence. A missing guard is not proof the failing input occurs. Static
 reachability is not proof of runtime execution. Label manual source observations
 separately from tool-generated evidence; do not invent TraceMap tiers or rule IDs.
+
+Before returning, check that findings do not contradict the risk/unknown sections.
+Do not include a mapping from synthetic aliases back to private identifiers or
+real session keys in the sanitized summary. Keep that mapping private.
 
 Stop after producing this report. Do not implement fixes.
