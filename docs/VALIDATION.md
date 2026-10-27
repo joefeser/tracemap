@@ -1,4 +1,22 @@
 # TraceMap Validation Guide
+## Bounded offline SQL Server `Field<T>` / `Field(Of T)` column-identity read evidence
+[SQLSERVER_FIELD_READ_EVIDENCE.md](validation/SQLSERVER_FIELD_READ_EVIDENCE.md) documents the
+additive sibling `sqlServerFieldReadState` on Fill facts (C# 0.22.20 / VB 0.10.23): the unchanged
+DataTable, DataSet, private-helper and internal-helper row rules with `Field<T>(string)` /
+`Field<T>(int)` (C# extension, VB reduced form, checked defining assembly) admitted as column
+name/ordinal reads, one site per direct Fill or helper call site, the separate
+`sqlserver-field-read-bindings/1` digest per `(factId, siteIndex)` and the `sqlserver-field-read`
+route. The type argument is recorded, never compared; Phase 2-5 states keep refusing Field reads.
+Shared Core and both adapters change: run the new tests with the retained SQL/DNN tests and
+Python guards, commit, then the frozen full Debug -warnaserror suite. Afterwards, sequentially at
+the committed head: the eight retained SQL smokes with unchanged denominators (52-case 8/12/32;
+result JSON 36/10/36, DDL 36/10/58, 20 refusals; table per language 22/5/44, 24 refusals;
+DataTable per language 54/12/88 over 148 cases, 22 refusals; DataSet per language 78/12/88 over
+169 cases, 24 refusals; helper per language 42/15/58 over 115 cases, 24 refusals; internal-helper
+per language 36/12/30 over 78 cases, 24 refusals), the new Field-read smoke (per language 39/18/21
+over 75 cases, 26 refusals), the pinned C#/VB OSS adapter smoke (reduced coverage; no SQL calls
+there) and, only on the reviewed disposable context, the extended linked live harness (34 cases
+20/6/8, 54 runtime checks).
 ## Bounded offline SQL Server internal-helper-returned DataTable/DataSet evidence (cross-document callers)
 [SQLSERVER_INTERNAL_HELPER_RESULT_EVIDENCE.md](validation/SQLSERVER_INTERNAL_HELPER_RESULT_EVIDENCE.md)
 documents the additive sibling `sqlServerInternalHelperResultState` on Fill facts (C# 0.22.18 /

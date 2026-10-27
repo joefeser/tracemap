@@ -24,3 +24,6 @@ never to `dev`. The user checkout and every other worktree were not touched.
 - Step 6.4: an unknown site (no hash) bound by a field binding reports only its own gap, not
   `command-binding-conflict` (Phase 5 adds the conflict for unknown callers too; the Field route
   keeps the reason list to the site's own refusal). 49 Field tests passed.
+- Step 6.5: first dev smoke run (working tree on top of `3244949a2`) matched every authored cell:
+  75 cases per language, 78 / 36 / 42 both languages, 26/26 refusals each for its intended reason,
+  ~75 s. Native theories 2/2; Python guards 59 (`test_sqlserver_*`, 9 new).
