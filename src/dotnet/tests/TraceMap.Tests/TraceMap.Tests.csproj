@@ -122,5 +122,7 @@
     <ProjectReference Include="../../../../samples/sqlserver-helper-result-evidence/vb/Helpers.vbproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/sqlserver-internal-helper-result-evidence/csharp/InternalHelpers.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../../../../samples/sqlserver-internal-helper-result-evidence/vb/InternalHelpers.vbproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/sqlserver-field-read-evidence/csharp/FieldReads.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../../../samples/sqlserver-field-read-evidence/vb/FieldReads.vbproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>
