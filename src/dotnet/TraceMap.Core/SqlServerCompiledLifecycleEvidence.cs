@@ -31,9 +31,11 @@ public sealed record SqlServerLifecycleReport(string Version, string GeneratorSh
 {
     public string RuleId => SqlServerCompiledLifecycleEvidence.RuleId;
     public string EvidenceTier => EvidenceTiers.Tier3SyntaxOrTextual;
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? SchemaOrigin { get; init; }
 }
 
-/// <summary>Offline encoded-lifecycle comparison against independent synthetic first-result declarations.</summary>
+/// <summary>Offline encoded-lifecycle comparison with separately admitted synthetic or owner-declared first-result shapes.</summary>
 public static class SqlServerCompiledLifecycleEvidence
 {
     public const string RuleId = "database.sqlserver.compiled-lifecycle-comparison.v1";
@@ -61,6 +63,27 @@ public static class SqlServerCompiledLifecycleEvidence
     {
         schema = SqlServerResultEvidence.Admit(SqlServerSchemaEvidence.Json(schema),
             SqlServerSchemaEvidence.Json(schema.Declarations), repo, revision);
+        return CompareAdmitted(schema, bindings, facts, repo, revision);
+    }
+
+    public static SqlServerLifecycleReport CompareOwnerDeclared(SqlServerResultSchemaExport schema,
+        SqlServerLifecycleBindings bindings, IReadOnlyList<CodeFact> facts, string repo, string revision)
+    {
+        schema = SqlServerOwnerResultEvidence.Admit(SqlServerSchemaEvidence.Json(schema),
+            SqlServerSchemaEvidence.Json(schema.Declarations), repo, revision);
+        var report = CompareAdmitted(schema, bindings, facts, repo, revision);
+        return report with
+        {
+            Version = "sqlserver-owner-compiled-lifecycle-comparison/1",
+            SchemaOrigin = SqlServerOwnerResultEvidence.Origin,
+            Limitations = [.. report.Limitations, SqlServerOwnerResultEvidence.Limitation,
+                "Column matches and mismatches are conditional on the supplied declaration. No exhaustive coverage claim."]
+        };
+    }
+
+    private static SqlServerLifecycleReport CompareAdmitted(SqlServerResultSchemaExport schema,
+        SqlServerLifecycleBindings bindings, IReadOnlyList<CodeFact> facts, string repo, string revision)
+    {
         Require(bindings.Version == "sqlserver-compiled-lifecycle-bindings/1" && bindings.Repo == repo
             && bindings.Revision == revision && bindings.Candidates is { Count: > 0 and <= 256 }, "binding-envelope");
         Require(facts.Count <= 1_000_000 && facts.All(f => f is not null), "fact-limit");

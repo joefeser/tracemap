@@ -28,7 +28,8 @@
 - [x] Pin in-memory conditional overwrite, clear/re-merge and failure-boundary behavior with synthetic tests; the separate lifecycle continuation below now adds bounded C#/VB extraction.
 - [x] Independently author property-held/two-table/two-distinct-function Merge and unknown helper-effect fixtures.
 - [ ] Add supported Select/predicate analysis only under a separately bounded design.
-- [ ] Bound ArrayList custom-parameter and exceptional cleanup/fallback alternatives.
+- [x] Bound ArrayList custom-parameter construction, exact collection enumeration and actual SqlParameter attachment in the lifecycle route (C#/VB); see 2026-10-28 continuation state.
+- [ ] Exceptional cleanup/fallback alternatives beyond the existing normal-completion boundary summaries.
 - [x] Separate supported RHS reads, LHS value writes and schema identity in the lifecycle route; retain unknown alias/helper effects. Select/predicate support remains separate above.
 - [x] Separate bounded application-authored auxiliary table schema/value origins from SQL contracts across inspected helpers; general derived-value computation and application/session initialization remain unproven.
 - [ ] Design explicit complex-DDL admission with owner identity inputs; no general parser or false acceptance. Synthetic compiled-candidate-to-contract binding is completed below, not production DDL admission.
@@ -42,3 +43,12 @@
 - [x] Exercise independently authored schemas and exact execution bindings through the CLI; match all required successful cases and negative controls.
 - [x] Pin C#/VB parity, deterministic replay, provenance tampering and retained denominators.
 - [x] Run frozen full/regression gates; publish validated branch and consolidated work-machine prompt only after end-to-end acceptance passes.
+
+## Bounded ArrayList continuation — 2026-10-28
+- [x] Inspect and preserve inherited dirty owner-schema and ArrayList work before editing.
+- [x] Resolve exact signed ArrayList APIs and inspect custom constructors/field loads/property getters through real parameter construction, attachment and Fill.
+- [x] Freeze elements and bound complete single enumeration; retain heap, instruction, call-depth and aggregate-work limits.
+- [x] Add public C#/VB positive and negative controls, including fresh execution separation, reuse, mutation, escape, unsupported collections and metadata refusal.
+- [x] Finish stable-file focused and broader validation and record exact results in implementation-state.md (87 focused/regression; 5,527 full Debug passes, three existing skips; unchanged 20/26-root native matrices; five Python guards).
+
+- [x] Refresh the consolidated work-machine prompt for the verified ArrayList lifecycle and separate conditional owner-declaration route after explicit publication authorization.

@@ -10,7 +10,7 @@ namespace TraceMap.Core;
 internal static class IlSqlLifecycleExtractor
 {
     internal const string Schema = "il-sql-lifecycle/1";
-    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. No source, deployment, session, framework, type, nullability, value or migration proof.";
+    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. No source, deployment, session, framework, type, nullability, value or migration proof.";
     internal static bool IsRoot(IlBodyObservation body)
         => body.ObjectBody is { HasThis: true, ParameterCount: <= 1, ReturnsValue: true, IsGeneric: false, IsVirtual: false } meta
             && (meta.ParameterCount == 0
@@ -61,6 +61,7 @@ internal static class IlSqlLifecycleExtractor
         internal Value Parent = Value.Unknown, Command = Value.Unknown, Type = Value.Unknown;
         internal string? Execution;
         internal bool Empty = true;
+        internal bool Frozen, Attached;
         internal int Moves = 0;
     }
     private sealed class Refusal(string message) : Exception(message);
@@ -126,6 +127,9 @@ internal static class IlSqlLifecycleExtractor
             var result = returned.Kind == "read" ? reads[int.Parse(returned.Text, CultureInfo.InvariantCulture)] : null;
             if (result is null) throw new Refusal("lifecycle-return-unresolved");
             if (loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-loop-incomplete");
+            if (heap.Values.Any(state => state.Kind == "collection-enumerator"
+                && state.Moves != Get(state.Parent, "arraylist").Slots.Count + 1))
+                throw new Refusal("lifecycle-collection-enumeration-incomplete");
             return new(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray());
         }
 
@@ -198,6 +202,14 @@ internal static class IlSqlLifecycleExtractor
                     }
                     if (op is "castclass" or "isinst")
                     {
+                        if (op == "castclass" && stack.Count > 0 && stack[^1].Kind == "object"
+                            && heap.TryGetValue(stack[^1].Text, out var customCast) && customCast.Kind == "custom"
+                            && operand == "t:" + customCast.Owner)
+                            continue;
+                        if (op == "isinst" && IlSqlLifecycleApis.TypeOperand(operand, "IDisposable")
+                            && stack.Count > 0 && stack[^1].Kind == "object"
+                            && heap.TryGetValue(stack[^1].Text, out var collectionCast) && collectionCast.Kind == "collection-enumerator")
+                        { _ = Pop(); stack.Add(new("null", "")); continue; }
                         if (!IlSqlLifecycleApis.TypeOperand(operand, op == "castclass" ? "DataRow" : "IDisposable"))
                             throw new Refusal("lifecycle-cast-type");
                         var value = Pop(); _ = Get(value, op == "castclass" ? "row" : "enumerator");
@@ -213,11 +225,11 @@ internal static class IlSqlLifecycleExtractor
                     {
                         var value = Pop(); var destination = Target(operand);
                         var truth = value.Kind == "object" || value.Kind == "int" && Number(value) != 0
-                            || value.Kind == "loop-test" && value.Text == "1";
-                        if (value.Kind is not ("object" or "int" or "null" or "loop-test")) throw new Refusal("lifecycle-guard-unresolved");
-                        if ((destination <= i || loopEnumerator.Kind != "unknown") && value.Kind != "loop-test")
+                            || value.Kind is "loop-test" or "collection-test" && value.Text == "1";
+                        if (value.Kind is not ("object" or "int" or "null" or "loop-test" or "collection-test")) throw new Refusal("lifecycle-guard-unresolved");
+                        if ((destination <= i || loopEnumerator.Kind != "unknown") && value.Kind is not ("loop-test" or "collection-test"))
                             throw new Refusal("lifecycle-loop-dependent-control");
-                        if (value.Kind == "loop-test" && (!op.StartsWith("brtrue", StringComparison.Ordinal) || destination >= i))
+                        if (value.Kind is "loop-test" or "collection-test" && (!op.StartsWith("brtrue", StringComparison.Ordinal) || destination >= i))
                             throw new Refusal("lifecycle-loop-test-shape");
                         if (truth == op.StartsWith("brtrue", StringComparison.Ordinal)) i = destination - 1;
                         continue;
@@ -253,6 +265,7 @@ internal static class IlSqlLifecycleExtractor
                         if (!identity.StartsWith("type:" + instance.Owner + "|member:", StringComparison.Ordinal)) throw new Refusal("lifecycle-field-owner");
                         if (op == "stfld")
                         {
+                            if (instance.Frozen) throw new Refusal("lifecycle-parameter-object-mutated");
                             if (loopEnumerator.Kind != "unknown" && !LoopAllocated(instanceValue)) throw new Refusal("lifecycle-loop-carried-field");
                             instance.Fields[identity] = value;
                         }
@@ -333,11 +346,30 @@ internal static class IlSqlLifecycleExtractor
                 throw new Refusal("lifecycle-loop-effect:" + api);
             switch (api)
             {
+                case "arraylist-new": return New("arraylist");
+                case "arraylist-add":
+                    var collection = Get(receiver, "arraylist");
+                    if (collection.Frozen || collection.Slots.Count >= 16) throw new Refusal("lifecycle-collection-mutated-or-limit");
+                    Get(args[0], "custom").Frozen = true;
+                    collection.Slots.Add(args[0]); return Int(collection.Slots.Count - 1);
+                case "arraylist-enumerator":
+                    collection = Get(receiver, "arraylist");
+                    if (collection.Frozen) throw new Refusal("lifecycle-collection-enumerated-twice");
+                    collection.Frozen = true;
+                    foreach (var item in collection.Slots) Get(item, "custom").Frozen = true;
+                    return View("collection-enumerator", receiver);
                 case "enumerator":
                     var rows = Get(receiver, "rows");
                     if (Get(rows.Parent, "table").Empty) throw new Refusal("lifecycle-enumerate-empty-table");
                     return View("enumerator", rows.Parent);
                 case "enumerator-next":
+                    if (Get(receiver, "enumerator", "collection-enumerator").Kind == "collection-enumerator")
+                    {
+                        var concrete = Get(receiver, "collection-enumerator");
+                        collection = Get(concrete.Parent, "arraylist");
+                        if (concrete.Moves > collection.Slots.Count) throw new Refusal("lifecycle-collection-enumerator-reused");
+                        return new("collection-test", concrete.Moves++ < collection.Slots.Count ? "1" : "0");
+                    }
                     var enumerator = Get(receiver, "enumerator");
                     if (enumerator.Moves > 1) throw new Refusal("lifecycle-enumerator-reused");
                     if (enumerator.Moves++ == 0)
@@ -351,6 +383,13 @@ internal static class IlSqlLifecycleExtractor
                     loopEnumerator = Value.Unknown; loopRow = Value.Unknown;
                     return new("loop-test", "0");
                 case "enumerator-current":
+                    if (Get(receiver, "enumerator", "collection-enumerator").Kind == "collection-enumerator")
+                    {
+                        var concrete = Get(receiver, "collection-enumerator");
+                        collection = Get(concrete.Parent, "arraylist");
+                        if (concrete.Moves < 1 || concrete.Moves > collection.Slots.Count) throw new Refusal("lifecycle-collection-position");
+                        return collection.Slots[concrete.Moves - 1];
+                    }
                     enumerator = Get(receiver, "enumerator");
                     if (enumerator.Moves != 1 || loopEnumerator != receiver || loopRow.Kind != "unknown")
                         throw new Refusal("lifecycle-enumerator-position");
@@ -403,12 +442,23 @@ internal static class IlSqlLifecycleExtractor
                     var command = New("command"); heap[command.Text].Command = new("string", Text(args[0])); return command;
                 case "command-type": Get(receiver, "command").Type = args[0]; return Value.Unknown;
                 case "parameters": _ = Get(receiver, "command"); return View("parameters", receiver);
-                case "parameter": return New("parameter");
-                case "add": Get(Get(receiver, "parameters").Parent, "command").Slots.Add(args[0]); return args[0];
+                case "parameter":
+                    var parameter = New("parameter");
+                    heap[parameter.Text].Command = new("string", Text(args[0]));
+                    heap[parameter.Text].Type = Int(Number(args[1]));
+                    heap[parameter.Text].Slots.Add(Int(Number(args[2])));
+                    return parameter;
+                case "add":
+                    var attachedCommand = Get(Get(receiver, "parameters").Parent, "command");
+                    var attachedParameter = Get(args[0], "parameter");
+                    if (attachedCommand.Attached || attachedParameter.Attached || attachedCommand.Slots.Count >= 16)
+                        throw new Refusal("lifecycle-parameter-reused-or-limit");
+                    attachedParameter.Attached = true; attachedCommand.Slots.Add(args[0]); return args[0];
                 case "adapter": _ = Get(args[0], "command"); return View("adapter", args[0]);
                 case "fill":
                     var cmd = Get(Get(receiver, "adapter").Parent, "command"); var set = Get(args[0], "dataset");
-                    if (Number(cmd.Type) != 4 || set.Slots.Count != 0 || executions.Count >= 8) throw new Refusal("lifecycle-execution-shape");
+                    if (Number(cmd.Type) != 4 || cmd.Attached || set.Slots.Count != 0 || executions.Count >= 8) throw new Refusal("lifecycle-execution-shape");
+                    cmd.Attached = true;
                     var execution = "execution:" + executions.Count.ToString(CultureInfo.InvariantCulture);
                     executions.Add(new(execution, Text(cmd.Command), site));
                     var table = New("table"); var state = heap[table.Text];

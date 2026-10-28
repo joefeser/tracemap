@@ -35,6 +35,23 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
             File.ReadAllBytes(Path.Combine(replayDirectory, "facts.ndjson")));
         var candidates = scan.Facts.Where(f => f.FactType == FactTypes.ManagedIlSqlLifecycleCandidate).ToArray();
         Assert.NotEmpty(candidates);
+        var compiledBodies = Bodies(language);
+        foreach (var (method, expectedExecutions) in new[] { ("ArrayParameterRead", 1), ("ArrayPropertyRead", 1), ("ArraySeparateExecutions", 2) })
+        {
+            var body = Assert.Single(compiledBodies, b => b.Observation.ObjectBody?.Name == method);
+            var candidate = Assert.Single(candidates, c => c.TargetSymbol == body.Observation.BodyIdentity);
+            var result = SqlServerSchemaEvidence.Read<IlSqlLifecycleExtractor.Result>(candidate.Properties["lifecycle"]);
+            Assert.Equal(expectedExecutions, result.Executions.Count);
+            Assert.Equal($"execution:{expectedExecutions - 1}", result.Returned!.Value.Execution);
+        }
+        foreach (var method in new[] { "ArrayWrongElement", "ArrayWrongCustomType", "ArrayRepeatedEnumeration", "ArrayUnsupportedCollection",
+            "ArrayUnsupportedMutation", "ArrayMutatedElement", "ArrayEscaped", "ArrayTooLarge", "ArrayInvalidAttachment", "ArrayIncompleteRead" })
+        {
+            var body = Assert.Single(compiledBodies, b => b.Observation.ObjectBody?.Name == method);
+            Assert.DoesNotContain(candidates, c => c.TargetSymbol == body.Observation.BodyIdentity);
+            Assert.Contains(scan.Facts, f => f.TargetSymbol == body.Observation.BodyIdentity
+                && f.RuleId == RuleIds.DotNetIlSqlLifecycle && f.FactType == FactTypes.AnalysisGap);
+        }
         var scoreBody = Assert.Single(Bodies(language), b => b.Observation.ObjectBody?.Name == "Score").Observation.BodyIdentity;
         var score = candidates.Where(f => f.TargetSymbol == scoreBody).ToArray();
         Assert.Equal(2, score.Length);
@@ -112,6 +129,37 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
         Assert.Equal(File.ReadAllText(Path.Combine(directory, "report1", "compiled-lifecycle-comparison.json")),
             File.ReadAllText(Path.Combine(directory, "report2", "compiled-lifecycle-comparison.json")));
         Assert.Contains("Coverage: partial", File.ReadAllText(Path.Combine(directory, "report1", "report.md")), StringComparison.Ordinal);
+
+        var ownerDeclarations = declarations with
+        {
+            Version = "sqlserver-owner-result-declarations/1",
+            Origin = SqlServerOwnerResultEvidence.Origin
+        };
+        File.WriteAllText(Path.Combine(directory, "owner.json"), SqlServerSchemaEvidence.Json(ownerDeclarations));
+        string[] ProduceOwner() => ["sqlserver-compiled-lifecycle", "produce-owner-schema",
+            "--declarations", Path.Combine(directory, "owner.json"), "--out", Path.Combine(directory, "owner-schema.json")];
+        Assert.True(await TraceMapCommand.RunAsync(ProduceOwner(), stdout, stderr) == 0, stderr.ToString());
+        Assert.NotEqual(0, await TraceMapCommand.RunAsync(ProduceOwner(), stdout, stderr));
+        string[] OwnerCommand(string destination)
+        {
+            var command = Command(destination);
+            command[1] = "compare-owner";
+            command[3] = Path.Combine(directory, "owner.json");
+            command[5] = Path.Combine(directory, "owner-schema.json");
+            return command;
+        }
+        Assert.True(await TraceMapCommand.RunAsync(OwnerCommand("owner-report1"), stdout, stderr) == 0, stderr.ToString());
+        Assert.True(await TraceMapCommand.RunAsync(OwnerCommand("owner-report2"), stdout, stderr) == 0, stderr.ToString());
+        var ownerReportJson = File.ReadAllText(Path.Combine(directory, "owner-report1", "compiled-lifecycle-comparison.json"));
+        Assert.Equal(ownerReportJson, File.ReadAllText(Path.Combine(directory, "owner-report2", "compiled-lifecycle-comparison.json")));
+        var ownerReport = SqlServerSchemaEvidence.Read<SqlServerLifecycleReport>(ownerReportJson);
+        Assert.Equal(SqlServerOwnerResultEvidence.Origin, ownerReport.SchemaOrigin);
+        Assert.All(ownerReport.Comparisons, row => Assert.Equal("match", row.Status));
+        Assert.Contains(SqlServerOwnerResultEvidence.Limitation, ownerReport.Limitations);
+        var wrongRoute = OwnerCommand("wrong-route");
+        wrongRoute[1] = "compare";
+        Assert.NotEqual(0, await TraceMapCommand.RunAsync(wrongRoute, stdout, stderr));
+        Assert.False(Directory.Exists(Path.Combine(directory, "wrong-route")));
 
         // Independently authored scenario/column/execution matrix. Extraction supplies locations,
         // never the expected command identity, column spelling, result or execution order.
@@ -298,7 +346,111 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
     }
 
     [Theory]
+    [InlineData("csharp", "ArrayParameterRead", 1)]
+    [InlineData("vb", "ArrayParameterRead", 1)]
+    [InlineData("csharp", "ArrayPropertyRead", 1)]
+    [InlineData("vb", "ArrayPropertyRead", 1)]
+    [InlineData("csharp", "ArraySeparateExecutions", 2)]
+    [InlineData("vb", "ArraySeparateExecutions", 2)]
+    public void ArrayList_custom_parameters_are_resolved_through_exact_wrapper_bodies(string language, string method, int executions)
+    {
+        var bodies = Bodies(language);
+        var root = Assert.Single(bodies, b => b.Observation.ObjectBody?.Name == method);
+        var result = IlSqlLifecycleExtractor.Extract(root, bodies, false, new(200_000));
+        Assert.Empty(result.Gaps);
+        Assert.NotNull(result.Returned);
+        Assert.Equal(executions, result.Executions.Count);
+        Assert.Equal($"execution:{executions - 1}", result.Returned.Value.Execution);
+        Assert.Equal($"execution:{executions - 1}", Assert.Single(result.Returned.SchemaExecutions));
+        var customConstructor = Assert.Single(bodies, b => b.Observation.ObjectBody is { Name: ".ctor", ParameterCount: 3 } meta
+            && meta.OwnerType.Contains(method == "ArrayPropertyRead" ? "PropertyParameter" : "FieldParameter", StringComparison.Ordinal));
+        Assert.Contains(result.Bodies!, b => b.Body == customConstructor.Observation.BodyIdentity);
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void ArrayList_missing_ambiguous_and_untrusted_metadata_never_admits_a_candidate(string language)
+    {
+        var bodies = Bodies(language);
+        var root = Assert.Single(bodies, b => b.Observation.ObjectBody?.Name == "ArrayPropertyRead");
+        var getter = Assert.Single(bodies, b => b.Observation.ObjectBody is { Name: "get_Size" } m
+            && m.OwnerType.Contains("PropertyParameter", StringComparison.Ordinal));
+        var missing = bodies.Where(b => b != getter).ToArray();
+        var ambiguous = bodies.Concat(new[] { getter }).ToArray();
+        var incomplete = bodies.Select(b => b == getter ? b with { Input = b.Input with { GapKinds = ["synthetic-incomplete-metadata"] } } : b).ToArray();
+        var unknown = bodies.Select(b => b == root ? b with
+        {
+            Observation = b.Observation with
+            {
+                ObjectBody = b.Observation.ObjectBody! with
+                {
+                    Instructions = b.Observation.ObjectBody!.Instructions.Select(line =>
+                    {
+                        var parts = line.Split(':', 4);
+                        return parts[2] == "ldstr" ? $"{parts[0]}:{parts[1]}:ldnull:" : line;
+                    }).ToArray()
+                }
+            }
+        } : b).ToArray();
+        var forged = bodies.Select(b => b with
+        {
+            Observation = b.Observation with
+            {
+                Calls = b.Observation.Calls.Select(call => call.TargetIdentity.Contains("ArrayList", StringComparison.Ordinal)
+                    ? call with { TargetIdentity = call.TargetIdentity.Replace("b77a5c561934e089", "0000000000000000", StringComparison.Ordinal) }
+                    : call).ToArray()
+            }
+        }).ToArray();
+        foreach (var variant in new[] { missing, ambiguous, incomplete, unknown, forged })
+        {
+            var changedRoot = Assert.Single(variant, b => b.Observation.MethodIdentity == root.Observation.MethodIdentity);
+            var result = IlSqlLifecycleExtractor.Extract(changedRoot, variant, false, new(200_000));
+            Assert.NotEmpty(result.Gaps); Assert.Empty(result.Executions); Assert.Empty(result.Reads); Assert.Null(result.Returned);
+        }
+        var limited = IlSqlLifecycleExtractor.Extract(root, bodies, false, new(1));
+        Assert.Equal("lifecycle-index-limit", Assert.Single(limited.Gaps));
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void ArrayList_refusals_identify_the_failed_protocol_leg(string language)
+    {
+        var bodies = Bodies(language);
+        foreach (var (method, gap) in new[] {
+            ("ArrayUnsupportedCollection", "lifecycle-unknown-call:"),
+            ("ArrayIncompleteRead", "lifecycle-collection-enumeration-incomplete"),
+            ("ArrayTooLarge", "lifecycle-collection-mutated-or-limit"),
+            ("ArrayMutatedElement", "lifecycle-parameter-object-mutated"),
+            ("ArrayRepeatedEnumeration", "lifecycle-collection-enumerated-twice"),
+            ("ArrayInvalidAttachment", "lifecycle-parameter-reused-or-limit") })
+        {
+            var root = Assert.Single(bodies, b => b.Observation.ObjectBody?.Name == method);
+            var result = IlSqlLifecycleExtractor.Extract(root, bodies, false, new(200_000));
+            Assert.StartsWith(gap, Assert.Single(result.Gaps), StringComparison.Ordinal);
+            Assert.Empty(result.Executions); Assert.Empty(result.Reads); Assert.Null(result.Returned);
+        }
+    }
+
+    [Theory]
+    [InlineData("csharp", "ArrayUnsupportedMutation")]
+    [InlineData("vb", "ArrayUnsupportedMutation")]
+    [InlineData("csharp", "ArrayMutatedElement")]
+    [InlineData("vb", "ArrayMutatedElement")]
+    [InlineData("csharp", "ArrayEscaped")]
+    [InlineData("vb", "ArrayEscaped")]
+    [InlineData("csharp", "ArrayTooLarge")]
+    [InlineData("vb", "ArrayTooLarge")]
+    [InlineData("csharp", "ArrayInvalidAttachment")]
+    [InlineData("vb", "ArrayInvalidAttachment")]
     [InlineData("csharp", "CrossRow")]
+    [InlineData("csharp", "ArrayWrongElement")]
+    [InlineData("vb", "ArrayWrongElement")]
+    [InlineData("csharp", "ArrayWrongCustomType")]
+    [InlineData("vb", "ArrayWrongCustomType")]
+    [InlineData("csharp", "ArrayRepeatedEnumeration")]
+    [InlineData("vb", "ArrayRepeatedEnumeration")]
     [InlineData("vb", "CrossRow")]
     [InlineData("csharp", "LoopCarried")]
     [InlineData("vb", "LoopCarried")]
@@ -351,6 +503,16 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
         Assert.Contains(calls, c => IlSqlLifecycleApis.Resolve(c, owners) == "row-write");
         Assert.Contains(calls, c => IlSqlLifecycleApis.Resolve(c, owners) == "rows-add");
         Assert.Contains(calls, c => IlSqlLifecycleApis.Resolve(c, owners) == "enumerator-next");
+        foreach (var api in new[] { "arraylist-new", "arraylist-add", "arraylist-enumerator" })
+        {
+            var identity = Assert.Single(calls, c => IlSqlLifecycleApis.Resolve(c, owners) == api);
+            foreach (var forged in new[] {
+                identity.Replace("b77a5c561934e089", "0000000000000000", StringComparison.Ordinal),
+                identity.Replace("4.0.0.0", "2.0.0.0", StringComparison.Ordinal),
+                identity.Replace("ArrayList", "ArrayLisp", StringComparison.Ordinal),
+                identity.Replace("hasThis:true", "hasThis:false", StringComparison.Ordinal) })
+                Assert.Null(IlSqlLifecycleApis.Resolve(forged, owners));
+        }
     }
 
     [Theory]

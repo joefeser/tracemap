@@ -12,6 +12,8 @@ public static class SqlServerCompiledLifecycleReportWriter
             .Replace("<", "&lt;", StringComparison.Ordinal).Replace(">", "&gt;", StringComparison.Ordinal);
         var text = new StringBuilder("# Compiled SQL lifecycle comparison\n\nCoverage: partial. Schema matches are not proof of runtime values or successful execution.\n\n");
         text.AppendLine($"Generator SHA-256: {Cell(report.GeneratorSha256)}\n\nBounded input SHA-256: {Cell(report.BoundedInputSha256)}\n");
+        if (report.SchemaOrigin is not null)
+            text.AppendLine($"Schema origin: {Cell(report.SchemaOrigin)}. Comparisons are conditional on this declaration, not independently verified database metadata. Private local report; do not publish.\n");
         text.AppendLine("| Fact | Guard | Schema identity | Current value origin | Application assignment |\n| --- | --- | --- | --- | --- |");
         foreach (var row in report.Comparisons)
             text.AppendLine($"| {Cell(row.FactId)} | {Cell(row.Guard)} | {Cell(row.Status)} | {Cell(row.ValueOrigin)} | {row.ApplicationAssignment} |");

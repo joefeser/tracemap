@@ -17,8 +17,35 @@ namespace PublicSql.CSharp
         public int Size { get; }
         public PropertyParameter(string name, SqlDbType type, int size) { Name = name; Type = type; Size = size; }
     }
+    public sealed class MutableParameter
+    {
+        public int Size { get; set; }
+        public MutableParameter(int size) { Size = size; }
+    }
     public static class Wrapper
     {
+        public static DataSet ArrayParameters(string procedure, System.Collections.ArrayList parameters)
+        {
+            var command = new SqlCommand(procedure); command.CommandType = CommandType.StoredProcedure;
+            foreach (FieldParameter value in parameters)
+                command.Parameters.Add(new SqlParameter(value.Name, value.Type, value.Size));
+            var adapter = new SqlDataAdapter(command); var result = new DataSet();
+            adapter.Fill(result); return result;
+        }
+        public static DataSet ArrayProperties(string procedure, System.Collections.ArrayList parameters)
+        {
+            var command = new SqlCommand(procedure); command.CommandType = CommandType.StoredProcedure;
+            foreach (PropertyParameter value in parameters)
+                command.Parameters.Add(new SqlParameter(value.Name, value.Type, value.Size));
+            var adapter = new SqlDataAdapter(command); var result = new DataSet();
+            adapter.Fill(result); return result;
+        }
+        public static DataSet ArrayIncomplete(string procedure, System.Collections.ArrayList parameters)
+        {
+            foreach (FieldParameter value in parameters)
+                return Forwarded(procedure, new SqlParameter(value.Name, value.Type, value.Size));
+            return Direct(procedure);
+        }
         public static DataSet Direct(string procedure)
         {
             var command = new SqlCommand(procedure); command.CommandType = CommandType.StoredProcedure;

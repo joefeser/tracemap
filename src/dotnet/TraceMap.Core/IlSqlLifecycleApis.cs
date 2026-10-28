@@ -30,6 +30,10 @@ internal static class IlSqlLifecycleApis
         Add("object-value", Core + Type("System.Runtime.CompilerServices", "RuntimeHelpers"), "GetObjectValue", obj, false, obj);
         Add("type-handle", CoreType("Type"), "GetTypeFromHandle", CoreType("Type"), false, CoreType("RuntimeTypeHandle"));
         var enumerator = Core + Type("System.Collections", "IEnumerator");
+        var arrayList = Core + Type("System.Collections", "ArrayList");
+        Add("arraylist-new", arrayList, ".ctor", nothing, true);
+        Add("arraylist-add", arrayList, "Add", Primitive("Int32"), true, obj);
+        Add("arraylist-enumerator", arrayList, "GetEnumerator", enumerator, true);
         foreach (var owner in new[] { "DataRowCollection", "InternalDataCollectionBase" })
             Add("enumerator", DataType(owner), "GetEnumerator", enumerator, true);
         Add("enumerator-current", enumerator, "get_Current", obj, true);

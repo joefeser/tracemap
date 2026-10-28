@@ -38,7 +38,65 @@ origins), six refusal controls, tamper rejection and byte-identical replay. The 
 full and retained smoke gates below verify this public synthetic scope.
 No private acceptance, framework/session execution, SQL execution or migration claim.
 
-### Final frozen validation — 2026-10-28
+The separate `sqlserver-compiled-lifecycle produce-owner-schema` and `compare-owner`
+commands also admit explicitly owner-declared first-result shapes under
+`database.sqlserver.owner-declared-result-shape.v1` (Tier3). Declaration/export
+versions are `sqlserver-owner-result-declarations/1` and
+`sqlserver-owner-result-schema/1`, with origin `owner-declared-result-shape`.
+The comparison report uses `sqlserver-owner-compiled-lifecycle-comparison/1` and
+retains `schemaOrigin`. Admission checks exact generator/input integrity and
+repo/revision; it does not authenticate the owner, extract general DDL, verify
+completeness independently, or establish deployed metadata. Keep private owner
+artifacts/reports local. Existing synthetic admission rejects this origin.
+Incomplete shapes stay unknown; declared matches/mismatches are conditional.
+The inherited owner implementation and its tests were included in both recorded
+gates below. The consolidated work-machine prompt documents the distinct routes.
+
+### Bounded ArrayList continuation — 2026-10-28
+
+The lifecycle route now inspects custom SQL parameter objects stored in an exact
+signed net48 `System.Collections.ArrayList`. Supported operations are parameterless
+construction, `Add(Object)`, `GetEnumerator`, and exact `IEnumerator.Current` /
+`MoveNext`. At most 16 inspected custom objects are enumerated once, to completion.
+Custom constructor stores and inspected field/property loads must resolve every
+name, SQL type and size supplied to actual `SqlParameter` construction and command
+attachment. Elements freeze on Add. Parameter allocations attach once; command
+allocations fill once, with at most 16 parameters. Fresh collections/commands retain
+distinct execution and returned-table identities.
+
+Unknown element types, other collection APIs, mutation, unknown escape, incomplete
+or repeated enumeration, missing/ambiguous/untrusted bodies and invalid attachment
+withhold positive lineage and emit explicit gaps. Existing call-depth, instruction,
+aggregate-work and heap bounds remain. No cap, previous refusal or original 20/26-root
+matrix expectation was relaxed. The schema and other SQL routes remain unchanged;
+this does not add ArrayList parameter-to-contract comparison to another route.
+
+Compile-only public C#/VB fixtures cover field/property positives, separate
+executions and ten negative roots per language. CLI tests assert all three positives,
+all ten gaps, exact body links, privacy projection and byte-identical replay. Test
+classes separate ArrayList roots from unrelated field-heavy lifecycle state so
+bounded metadata retention remains available; mutable controls use a distinct type
+without changing the legacy read-only parameter fixture.
+
+The current uncommitted working tree (base `e24387ffb`) passed:
+
+| Gate | Result |
+| --- | --- |
+| Focused lifecycle/owner/object-path/shape regression, `-warnaserror` | 87 passed, zero failures/skips |
+| Full Debug solution, `-warnaserror` | 5,527 passed, zero failures, three existing skips; 46.0551 minutes |
+| Original/named compiled native smoke | Unchanged 20 roots (10 candidates/10 unknowns), 26 named roots (4/22), two local shapes |
+| Python compiled-wrapper guards | Five passed |
+| Whitespace and preservation | `git diff --check` passed; five inherited owner files byte-identical to the recovery snapshot |
+
+Exact commands, hashes, changed files, intermediate failures and remaining gaps are
+recorded in the spec's `implementation-state.md`. Pinned source OSS smokes are
+explicitly deferred for this compiled-only slice; no source-adapter code changes,
+and those repositories contain no SQL calls. The historical frozen validation
+below belongs to its stated earlier head. No SQL/provider
+execution, private acceptance, Select predicate, catch/fallback execution, deployment
+or general collection support is claimed.
+
+### Earlier frozen validation — 2026-10-28
 
 Implementation head: `7715833f9db6c6e4fd326dbec3013e3c5be8c0c5`. Source, HEAD and
 CLI/Core/Reporting binaries stayed unchanged through the full suite and sequential

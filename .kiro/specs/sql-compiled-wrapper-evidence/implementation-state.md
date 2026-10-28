@@ -341,3 +341,162 @@ synthetic JSON admission cannot be repurposed as production DDL/catalog admissio
 Select predicates, custom ArrayList protocols, actual catch execution, session and
 framework behavior, private acceptance and migration remain separate capabilities.
 No private input, provider execution, SQL/container execution, PR or merge occurred.
+
+
+## Bounded ArrayList continuation — 2026-10-28 (bounded lifecycle scope verified)
+
+Starting branch `codex/sql-compiled-wrapper-evidence`, HEAD
+`e24387ffb7a8adc7b0bf65798956680e6321cd75`. Twelve dirty files included inherited
+owner-declared result admission (two untracked source/test files) and partial
+ArrayList implementation/fixtures/tests. All were preserved. The user archived
+the checkout during a build, then explicitly authorized recovery. All 12 files
+were restored byte-for-byte from snapshot `a1ea5d236c573af16a59d57e947425abedcca58d`
+into the same branch/path. The agent made no commit, push, PR, merge or ACK change.
+
+The lifecycle route accepts exact signed net48 ArrayList parameterless construction,
+Add(Object), GetEnumerator and IEnumerator Current/MoveNext. It concretely enumerates
+at most 16 inspected custom objects once and requires completion. Elements freeze
+when added. Inspected constructor stores and field/property loads must resolve the
+actual SqlParameter name, SqlDbType and size; unknowns never become defaults. Each
+parameter allocation attaches once; each command fills once with at most 16 parameters.
+Fresh collections preserve separate execution/table origins. Existing 4096-body,
+256-instruction/body, 8192-step, 24-depth, 256-object, eight-execution and 64-stack/local
+bounds remain. IDisposable tests return null only for the exact ArrayList enumerator
+protocol; arbitrary collection enumerators are not admitted. Lifecycle schema `/1`
+and other SQL route contracts are unchanged. Parameter-to-SQL-contract comparison
+is not added by this lineage feature.
+
+Public C#/VB fixtures cover fields, properties, two fresh executions, wrong
+primitive/custom element types, repeated enumeration, Queue refusal, RemoveAt,
+custom-element mutation, unknown escape, 17-element overflow, early exit, and an
+actual SqlParameter reused across two commands. Missing/duplicate/incomplete and
+forged framework metadata plus unresolved constructor values discard all positive
+lineage. Separate ArrayLifecycle fixture classes avoid charging unrelated lifecycle
+fields against the bounded compiled-object retention budget at every ArrayList root.
+No retention cap was increased or admission refusal bypassed.
+
+Checkpoint gates before archive: 36, 50 and 52 focused tests passed. A later 57-test
+gate had 56 passes and one SourceSnapshotChangedDuringScan failure because the agent
+edited a fixture during scanning. Its restart lost the checkout during archive.
+After recovery, 56 passed and one native VB integration test failed: no lifecycle
+candidates, with unknown List<Projection> constructor gaps. Added roots on the
+field-heavy Lifecycle class exhausted retained-object metadata; the ArrayLifecycle
+fixture isolation addresses this without widening the scanner. Stable rerun passed 57/57. A broader 87-test checkpoint then had 83 passes and
+four legacy object-path failures: making the shared PropertyParameter.Size writable
+for a mutation control changed its admitted field contract. Restored the original
+read-only property and isolated mutation in a new MutableParameter fixture class;
+legacy expectations remain unchanged. Corrected focused/regression gate passed 87/87, including explicit native CLI
+ArrayList positives and gaps, lifecycle, owner declarations, object paths and shapes.
+
+No fixture method, SQL provider, private/employer input or application runtime was
+executed. Select predicates, general collection protocols, catch/fallback execution,
+complex DDL, deployment and private acceptance remain separate and unresolved.
+
+
+### Continuation validation commands (current working tree)
+
+The focused regression command passed **87 tests**, zero failures/skips:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~IlSqlLifecycleExtractorTests|FullyQualifiedName~SqlServerOwnerResultEvidenceTests|FullyQualifiedName~IlSqlObjectPathExtractorTests|FullyQualifiedName~IlSqlShapeExtractorTests|FullyQualifiedName~CompiledSql' -warnaserror
+```
+
+The original/named compiled native matrix passed unchanged (20 roots: 10 positive /
+10 unknown, two local shapes; named table: 26 roots, four positive / 22 unknown):
+
+```sh
+python3 scripts/validation/sql-compiled-wrapper-smoke.py --cli src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll --out /tmp/tracemap-arraylist-compiled-smoke-20261028
+python3 -m unittest discover -s scripts/validation -p test_sql_compiled_wrapper_smoke.py
+```
+
+All five Python guards passed. Actual C#/VB CLI scan and comparison, all three
+ArrayList positives and ten negative roots per language, body links and deterministic
+fact replay are exercised by the focused tests, not inferred from the separate
+20/26-root smoke.
+
+Full Debug shared-core gate passed **5,527 tests**, zero failures, three existing
+skips (5,530 total), exit 0, **46.0551 minutes**:
+
+```sh
+dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'
+```
+
+Logs: `/tmp/tracemap-arraylist-focused-regression.log`,
+`/tmp/tracemap-arraylist-compiled-smoke.log`,
+`/tmp/tracemap-arraylist-python-guards.log`, `/tmp/tracemap-arraylist-full-debug.log`.
+Pinned C#/VB source OSS smoke reruns are explicitly deferred: this slice changes the
+compiled lifecycle interpreter, not source adapters; the two pinned repositories
+contain no SQL calls and would not exercise this protocol. Non-.NET lanes and the
+Windows/private/runtime acceptance lanes are also deferred and unclaimed.
+
+### Changed-file handoff
+
+ArrayList implementation and independently authored compile-only controls:
+- `src/dotnet/TraceMap.Core/IlSqlLifecycleExtractor.cs`
+- `src/dotnet/TraceMap.Core/IlSqlLifecycleApis.cs`
+- `src/dotnet/tests/TraceMap.Tests/IlSqlLifecycleExtractorTests.cs`
+- `samples/sql-compiled-wrapper-evidence/csharp/end-to-end/Lifecycle.cs`
+- `samples/sql-compiled-wrapper-evidence/csharp/wrapper/Wrapper.cs`
+- `samples/sql-compiled-wrapper-evidence/vb/end-to-end/Lifecycle.vb`
+- `samples/sql-compiled-wrapper-evidence/vb/wrapper/Wrapper.vb`
+
+Associated limitations, tasks and state:
+- `rules/rule-catalog.yml`
+- `docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md`
+- `.kiro/specs/sql-compiled-wrapper-evidence/tasks.md`
+- `.kiro/specs/sql-compiled-wrapper-evidence/implementation-state.md`
+
+Inherited owner-declaration changes retained intact (not newly implemented here):
+- `src/dotnet/TraceMap.Core/SqlServerOwnerResultEvidence.cs` (untracked)
+- `src/dotnet/tests/TraceMap.Tests/SqlServerOwnerResultEvidenceTests.cs` (untracked)
+- `src/dotnet/TraceMap.Core/SqlServerCompiledLifecycleEvidence.cs`
+- `src/dotnet/TraceMap.Cli/SqlServerCompiledLifecycleCommand.cs`
+- `src/dotnet/TraceMap.Reporting/SqlServerCompiledLifecycleReportWriter.cs`
+
+
+### Final closeout for this continuation
+
+The three full-suite skips are `OracleGoldenLaneTests.Full_generated_golden_sweep`,
+`HttpReportProvenanceInteropTests.Native_http_receipt_verifies_without_claiming_path_presence`,
+and the gated `IlCommandBindingExtractorTests.Deep_projectless_Windows_ASPNET_publish_preserves_exact_chain_and_command_binding`.
+No new skip was introduced. `git diff --check` passed. The five inherited owner
+files listed above remain byte-identical to the recovered archive snapshot.
+
+All results apply to the uncommitted working tree on `codex/sql-compiled-wrapper-evidence`
+based at `e24387ffb7a8adc7b0bf65798956680e6321cd75`, not a new committed head.
+CLI/Core/Reporting hashes stayed identical from the passing compiled native smoke
+through the full Debug gate:
+
+```text
+Core      ebf4d125644bac2c40ae8912d2fd7102a06eb1abd090832420b429ba3ad83cb7
+CLI       32aed8af88ff0a257fdf605f6ab5df9668865f22970cc559f6d14a21c73cbb13
+Reporting 121d1eaaede3dd9f323cce43f81c311ca0e9e29405bf5be3938d3333f5164242
+```
+
+This closes the ArrayList blocker for the tested bounded C#/VB compiled lifecycle
+pattern: inspected custom constructor fields/properties, actual SqlParameter
+construction and attachment, Fill(DataSet), and returned column-read lineage.
+It does not close the overall SQL effort. Other collection protocols, repeated
+or partial enumeration, unknown mutation/escape, parameter-to-contract comparison
+for ArrayList inputs, Select predicates, catch/fallback execution, general SQL/DDL,
+deployment and private acceptance remain unsupported or outside this task.
+
+No agent commit, push, PR, merge or ACK-policy change occurred. The restored checkout
+is `/Users/josephfeser/.codex/worktrees/sqlserver-public-acceptance/tracemap`.
+The app rejected attachment to this chat with “Cannot verify that this ownerless
+worktree belongs to this task”; the branch/worktree exists in Git, but UI attachment
+was not established. All commands used the explicit restored directory.
+
+
+## Publication authorization — 2026-10-28
+
+After the bounded validation closeout, Joe explicitly requested pushing this branch
+with a work-machine test prompt. This supersedes the earlier no-commit/no-push
+instruction for this publication only. The consolidated prompt now tests current
+native ArrayList lineage, separates optional conditional owner-schema comparison,
+and preserves offline/private/no-application-or-SQL-execution boundaries. It no
+longer incorrectly lists bounded ArrayList support or all owner declarations as
+unavailable. Only prompt/validation/state prose changed after the passing full gate;
+implementation, test sources and binaries remain unchanged. No additional full
+suite rerun is warranted for this prose-only publication preparation. No PR, merge,
+ACK-policy change, deployment or private evidence publication is authorized.

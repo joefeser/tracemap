@@ -3,6 +3,98 @@ Imports System.Collections.Generic
 Imports System.Data
 Namespace PublicSql.VisualBasic
     ' Compile-only integration fixture. Never invoke provider-backed methods.
+    Public NotInheritable Class ArrayLifecycle
+        Public Function ArrayParameterRead() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Code", SqlDbType.VarChar, 10))
+            Return Wrapper.ArrayParameters("public.first", parameters).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayIncompleteRead() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Code", SqlDbType.VarChar, 10))
+            Return Wrapper.ArrayIncomplete("public.first", parameters).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayPropertyRead() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add(New PropertyParameter("@Name", SqlDbType.NVarChar, 40))
+            Return Wrapper.ArrayProperties("public.first", parameters).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArraySeparateExecutions() As Object
+            Dim first = New System.Collections.ArrayList()
+            first.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            Wrapper.ArrayParameters("public.first", first)
+            Dim second = New System.Collections.ArrayList()
+            second.Add(New FieldParameter("@Code", SqlDbType.VarChar, 10))
+            Return Wrapper.ArrayParameters("public.second", second).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayUnsupportedCollection() As Object
+            Dim parameters = New System.Collections.Queue()
+            parameters.Enqueue(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            Return Wrapper.Direct("public.first").Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayUnsupportedMutation() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.RemoveAt(0)
+            Return Wrapper.ArrayParameters("public.first", parameters).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayMutatedElement() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            Dim value = New MutableParameter(40)
+            parameters.Add(value) : value.Size = 80
+            Return Wrapper.ArrayProperties("public.first", parameters).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayEscaped() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            System.GC.KeepAlive(parameters)
+            Return Wrapper.ArrayParameters("public.first", parameters).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayTooLarge() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            Return Wrapper.ArrayParameters("public.first", parameters).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayInvalidAttachment() As Object
+            Dim value = New System.Data.SqlClient.SqlParameter("@Name", SqlDbType.NVarChar, 40)
+            Wrapper.Forwarded("public.first", value)
+            Return Wrapper.Forwarded("public.second", value).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayWrongElement() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add("not a parameter")
+            Return Wrapper.ArrayParameters("public.first", parameters).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayWrongCustomType() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add(New PropertyParameter("@Name", SqlDbType.NVarChar, 40))
+            Return Wrapper.ArrayParameters("public.first", parameters).Tables(0).Rows(0)("Name")
+        End Function
+        Public Function ArrayRepeatedEnumeration() As Object
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add(New FieldParameter("@Name", SqlDbType.NVarChar, 40))
+            Wrapper.ArrayParameters("public.first", parameters)
+            Return Wrapper.ArrayParameters("public.second", parameters).Tables(0).Rows(0)("Name")
+        End Function
+    End Class
     Public NotInheritable Class Lifecycle
         Private stored As DataSet
         Public Property State As DataSet

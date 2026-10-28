@@ -17,7 +17,41 @@ Namespace PublicSql.VisualBasic
             Me.Name = name : Me.Type = type : Me.Size = size
         End Sub
     End Class
+    Public NotInheritable Class MutableParameter
+        Public Property Size As Integer
+        Public Sub New(size As Integer)
+            Me.Size = size
+        End Sub
+    End Class
     Public Module Wrapper
+        Public Function ArrayParameters(procedure As String, parameters As System.Collections.ArrayList) As DataSet
+            Dim command = New SqlCommand(procedure)
+            command.CommandType = CommandType.StoredProcedure
+            For Each value As FieldParameter In parameters
+                command.Parameters.Add(New SqlParameter(value.Name, value.Type, value.Size))
+            Next
+            Dim adapter = New SqlDataAdapter(command)
+            Dim result = New DataSet()
+            adapter.Fill(result)
+            Return result
+        End Function
+        Public Function ArrayProperties(procedure As String, parameters As System.Collections.ArrayList) As DataSet
+            Dim command = New SqlCommand(procedure)
+            command.CommandType = CommandType.StoredProcedure
+            For Each value As PropertyParameter In parameters
+                command.Parameters.Add(New SqlParameter(value.Name, value.Type, value.Size))
+            Next
+            Dim adapter = New SqlDataAdapter(command)
+            Dim result = New DataSet()
+            adapter.Fill(result)
+            Return result
+        End Function
+        Public Function ArrayIncomplete(procedure As String, parameters As System.Collections.ArrayList) As DataSet
+            For Each value As FieldParameter In parameters
+                Return Forwarded(procedure, New SqlParameter(value.Name, value.Type, value.Size))
+            Next
+            Return Direct(procedure)
+        End Function
         Public Function Direct(procedure As String) As DataSet
             Dim command = New SqlCommand(procedure)
             command.CommandType = CommandType.StoredProcedure
