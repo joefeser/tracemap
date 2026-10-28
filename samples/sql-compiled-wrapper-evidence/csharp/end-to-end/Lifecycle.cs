@@ -60,6 +60,8 @@ namespace PublicSql.CSharp
             return State.Tables[0].Rows[0]["Score"];
         }
         public object ClearedRead() { Load(false); State.Tables[0].Clear(); return State.Tables[0].Rows[0]["Name"]; }
+        public object DuplicateTable() { Load(false); State.Tables.Add("First"); return State.Tables[0].Rows[0]["Name"]; }
+        public object EmptyLoop() { Load(false); State.Tables[0].Clear(); Overlay(true); return State.Tables[1].Rows[0]["Count"]; }
         public object Escaped() { Load(false); GC.KeepAlive(State); return State.Tables[0].Rows[0]["Name"]; }
         public object CrossRow()
         {

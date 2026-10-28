@@ -27,6 +27,12 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
             scanOutput, scanError) == 0, scanError.ToString());
         var scan = (Manifest: SqlServerSchemaEvidence.Read<ScanManifest>(File.ReadAllText(Path.Combine(scanDirectory, "scan-manifest.json"))),
             Facts: File.ReadLines(Path.Combine(scanDirectory, "facts.ndjson")).Select(SqlServerSchemaEvidence.Read<CodeFact>).ToArray());
+        var replayDirectory = IlBodyEvidenceExtractorShared.TempOutput();
+        Assert.True(await TraceMapCommand.RunAsync(["scan", "--repo", Path.Combine(fixture, "end-to-end"),
+            "--out", replayDirectory, "--il-body-evidence", "--compiled-input", inputs[0], "--compiled-input", inputs[1]],
+            scanOutput, scanError) == 0, scanError.ToString());
+        Assert.Equal(File.ReadAllBytes(Path.Combine(scanDirectory, "facts.ndjson")),
+            File.ReadAllBytes(Path.Combine(replayDirectory, "facts.ndjson")));
         var candidates = scan.Facts.Where(f => f.FactType == FactTypes.ManagedIlSqlLifecycleCandidate).ToArray();
         Assert.NotEmpty(candidates);
         var scoreBody = Assert.Single(Bodies(language), b => b.Observation.ObjectBody?.Name == "Score").Observation.BodyIdentity;
@@ -141,7 +147,7 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
             }
         }
         Assert.Equal(12, allBindings.Count);
-        foreach (var unsupported in new[] { "Escaped", "CrossRow", "LoopCarried", "ClearedRead" })
+        foreach (var unsupported in new[] { "Escaped", "CrossRow", "LoopCarried", "ClearedRead", "DuplicateTable", "EmptyLoop" })
         {
             var methodBody = Assert.Single(bodyInputs, b => b.Input.Role == "end-to-end" && b.Observation.ObjectBody?.Name == unsupported).Observation.BodyIdentity;
             Assert.DoesNotContain(candidates, c => c.TargetSymbol == methodBody);
@@ -183,9 +189,15 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
         Assert.True(write.MayPartiallyMutate); Assert.True(write.MayHaveCompletedEarlierRows);
         Assert.Empty(Assert.Single(write.Before, t => t.Allocation == overlay.Table).ApplicationWrittenColumns);
         Assert.NotEmpty(Assert.Single(write.NormalCompletion, t => t.Allocation == overlay.Table).ApplicationWrittenColumns);
-        Assert.True(Assert.Single(failures, f => f.Operation == "list-add").MayHaveCompletedEarlierRows);
+        var projectionFailure = Assert.Single(failures, f => f.Operation == "list-add");
+        Assert.True(projectionFailure.MayHaveCompletedEarlierRows);
+        var beforeList = Assert.Single(projectionFailure.BeforeObjects, o => o.Kind == "list");
+        var afterList = Assert.Single(projectionFailure.NormalCompletionObjects, o => o.Kind == "list");
+        Assert.Equal(beforeList.Allocation, afterList.Allocation);
+        Assert.Empty(beforeList.Slots);
+        Assert.Single(afterList.Slots);
         Assert.All(failures, f => Assert.Contains("catch-continuation-not-executed", f.Limitation, StringComparison.Ordinal));
-        output.WriteLine($"CLI matrix {language}: 12 selected alternatives, 11 schema matches/1 mismatch; 2 value origins unknown; 4 unsupported controls withheld; explicit partial failure boundaries.");
+        output.WriteLine($"CLI matrix {language}: 12 selected alternatives, 11 schema matches/1 mismatch; 2 value origins unknown; 6 unsupported controls withheld; explicit partial failure boundaries.");
     }
 
     [Theory]
@@ -294,6 +306,10 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
     [InlineData("vb", "Escaped")]
     [InlineData("csharp", "ClearedRead")]
     [InlineData("vb", "ClearedRead")]
+    [InlineData("csharp", "DuplicateTable")]
+    [InlineData("vb", "DuplicateTable")]
+    [InlineData("csharp", "EmptyLoop")]
+    [InlineData("vb", "EmptyLoop")]
     public void Unproven_loop_effects_and_escapes_discard_positive_claims(string language, string method)
     {
         var bodies = Bodies(language);

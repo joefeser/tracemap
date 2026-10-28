@@ -78,6 +78,12 @@ Namespace PublicSql.VisualBasic
         Public Function ClearedRead() As Object
             Load(False) : State.Tables(0).Clear() : Return State.Tables(0).Rows(0)("Name")
         End Function
+        Public Function DuplicateTable() As Object
+            Load(False) : State.Tables.Add("First") : Return State.Tables(0).Rows(0)("Name")
+        End Function
+        Public Function EmptyLoop() As Object
+            Load(False) : State.Tables(0).Clear() : Overlay(True) : Return State.Tables(1).Rows(0)("Count")
+        End Function
         Public Function Escaped() As Object
             Load(False) : GC.KeepAlive(State) : Return State.Tables(0).Rows(0)("Name")
         End Function

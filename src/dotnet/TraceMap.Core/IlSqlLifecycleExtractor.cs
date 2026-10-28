@@ -335,6 +335,7 @@ internal static class IlSqlLifecycleExtractor
             {
                 case "enumerator":
                     var rows = Get(receiver, "rows");
+                    if (Get(rows.Parent, "table").Empty) throw new Refusal("lifecycle-enumerate-empty-table");
                     return View("enumerator", rows.Parent);
                 case "enumerator-next":
                     var enumerator = Get(receiver, "enumerator");
@@ -417,6 +418,8 @@ internal static class IlSqlLifecycleExtractor
                 case "table-add":
                     set = Get(Get(receiver, "tables").Parent, "dataset");
                     if (set.Slots.Count >= 16) throw new Refusal("lifecycle-table-limit");
+                    if (set.Slots.Any(slot => Get(slot, "table").Command.Text == Text(args[0])))
+                        throw new Refusal("lifecycle-duplicate-table-name");
                     table = New("table"); heap[table.Text].Command = new("string", Text(args[0])); set.Slots.Add(table); return table;
                 case "table":
                     set = Get(Get(receiver, "tables").Parent, "dataset"); var index = Number(args[0]);

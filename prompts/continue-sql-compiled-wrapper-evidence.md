@@ -1,5 +1,50 @@
 # Consolidated compiled-wrapper evidence handoff
 
+## Later work-machine acceptance: use only after local final gates are recorded
+
+Inputs (keep values and artifacts private on the work machine):
+
+```text
+EXPECTED_TOOL_COMMIT = <published validated branch commit>
+PRIVATE_SOURCE_ROOT = <existing source checkout>
+PRIVATE_ACCEPTANCE_ROOT = <existing retained notes, indexes and receipts>
+COMPILED_INPUTS = <exact caller and wrapper assemblies, with available correspondence evidence>
+ROOT_CLASS_AND_PROPERTY = <class.property under investigation>
+PROCEDURE_IDENTITIES_AND_DDL = <owner-provided server/database/schema/procedure identities and scripts>
+```
+
+This is one consolidated read-only fit check, not permission to run the application,
+SQL, containers, impersonation flows or requests. Preserve accepted baseline hashes.
+First verify exact tool revision and CLI/Core/Reporting provenance, then read the
+recorded local end-to-end gate in the validation document. If still pending, stop
+before a private retry and report that prerequisite; do not repeat old diagnostic runs.
+
+Inspect retained artifacts first. Map the chosen root's actual operations to the
+new separate lifecycle route and record unsupported operations with file/line or
+compiled-body evidence. Do not use the legacy object-path or source-reader routes
+as substitutes. A source-backed Select predicate, ArrayList custom parameter object,
+unavailable wrapper body, complex DDL, or unresolved deployment correspondence is
+still a distinct boundary; synthetic passing cases do not remove it.
+
+Only if the inputs and exact shape fit, perform a fresh offline scan into a new
+private output directory. Keep source/index/binary correspondence explicit. Bind
+every observed execution to the independently supplied identity, and every consumer
+to its exact table, column and read site. The new comparison route currently admits
+synthetic JSON result declarations only: do not relabel owner DDL or a manually
+transcribed production schema as synthetic evidence. If no truthful admitted schema
+route exists, report that gap rather than manufacture a passing comparison.
+
+Return one sanitized matrix: input presence, exact revision/binary verification,
+root/guard, execution/table/column linkage, SQL schema origin versus application value
+origin, raw/projection consumers, refresh ordering, potential partial-failure states,
+baseline preservation, refusal reason and smallest remaining capability. Preserve
+unknowns and partial coverage. No private source, paths, SQL text or hashes in public
+commits. No PR, merge, runtime/deployment or migration-readiness claim.
+
+The historical foundation instructions below describe the unchanged older route;
+the lifecycle additions above and current validation document supersede them only
+for the separate lifecycle contract.
+
 Read AGENTS, `.kiro/specs/sql-compiled-wrapper-evidence/`,
 `docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md`, the current IL rules and
 source SQL contracts. Verify the exact branch/head and validation receipts first.

@@ -16,10 +16,14 @@ public sealed record SqlServerLifecycleComparison(string FactId, string Guard, s
 public sealed record SqlServerLifecycleSite(string Body, string Binary, long Offset, int Invocation);
 public sealed record SqlServerLifecycleTableState(string Allocation, bool RowsCleared, string? Execution,
     IReadOnlyList<string> SchemaExecutions, IReadOnlyList<string> ApplicationWrittenColumns);
+public sealed record SqlServerLifecycleObjectState(string Allocation, string Kind, IReadOnlyList<string> Slots,
+    IReadOnlyDictionary<string, string> Fields);
 public sealed record SqlServerLifecycleFailure(string FactId, string Guard, string Operation,
     SqlServerLifecycleSite Site, SqlServerLifecycleSite CatchHandler,
     IReadOnlyList<SqlServerLifecycleTableState> Before, IReadOnlyList<SqlServerLifecycleTableState> NormalCompletion,
-    bool MayPartiallyMutate, bool MayHaveCompletedEarlierRows, string Limitation);
+    bool MayPartiallyMutate, bool MayHaveCompletedEarlierRows,
+    IReadOnlyList<SqlServerLifecycleObjectState> BeforeObjects,
+    IReadOnlyList<SqlServerLifecycleObjectState> NormalCompletionObjects, string Limitation);
 public sealed record SqlServerLifecycleReport(string Version, string GeneratorSha256, string BoundedInputSha256,
     string SchemaGeneratorSha256, string SchemaInputSha256, string Repo, string Revision,
     string Coverage, IReadOnlyList<SqlServerLifecycleComparison> Comparisons,
@@ -136,6 +140,8 @@ public static class SqlServerCompiledLifecycleEvidence
             static SqlServerLifecycleSite Site(IlSqlLifecycleExtractor.Site site) => new(site.Body, site.Binary, site.Offset, site.Invocation);
             static SqlServerLifecycleTableState Table(IlSqlLifecycleExtractor.TableState table) => new(table.Allocation,
                 table.RowsCleared, table.Execution, table.SchemaExecutions, table.Writes.Keys.Order(StringComparer.Ordinal).ToArray());
+            static SqlServerLifecycleObjectState ObjectState(IlSqlLifecycleExtractor.ObjectSnapshot value)
+                => new(value.Allocation, value.Kind, value.Slots, value.Fields);
             foreach (var failure in state.Failures)
             {
                 Require(state.Bodies.Any(s => s.Body == failure.Site.Body && s.Binary == failure.Site.Binary && s.Invocation == failure.Site.Invocation)
@@ -143,7 +149,9 @@ public static class SqlServerCompiledLifecycleEvidence
                         && s.Invocation == failure.CatchHandler.Invocation), "failure-site-conflict");
                 failures.Add(new(fact.FactId, Property(fact, "guard"), failure.Operation, Site(failure.Site), Site(failure.CatchHandler),
                     failure.Before.Select(Table).ToArray(), failure.NormalCompletion.Select(Table).ToArray(),
-                    failure.MayPartiallyMutate, failure.MayHaveCompletedEarlierRows, failure.Limitation));
+                    failure.MayPartiallyMutate, failure.MayHaveCompletedEarlierRows,
+                    failure.BeforeObjects.Select(ObjectState).ToArray(), failure.NormalCompletionObjects.Select(ObjectState).ToArray(),
+                    failure.Limitation));
             }
             selected.Add(fact);
         }

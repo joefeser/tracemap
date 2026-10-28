@@ -294,3 +294,18 @@ An earlier matrix run failed due to an ambiguous same-name fixture selector; the
 selector now includes the exact end-to-end input role, without relaxing outcomes.
 Final soundness review, frozen full/regression gates, retained smoke denominators,
 publication and consolidated prompt remain pending. The goal remains active.
+
+## Implementation freeze preparation — 2026-10-28
+
+The focused lifecycle/object-path/lineage gate passes 52 tests with zero failures
+or skips under Debug -warnaserror. Actual CLI scans are repeated and their persisted
+facts compared byte-for-byte, in addition to repeated comparison reports. Six
+negative roots per language now include duplicate named-table creation and
+enumeration over a definitely emptied table. Neither admits positive lineage.
+
+Public failure records now retain before/normal-completion object snapshots as
+well as table snapshots, including the empty-to-one-item projection-list boundary.
+The preceding lifecycle-only checkpoints passed 24 and then 28 tests. No runtime
+provider calls or private inputs were used. Implementation and independent CLI
+matrix tasks are complete; retained denominator checks, frozen full validation,
+publication and goal completion remain pending.

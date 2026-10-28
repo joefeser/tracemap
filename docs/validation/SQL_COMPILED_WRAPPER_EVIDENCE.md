@@ -1,5 +1,43 @@
 # Public compiled-wrapper SQL evidence
 
+## End-to-end lifecycle route (implementation; final validation pending)
+
+IL extractor 0.2.4 adds the separate `ManagedIlSqlLifecycleCandidate` contract
+(`il-sql-lifecycle/1`, rule `dotnet.compiled.il-sql-lifecycle.v1`, Tier3). Earlier
+object-path routes retain their refusals and independent 20/26-root denominators.
+This route follows separately compiled wrapper bodies, two SQL executions, named
+Merge destinations held through a property, application-authored auxiliary schema,
+an inspected guarded overlay helper, raw reads and typed projections, Clear/re-Merge
+and reload. Boolean arguments produce both correlated alternatives, never a guessed
+runtime branch. Loops summarize existing rows under normal completion, not row counts.
+
+`sqlserver-compiled-lifecycle compare` accepts independent synthetic result JSON
+declarations/export, persisted scan facts, repo/revision, and
+`sqlserver-compiled-lifecycle-bindings/1`. Each binding selects an exact candidate
+digest, consumer table/column/read body/binary/offset/invocation, and every execution's
+command plus four-part schema identity. Source-reader bindings are not accepted.
+Command syntax is available through CLI help. Publication requires a new directory
+and produces `compiled-lifecycle-comparison.json` and `report.md`.
+
+Reports retain generator and bounded-input hashes, schema provenance, body links in
+the selected scan facts, rule/tier and partial coverage. Schema match/mismatch/unknown
+is separate from current value origin and source-column hash. An application overlay
+does not become a SQL value; a column retained after Clear but absent from the new
+Merge result has unknown current origin. Definite cleared-table reads, duplicate
+table names, escapes, cross-row dependencies and loop-carried field effects refuse
+positive lineage. Types, nullability, row existence and actual values are not compared.
+
+Potential failure records include table and object/list before/normal-completion
+snapshots and possible earlier-row/partial-update flags. They are not observed failures,
+do not execute catch continuations, and do not prove rollback or final post-catch state.
+
+The independently authored acceptance matrix lives in the spec's
+`end-to-end-acceptance.md`. Actual CLI scan and comparison tests exercise both languages,
+12 selected alternatives each (11 schema matches/one mismatch, two unknown current
+origins), six refusal controls, tamper rejection and byte-identical replay. These are
+development results until the frozen full and retained smoke gates below are recorded.
+No private acceptance, framework/session execution, SQL execution or migration claim.
+
 This is a finite compile-only corpus and a **partial** native evidence addition,
 not completed SQL-A acceptance. No SQL, provider methods, containers or private
 application inputs execute. Source fixtures are not proof of deployed binaries.
