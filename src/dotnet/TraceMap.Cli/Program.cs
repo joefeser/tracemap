@@ -557,6 +557,7 @@ public static class TraceMapCommand
             WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"),
             WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"))
         {
+            IlLifecycleRoots = values.GetMany("--il-lifecycle-root"),
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
             CiHintWorkflows = ReadCiHintsOption(values),
@@ -3104,6 +3105,10 @@ public static class TraceMapCommand
               --compiled-max-work <count>
                                        Positive deterministic compiled-input limits; max-text must be at least 71.
               --il-body-evidence        Extract bounded operand-aware IL method-body and direct-call evidence from admitted compiled inputs. Never discovered.
+              --il-lifecycle-root <sha256:0x06token>
+                                       Repeatable (max 16). Explicit admitted assembly SHA-256 and method-definition token.
+                                       Retain only the selected lifecycle root/constructor/callee slice, up to 1 MiB per reader.
+                                       Raw IL/source lanes remain; corpus object-path/lifecycle enumeration is not performed.
               --il-max-bodies <count>
               --il-max-instructions-per-body <count>
               --il-max-locals-per-body <count>

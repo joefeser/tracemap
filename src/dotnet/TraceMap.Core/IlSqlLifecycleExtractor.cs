@@ -397,7 +397,8 @@ internal static class IlSqlLifecycleExtractor
                             if (loopEnumerator.Kind != "unknown" && op != "newobj") throw new Refusal("lifecycle-loop-helper-effect");
                             if (!budget.TryConsume(bodies.Count)) throw new Refusal("lifecycle-work-limit");
                             var targets = bodies.Where(b => b.Observation.MethodIdentity == call.TargetIdentity
-                                || b.Observation.ObjectBody?.MemberReference == call.TargetIdentity).Take(2).ToArray();
+                                || b.Observation.ObjectBody?.MemberReference == call.TargetIdentity
+                                || b.MemberReferenceAlias == call.TargetIdentity).Take(2).ToArray();
                             if (targets.Length != 1) throw new Refusal("lifecycle-unknown-call:" + call.TargetIdentity);
                             var targetMeta = targets[0].Observation.ObjectBody
                                 ?? throw new Refusal("lifecycle-body-unavailable", MetadataFailure(targets[0], "callee-metadata"));

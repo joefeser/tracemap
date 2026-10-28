@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v9";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v10";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -42,8 +42,12 @@ internal static class IlBodyEvidenceExtractor
         CompiledInputEvaluation compiledEvaluation,
         CancellationToken cancellationToken = default)
     {
+        var rootSelections = IlLifecycleRootSelection.Parse(options.IlLifecycleRoots);
         if (!options.IlBodyEvidence)
+        {
+            if (rootSelections.Count > 0) throw new ArgumentException("il-lifecycle-root-requires-il-body-evidence");
             return IlBodyEvaluation.Disabled;
+        }
 
         var limits = options.IlBodyLimits ?? new IlBodyLimits();
         ValidateLimits(limits);
@@ -78,8 +82,8 @@ internal static class IlBodyEvidenceExtractor
         // body/call admission budget or retire independently decoded bodies.
         var srmValueBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
         var cecilValueBudget = new IlWorkBudget(limits.MaxTotalWorkUnits);
-        var srmObjectBudget = new IlWorkBudget(Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
-        var cecilObjectBudget = new IlWorkBudget(Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
+        var srmObjectBudget = new IlWorkBudget(rootSelections.Count > 0 ? 0 : Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
+        var cecilObjectBudget = new IlWorkBudget(rootSelections.Count > 0 ? 0 : Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
         foreach (var artifact in admitted)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -157,6 +161,11 @@ internal static class IlBodyEvidenceExtractor
             }
         }
 
+        foreach (var selection in rootSelections)
+            if (evaluated.SelectMany(input => input.Bodies.Where(body => input.Outcome.Outcome == "admitted"
+                    && input.Outcome.GapKinds.Count == 0 && input.Outcome.RawFileSha256 == selection.BinarySha256
+                    && body.MetadataToken == selection.MetadataToken)).Count() != 1)
+                throw new ArgumentException("il-lifecycle-root-not-uniquely-admitted");
         var outcomes = evaluated.Select(item => item.Outcome)
             .OrderBy(item => item.SafeLocator, StringComparer.Ordinal)
             .ThenBy(item => item.Role, StringComparer.Ordinal)
@@ -169,6 +178,10 @@ internal static class IlBodyEvidenceExtractor
             extractorIdentities = new[] { ScannerVersions.IlBodyEvidenceExtractor, "system-reflection-metadata/10.0.0", "mono-cecil/0.11.6" },
             expectedInputs = expected,
             effectiveLimits = limits,
+            lifecycleRootSelections = rootSelections,
+            lifecycleSliceProfile = new { schema = "il-sql-lifecycle-slice/1", maxRoots = 16,
+                maxBodies = 128, maxInputBytes = 67_108_864, retainedCharactersPerReader = Math.Min(limits.MaxTotalWorkUnits, 1_048_576),
+                decodeWorkAcrossRoots = limits.MaxTotalWorkUnits },
             controlFlowValueLimits = new { IlControlFlowValueExtractor.MaxInstructions, IlControlFlowValueExtractor.MaxSlots,
                 IlControlFlowValueExtractor.MaxWorkUnits, IlControlFlowValueExtractor.MaxExceptionEntries,
                 IlArgumentAlternatives.MaxAlternatives, IlArgumentAlternatives.MaxEncodedLength },
@@ -200,7 +213,7 @@ internal static class IlBodyEvidenceExtractor
                 item.GapKinds
             })
         });
-        var coverage = globalGapKinds.Count == 0
+        var coverage = rootSelections.Count == 0 && globalGapKinds.Count == 0
             && outcomes.Length > 0
             && outcomes.All(item => item.Outcome == "admitted" && item.GapKinds.Count == 0)
                 ? "il-complete"
@@ -218,10 +231,12 @@ internal static class IlBodyEvidenceExtractor
             coverage)
         { AdmissionWork = CompiledAdmissionWorkUsage.Create("il-body", generatorSha256, boundedInputSha256,
             workBudget.Consumed, workBudget.RefusedRequests, limits.MaxTotalWorkUnits) };
+        if (rootSelections.Count > 0) globalGapKinds.Add("IlLifecycleSelectedRootsOnly");
         var knownGaps = DistinctGapKinds(outcomes, globalGapKinds)
             .Select(value => $"IL body evidence coverage reduced: {value}.")
             .ToArray();
-        return new IlBodyEvaluation(provenance, evaluated, knownGaps, admitted);
+        return new IlBodyEvaluation(provenance, evaluated, knownGaps, admitted)
+        { LifecycleRoots = rootSelections, CompiledMaximumBytes = compiledMaximumBytes, SliceCancellationToken = cancellationToken };
     }
 
     private static IEnumerable<string> DistinctGapKinds(IReadOnlyList<IlInputOutcome> outcomes, List<string> globalGapKinds) =>
@@ -499,6 +514,7 @@ internal static class IlBodyEvidenceExtractor
                 bodyProperties["initLocals"] = body.InitLocals ? "true" : "false";
                 bodyProperties["limitation"] = BodyLimitation;
                 bodyProperties["objectBodyMetadataSchema"] = "il-object-body-retention/1";
+                bodyProperties["objectBodyScope"] = evaluation.LifecycleRoots.Count > 0 ? "deferred-to-root-slice" : "corpus";
                 bodyProperties["objectBodyState"] = body.ObjectBody is null ? "unavailable" : "retained";
                 bodyProperties["objectBodyRetention"] = SqlServerSchemaEvidence.Json(body.ObjectBodyRetention);
                 bodyProperties["objectBodyAgreement"] = SqlServerSchemaEvidence.Json(body.ObjectBodyAgreement);
@@ -673,7 +689,7 @@ internal static class IlBodyEvidenceExtractor
             }
         }
 
-        EmitSqlObjectPaths(manifest, evaluation, provenance, facts);
+        if (evaluation.LifecycleRoots.Count == 0) EmitSqlObjectPaths(manifest, evaluation, provenance, facts);
         EmitSqlLifecycles(manifest, evaluation, provenance, facts);
         return facts;
     }
@@ -685,15 +701,31 @@ internal static class IlBodyEvidenceExtractor
         var bodyFacts = facts.Where(f => f.FactType == FactTypes.ManagedIlBodyDeclared)
             .GroupBy(f => (f.Properties["rawFileSha256"], f.TargetSymbol!)).ToDictionary(g => g.Key, g => g.First());
         var budget = new IlWorkBudget(provenance.EffectiveLimits.MaxTotalWorkUnits);
-        foreach (var root in bodies.Where(b => IlSqlLifecycleExtractor.IsRoot(b.Observation)))
+        var sliceDecodeBudget = new IlWorkBudget(provenance.EffectiveLimits.MaxTotalWorkUnits);
+        var selected = evaluation.LifecycleRoots.Count > 0;
+        var roots = selected ? evaluation.LifecycleRoots.Select(selection => bodies.Single(body =>
+            body.Input.RawFileSha256 == selection.BinarySha256 && body.Observation.MetadataToken == selection.MetadataToken))
+            : bodies.Where(body => IlSqlLifecycleExtractor.IsRoot(body.Observation));
+        foreach (var originalRoot in roots)
         {
+            using var slice = selected ? new IlSqlLifecycleSlice(evaluation, bodies, originalRoot, sliceDecodeBudget) : null;
+            var root = slice?.Root ?? originalRoot;
+            var scopedBodies = slice?.Bodies ?? bodies;
+            var sliceReceipt = slice?.Receipt();
             var guarded = IlSqlLifecycleExtractor.IsGuardedRoot(root.Observation);
             var lifecycleSchema = IlSqlLifecycleExtractor.IsReadRoot(root.Observation)
                 ? IlSqlLifecycleExtractor.Schema : IlSqlLifecycleExtractor.EntrySchema;
             foreach (var enabled in guarded ? new[] { false, true } : new[] { false })
             {
-                var result = IlSqlLifecycleExtractor.Extract(root, bodies, enabled, budget);
-                var common = CommonProperties(provenance, root.Input);
+                var result = slice?.Failure is { } sliceFailure
+                    ? new IlSqlLifecycleExtractor.Result([], [], null, [sliceFailure])
+                    : IlSqlLifecycleExtractor.Extract(root, scopedBodies, enabled, budget);
+                var common = new Dictionary<string, string>(CommonProperties(provenance, root.Input), StringComparer.Ordinal);
+                if (sliceReceipt is not null)
+                {
+                    common["lifecycleSlice"] = SqlServerSchemaEvidence.Json(sliceReceipt);
+                    common["lifecycleCoverage"] = "selected-root-slice-only";
+                }
                 var guard = guarded ? "argument:0=" + (enabled ? "true" : "false") : "unconditional";
                 if ((result.Returned is not null || result.Entry is not null) && result.Executions.Count > 0)
                 {
@@ -865,7 +897,7 @@ internal static class IlBodyEvidenceExtractor
         }).ToArray();
     }
 
-    private static bool RawBodiesAgree(IlBodyObservation left, IlBodyObservation right)
+    internal static bool RawBodiesAgree(IlBodyObservation left, IlBodyObservation right)
         => left.BodyIdentity == right.BodyIdentity && left.MethodIdentity == right.MethodIdentity
             && left.InstructionCount == right.InstructionCount && left.InstructionsSha256 == right.InstructionsSha256
             && left.OpcodesSha256 == right.OpcodesSha256 && left.LocalCount == right.LocalCount
@@ -916,7 +948,7 @@ internal static class IlBodyEvidenceExtractor
         IlWorkBudget budget,
         CancellationToken cancellationToken,
         bool retainDiagnosticInstructions = false,
-        IlWorkBudget? valueBudget = null, IlWorkBudget? objectBudget = null)
+        IlWorkBudget? valueBudget = null, IlWorkBudget? objectBudget = null, IReadOnlySet<string>? selectedMethods = null)
     {
         valueBudget ??= new IlWorkBudget(limits.MaxTotalWorkUnits);
         objectBudget ??= new IlWorkBudget(Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
@@ -949,6 +981,7 @@ internal static class IlBodyEvidenceExtractor
                     throw new IlEvidenceException("IlBodyCountLimitExceeded");
                 if (!budget.TryConsume(1))
                     throw new IlEvidenceException("IlTotalWorkLimitExceeded");
+                if (selectedMethods is not null && !selectedMethods.Contains(ManagedMetadataExtractor.Token(method.MetadataToken.ToUInt32()))) continue;
                 var rawMethod = rawReader.GetMethodDefinition(
                     MetadataTokens.MethodDefinitionHandle(checked((int)method.MetadataToken.RID)));
                 var rawIl = rawPe.GetMethodBody(rawMethod.RelativeVirtualAddress).GetILBytes()
@@ -1171,6 +1204,15 @@ internal static class IlBodyEvidenceExtractor
         }
     }
 
+    internal static string ObjectMemberReference(CecilMethodDefinition method)
+    {
+        var signature = ManagedMetadataExtractor.MethodSignature(ManagedMetadataExtractor.FormatType(method.ReturnType),
+            method.Parameters.Select(parameter => ManagedMetadataExtractor.FormatType(parameter.ParameterType)),
+            method.GenericParameters.Count, method.CallingConvention == MethodCallingConvention.VarArg ? "vararg" : "default",
+            method.HasThis, method.ExplicitThis);
+        return $"memberref|type:{ScopedNamedType(method.DeclaringType)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(method.Name)}|{signature}";
+    }
+
     private static (string Kind, string Token, string Identity) CecilMethodTarget(MethodReference reference, string selfAssemblyIdentity, IlBodyLimits limits)
     {
         if (reference is GenericInstanceMethod generic)
@@ -1337,7 +1379,7 @@ internal static class IlBodyEvidenceExtractor
         IlWorkBudget budget,
         CancellationToken cancellationToken,
         bool retainDiagnosticInstructions = false,
-        IlWorkBudget? valueBudget = null, IlWorkBudget? objectBudget = null)
+        IlWorkBudget? valueBudget = null, IlWorkBudget? objectBudget = null, IReadOnlySet<string>? selectedMethods = null)
     {
         valueBudget ??= new IlWorkBudget(limits.MaxTotalWorkUnits);
         objectBudget ??= new IlWorkBudget(Math.Min(limits.MaxTotalWorkUnits, 1_048_576));
@@ -1371,6 +1413,7 @@ internal static class IlBodyEvidenceExtractor
                 throw new IlEvidenceException("IlBodyCountLimitExceeded");
             if (!budget.TryConsume(1))
                 throw new IlEvidenceException("IlTotalWorkLimitExceeded");
+            if (selectedMethods is not null && !selectedMethods.Contains(ManagedMetadataExtractor.Token(MetadataTokens.GetToken(handle)))) continue;
             bodies.Add(ReadSrmBody(pe, reader, provider, handle, method, assemblyIdentity, limits, budget,
                 retainDiagnosticInstructions, valueBudget, objectBudget));
         }

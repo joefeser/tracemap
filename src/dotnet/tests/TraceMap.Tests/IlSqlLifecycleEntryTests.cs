@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TraceMap.Cli;
 using TraceMap.Core;
 
@@ -83,9 +84,11 @@ public sealed class IlSqlLifecycleEntryTests
     }
 
     [Theory]
-    [InlineData("csharp")]
-    [InlineData("vb")]
-    public async Task Native_cli_emits_entry_contract_and_rejection_gaps_without_fabricating_a_column_read(string language)
+    [InlineData("csharp", false)]
+    [InlineData("vb", false)]
+    [InlineData("csharp", true)]
+    [InlineData("vb", true)]
+    public async Task Native_cli_emits_entry_contract_and_rejection_gaps_without_fabricating_a_column_read(string language, bool selectedRoots)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "AGENTS.md"))) directory = directory.Parent;
@@ -98,9 +101,15 @@ public sealed class IlSqlLifecycleEntryTests
         var args = new List<string> { "scan", "--repo", Path.Combine(sample, "end-to-end"), "--out", output, "--il-body-evidence" };
         foreach (var role in new[] { "end-to-end", "wrapper" })
             args.AddRange(["--compiled-input", Path.Combine(sample, role, "bin", config, "net48", $"PublicSql.{language}.{role}.dll")]);
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        if (selectedRoots)
+            foreach (var name in new[] { "ProduceInputs", "StoreInputs", "UnknownGuard", "UnknownCommand", "EmptyProducer", "DiscardInputs" })
+            {
+                var root = Assert.Single(bodies, body => body.Observation.ObjectBody?.Name == name);
+                args.AddRange(["--il-lifecycle-root", root.Input.RawFileSha256 + ":" + root.Observation.MetadataToken]);
+            }
         Assert.True(await TraceMapCommand.RunAsync(args.ToArray(), stdout, stderr) == 0, stderr.ToString());
         var facts = File.ReadLines(Path.Combine(output, "facts.ndjson")).Select(SqlServerSchemaEvidence.Read<CodeFact>).ToArray();
-        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
         foreach (var name in new[] { "ProduceInputs", "StoreInputs" })
         {
             var root = Assert.Single(bodies, b => b.Observation.ObjectBody?.Name == name);
@@ -108,7 +117,26 @@ public sealed class IlSqlLifecycleEntryTests
                 && f.FactType == FactTypes.ManagedIlSqlLifecycleEntryCandidate);
             var declared = Assert.Single(facts, item => item.TargetSymbol == root.Observation.BodyIdentity
                 && item.FactType == FactTypes.ManagedIlBodyDeclared);
-            Assert.Equal("retained", declared.Properties["objectBodyState"]);
+            Assert.Equal(selectedRoots ? "unavailable" : "retained", declared.Properties["objectBodyState"]);
+            Assert.Equal(selectedRoots ? "deferred-to-root-slice" : "corpus", declared.Properties["objectBodyScope"]);
+            if (selectedRoots)
+            {
+                using var slice = JsonDocument.Parse(fact.Properties["lifecycleSlice"]);
+                var receipt = slice.RootElement;
+                Assert.Equal("il-sql-lifecycle-slice/1", receipt.GetProperty("schema").GetString());
+                Assert.Equal("selected-root-slice-only", fact.Properties["lifecycleCoverage"]);
+                Assert.Equal(64, receipt.GetProperty("generatorSha256").GetString()!.Length);
+                Assert.Equal(64, receipt.GetProperty("boundedInputSha256").GetString()!.Length);
+                Assert.Equal(JsonValueKind.Null, receipt.GetProperty("failure").ValueKind);
+                var members = receipt.GetProperty("members").EnumerateArray().ToArray();
+                Assert.InRange(members.Length, 1, IlSqlLifecycleSlice.MaxBodies);
+                Assert.Contains(members, member => member.GetProperty("metadataToken").GetString() == root.Observation.MetadataToken
+                    && member.GetProperty("binary").GetString() == root.Input.RawFileSha256
+                    && member.GetProperty("state").GetString() == "retained");
+                Assert.DoesNotContain(members, member => member.GetProperty("body").GetString()!.Contains("Noise", StringComparison.Ordinal));
+                Assert.InRange(receipt.GetProperty("cecilCharacters").GetInt64(), 1, 1_048_576);
+                Assert.InRange(receipt.GetProperty("srmCharacters").GetInt64(), 1, 1_048_576);
+            }
             Assert.Equal("il-object-body-retention/1", declared.Properties["objectBodyMetadataSchema"]);
             Assert.True(declared.Properties.ContainsKey("objectBodyRetention"));
             Assert.True(declared.Properties.ContainsKey("objectBodyAgreement"));

@@ -5,35 +5,56 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
-## Current metadata-handoff repair
+## Current root-sliced metadata repair
 
-Use the newly fetched public head, including IL extractor **0.2.5** and policy
-`explicit-il-body-evidence.v9`. Both this repair and the preceding entry patch are
-compile-only publications: Joe explicitly deferred tests. Do not apply historical
-87/5,527 pass totals to either patch, and do not run test suites for this iteration.
+Use the newly fetched public head, IL extractor **0.2.6**, policy
+`explicit-il-body-evidence.v10`. This iteration is compile-only: Joe explicitly
+requested no tests. Historical pass totals do not validate this patch.
 
-The repair keeps independently agreed object metadata when generic value summaries
-fail and charges actual retained text under unchanged bounds. Its scale fixture has
-160 unrelated methods before a producer. This is a proposed repair, not a private
-acceptance claim. No new photos or manually supplied inputs are needed.
+The previous actual-text accounting repair could still exhaust the shared corpus
+quota before the target root. That quota is per reader across admitted inputs,
+not per assembly. This patch adds explicit root-sliced retention rather than raising
+the cap. The selected root and inspected callees receive a fresh bounded metadata
+lease; unrelated classes do not consume that lease. This is a proposed repair,
+not private acceptance. No new photos or manually supplied identities are needed.
 
-After one bounded native run, inspect the selected roots and exact callees using:
+Before scanning, derive each target's `rawFileSha256` and `metadataToken` from the
+existing local `ManagedIlBodyDeclared` facts, verify the DLL still has that SHA,
+and append `--il-lifecycle-root <sha256>:<0x06xxxxxx>` for each selected root (max16).
+Use the exact MethodDef token, not a name, MemberRef token or invented argument value.
+Keep identities private. If old body facts are absent, inspect the matching compiled
+metadata locally to establish SHA and MethodDef token; do not ask Joe to type them.
+Do not change the application or rebuild its DLLs to manufacture a root.
 
-- `ManagedIlBodyDeclared.objectBodyMetadataSchema` = `il-object-body-retention/1`;
-- `objectBodyState`, `objectBodyRetention`, `objectBodyAgreement` (JSON properties);
-- lifecycle gap `bodyMetadataFailure` (JSON), including stage, failing body/token,
-  instruction count, retention/agreement, and constructor-search counts if present.
+Selected mode deliberately skips corpus-wide SQL object/lifecycle interpretation.
+Raw body facts remain available, but `objectBodyScope: deferred-to-root-slice`
+means their object metadata was deferred, not that the selected root failed.
+The scan is partial. Inspect each selected lifecycle candidate/gap's JSON
+`lifecycleSlice` (`il-sql-lifecycle-slice/1`) for actual retained/unavailable members,
+per-reader character usage, decode work, constructor-definition count and failure.
+The receipt binds generator and bounded-input hashes. Body links still reference
+admitted raw body facts. Do not diagnose starvation from the deferred corpus facts.
 
-`root-metadata` / `callee-metadata` mean metadata was missing before that body was
-interpreted. Do not infer unsupported try/catch or delegated enumeration from
-`lifecycle-body-unavailable`. The interpreter already follows inspected callees.
-Raw `il-complete` / admitted status does not establish structured metadata presence.
-`provenanceState: unbound` does not say whether arguments or object metadata were
-retained. A constructor-selection gap alone does not prove multiple-overload ambiguity.
+Limits: 16 root selections, 128 closure bodies/root, 4,096 admitted raw bodies in
+the lookup index, 4,096 reference lookups/root, 64 MiB verified input bytes/root,
+at most 1 MiB retained characters/reader/root, and one aggregate decode-work budget
+across selected roots. Each lease is released before the next root. Existing
+256-instruction/64-field metadata and interpreter/heap/enumeration limits remain.
+Both readers must agree on the selected body and its original admitted raw body.
+Changed inputs, missing/ambiguous bodies, incomplete metadata or closure/budget
+overflow must produce a gap, never assumed values.
 
-If this run still has no entry candidate for the actual path, execute the failure-only
-Claude request at the end of this file using the output already produced. Do not
-start a second whole-app scan just to repeat it. Return one capsule with the result.
+Also retain `bodyMetadataFailure` when present. `root-metadata` / `callee-metadata`
+mean metadata was missing before interpretation. A constructor search with zero
+admitted matches does not alone prove constructor absence or overload ambiguity;
+use the slice's inspected constructor-definition count and exact failing member.
+Raw admission and `provenanceState: unbound` do not establish interpreted lineage.
+
+Run once with the selected-root flag. If there is still no entry candidate, use the
+failure-only Claude request below with that same output. Return the exact first
+failing slice/body/opcode and an independently authored complete public sample.
+An illustrative stub with omitted methods or a throwing wrapper is not a replay.
+Do not start another whole-app scan just to repeat the diagnosis.
 
 ## Entry patch status and execution constraint
 
@@ -183,7 +204,7 @@ concrete failure. Use the built CLI and repeat `--compiled-input` for each neces
 assembly; do not omit the wrapper or substitute source-reader evidence.
 
 ```text
-dotnet <local-built-tracemap.dll> scan --repo <PRIVATE_SOURCE_ROOT> --out <new-private-scan-directory> --il-body-evidence --compiled-input <caller.dll> --compiled-input <wrapper.dll>
+dotnet <local-built-tracemap.dll> scan --repo <PRIVATE_SOURCE_ROOT> --out <new-private-scan-directory> --il-body-evidence --compiled-input <caller.dll> --compiled-input <wrapper.dll> --il-lifecycle-root <privately-derived-sha256>:<privately-derived-MethodDef-token>
 ```
 
 Inspect all three fact kinds under `dotnet.compiled.il-sql-lifecycle.v1`, Tier3:
@@ -280,7 +301,7 @@ failures and evidence first.
 
 ## Failure-only Claude request: one diagnostic capsule and independent sample
 
-Use this only if the new metadata-handoff iteration still cannot produce the
+Use this only if the new root-sliced metadata iteration still cannot produce the
 selected native entry lineage. Do the work locally; do not ask Joe for more pictures,
 private source pasted into chat, DLL uploads, hash transcription or another full scan.
 Use the existing output and available local source/metadata inspection.

@@ -70,3 +70,12 @@
 - [x] Author regression definitions and a single sanitized Claude diagnostic/reproducer fallback; compile-check and publish the patch.
 - [ ] Run retention/agreement/entry tests and native scale replay (explicitly deferred by Joe; not claimed).
 - [ ] Establish real-input lineage success after metadata admission (not claimed by compilation).
+
+
+## Root-sliced continuation — 2026-10-28 (tests explicitly deferred)
+- [x] Add explicit SHA/MethodDef root selections and root-local dual-reader metadata leases without raising retention caps.
+- [x] Preserve raw-body agreement, exact call identities, independent reader refusals and bounded closure/input/work accounting.
+- [x] Mark selected-only coverage partial; expose scoped generator/input-bound retention and constructor diagnostics.
+- [x] Author C#/VB selected-root controls and selector refusals; update limitations/state/work-machine prompt; compile CLI.
+- [ ] Execute new focused controls and a complete actual-cost starvation replay (deferred; no behavioral success claimed).
+- [ ] Establish real-input ArrayList lineage after slice admission (work-machine check outstanding).

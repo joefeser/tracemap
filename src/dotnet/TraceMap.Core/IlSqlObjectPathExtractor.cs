@@ -42,7 +42,7 @@ internal static class IlSqlObjectPathExtractor
         [$"memberref|type:{CoreScope}type(namespace:6:System|names:6:Object)|member:5:.ctor|arity:0|call:default|hasThis:true|explicitThis:false|()->{Void}"] = "object-base"
     };
 
-    internal sealed record Body(IlBodyObservation Observation, IlInputOutcome Input);
+    internal sealed record Body(IlBodyObservation Observation, IlInputOutcome Input, string? MemberReferenceAlias = null);
     internal sealed record Site(string BodyIdentity, string BinarySha256, long Offset, int Frame, string Action);
     internal sealed record ParameterShape(string ObjectIdentity, IlValueOrigin Name, IlValueOrigin SqlDbType, IlValueOrigin Size);
     internal sealed record Path(string RootBodyIdentity, string ExecutionIdentity, IlValueOrigin CommandText,

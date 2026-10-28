@@ -1,5 +1,41 @@
 # Public compiled-wrapper SQL evidence
 
+## Root-sliced retention — compile-only, 2026-10-28
+
+IL extractor 0.2.6 / policy `explicit-il-body-evidence.v10` adds repeatable
+`--il-lifecycle-root <binary-sha256>:<MethodDef-token>` (max 16; requires explicit
+`--il-body-evidence`). The root must uniquely match an admitted raw body. Default
+corpus mode is retained. Selected mode defers corpus object metadata and skips
+corpus-wide object-path/lifecycle interpretation; it reports partial coverage.
+`ManagedIlBodyDeclared.objectBodyScope: deferred-to-root-slice` is not a selected
+metadata failure. Selected lifecycle candidates/gaps carry `lifecycleSlice`, schema
+`il-sql-lifecycle-slice/1`, with generator/bounded-input hashes and member receipts.
+
+Each sequential root lease retains only the root, its inspected parameterless
+constructor when needed, and exact resolved call closure. Bounds are 128 bodies/root,
+4,096 admitted raw bodies indexed, 4,096 reference lookups/root, 64 MiB verified
+compiled input bytes/root, and at most 1 MiB characters per reader/root. The decoder
+has one aggregate configured work budget across selections, separate from the
+existing interpreter budget. The lease is disposed before advancing to another root.
+The previous default corpus quota remains shared across inputs per reader.
+
+Selected bytes are SHA-verified again. Both independent decoders must agree and
+match the admitted raw body. Cecil metadata lookup locates candidate definitions;
+it cannot establish a positive body without SRM agreement. Exact framed assembly
+and member identities select cross-assembly candidates. Missing, changed, ambiguous,
+over-limit or unagreed bodies remain explicit gaps. Existing instruction/field,
+interpreter depth, heap, collection and execution-identity refusal gates remain.
+Read/entry JSON contracts and compare routes are unchanged; this is an additive
+opt-in analysis scope and receipt, not a new result-schema acceptance route.
+
+The C#/VB CLI test definitions now cover selected roots, excluded unrelated noise,
+retained member receipts and existing positive/negative entry controls. Selector
+format, MethodDef identity, root-count and explicit-admission controls are authored.
+Tests/native scans were not run at Joe's request. Compilation does not establish
+private-input success or close the ArrayList blocker. The earlier scale fixture
+was not a complete reproduction of actual-cost corpus starvation; no successful
+large-corpus behavioral replay is claimed here.
+
 ## Metadata handoff repair — compile-only, 2026-10-28
 
 IL extractor 0.2.5 / policy `explicit-il-body-evidence.v9` separates generic
