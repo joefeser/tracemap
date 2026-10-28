@@ -38,7 +38,7 @@
 - [x] Add isolated compile-only C#/VB lifecycle projects with two executions, property state, auxiliary schema, helper overlay, projection, refresh and catch paths.
 - [x] Establish actual CLI failing baseline for both languages without altering earlier matrices.
 - [ ] Implement bounded multi-consumer lifecycle evidence with guards, schema/value-origin separation, loops/helper effects and failure alternatives.
-- [ ] Add distinct compiled-lineage binding admission and SQL comparison CLI/report route; no source-reader substitution.
+- [x] Add distinct compiled-lineage binding admission and SQL comparison CLI/report route; no source-reader substitution.
 - [ ] Exercise independently authored schemas and exact execution bindings through the CLI; match all required successful cases and negative controls.
 - [ ] Pin C#/VB parity, deterministic replay, provenance tampering and retained denominators.
 - [ ] Run frozen full/regression gates; publish validated branch and consolidated work-machine prompt only after end-to-end acceptance passes.

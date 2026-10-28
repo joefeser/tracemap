@@ -70,6 +70,14 @@ Namespace PublicSql.VisualBasic
         Public Function Reload() As Object
             Load(True) : Load(False) : Return State.Tables(0).Rows(0)("Score")
         End Function
+        Public Function DifferentRefresh() As Object
+            Load(False) : State.Tables(0).Clear()
+            State.Tables(0).Merge(Wrapper.Direct("public.second").Tables(0))
+            Return State.Tables(0).Rows(0)("Score")
+        End Function
+        Public Function ClearedRead() As Object
+            Load(False) : State.Tables(0).Clear() : Return State.Tables(0).Rows(0)("Name")
+        End Function
         Public Function Escaped() As Object
             Load(False) : GC.KeepAlive(State) : Return State.Tables(0).Rows(0)("Name")
         End Function

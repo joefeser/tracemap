@@ -266,3 +266,31 @@ This is not final acceptance. The complete independent end-to-end CLI scan matri
 failure-boundary report presentation, additional soundness/negative controls,
 retained smoke denominators and frozen full suite remain required. The goal stays
 active; no PR, private-app acceptance or work-machine retry is claimed.
+
+## CLI matrix and value-origin correction — 2026-10-28
+
+The integration test now enters through the actual scan command, reads persisted
+facts, and enters the comparison command with independently authored schemas and
+execution/column expectations. Each language exercises 12 selected alternatives:
+11 schema matches and one mismatch. Two current-value origins remain explicitly
+unknown (absent column and Clear followed by a different result schema), while the
+representative successful SQL and application-overlay origins remain linked.
+Four unsupported controls withhold positive evidence, including reading after a
+definite Clear. Repeated reports remain deterministic.
+
+Failure boundaries are now carried into the public JSON and Markdown report, with
+before/normal-completion table snapshots and partial/earlier-row flags. They do not
+claim executed catch continuations, rollback or observed post-catch state.
+
+Soundness review found that retained schema ancestry could falsely attribute an
+old column to the latest merged SQL execution. The comparator now independently
+checks the originating column against that execution's shape, emits unknown when
+unproven, and retains its source-column hash separately from the destination hash.
+Both C# and VB fixtures pin this case; definite cleared-table reads are refused.
+
+Development gate: 24 lifecycle tests passed, no failures/skips, Debug -warnaserror.
+The subsequent lifecycle/object-path checkpoint passed 32 tests, zero failures/skips.
+An earlier matrix run failed due to an ambiguous same-name fixture selector; the
+selector now includes the exact end-to-end input role, without relaxing outcomes.
+Final soundness review, frozen full/regression gates, retained smoke denominators,
+publication and consolidated prompt remain pending. The goal remains active.

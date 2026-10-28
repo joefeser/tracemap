@@ -19,8 +19,14 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
         var fixture = Path.Combine(root.FullName, "samples", "sql-compiled-wrapper-evidence", language);
         var inputs = new[] { "end-to-end", "wrapper" }.Select(role => Path.Combine(fixture, role, "bin", config,
             "net48", $"PublicSql.{language}.{role}.dll")).ToArray();
-        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(fixture, "end-to-end"),
-            IlBodyEvidenceExtractorShared.TempOutput(), CompiledInputPaths: inputs, IlBodyEvidence: true));
+        var scanDirectory = IlBodyEvidenceExtractorShared.TempOutput();
+        using var scanOutput = new StringWriter();
+        using var scanError = new StringWriter();
+        Assert.True(await TraceMapCommand.RunAsync(["scan", "--repo", Path.Combine(fixture, "end-to-end"),
+            "--out", scanDirectory, "--il-body-evidence", "--compiled-input", inputs[0], "--compiled-input", inputs[1]],
+            scanOutput, scanError) == 0, scanError.ToString());
+        var scan = (Manifest: SqlServerSchemaEvidence.Read<ScanManifest>(File.ReadAllText(Path.Combine(scanDirectory, "scan-manifest.json"))),
+            Facts: File.ReadLines(Path.Combine(scanDirectory, "facts.ndjson")).Select(SqlServerSchemaEvidence.Read<CodeFact>).ToArray());
         var candidates = scan.Facts.Where(f => f.FactType == FactTypes.ManagedIlSqlLifecycleCandidate).ToArray();
         Assert.NotEmpty(candidates);
         var scoreBody = Assert.Single(Bodies(language), b => b.Observation.ObjectBody?.Name == "Score").Observation.BodyIdentity;
@@ -100,6 +106,86 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
         Assert.Equal(File.ReadAllText(Path.Combine(directory, "report1", "compiled-lifecycle-comparison.json")),
             File.ReadAllText(Path.Combine(directory, "report2", "compiled-lifecycle-comparison.json")));
         Assert.Contains("Coverage: partial", File.ReadAllText(Path.Combine(directory, "report1", "report.md")), StringComparison.Ordinal);
+
+        // Independently authored scenario/column/execution matrix. Extraction supplies locations,
+        // never the expected command identity, column spelling, result or execution order.
+        (string Method, string Column, string Status, string ValueExecution, string[] Commands, int Guards)[] matrix =
+        {
+            ("First", "Name", "match", "execution:0", new[] { "first", "second" }, 2),
+            ("Second", "Count", "match", "execution:1", new[] { "first", "second" }, 2),
+            ("Typed", "Name", "match", "execution:0", new[] { "first", "second" }, 2),
+            ("Score", "Score", "match", "execution:0", new[] { "first", "second" }, 2),
+            ("Missing", "Absent", "mismatch", "execution:0", new[] { "first", "second" }, 1),
+            ("Refresh", "Score", "match", "execution:2", new[] { "first", "second", "first" }, 1),
+            ("Reload", "Score", "match", "execution:2", new[] { "first", "second", "first", "second" }, 1),
+            ("DifferentRefresh", "Score", "match", "execution:2", new[] { "first", "second", "second" }, 1)
+        };
+        var allBindings = new List<SqlServerLifecycleBinding>();
+        var expected = new Dictionary<string, (string Method, string Status, string Execution)>();
+        var bodyInputs = Bodies(language);
+        foreach (var item in matrix)
+        {
+            var methodBody = Assert.Single(bodyInputs, b => b.Input.Role == "end-to-end" && b.Observation.ObjectBody?.Name == item.Method).Observation.BodyIdentity;
+            var selected = candidates.Where(c => c.TargetSymbol == methodBody).ToArray();
+            Assert.Equal(item.Guards, selected.Length);
+            foreach (var fact in selected)
+            {
+                var state = SqlServerSchemaEvidence.Read<IlSqlLifecycleExtractor.Result>(fact.Properties["lifecycle"]);
+                var read = state.Returned!;
+                Assert.Equal(item.Commands.Length, state.Executions.Count);
+                allBindings.Add(new(fact.FactId, SqlServerCompiledLifecycleEvidence.EvidenceDigest(fact),
+                    read.Table, item.Column, read.Site.Body, read.Site.Binary, read.Site.Offset, read.Site.Invocation,
+                    item.Commands.Select((command, index) => new SqlServerLifecycleExecutionBinding($"execution:{index}",
+                        "public." + command, command == "first" ? firstIdentity : secondIdentity)).ToArray()));
+                expected.Add(fact.FactId, (item.Method, item.Status, item.ValueExecution));
+            }
+        }
+        Assert.Equal(12, allBindings.Count);
+        foreach (var unsupported in new[] { "Escaped", "CrossRow", "LoopCarried", "ClearedRead" })
+        {
+            var methodBody = Assert.Single(bodyInputs, b => b.Input.Role == "end-to-end" && b.Observation.ObjectBody?.Name == unsupported).Observation.BodyIdentity;
+            Assert.DoesNotContain(candidates, c => c.TargetSymbol == methodBody);
+            Assert.Contains(scan.Facts, f => f.TargetSymbol == methodBody && f.FactType == FactTypes.AnalysisGap
+                && f.RuleId == RuleIds.DotNetIlSqlLifecycle);
+        }
+        File.WriteAllText(Path.Combine(directory, "bindings.json"), SqlServerSchemaEvidence.Json(bindings with { Candidates = allBindings }));
+        Assert.True(await TraceMapCommand.RunAsync(Command("matrix"), stdout, stderr) == 0, stderr.ToString());
+        var actual = SqlServerSchemaEvidence.Read<SqlServerLifecycleReport>(File.ReadAllText(Path.Combine(directory, "matrix", "compiled-lifecycle-comparison.json")));
+        Assert.Equal(12, actual.Comparisons.Count);
+        foreach (var row in actual.Comparisons)
+        {
+            var e = expected[row.FactId];
+            Assert.Equal(e.Status, row.Status);
+            var application = e.Method == "Score" && row.Guard == "argument:0=true";
+            var unknownValue = e.Method is "Missing" or "DifferentRefresh";
+            Assert.Equal(unknownValue ? "unknown" : application ? "application" : "sql", row.ValueOrigin);
+            Assert.Equal(application || unknownValue ? null : e.Execution, row.ValueExecution);
+            Assert.Equal(row.ColumnHash, row.ValueColumnHash);
+        }
+        SqlServerLifecycleComparison Row(string method, string guard = "unconditional") => Assert.Single(actual.Comparisons,
+            r => expected[r.FactId].Method == method && r.Guard == guard);
+        var first = Row("First", "argument:0=false");
+        Assert.NotEqual(first.Table, Row("Second", "argument:0=false").Table);
+        Assert.Equal(first.Table, Row("Refresh").Table);
+        Assert.NotEqual(first.Table, Row("Reload").Table);
+        Assert.Equal(new[] { "execution:0", "execution:2" }, Row("Refresh").SchemaExecutions);
+        Assert.Equal("execution:2", Assert.Single(Row("Reload").SchemaExecutions));
+        Assert.NotEqual(allBindings.Single(b => b.FactId == first.FactId).ReadBody,
+            allBindings.Single(b => b.FactId == Row("Typed", "argument:0=false").FactId).ReadBody);
+        var overlay = Row("Score", "argument:0=true");
+        var failures = actual.PotentialFailures.Where(f => f.FactId == overlay.FactId).ToArray();
+        var merges = failures.Where(f => f.Operation == "table-merge").ToArray();
+        Assert.Equal(2, merges.Length);
+        Assert.Equal("execution:0", Assert.Single(merges[1].Before, t => t.Allocation == overlay.Table).Execution);
+        var second = Row("Second", "argument:0=true");
+        Assert.Null(Assert.Single(merges[1].Before, t => t.Allocation == second.Table).Execution);
+        var write = Assert.Single(failures, f => f.Operation == "row-write");
+        Assert.True(write.MayPartiallyMutate); Assert.True(write.MayHaveCompletedEarlierRows);
+        Assert.Empty(Assert.Single(write.Before, t => t.Allocation == overlay.Table).ApplicationWrittenColumns);
+        Assert.NotEmpty(Assert.Single(write.NormalCompletion, t => t.Allocation == overlay.Table).ApplicationWrittenColumns);
+        Assert.True(Assert.Single(failures, f => f.Operation == "list-add").MayHaveCompletedEarlierRows);
+        Assert.All(failures, f => Assert.Contains("catch-continuation-not-executed", f.Limitation, StringComparison.Ordinal));
+        output.WriteLine($"CLI matrix {language}: 12 selected alternatives, 11 schema matches/1 mismatch; 2 value origins unknown; 4 unsupported controls withheld; explicit partial failure boundaries.");
     }
 
     [Theory]
@@ -206,6 +292,8 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
     [InlineData("vb", "LoopCarried")]
     [InlineData("csharp", "Escaped")]
     [InlineData("vb", "Escaped")]
+    [InlineData("csharp", "ClearedRead")]
+    [InlineData("vb", "ClearedRead")]
     public void Unproven_loop_effects_and_escapes_discard_positive_claims(string language, string method)
     {
         var bodies = Bodies(language);

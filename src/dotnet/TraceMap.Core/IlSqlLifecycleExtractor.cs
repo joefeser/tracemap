@@ -4,8 +4,7 @@ using Body = TraceMap.Core.IlSqlObjectPathExtractor.Body;
 namespace TraceMap.Core;
 
 /// <summary>
-/// Internal lifecycle prototype. Not published as facts until the complete
-/// control-flow, failure and comparison contracts pass their acceptance matrix.
+/// Bounded lifecycle interpreter, emitted through a separate candidate contract.
 /// Values describe successful-path symbolic origins, never actual database rows.
 /// </summary>
 internal static class IlSqlLifecycleExtractor
@@ -432,6 +431,7 @@ internal static class IlSqlLifecycleExtractor
                 case "row":
                     if (Number(args[0]) != 0) throw new Refusal("lifecycle-row-index");
                     var rowSource = Get(receiver, "rows").Parent;
+                    if (Get(rowSource, "table").Empty) throw new Refusal("lifecycle-read-cleared-table");
                     if (loopEnumerator.Kind != "unknown" && rowSource == Get(loopEnumerator, "enumerator").Parent)
                         throw new Refusal("lifecycle-cross-row-read");
                     return View("row", rowSource);

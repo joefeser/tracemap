@@ -53,6 +53,13 @@ namespace PublicSql.CSharp
             return State.Tables[0].Rows[0]["Score"];
         }
         public object Reload() { Load(true); Load(false); return State.Tables[0].Rows[0]["Score"]; }
+        public object DifferentRefresh()
+        {
+            Load(false); State.Tables[0].Clear();
+            State.Tables[0].Merge(Wrapper.Direct("public.second").Tables[0]);
+            return State.Tables[0].Rows[0]["Score"];
+        }
+        public object ClearedRead() { Load(false); State.Tables[0].Clear(); return State.Tables[0].Rows[0]["Name"]; }
         public object Escaped() { Load(false); GC.KeepAlive(State); return State.Tables[0].Rows[0]["Name"]; }
         public object CrossRow()
         {

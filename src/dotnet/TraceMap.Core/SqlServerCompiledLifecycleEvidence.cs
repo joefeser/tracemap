@@ -11,11 +11,19 @@ public sealed record SqlServerLifecycleBindings(string Version, string Repo, str
     IReadOnlyList<SqlServerLifecycleBinding> Candidates);
 public sealed record SqlServerLifecycleComparison(string FactId, string Guard, string Table, string ColumnHash,
     string Status, IReadOnlyList<string> Reasons, IReadOnlyList<string> SchemaExecutions,
-    string ValueOrigin, string? ValueExecution, string ValueTable, bool ApplicationAssignment,
+    string ValueOrigin, string? ValueExecution, string ValueTable, string ValueColumnHash, bool ApplicationAssignment,
     string SourceRule, string SourceTier);
+public sealed record SqlServerLifecycleSite(string Body, string Binary, long Offset, int Invocation);
+public sealed record SqlServerLifecycleTableState(string Allocation, bool RowsCleared, string? Execution,
+    IReadOnlyList<string> SchemaExecutions, IReadOnlyList<string> ApplicationWrittenColumns);
+public sealed record SqlServerLifecycleFailure(string FactId, string Guard, string Operation,
+    SqlServerLifecycleSite Site, SqlServerLifecycleSite CatchHandler,
+    IReadOnlyList<SqlServerLifecycleTableState> Before, IReadOnlyList<SqlServerLifecycleTableState> NormalCompletion,
+    bool MayPartiallyMutate, bool MayHaveCompletedEarlierRows, string Limitation);
 public sealed record SqlServerLifecycleReport(string Version, string GeneratorSha256, string BoundedInputSha256,
     string SchemaGeneratorSha256, string SchemaInputSha256, string Repo, string Revision,
-    string Coverage, IReadOnlyList<SqlServerLifecycleComparison> Comparisons, IReadOnlyList<string> Limitations)
+    string Coverage, IReadOnlyList<SqlServerLifecycleComparison> Comparisons,
+    IReadOnlyList<SqlServerLifecycleFailure> PotentialFailures, IReadOnlyList<string> Limitations)
 {
     public string RuleId => SqlServerCompiledLifecycleEvidence.RuleId;
     public string EvidenceTier => EvidenceTiers.Tier3SyntaxOrTextual;
@@ -56,6 +64,7 @@ public static class SqlServerCompiledLifecycleEvidence
         var byId = facts.ToDictionary(f => f.FactId, StringComparer.Ordinal);
         var selected = new List<CodeFact>();
         var rows = new List<SqlServerLifecycleComparison>();
+        var failures = new List<SqlServerLifecycleFailure>();
         var unique = new HashSet<string>(StringComparer.Ordinal);
         foreach (var binding in bindings.Candidates)
         {
@@ -111,15 +120,36 @@ public static class SqlServerCompiledLifecycleEvidence
             var statuses = read.SchemaExecutions.Select(id => Match(shapes[id], binding.ColumnName)).ToArray();
             var status = statuses.Contains("match", StringComparer.Ordinal) ? "match"
                 : statuses.All(s => s == "mismatch") ? "mismatch" : "unknown";
+            // Retained schema ancestry does not establish the current execution's value.
+            // In particular Clear + Merge may retain a column absent from the new result.
+            var valueProven = read.Value.Kind == "application" || shapes[read.Value.Execution!].Columns
+                .Count(c => Literal(c.Name) == read.Value.ColumnHash) == 1;
+            var reasons = new List<string> { status == "match" ? "column-present-in-schema-ancestry"
+                : status == "mismatch" ? "column-absent-from-complete-schema-ancestry" : "schema-identity-incomplete" };
+            if (!valueProven) reasons.Add("current-execution-column-origin-unproven");
             rows.Add(new(fact.FactId, Property(fact, "guard"), read.Table, read.ColumnHash, status,
-                [status == "match" ? "column-present-in-schema-ancestry" : status == "mismatch" ? "column-absent-from-complete-schema-ancestry" : "schema-identity-incomplete"],
-                read.SchemaExecutions, read.Value.Kind, read.Value.Execution, read.Value.Table,
+                reasons,
+                read.SchemaExecutions, valueProven ? read.Value.Kind : "unknown", valueProven ? read.Value.Execution : null,
+                read.Value.Table, read.Value.ColumnHash,
                 read.Value.Assignment is not null, fact.RuleId, fact.EvidenceTier));
+            Require(state.Failures is { Count: <= 256 }, "failure-limit");
+            static SqlServerLifecycleSite Site(IlSqlLifecycleExtractor.Site site) => new(site.Body, site.Binary, site.Offset, site.Invocation);
+            static SqlServerLifecycleTableState Table(IlSqlLifecycleExtractor.TableState table) => new(table.Allocation,
+                table.RowsCleared, table.Execution, table.SchemaExecutions, table.Writes.Keys.Order(StringComparer.Ordinal).ToArray());
+            foreach (var failure in state.Failures)
+            {
+                Require(state.Bodies.Any(s => s.Body == failure.Site.Body && s.Binary == failure.Site.Binary && s.Invocation == failure.Site.Invocation)
+                    && state.Bodies.Any(s => s.Body == failure.CatchHandler.Body && s.Binary == failure.CatchHandler.Binary
+                        && s.Invocation == failure.CatchHandler.Invocation), "failure-site-conflict");
+                failures.Add(new(fact.FactId, Property(fact, "guard"), failure.Operation, Site(failure.Site), Site(failure.CatchHandler),
+                    failure.Before.Select(Table).ToArray(), failure.NormalCompletion.Select(Table).ToArray(),
+                    failure.MayPartiallyMutate, failure.MayHaveCompletedEarlierRows, failure.Limitation));
+            }
             selected.Add(fact);
         }
         return new("sqlserver-compiled-lifecycle-comparison/1", SqlServerSchemaEvidence.GeneratorSha256,
             SqlServerSchemaEvidence.Digest(new { schema, bindings, candidates = selected.Select(Projection).ToArray() }),
-            schema.GeneratorSha256, schema.BoundedInputSha256, repo, revision, "partial", rows,
+            schema.GeneratorSha256, schema.BoundedInputSha256, repo, revision, "partial", rows, failures,
             [IlSqlLifecycleExtractor.Limitation, "Synthetic first-result schema identity only; no type, value, row, runtime or private-application proof. Bound selections are not exhaustive coverage."]);
     }
 
