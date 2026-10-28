@@ -7,26 +7,53 @@ the new native evidence.
 
 ## Inputs and revision
 
-Resolve these locally from existing notes and checkouts. Ask only for an indispensable
-input that cannot be found locally; otherwise proceed and report missing legs once.
+Discover these inputs locally. Joe does not need to fill in a worksheet or know a
+private acceptance folder. Use the current work-application context and existing
+checkouts/build outputs; ask only when the application checkout cannot be identified
+or multiple plausible target flows need a human choice.
 
 ```text
-EXPECTED_TOOL_COMMIT = <exact public SHA supplied with this prompt>
+VALIDATED_IMPLEMENTATION_COMMIT = b4526fcec6b7ab5e814a1f55051e4229bff9139c
 TOOL_BRANCH = codex/sql-compiled-wrapper-evidence
-PRIVATE_SOURCE_ROOT = <existing application source checkout>
-PRIVATE_ACCEPTANCE_ROOT = <existing retained notes, indexes and receipts>
-COMPILED_INPUTS = <exact caller and wrapper DLLs needed by the selected root>
-ROOT_AND_SELECTED_READ = <actual class/method/property and selected column-read site>
-OWNER_DECLARATIONS = <optional truthful owner-declared first-result JSON, private/local>
-NEW_OUTPUT_ROOT = <new private directory outside source and accepted baseline outputs>
+EXPECTED_TOOL_COMMIT = AUTO: exact fetched branch SHA, verified and recorded below
+PRIVATE_SOURCE_ROOT = AUTO: locate the work application checkout
+PRIVATE_ACCEPTANCE_ROOT = NONE: old acceptance notes/receipts are optional
+COMPILED_INPUTS = AUTO: discover matching caller and SQL-wrapper DLLs
+ROOT_AND_SELECTED_READ = AUTO: locate the actual ArrayList custom-parameter flow
+OWNER_DECLARATIONS = NONE unless an honest independent owner declaration is available
+NEW_OUTPUT_ROOT = AUTO: create a new private local directory outside source/baselines
 ```
 
 Read AGENTS.md, the current continuation section of
 `.kiro/specs/sql-compiled-wrapper-evidence/implementation-state.md`,
 `docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md`, and lifecycle rule limitations.
-Fetch `origin/codex/sql-compiled-wrapper-evidence`, verify the exact supplied SHA,
-and use a clean tool checkout at that revision without resetting any dirty checkout.
-Record the tool SHA separately from the private application's revision.
+Fetch `origin/codex/sql-compiled-wrapper-evidence`. If the handoff supplied an exact
+prompt/tool SHA, verify and use it. Otherwise resolve the fetched branch SHA once
+and record it as EXPECTED_TOOL_COMMIT. Verify that it descends from the validated
+implementation commit above and that subsequent changes are documentation only.
+If implementation, tests, fixtures or rules changed, inspect their validation before
+claiming the recorded gate applies. Use a clean tool checkout at the verified SHA
+without resetting any dirty checkout. Record this public tool SHA separately from
+the private application's revision.
+
+Discover matching caller/wrapper DLLs in existing local build or publish outputs.
+Use project references, assembly identities, inspected bodies and any available
+source/binary correspondence evidence; similarly named DLLs are insufficient.
+Do not rebuild the application or silently accept stale/mismatched binaries.
+If DLLs are unavailable, report exactly which assemblies/projects are missing and
+what build would be required. Preserve uncertainty about deployment correspondence.
+
+Locate the target flow by inspecting custom parameter objects added to ArrayList,
+passed to a compiled wrapper that constructs/attaches actual SqlParameter instances
+and fills a DataSet. Identify the real selected read and its eligible root. If
+several applications or flows fit, return a short private candidate list and ask
+one focused selection question. Do not make Joe supply identities the agent can
+establish from local evidence.
+
+No acceptance folder or owner declaration is required for the native lineage test.
+If no old notes, receipts or baselines exist, mark them absent and continue with
+available source/compiled inputs. Create a fresh private output directory yourself.
+Never substitute public synthetic fixtures for a real-input acceptance claim.
 
 The implementation-tree validation was 87 focused/regression passes, 5,527 full
 Debug passes with zero failures and three existing skips, five Python guards, and
@@ -51,9 +78,10 @@ privacy-projected inputs. Do not store source snippets by default.
 
 ## 1. Establish the actual input and build state
 
-Inspect retained notes and evidence first. Preserve accepted baseline hashes before
-and after testing. Record exact application repo/revision/dirty state, caller and
-wrapper assembly identities/MVIDs/hashes, missing bodies, build status and available
+Inspect retained notes and evidence first if available; their absence is not a
+blocker. Preserve any existing accepted baseline hashes before and after testing.
+Record exact application repo/revision/dirty state, caller and wrapper assembly
+identities/MVIDs/hashes, missing bodies, build status and available
 source-to-binary or deployment correspondence. Treat these as separate claims.
 A failed or partial application build must stay labeled failed or partial.
 Do not reuse facts from an older generator as proof of the new feature.
