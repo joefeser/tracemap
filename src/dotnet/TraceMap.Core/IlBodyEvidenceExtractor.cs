@@ -911,13 +911,14 @@ internal static class IlBodyEvidenceExtractor
             retainDiagnosticInstructions ? instructions : null,
             ExtractCallValues(instructions, calls, body.MaxStackSize, handlers, valueBudget),
             instructions.Count <= 256 && method.DeclaringType.Fields.Count <= 64
-                && objectBudget.TryConsume(instructions.Sum(item => (long)item.Length) + (long)method.DeclaringType.Fields.Count * limits.MaxTextLength)
+                && objectBudget.TryConsume(instructions.Sum(item => (long)item.Length) + handlers.Sum(item => (long)item.Length)
+                    + (long)method.DeclaringType.Fields.Count * limits.MaxTextLength)
                 ? new IlObjectBody(instructions, $"memberref|type:{ScopedNamedType(method.DeclaringType)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(method.Name)}|{signature}",
                     ScopedNamedType(method.DeclaringType), method.Name, method.Parameters.Count, method.HasThis,
                     method.ReturnType.FullName != "System.Void", method.IsVirtual,
                     method.HasGenericParameters || method.DeclaringType.HasGenericParameters,
                     method.DeclaringType.Fields.Where(field => field.IsPrivate && !field.IsStatic)
-                        .Select(field => CecilFieldIdentity(field)["fielddef|".Length..]).Order(StringComparer.Ordinal).ToArray()) : null);
+                        .Select(field => CecilFieldIdentity(field)["fielddef|".Length..]).Order(StringComparer.Ordinal).ToArray(), handlers) : null);
     }
 
     // Cecil and Reflection.Emit may use different display names for an opcode.
@@ -1373,7 +1374,8 @@ internal static class IlBodyEvidenceExtractor
             retainDiagnosticInstructions ? instructions : null,
             ExtractCallValues(instructions, calls, body.MaxStack, handlers, valueBudget),
             instructions.Count <= 256 && reader.GetTypeDefinition(declaringTypeHandle).GetFields().Count <= 64
-                && objectBudget.TryConsume(instructions.Sum(item => (long)item.Length) + (long)reader.GetTypeDefinition(declaringTypeHandle).GetFields().Count * limits.MaxTextLength)
+                && objectBudget.TryConsume(instructions.Sum(item => (long)item.Length) + handlers.Sum(item => (long)item.Length)
+                    + (long)reader.GetTypeDefinition(declaringTypeHandle).GetFields().Count * limits.MaxTextLength)
                 ? new IlObjectBody(instructions, $"memberref|type:{provider.GetTypeFromEntityHandle(declaringTypeHandle)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(name)}|{signature}",
                     provider.GetTypeFromEntityHandle(declaringTypeHandle), name, decoded.ParameterTypes.Length,
                     decoded.Header.IsInstance, decoded.ReturnType != "type(namespace:6:System|names:4:Void)",
@@ -1385,7 +1387,7 @@ internal static class IlBodyEvidenceExtractor
                         return (attributes & System.Reflection.FieldAttributes.FieldAccessMask) == System.Reflection.FieldAttributes.Private
                             && (attributes & System.Reflection.FieldAttributes.Static) == 0;
                     }).Select(fieldHandle => SrmFieldIdentity(reader, provider, fieldHandle)["fielddef|".Length..])
-                        .Order(StringComparer.Ordinal).ToArray()) : null);
+                        .Order(StringComparer.Ordinal).ToArray(), handlers) : null);
     }
 
     private static (string Kind, string Token, string Identity) SrmBoundedTarget(string kind, string token, string identity, IlBodyLimits limits)

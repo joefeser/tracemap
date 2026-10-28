@@ -247,6 +247,28 @@ public sealed class IlBodyEvidenceExtractorTestsDecoding
     }
 
     [Fact]
+    public void Object_interpretation_retains_only_dual_reader_agreed_exception_boundaries()
+    {
+        var fixture = Fixture("csharp", "CompiledEvidence.CSharp");
+        var bytes = File.ReadAllBytes(fixture.Assembly);
+        var left = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, new(), new(200_000), CancellationToken.None);
+        var right = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, new(), new(200_000), CancellationToken.None);
+        Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(left, right));
+        var body = Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows(left.Bodies, right.Bodies),
+            item => item.ObjectBody?.Name == "ExceptionRegionShapes");
+        var regions = Assert.IsAssignableFrom<IReadOnlyList<string>>(body.ObjectBody!.ExceptionRegions);
+        Assert.Equal(body.ExceptionRegionCount, regions.Count);
+        Assert.NotEmpty(regions);
+        Assert.All(regions, region =>
+        {
+            Assert.Contains(":try:", region, StringComparison.Ordinal);
+            Assert.Contains(":handler:", region, StringComparison.Ordinal);
+        });
+        var changed = body with { ObjectBody = body.ObjectBody with { ExceptionRegions = [] } };
+        Assert.Null(Assert.Single(IlBodyEvidenceExtractor.AgreeValueFlows([body], [changed])).ObjectBody);
+    }
+
+    [Fact]
     public void Multi_target_switch_opcode_produces_complete_evidence_without_disagreement()
     {
         var fixture = Fixture("csharp", "CompiledEvidence.CSharp");

@@ -191,3 +191,25 @@ summary and exception alternatives. Then add dedicated binding validation and
 comparison, with independent shape declarations. No provenance downgrade or manual
 lineage annotation may substitute for extracted evidence. Existing smoke projects
 and expected denominators remain unchanged. No PR or private retry yet.
+
+### Lifecycle state implementation checkpoint
+
+Added an internal schema/value lineage state model with execution-specific origins,
+guard-correlated alternatives, empty-destination Merge, Clear/re-Merge, explicit
+unknown helper effects, bounded histories and partial-operation failure snapshots.
+Writes preserve schema ancestry and cannot manufacture a missing SQL column.
+This is not yet wired into extraction or a comparison route, and does not satisfy
+the end-to-end matrix.
+
+Both IL readers now retain their canonical exception-region boundaries in the
+bounded internal object-body metadata. The retained text is charged to the existing
+object budget and covered by dual-reader equality; disagreement withholds the
+object interpretation. Existing serialized body hashes and contracts are unchanged.
+This makes catch/partial-failure interpretation possible without guessing handler
+boundaries from an exception count.
+
+Development gate: 25 focused lineage, object-path regression and exception-boundary
+tests passed with Debug `-warnaserror`, no failures or skips. The earlier eight
+lineage-only tests also passed. Full frozen and CLI end-to-end gates remain pending;
+the baseline lifecycle still has no positive comparison evidence. No goal completion,
+public acceptance, PR or work-machine retry is claimed.
