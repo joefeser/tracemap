@@ -5,6 +5,45 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
+## Current opaque root-scalar initializer boundary
+
+Use IL extractor **0.2.9**, policy `explicit-il-body-evidence.v13`. For the already
+identified external scalar initializer blocker, add `--il-opaque-root-initializers`
+to the same selected-root scan command. This flag requires `--il-lifecycle-root`;
+the default remains strict. Do not rebuild or edit the private application.
+
+This is an explicit conditional analysis boundary, not an assertion that unknown
+configuration/decryption calls are pure. Only the fresh root's parameterless
+constructor, private scalar terminal stores, and linear temporary-only chains fit.
+The root or other tracked references cannot be arguments/receivers across the
+boundary. Unknown calls may throw and have unmodeled external effects. Candidate
+claims explicitly assume normal return and noninterference with unpassed tracked
+heap state; they do not establish constructor completion, purity or lack of aliases.
+
+Limits are 8 fields/root, 32 instructions/chain, 8 calls/chain, 4 arguments/call and 16
+chain stack values, under existing aggregate work/body/heap caps. No branches,
+handlers, local/intermediate stores, void/byref/generic calls, non-scalar terminal
+fields or later writes to opaque fields are admitted. Available compiled callees
+are inspected normally, not replaced with opaque assumptions. Exact declared
+String/Boolean/integer/floating/Char terminal types must match the final return.
+Opaque values remain unknown; using one for command/name/type/size/control refuses.
+They may pass as scalar data to inspected wrappers and parameter Value assignments.
+
+Inspect `ManagedIlSqlLifecycleEntryCandidate` under the separate schema
+`il-sql-lifecycle-opaque-entry/1`. It is not accepted by the existing read/SQL
+comparison route. JSON `lifecycle.opaqueInitializers` records store sites, hashed
+fields, declared types and call-site/signature hashes, including `mayThrow: true`
+and `effects: unmodeled`. `claim` records the assumptions. A parameter value origin
+can be `opaque-field:<field hash>`; do not relabel it as a root argument or a proven
+configuration/decrypted value. Generator/bounded-input provenance includes the flag.
+Later gaps retain completed initializer receipts but withhold positive lineage.
+
+No tests were run for this publication. Compile success does not prove real-input
+success. Return only the short sanitized text matrix: entry schema/count, whether
+the constructor boundary was used, first subsequent gap, and public framework
+identity inventory. Keep code, samples, private identities, hashes, field names and
+body receipts on the work machine. Joe need not return sample source or photos.
+
 ## Current closed legacy core profile
 
 The current head admits two explicit signed neutral mscorlib profiles (2.0.0.0 and
@@ -44,8 +83,8 @@ A throwing/omitted wrapper is an illustrative stub, not a complete replay.
 
 ## Current root-sliced metadata repair
 
-Use the newly fetched public head, IL extractor **0.2.8**, policy
-`explicit-il-body-evidence.v12`. This iteration is compile-only: Joe explicitly
+Use the newly fetched public head, IL extractor **0.2.9**, policy
+`explicit-il-body-evidence.v13`. This iteration is compile-only: Joe explicitly
 requested no tests. Historical pass totals do not validate this patch.
 
 The previous actual-text accounting repair could still exhaust the shared corpus
@@ -89,7 +128,7 @@ Raw admission and `provenanceState: unbound` do not establish interpreted lineag
 
 Run once with the selected-root flag. If there is still no entry candidate, use the
 failure-only Claude request below with that same output. Return the exact first
-failing slice/body/opcode and an independently authored complete public sample.
+failing slice/body/opcode and the short abstract shape/status of any independently authored local sample; keep its source on the work machine.
 An illustrative stub with omitted methods or a throwing wrapper is not a replay.
 Do not start another whole-app scan just to repeat the diagnosis.
 
@@ -241,7 +280,7 @@ concrete failure. Use the built CLI and repeat `--compiled-input` for each neces
 assembly; do not omit the wrapper or substitute source-reader evidence.
 
 ```text
-dotnet <local-built-tracemap.dll> scan --repo <PRIVATE_SOURCE_ROOT> --out <new-private-scan-directory> --il-body-evidence --compiled-input <caller.dll> --compiled-input <wrapper.dll> --il-lifecycle-root <privately-derived-sha256>:<privately-derived-MethodDef-token>
+dotnet <local-built-tracemap.dll> scan --repo <PRIVATE_SOURCE_ROOT> --out <new-private-scan-directory> --il-body-evidence --il-opaque-root-initializers --compiled-input <caller.dll> --compiled-input <wrapper.dll> --il-lifecycle-root <privately-derived-sha256>:<privately-derived-MethodDef-token>
 ```
 
 Inspect all three fact kinds under `dotnet.compiled.il-sql-lifecycle.v1`, Tier3:
@@ -358,22 +397,21 @@ Use the existing output and available local source/metadata inspection.
 4. If metadata is retained and interpretation fails later, record the exact native
    gap and public framework API/opcode shape needed to reproduce it. Do not call it
    a body-retention failure or assume it is the last blocker.
-5. Independently author the smallest synthetic C#/VB sample that reproduces that
-   single failing property using neutral names/literals and public APIs. It should
-   represent the relevant field/method counts, argument/constructor shape, root and
-   callee relation or control operation. Include an opaque root label and expected
-   native outcome/reason; distinguish executed observations from proposed expectations.
-   Never copy, transliterate, or merely rename employer code/SQL. Include that independently authored neutral sample in this requested sanitized
-   return only after checking it contains no employer identifiers/source/SQL. If
-   that cannot be assured, retain it locally and return one precise abstract shape
-   detail instead. This does not authorize public commits or publication.
+5. If a sample is needed, independently author the smallest synthetic C#/VB sample
+   for that single failing property using neutral names/literals and public APIs.
+   Keep the source/build output on this machine. Do not ask Joe to return code or
+   photographs. Report only whether it was authored/compiled, whether behavior was
+   executed (tests remain deferred), and one short abstract IL shape/reason. Never
+   copy, transliterate or merely rename employer code/SQL. A throwing or incomplete
+   wrapper is illustrative, not an executed reproducer.
 6. If no faithful public-safe reproducer can be authored, identify one specific
    missing metadata fact or shape detail. Do not return two speculative causes or
    demand another broad investigation. A native positive on one leg does not close
    missing downstream transformation/schema/runtime legs.
 
-Deliver once: the sanitized diagnostic table, the independently authored sample or
-one precise missing detail, and separate entry-lineage/consumer/schema statuses.
+Deliver once: the short sanitized diagnostic table, one abstract shape or precise
+missing detail, local sample status only, and separate entry-lineage/consumer/schema
+statuses. Do not return sample source, private evidence, or photographs.
 Keep the exact evidence note and all employer artifacts on the work machine. Do not
 execute the application/SQL or change implementation, ACK policy, accepted baselines,
 push/PR/merge/deployment state. Test suites remain deferred unless Joe authorizes them.

@@ -1,5 +1,47 @@
 # Public compiled-wrapper SQL evidence
 
+## Opt-in opaque root scalar initialization — compile-only, 2026-10-28
+
+IL extractor 0.2.9 / policy `explicit-il-body-evidence.v13` adds
+`--il-opaque-root-initializers`, requiring explicit selected roots. Default behavior
+remains strict. Only a fresh producer/loader root's unique parameterless constructor
+can abstract a linear external-call chain into its own private scalar field. Read
+roots retain the strict constructor route. Existing available/metadata-failed
+compiled callees are not blackboxed. Unknown effects are not treated as pure.
+
+Admission requires no constructor branching or exception handlers, no intermediate
+stores/escapes, no tracked reference arguments/receivers, and no void/byref/generic
+calls. Arguments are chain temporaries or literals; instance receivers must be
+chain temporaries. The terminal store must consume the root receiver and exactly
+one opaque result whose agreed encoded return type equals the private field's
+primitive String/Boolean/integer/floating/Char type. No arbitrary struct, Object or
+DataSet field is admitted. A temporary reference is not claimed fresh or local.
+Opaque fields can initialize only once and later explicit writes refuse.
+
+Bounds are 8 fields/root, 32 instructions/chain, 8 calls/chain, 4 arguments/call and 16
+chain stack values, plus existing interpreter/closure/heap/work bounds. No runtime,
+configuration, provider, decryption or environment access is performed. Only the
+already dual-reader-agreed retained instruction/call/field metadata is interpreted.
+Opaque field values carry typed unknown origins. They may flow as data through
+inspected wrappers/parameter Value assignments, but never become assumed command
+text, parameter names/types/sizes, branch outcomes or tracked object identities.
+
+Using the boundary emits a separate `il-sql-lifecycle-opaque-entry/1` entry schema,
+not the existing column-read or comparison contract. Initializer receipts identify
+store and call sites, signature/field hashes, declared types, possible throws and
+unmodeled effects. Claims explicitly assume normal return and noninterference with
+unpassed tracked heap state. They do not prove constructor completion, purity,
+external non-mutation or absence of aliases. This is conditional partial evidence
+under an opt-in abstraction, not independently established external-call behavior.
+The selection flag/policy/bounds are bound into generator/input provenance. Later
+refusals retain initializer receipts but discard executions/positive entry claims.
+
+Independent public C#/VB compile-only fixtures include opaque producer data flow,
+SQL/control/mutation refusals, root-reference arguments, non-scalar fields, handlers,
+long chains and strict read roots. Tests also define missing field metadata/byref
+refusals, explicit-opt-in validation and native separate-schema emission. Definitions
+are authored/compiled, not executed. No private code or report text was added.
+
 ## Closed legacy core ArrayList profile — compile-only, 2026-10-28
 
 IL extractor 0.2.8 / policy `explicit-il-body-evidence.v12` deliberately extends

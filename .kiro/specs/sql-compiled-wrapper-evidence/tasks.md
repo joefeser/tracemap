@@ -93,3 +93,12 @@
 - [x] Preserve stack/type/element/attachment refusals and all existing resource bounds; retain separate object-path and comparison contracts.
 - [x] Author C#/VB dual-reader compiled-metadata profile, execution-isolation and negative controls; version admission and update docs/prompt.
 - [ ] Execute focused profile controls and work-machine lineage check (explicitly deferred; no success claimed).
+
+
+## Opt-in opaque root scalar initialization — 2026-10-28
+- [x] Add explicit selected-root-only conditional scalar-chain boundary with typed unknowns and external-effect/normal-return assumptions.
+- [x] Bound fields/instructions/calls/arguments/stack/work; refuse tracked-reference arguments, handlers, branches, compiled-callee blackboxing and opaque-field mutation.
+- [x] Separate opaque entry schema and receipts from existing read/comparison contracts; bind policy/flag into provenance.
+- [x] Add public C#/VB fixtures and focused/native/refusal test definitions; update rule limitations, state and work-machine text-return prompt.
+- [ ] Execute new focused controls and broader shared-core gate (explicitly deferred by Joe).
+- [ ] Establish real-input opaque-initializer/ArrayList lineage under the explicit boundary (not claimed).

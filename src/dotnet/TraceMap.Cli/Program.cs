@@ -558,6 +558,7 @@ public static class TraceMapCommand
             WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"))
         {
             IlLifecycleRoots = values.GetMany("--il-lifecycle-root"),
+            IlOpaqueRootInitializers = values.HasFlag("--il-opaque-root-initializers"),
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
             CiHintWorkflows = ReadCiHintsOption(values),
@@ -2574,7 +2575,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--index-deps-json" or "--index-ci-producers" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
+            if (arg is "--restore" or "--index-deps-json" or "--index-ci-producers" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-opaque-root-initializers" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
@@ -3105,6 +3106,9 @@ public static class TraceMapCommand
               --compiled-max-work <count>
                                        Positive deterministic compiled-input limits; max-text must be at least 71.
               --il-body-evidence        Extract bounded operand-aware IL method-body and direct-call evidence from admitted compiled inputs. Never discovered.
+              --il-opaque-root-initializers
+                                       Opt in to conditional typed-unknown root scalar initializer chains; requires --il-lifecycle-root.
+                                       External effects and normal return are unproved; emits a separate opaque-entry schema when used.
               --il-lifecycle-root <sha256:0x06token>
                                        Repeatable (max 16). Explicit admitted assembly SHA-256 and method-definition token.
                                        Retain only the selected lifecycle root/constructor/callee slice, up to 1 MiB per reader.

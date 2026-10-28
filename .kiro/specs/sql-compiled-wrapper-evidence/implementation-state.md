@@ -769,3 +769,75 @@ do not validate this profile. No PR, merge, ACK policy or deployment changes.
 Result: the final test-source/CLI dependency build succeeded with zero warnings and
 zero errors. `git diff --check` passed. No test methods were executed. Work-machine
 framework inventory and native selected-root lineage remain outstanding.
+
+
+## Opaque initializer continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting head
+`2a2924f9ba6f72238a189170945b28eeb52bffea`, initially clean. Joe explicitly asked
+to build the bounded opaque-initializer policy after discussion of its uncertainty.
+Standing no-tests instruction retained. The policy is opt-in and candidate claims
+surface assumptions rather than asserting purity from signature/stack metadata.
+
+## Opt-in opaque root scalar initialization — compile-only, 2026-10-28
+
+IL extractor 0.2.9 / policy `explicit-il-body-evidence.v13` adds
+`--il-opaque-root-initializers`, requiring explicit selected roots. Default behavior
+remains strict. Only a fresh producer/loader root's unique parameterless constructor
+can abstract a linear external-call chain into its own private scalar field. Read
+roots retain the strict constructor route. Existing available/metadata-failed
+compiled callees are not blackboxed. Unknown effects are not treated as pure.
+
+Admission requires no constructor branching or exception handlers, no intermediate
+stores/escapes, no tracked reference arguments/receivers, and no void/byref/generic
+calls. Arguments are chain temporaries or literals; instance receivers must be
+chain temporaries. The terminal store must consume the root receiver and exactly
+one opaque result whose agreed encoded return type equals the private field's
+primitive String/Boolean/integer/floating/Char type. No arbitrary struct, Object or
+DataSet field is admitted. A temporary reference is not claimed fresh or local.
+Opaque fields can initialize only once and later explicit writes refuse.
+
+Bounds are 8 fields/root, 32 instructions/chain, 8 calls/chain, 4 arguments/call and 16
+chain stack values, plus existing interpreter/closure/heap/work bounds. No runtime,
+configuration, provider, decryption or environment access is performed. Only the
+already dual-reader-agreed retained instruction/call/field metadata is interpreted.
+Opaque field values carry typed unknown origins. They may flow as data through
+inspected wrappers/parameter Value assignments, but never become assumed command
+text, parameter names/types/sizes, branch outcomes or tracked object identities.
+
+Using the boundary emits a separate `il-sql-lifecycle-opaque-entry/1` entry schema,
+not the existing column-read or comparison contract. Initializer receipts identify
+store and call sites, signature/field hashes, declared types, possible throws and
+unmodeled effects. Claims explicitly assume normal return and noninterference with
+unpassed tracked heap state. They do not prove constructor completion, purity,
+external non-mutation or absence of aliases. This is conditional partial evidence
+under an opt-in abstraction, not independently established external-call behavior.
+The selection flag/policy/bounds are bound into generator/input provenance. Later
+refusals retain initializer receipts but discard executions/positive entry claims.
+
+Independent public C#/VB compile-only fixtures include opaque producer data flow,
+SQL/control/mutation refusals, root-reference arguments, non-scalar fields, handlers,
+long chains and strict read roots. Tests also define missing field metadata/byref
+refusals, explicit-opt-in validation and native separate-schema emission. Definitions
+are authored/compiled, not executed. No private code or report text was added.
+
+Compile-only verification commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No test methods, native scans, SQL, provider/application methods, or environment
+fixture calls were executed. No PR/merge/ACK policy changes. Real-input lineage and
+closure of the ArrayList blocker remain unproven. The work-machine prompt now asks
+only for a short sanitized text return; sample code stays on that machine.
+
+Initializer rejection messages distinguish constructor control/handlers, chain/call/
+stack limits, tracked-reference arguments, unsupported returns and field metadata.
+An opaque-initializer-stage body receipt identifies the rejected constructor when
+an unresolved call is reached there. These are analysis gaps, not purity judgments.
+
+Final builds succeeded with zero warnings/errors for CLI dependencies/test source
+and both C#/VB fixture projects. `git diff --check` passed. These are compilation
+checks only; no tests or sample methods were run. The failure-only handoff now
+explicitly keeps sample source on the work machine and requests text/status only.

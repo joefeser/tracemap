@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v12";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v13";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -43,6 +43,8 @@ internal static class IlBodyEvidenceExtractor
         CancellationToken cancellationToken = default)
     {
         var rootSelections = IlLifecycleRootSelection.Parse(options.IlLifecycleRoots);
+        if (options.IlOpaqueRootInitializers && rootSelections.Count == 0)
+            throw new ArgumentException("opaque-root-initializers-require-selected-roots");
         if (!options.IlBodyEvidence)
         {
             if (rootSelections.Count > 0) throw new ArgumentException("il-lifecycle-root-requires-il-body-evidence");
@@ -179,6 +181,9 @@ internal static class IlBodyEvidenceExtractor
             expectedInputs = expected,
             effectiveLimits = limits,
             lifecycleRootSelections = rootSelections,
+            opaqueRootInitializers = new { enabled = options.IlOpaqueRootInitializers,
+                policy = IlSqlLifecycleExtractor.OpaquePolicy, maxFields = 8, maxChainInstructions = 32, maxChainCalls = 8,
+                maxCallArguments = 4, maxChainStack = 16 },
             lifecycleSliceProfile = new { schema = "il-sql-lifecycle-slice/1", maxRoots = 16,
                 maxBodies = 128, maxInputBytes = 67_108_864, retainedCharactersPerReader = Math.Min(limits.MaxTotalWorkUnits, 1_048_576),
                 decodeWorkAcrossRoots = limits.MaxTotalWorkUnits },
@@ -236,7 +241,7 @@ internal static class IlBodyEvidenceExtractor
             .Select(value => $"IL body evidence coverage reduced: {value}.")
             .ToArray();
         return new IlBodyEvaluation(provenance, evaluated, knownGaps, admitted)
-        { LifecycleRoots = rootSelections, CompiledMaximumBytes = compiledMaximumBytes, SliceCancellationToken = cancellationToken };
+        { LifecycleRoots = rootSelections, OpaqueRootInitializers = options.IlOpaqueRootInitializers, CompiledMaximumBytes = compiledMaximumBytes, SliceCancellationToken = cancellationToken };
     }
 
     private static IEnumerable<string> DistinctGapKinds(IReadOnlyList<IlInputOutcome> outcomes, List<string> globalGapKinds) =>
@@ -719,8 +724,11 @@ internal static class IlBodyEvidenceExtractor
             {
                 var result = slice?.Failure is { } sliceFailure
                     ? new IlSqlLifecycleExtractor.Result([], [], null, [sliceFailure])
-                    : IlSqlLifecycleExtractor.Extract(root, scopedBodies, enabled, budget);
+                    : IlSqlLifecycleExtractor.Extract(root, scopedBodies, enabled, budget, evaluation.OpaqueRootInitializers);
+                if (result.OpaqueInitializers is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.OpaqueEntrySchema;
                 var common = new Dictionary<string, string>(CommonProperties(provenance, root.Input), StringComparer.Ordinal);
+                if (evaluation.OpaqueRootInitializers)
+                    common["opaqueInitializerPolicy"] = IlSqlLifecycleExtractor.OpaquePolicy;
                 if (sliceReceipt is not null)
                 {
                     common["lifecycleSlice"] = SqlServerSchemaEvidence.Json(sliceReceipt);

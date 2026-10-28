@@ -9,10 +9,10 @@ namespace TraceMap.Core;
 /// Bounded lifecycle interpreter, emitted through a separate candidate contract.
 /// Values describe successful-path symbolic origins, never actual database rows.
 /// </summary>
-internal static class IlSqlLifecycleExtractor
+internal static partial class IlSqlLifecycleExtractor
 {
     internal const string Schema = "il-sql-lifecycle/1";
-    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. Entry producers/loaders retain unbound argument origins; unknown control or required scalar values refuse. Entry facts are separate from column-read comparison facts. No source, deployment, session, framework, type, nullability, value or migration proof.";
+    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. Entry producers/loaders retain unbound argument origins; unknown control or required scalar values refuse. Entry facts are separate from column-read comparison facts. Opt-in opaque root scalar initialization uses a separate entry schema, conditional normal-return and tracked-heap noninterference assumptions, and unmodeled external effects; it is not constructor-completion or purity proof. No source, deployment, session, framework, type, nullability, value or migration proof.";
     internal static bool IsReadRoot(IlBodyObservation body)
         => body.ObjectBody is { HasThis: true, ParameterCount: <= 1, ReturnsValue: true, IsGeneric: false, IsVirtual: false } meta
             && (meta.ParameterCount == 0
@@ -63,7 +63,11 @@ internal static class IlSqlLifecycleExtractor
         Read? Returned, IReadOnlyList<string> Gaps, IReadOnlyList<Loop>? Loops = null,
         IReadOnlyList<Failure>? Failures = null, IReadOnlyList<Site>? Bodies = null)
     {
-        public string Claim => "conditional-static-lineage;normal-completion;row-existence-unproven";
+        public string Claim => OpaqueInitializers is { Count: > 0 }
+            ? "conditional-static-lineage;opaque-initialization-normal-return-assumed;tracked-heap-noninterference-assumed;external-effects-unmodeled;row-existence-unproven"
+            : "conditional-static-lineage;normal-completion;row-existence-unproven";
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<OpaqueInitializer>? OpaqueInitializers { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public EntryOutput? Entry { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -108,13 +112,15 @@ internal static class IlSqlLifecycleExtractor
     }
 
     internal static Result Extract(Body root, IReadOnlyList<Body> bodies, bool enabled,
-        IlBodyEvidenceExtractor.IlWorkBudget budget)
+        IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers = false)
     {
-        try { return new Machine(bodies, budget).Run(root, enabled); }
-        catch (Refusal error) { return new Result([], [], null, [error.Message]) { MetadataFailure = error.MetadataFailure }; }
+        var machine = new Machine(bodies, budget, opaqueRootInitializers);
+        try { return machine.Run(root, enabled); }
+        catch (Refusal error) { return new Result([], [], null, [error.Message]) { MetadataFailure = error.MetadataFailure,
+            OpaqueInitializers = machine.Initializers.Count > 0 ? machine.Initializers.ToArray() : null }; }
     }
 
-    private sealed class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget)
+    private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers)
     {
         private readonly Dictionary<string, ObjectState> heap = new(StringComparer.Ordinal);
         private readonly List<Execution> executions = [];
@@ -171,7 +177,10 @@ internal static class IlSqlLifecycleExtractor
                 if (ctor.Length != 1) throw new Refusal("lifecycle-constructor-unresolved",
                     MetadataFailure(root, "constructor-selection", ctor.Length,
                         bodies.Count(body => body.Input.RawFileSha256 == root.Input.RawFileSha256 && body.Observation.ObjectBody is null)));
+                if (opaqueRootInitializers && !readRoot)
+                { opaqueConstructor = ctor[0].Observation.BodyIdentity; opaqueInstance = instance.Text; }
                 Invoke(ctor[0], [instance], 0);
+                opaqueConstructor = null;
             }
             var guarded = IsGuardedRoot(root.Observation);
             var inputTypes = IlSqlLifecycleApis.RootArgumentTypes(meta);
@@ -184,7 +193,8 @@ internal static class IlSqlLifecycleExtractor
             if (heap.Values.Any(state => state.Kind == "collection-enumerator"
                 && state.Moves != Get(state.Parent, "arraylist").Slots.Count + 1))
                 throw new Refusal("lifecycle-collection-enumeration-incomplete");
-            var completed = new Result(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray());
+            var completed = new Result(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray())
+                { OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null };
             if (readRoot) return completed;
             if (executions.Count == 0) throw new Refusal("lifecycle-entry-no-sql-execution");
             string? returnedSet = null;
@@ -207,7 +217,8 @@ internal static class IlSqlLifecycleExtractor
                     var parameter = Get(value, "parameter");
                     var origin = parameter.Fields.GetValueOrDefault("parameter-value", Value.Unknown);
                     return new ParameterOutput(value.Text, Text(parameter.Command), Number(parameter.Type),
-                        Number(parameter.Slots[0]), origin.Kind == "input" ? "argument:" + origin.Text : origin.Kind);
+                        Number(parameter.Slots[0]), origin.Kind == "input" ? "argument:" + origin.Text
+                            : origin.Kind == "opaque-initializer" ? "opaque-field:" + origin.Text : origin.Kind);
                 }).ToArray())).ToArray();
             return completed with { Entry = new(producer ? "dataset-return" : "void-completion", Hash(meta.MemberReference),
                 Enumerable.Range(0, meta.ParameterCount).Select(i => new RootArgument(i,
@@ -255,6 +266,8 @@ internal static class IlSqlLifecycleExtractor
                     if (++work > 8192 || !budget.TryConsume(1) || stack.Count > 64 || locals.Count > 64) throw new Refusal("lifecycle-work-limit");
                     var op = code[i][2]; var operand = code[i][3]; var offset = offsets[i];
                     if (op == "nop") continue;
+                    if (stack.Count == 0 && TryOpaqueInitializer(body, args, depth, code, offsets, calls, i, invocation, out var terminal))
+                    { i = terminal; continue; }
                     if (Slot(op, operand, "ldarg", out var slot)) { stack.Add(slot < args.Length ? args[slot] : Value.Unknown); continue; }
                     if (Slot(op, operand, "ldloc", out slot)) { stack.Add(locals.GetValueOrDefault(slot, Value.Unknown)); continue; }
                     if (Slot(op, operand, "stloc", out slot)) { locals[slot] = Pop(); continue; }
@@ -267,7 +280,7 @@ internal static class IlSqlLifecycleExtractor
                     if (op == "box")
                     {
                         var value = Pop();
-                        if (value.Kind == "input" && IlSqlLifecycleApis.IsInputBox(operand, value.DeclaredType))
+                        if (value.Kind is ("input" or "opaque-initializer") && IlSqlLifecycleApis.IsInputBox(operand, value.DeclaredType))
                         { stack.Add(value); continue; }
                         if (IlSqlLifecycleApis.TypeOperand(operand, "Boolean"))
                         {
@@ -355,6 +368,8 @@ internal static class IlSqlLifecycleExtractor
                         if (!identity.StartsWith("type:" + instance.Owner + "|member:", StringComparison.Ordinal)) throw new Refusal("lifecycle-field-owner");
                         if (op == "stfld")
                         {
+                            if (opaqueFields.Contains(instanceValue.Text + ":" + identity))
+                                throw new Refusal("lifecycle-opaque-field-mutated");
                             if (instance.Frozen) throw new Refusal("lifecycle-parameter-object-mutated");
                             if (loopEnumerator.Kind != "unknown" && !LoopAllocated(instanceValue)) throw new Refusal("lifecycle-loop-carried-field");
                             instance.Fields[identity] = value;
@@ -399,7 +414,10 @@ internal static class IlSqlLifecycleExtractor
                             var targets = bodies.Where(b => b.Observation.MethodIdentity == call.TargetIdentity
                                 || b.Observation.ObjectBody?.MemberReference == call.TargetIdentity
                                 || b.MemberReferenceAlias == call.TargetIdentity).Take(2).ToArray();
-                            if (targets.Length != 1) throw new Refusal("lifecycle-unknown-call:" + call.TargetIdentity);
+                            if (targets.Length != 1) throw new Refusal(
+                                (opaqueConstructor == body.Observation.BodyIdentity ? "lifecycle-opaque-initializer-" + opaqueRejection : "lifecycle-unknown-call")
+                                    + ":" + call.TargetIdentity,
+                                opaqueConstructor == body.Observation.BodyIdentity ? MetadataFailure(body, "opaque-initializer") : null);
                             var targetMeta = targets[0].Observation.ObjectBody
                                 ?? throw new Refusal("lifecycle-body-unavailable", MetadataFailure(targets[0], "callee-metadata"));
                             if (targetMeta.ParameterCount != shape.ParameterCount || targetMeta.HasThis != shape.HasThis
@@ -507,7 +525,7 @@ internal static class IlSqlLifecycleExtractor
                     if (listIndex < 0 || listIndex >= list.Slots.Count) throw new Refusal("lifecycle-list-index");
                     return list.Slots[listIndex];
                 case "object-value":
-                    if (args[0].Kind is not ("read" or "int" or "string" or "null")) throw new Refusal("lifecycle-object-copy-unresolved");
+                    if (args[0].Kind is not ("read" or "int" or "string" or "null" or "opaque-initializer")) throw new Refusal("lifecycle-object-copy-unresolved");
                     return args[0];
                 case "type-handle":
                     if (args[0].Kind != "type-token") throw new Refusal("lifecycle-type-handle-unresolved");
