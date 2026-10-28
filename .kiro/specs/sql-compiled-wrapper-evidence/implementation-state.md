@@ -142,5 +142,22 @@ native paths and were repaired by separating original/new owner identities;
 expectations were not weakened. A smoke invocation with an incorrect CLI filename
 failed before scanning; the corrected tracemap.dll invocation passed.
 
-Frozen full-suite, repeated native replay and retained regression gates are still
-pending. This note does not claim final validation or publication.
+Final validation at frozen implementation `7b06f08e6920adf0f2a4d5e5138f79e62bbd06a3`:
+full Debug `-warnaserror` passed 5,461 tests with three existing skips, zero
+failures and no warnings (43m16s), without a full-suite retry. Two native smoke
+runs matched both independent matrices, and C#/VB facts were byte-identical.
+All nine retained SQL smokes passed with unchanged denominators. Pinned public
+C#/VB scans and artifact validation passed, both with reduced coverage and
+FailedOrPartial application builds; neither contains SQL calls. CLI/Core/Reporting
+hashes remained unchanged through all smokes. Five compiled-wrapper Python guards
+and 59 SQL Server guards passed.
+
+An overly broad Python discovery invocation produced 32 setup errors in the
+argument-driven SQL command-text harness because its required CLI configuration
+was absent. This was an invalid harness invocation, not a passing gate; the
+correctly scoped guard commands above passed. No expectation was weakened.
+
+Exact results and hashes are in the validation document. Publication uses a
+docs-only results commit after the frozen implementation. The consolidated
+continuation prompt is current; broader unchecked tasks remain separate scope,
+not claimed implementation. No private acceptance, SQL execution or PR/merge.

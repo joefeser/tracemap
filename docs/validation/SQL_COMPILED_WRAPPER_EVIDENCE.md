@@ -282,3 +282,53 @@ new actual C#/VB compiled corpus, retained SQL smokes and pinned source adapters
 Results documentation follows the frozen implementation in a docs-only commit.
 The consolidated continuation is `prompts/continue-sql-compiled-wrapper-evidence.md`;
 it is a local capability prompt, **not** a work-machine acceptance retry.
+
+## Named-table continuation: frozen validation
+
+Implementation head: `7b06f08e6920adf0f2a4d5e5138f79e62bbd06a3`.
+These results supersede pending validation for the bounded named-table slice,
+not the historical gates above. IL extractor: `0.2.3`.
+
+| Gate | Result |
+| --- | --- |
+| Focused extraction/lifecycle | 28 passed |
+| Broader IL lane | 206 passed, one skip, zero failures |
+| Full Debug `-warnaserror` | 5,461 passed, three existing skips, zero failures, no warnings; 43m16s; no retry |
+| Native smoke, twice | Original 20 roots: 10 paths/10 unknowns; new 26 roots: four paths/22 unknowns |
+| Deterministic replay | C# and VB facts byte-identical between runs |
+| Parameter / DDL parameter | Each 52 cases: 8 match / 12 mismatch / 32 unknown |
+| Result column | JSON 36/10/36; DDL 36/10/58; 20 refusals |
+| Table result | 44/10/88; 24 refusals |
+| DataTable | 108/24/176; 22 refusals |
+| DataSet | 156/24/176; 24 refusals |
+| Private helper | 84/30/116; 24 refusals |
+| Internal helper | 72/24/60; 24 refusals |
+| Field reads | 78/36/42; 52 refusals |
+| Python guards | Five compiled-wrapper and 59 SQL Server guards passed |
+| Pinned public C#/VB scans | 12,949 / 114,806 facts; artifact validator passed for both |
+
+Triplets are match/mismatch/unknown. All nine retained SQL smoke denominators
+remain unchanged. Full suite preceded sequential committed-head smokes. Both
+pinned source scans retain reduced coverage and FailedOrPartial application
+build status; neither contains SQL calls, so they establish no SQL coverage.
+
+One broad Python discovery command produced 32 setup errors in the unrelated
+argument-driven SQL command-text harness (`CONFIG` absent); it bypassed required
+`--tool`, `--paths`, and `--assembly` initialization. This invocation is not counted
+as a passing gate. Correctly scoped guard commands passed as reported above.
+
+Frozen binaries, unchanged before and after regression and pinned smokes:
+
+```text
+CLI       7aa8a79b94b5c51d8f2ab18184e404d0210d353f7a77a34c782174f0ccd03ff3
+Core      021bb9912422167da2ca7e4e7da81a675fec50871f79728234b5d1b8096bbe3b
+Reporting c096e73cec7ee38083e0ed72a244b7ee4c60e93deff757a68194959eea3a7580
+```
+
+Conditional writes, unknown helper effects, exceptional paths and destructive
+re-Merge remain extraction refusals. Twelve in-memory lifecycle controls describe
+behavior without upgrading it to extraction support. No private application,
+SQL Server, container or Windows runtime was executed. The broader multi-framework
+sweep and non-.NET lanes remain deferred for this bounded IL change. This is not
+private-application, SQL-contract, runtime or migration acceptance. The consolidated
+next-step prompt remains `prompts/continue-sql-compiled-wrapper-evidence.md`.

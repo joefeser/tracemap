@@ -22,7 +22,7 @@
 - [x] Preserve distinct source/destination table and DataSet identities with exact provenance and selected command evidence.
 - [x] Add C#/VB extraction refusals for mutation, unknown helpers, exceptional/conditional flow, repeated Merge and unsupported slots.
 - [x] Keep the original 20-root matrix separate from the 26-root named-table matrix.
-- [ ] Run frozen full/regression gates and publish exact results with consolidated prompt.
+- [x] Run frozen full/regression gates and publish exact results with consolidated prompt.
 
 ## Broader application fit (separate follow-up, not claimed completion)
 - [x] Pin in-memory conditional overwrite, clear/re-merge and failure-boundary behavior with synthetic tests; this is not C#/VB extraction support.
