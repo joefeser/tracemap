@@ -27,7 +27,7 @@ records distinct filled and consumer allocations with
 `fresh-empty-schema-union-candidate`, never original-result aliasing, schema
 comparison, value/row/type/nullability or runtime-ownership proof.
 
-IL version is `0.2.2`; source versions and legacy routes are unchanged. New bounds:
+IL version is `0.2.3`; source versions and legacy routes are unchanged. New bounds:
 4096 indexed bodies, 256 instructions/body, 64 fields, 2048 steps, depth 16,
 64 allocations, 256 sites, 16 parameters and 64 stack/local slots. Retained object
 metadata has a separate per-reader character budget capped at 1048576 and
@@ -56,7 +56,31 @@ private wrappers. Actual acceptance additionally requires:
 Do not rerun the work-machine loop simply to rediscover known contract-admission
 and comparison blockers. No SQL, containers or private inputs run in this package.
 
-### New application-shape fit requirements (not implemented)
+### Bounded named-table continuation
+
+The separate TableFlow matrix has 13 roots per language: First and Second are
+positive static candidates; Conditional, Mutated, UnknownHelper, RepeatedMerge,
+ClearMerge, Existing, Exceptional, DuplicateName, OutOfRange, DynamicSlot and
+ThirdTable remain unknown. This adds four candidates and 22 unknowns without
+changing the original 20-root matrix or its 10/10 result.
+
+An inspected property setter can store a fresh DataSet into its exact private
+backing field. At most two distinct named tables may be added, each receiving one
+Merge from the first table of an inspected returned DataSet. Destination ordinals
+must select an existing authored slot; source table and row ordinals remain zero.
+Each consumer retains its selected execution and command/parameter evidence,
+distinct filled/consumer DataSets, and optional `filledTableIdentity` and
+`consumerTableIdentity`. These optional properties occur only on the new
+`fresh-empty-table-schema-union-candidate` relation. Schema v1 is additive; the
+local smoke matrix is version 3 with separate `rows` and `tableRows` denominators.
+
+The entire inspected root must be supported, including effects after a read.
+Unknown helper calls, value writes, Clear/re-Merge, conditional and exceptional
+alternatives refuse the path. This conservative boundary prevents stale value
+lineage; it does not compute replacement values or partial exception states.
+The in-memory controls below characterize those distinctions separately.
+
+### Broader application-shape fit requirements (not implemented)
 
 Additional shape evidence arrived after the implementation freeze. It does not
 change the validated 20-root denominator and is not exact executable source:
@@ -65,8 +89,9 @@ change the validated 20-root denominator and is not exact executable source:
   result table of two **different DataSet-returning functions** is merged into
   destination tables zero and one. Keep two execution lineages; neither repeated
   fetch identity nor snapshot-copy equivalence is established.
-- DataTable.Merge, table creation, holder property/alias ownership and index one
-  are not covered by the current single DataSet.Merge/first-table route.
+- The bounded fresh property/two-table/DataTable.Merge/index-one form is covered
+  only by the separate TableFlow matrix above. Existing state and unknown aliases
+  remain unsupported; no general property or session lifetime analysis is implied.
 - Data access constructs four custom parameter objects in an ArrayList and has
   open/execute, catch/logging, finally/close and a fallback DataSet. Exceptional
   alternatives, effects and collection propagation need separately bounded proof.
@@ -86,7 +111,7 @@ These require independently authored public C#/VB fit fixtures before widening
 analysis. Preserve supported/unsupported legs and initialization/value/schema
 distinctions; never copy private code or turn an OCR shape into exact source.
 
-#### Required correction controls (not implemented coverage)
+#### Required correction controls (behavior controls, not positive extraction)
 
 The next synthetic matrix must distinguish three independent identities:
 destination allocation, merged column/schema origin, and value origin at a read.
@@ -108,6 +133,23 @@ Pin these cases independently in both languages before widening evidence:
 
 Keep these as public synthetic requirements, not confirmed private defects or
 runtime observations. Existing success/unknown denominators remain unchanged.
+
+#### In-memory behavior controls
+
+`DataSetLifecycleBoundaryTests` now pins 12 synthetic .NET 10 cases: guarded and
+unmatched updates, column import into a locally allocated table, Clear/re-Merge
+value replacement, seven explicit injected-failure boundaries, and an enclosing
+catch that skips later initialization. The failure matrix distinguishes prior
+state, fresh allocation, first/second merge, partial enrichment and partial list
+population. It injects failures *between* operations; it does not characterize
+atomicity or rollback when Merge itself throws.
+
+Focused Debug test run with `-warnaserror`: 12 passed, zero failed/skipped.
+These tests execute only System.Data in memory, without a provider or database.
+They establish fixture behavior, not extractor correctness, C#/VB parity, private
+application behavior or new contract admission. No production defect was shown.
+The original compiled-wrapper matrix remains unchanged; the new TableFlow matrix
+is reported separately. Conditional/helper/exception cases are extraction refusals.
 
 ### Continuation validation
 

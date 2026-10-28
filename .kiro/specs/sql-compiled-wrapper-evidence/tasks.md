@@ -17,8 +17,17 @@
 - [x] Add independent native positive/negative matrices, identity/provenance/limits controls and rule limitations.
 - [x] Run focused gates before one frozen full gate and relevant retained/pinned smokes; update consolidated prompt and validation records for publication.
 
-## Newly supplied application fit (separate follow-up, not current completion)
-- [ ] Independently author property-held/two-table/two-distinct-function Merge and Select/helper-effect fixtures.
+## Bounded named-table continuation
+- [x] Implement property-held fresh DataSets, two named destinations and distinct returned-table Merge executions.
+- [x] Preserve distinct source/destination table and DataSet identities with exact provenance and selected command evidence.
+- [x] Add C#/VB extraction refusals for mutation, unknown helpers, exceptional/conditional flow, repeated Merge and unsupported slots.
+- [x] Keep the original 20-root matrix separate from the 26-root named-table matrix.
+- [ ] Run frozen full/regression gates and publish exact results with consolidated prompt.
+
+## Broader application fit (separate follow-up, not claimed completion)
+- [x] Pin in-memory conditional overwrite, clear/re-merge and failure-boundary behavior with synthetic tests; this is not C#/VB extraction support.
+- [x] Independently author property-held/two-table/two-distinct-function Merge and unknown helper-effect fixtures.
+- [ ] Add supported Select/predicate analysis only under a separately bounded design.
 - [ ] Bound ArrayList custom-parameter and exceptional cleanup/fallback alternatives.
 - [ ] Separate predicate/RHS reads, LHS value writes and schema identity; retain unknown alias/helper effects.
 - [ ] Separate application-authored auxiliary table schema/derived values from SQL contracts and cross-method initialization.

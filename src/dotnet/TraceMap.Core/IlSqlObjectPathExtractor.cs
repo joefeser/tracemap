@@ -7,7 +7,7 @@ internal static class IlSqlObjectPathExtractor
 {
     internal const string Schema = "il-sql-object-path.v1";
     internal const int MaxSteps = 2048, MaxFrames = 16, MaxObjects = 64, MaxSites = 256;
-    internal const string Limitation = "Tier3 encoded static object/dataflow candidate only. Exact unique admitted compiled bodies, no deployment/source equivalence, SQL contract match, rows, values, types, nullability or runtime proof. Only fresh bounded objects, constructor stores/getter loads, positional nonvirtual calls, one Fill, first table/row named access, and optional distinct fresh-empty DataSet Merge destination. Existing destinations, mutation, escapes, virtual/generic/recursive/branch/exception flow are unknown. Merge is a schema-union-from-empty candidate, never original-result identity or runtime ownership.";
+    internal const string Limitation = "Tier3 encoded static object/dataflow candidate only. Exact unique admitted compiled bodies, no deployment/source equivalence, SQL contract match, rows, values, types, nullability or runtime proof. Fresh bounded objects, constructor stores/getter loads, positional nonvirtual calls, one Fill for legacy DataSet paths; at most two Fills for explicit fresh named-table destinations with first source table/row named access. Fresh root property stores require an inspected private backing field. Existing destinations, repeated merges, mutation, escapes, virtual/generic/recursive/branch/exception flow are unknown. Merge is a schema-union-from-empty candidate, never original-result identity or runtime ownership.";
     private const string DataScope = "scope(assembly:name:11:System.Data|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
     private const string CoreScope = "scope(assembly:name:8:mscorlib|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
     private static string Primitive(string name) => $"type(namespace:6:System|names:{name.Length}:{name})";
@@ -32,6 +32,8 @@ internal static class IlSqlObjectPathExtractor
         [Api("System.Data.Common", "DbDataAdapter", "Fill", Int, Set)] = "fill",
         [Api("System.Data.Common", "DataAdapter", "Fill", Int, Set)] = "fill",
         [Api("System.Data", "DataSet", "Merge", Void, Set)] = "merge",
+        [Api("System.Data", "DataTableCollection", "Add", Table, String)] = "table-add",
+        [Api("System.Data", "DataTable", "Merge", Void, Table)] = "table-merge",
         [Api("System.Data", "DataSet", "get_Tables", Tables)] = "tables",
         [Api("System.Data", "DataTableCollection", "get_Item", Table, Int)] = "table",
         [Api("System.Data", "DataTable", "get_Rows", Rows)] = "rows",
@@ -45,7 +47,8 @@ internal static class IlSqlObjectPathExtractor
     internal sealed record ParameterShape(string ObjectIdentity, IlValueOrigin Name, IlValueOrigin SqlDbType, IlValueOrigin Size);
     internal sealed record Path(string RootBodyIdentity, string ExecutionIdentity, IlValueOrigin CommandText,
         IlValueOrigin CommandType, IReadOnlyList<ParameterShape> Parameters, IlValueOrigin Column,
-        string FilledDataSetIdentity, string ConsumerDataSetIdentity, string Relation, IReadOnlyList<Site> Sites);
+        string FilledDataSetIdentity, string ConsumerDataSetIdentity, string Relation, IReadOnlyList<Site> Sites,
+        string? ConsumerTableIdentity = null, string? FilledTableIdentity = null);
     internal sealed record Result(IReadOnlyList<Path> Paths, IReadOnlyList<string> Gaps);
     private sealed record Value(string Kind, string Text)
     {
@@ -57,8 +60,9 @@ internal static class IlSqlObjectPathExtractor
         internal string Kind = kind, Owner = owner;
         internal Dictionary<string, Value> Fields = new(StringComparer.Ordinal);
         internal List<Value> Parameters = [];
+        internal List<Value> TableSlots = [];
         internal Value Text = Value.Unknown, Type = Value.Unknown, Size = Value.Unknown, Parent = Value.Unknown;
-        internal string? Execution, FilledIdentity;
+        internal string? Execution, FilledIdentity, FilledTable;
         internal bool Attached, Merged, FieldOwned;
     }
     private sealed class Refusal(string gap) : Exception(gap);
@@ -118,7 +122,8 @@ internal static class IlSqlObjectPathExtractor
             var args = Enumerable.Repeat(Value.Unknown, metadata.ParameterCount + (metadata.HasThis ? 1 : 0)).ToArray();
             if (metadata.HasThis) args[0] = New("root", metadata.OwnerType, "root-this");
             var returned = Invoke(root, args, 0);
-            if (returned.Kind != "consumer" || result is null || executions != 1)
+            if (returned.Kind != "consumer" || result is null
+                || (result.ConsumerTableIdentity is null && executions != 1))
                 throw new Refusal("IlSqlObjectConsumerReturnUnresolved");
             return result with { RootBodyIdentity = root.Observation.BodyIdentity, Sites = sites.ToArray() };
         }
@@ -211,7 +216,8 @@ internal static class IlSqlObjectPathExtractor
                             if (instance.Kind == "root")
                             {
                                 var owned = Get(stored, "dataset");
-                                if (depth != 0 || !meta.PrivateInstanceFields.Contains(identity, StringComparer.Ordinal)
+                                if ((depth != 0 && !meta.Name.StartsWith("set_", StringComparison.Ordinal))
+                                    || !meta.PrivateInstanceFields.Contains(identity, StringComparer.Ordinal)
                                     || owned.Execution is not null || owned.FieldOwned) throw new Refusal("IlSqlObjectFieldOwnershipUnavailable");
                                 owned.FieldOwned = true;
                             }
@@ -292,36 +298,72 @@ internal static class IlSqlObjectPathExtractor
                     parameter.Attached = true; command.Parameters.Add(args[0]); return args[0];
                 case "fill":
                     command = Get(Get(receiver, "adapter").Parent, "command"); var dataSet = Get(args[0], "dataset");
-                    if (++executions != 1 || command.Attached || command.Parameters.Count == 0 || command.Type != new Value("constant-int32", "4")
-                        || dataSet.Execution is not null) throw new Refusal("IlSqlObjectExecutionUnresolved");
+                    if (++executions > 2 || command.Attached || command.Parameters.Count == 0 || command.Type != new Value("constant-int32", "4")
+                        || dataSet.Execution is not null || dataSet.TableSlots.Count != 0) throw new Refusal("IlSqlObjectExecutionUnresolved");
                     command.Attached = true; dataSet.Execution = id; dataSet.FilledIdentity = args[0].Text; dataSet.Parent = Get(receiver, "adapter").Parent;
                     SiteAt(body, offset, frameId, "fill"); return Value.Unknown;
                 case "merge":
                     var destination = Get(receiver, "dataset"); var incoming = Get(args[0], "dataset");
-                    if (receiver == args[0] || destination.Execution is not null || destination.Merged || incoming.Execution is null || incoming.Merged)
+                    if (receiver == args[0] || destination.Execution is not null || destination.Merged || incoming.Execution is null || incoming.Merged
+                        || destination.TableSlots.Count != 0 || incoming.TableSlots.Count != 0)
                         throw new Refusal("IlSqlObjectMergeDestinationUnresolved");
                     destination.Execution = incoming.Execution; destination.FilledIdentity = incoming.FilledIdentity; destination.Parent = incoming.Parent; destination.Merged = true;
                     SiteAt(body, offset, frameId, "fresh-empty-schema-union"); return Value.Unknown;
                 case "tables": return View(receiver, "dataset", "tables", id);
-                case "table": RequireZero(args[0]); return View(receiver, "tables", "table", id);
+                case "table-add":
+                    Require(args[0], "constant-string-hash");
+                    var ownerValue = Get(receiver, "tables").Parent;
+                    var owner = Get(ownerValue, "dataset");
+                    if (owner.Execution is not null || owner.Merged || owner.TableSlots.Count >= 2
+                        || owner.TableSlots.Any(v => Get(v, "owned-table").Text == args[0]))
+                        throw new Refusal("IlSqlObjectTableAllocationUnsupported");
+                    var added = New("owned-table", "", id);
+                    heap[id].Parent = ownerValue; heap[id].Text = args[0];
+                    owner.TableSlots.Add(added);
+                    SiteAt(body, offset, frameId, "fresh-named-table"); return added;
+                case "table":
+                    ownerValue = Get(receiver, "tables").Parent; owner = Get(ownerValue, "dataset");
+                    if (owner.TableSlots.Count == 0) { RequireZero(args[0]); return View(receiver, "tables", "table", id); }
+                    Require(args[0], "constant-int32");
+                    if (!int.TryParse(args[0].Text, out var ordinal) || ordinal < 0 || ordinal >= owner.TableSlots.Count)
+                        throw new Refusal("IlSqlObjectSelectorUnsupported");
+                    return owner.TableSlots[ordinal];
+                case "table-merge":
+                    var targetTable = Get(receiver, "owned-table");
+                    var sourceTable = Get(args[0], "table");
+                    incoming = Get(sourceTable.Parent, "dataset");
+                    if (targetTable.Execution is not null || incoming.Execution is null || incoming.Merged)
+                        throw new Refusal("IlSqlObjectMergeDestinationUnresolved");
+                    targetTable.Execution = incoming.Execution; targetTable.FilledIdentity = incoming.FilledIdentity;
+                    targetTable.FilledTable = sourceTable.Parent.Text + ":table:0"; targetTable.Merged = true;
+                    // Preserve the destination owner separately from the source command.
+                    targetTable.Fields.Add("source-command", incoming.Parent);
+                    SiteAt(body, offset, frameId, "fresh-empty-table-schema-union"); return Value.Unknown;
                 case "rows": return View(receiver, "table", "rows", id);
                 case "row": RequireZero(args[0]); return View(receiver, "rows", "row", id);
                 case "consumer":
-                    Require(args[0], "constant-string-hash"); var row = Get(receiver, "row"); var setValue = row.Parent; dataSet = Get(setValue, "dataset");
+                    Require(args[0], "constant-string-hash"); var row = Get(receiver, "row"); var setValue = row.Parent;
+                    var source = Get(setValue, "dataset", "owned-table");
+                    var tableValue = source.Kind == "owned-table" ? setValue : Value.Unknown;
+                    dataSet = source;
+                    if (source.Kind == "owned-table") setValue = source.Parent;
                     if (dataSet.Execution is null || result is not null) throw new Refusal("IlSqlObjectConsumerUnresolved");
-                    command = Get(dataSet.Parent, "command");
+                    command = Get(source.Kind == "owned-table" ? source.Fields["source-command"] : dataSet.Parent, "command");
                     result = new("", dataSet.Execution, command.Text.Origin, command.Type.Origin,
                         command.Parameters.Select(value => { var p = Get(value, "parameter"); return new ParameterShape(value.Text, p.Text.Origin, p.Type.Origin, p.Size.Origin); }).ToArray(),
                         args[0].Origin, dataSet.FilledIdentity!, setValue.Text,
-                        dataSet.Merged ? "fresh-empty-schema-union-candidate" : "same-returned-dataset-candidate", []);
+                        source.Kind == "owned-table" ? "fresh-empty-table-schema-union-candidate" :
+                        dataSet.Merged ? "fresh-empty-schema-union-candidate" : "same-returned-dataset-candidate", [],
+                        tableValue == Value.Unknown ? null : tableValue.Text, source.FilledTable);
                     SiteAt(body, offset, frameId, "column-consumer"); return new("consumer", id);
             }
             throw new Refusal("IlSqlObjectFrameworkCallUnsupported");
         }
         private Value View(Value receiver, string sourceKind, string kind, string id)
         {
-            var parent = Get(receiver, sourceKind); var value = New(kind, "", id);
-            heap[id].Parent = sourceKind == "dataset" ? receiver : parent.Parent;
+            var parent = sourceKind == "table" ? Get(receiver, "table", "owned-table") : Get(receiver, sourceKind);
+            var value = New(kind, "", id);
+            heap[id].Parent = sourceKind == "dataset" || parent.Kind == "owned-table" ? receiver : parent.Parent;
             return value;
         }
         private static void Require(Value value, string kind)

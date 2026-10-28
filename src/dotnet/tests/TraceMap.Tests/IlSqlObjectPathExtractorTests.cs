@@ -15,8 +15,16 @@ public sealed class IlSqlObjectPathExtractorTests
         var result = ScanEngine.Scan(new ScanOptions(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(caller))))!,
             IlBodyEvidenceExtractorShared.TempOutput(), CompiledInputPaths: [caller, wrapper], IlBodyEvidence: true));
         var paths = result.Facts.Where(fact => fact.FactType == FactTypes.ManagedIlSqlObjectPathCandidate).ToArray();
-        Assert.Equal(5, paths.Length);
-        Assert.Equal(5, result.Facts.Count(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.DotNetIlSqlObjectPath));
+        Assert.Equal(5, paths.Count(path => path.Properties["consumerRelation"] != "fresh-empty-table-schema-union-candidate"));
+        Assert.Equal(2, paths.Count(path => path.Properties["consumerRelation"] == "fresh-empty-table-schema-union-candidate"));
+        var gaps = result.Facts.Where(fact => fact.FactType == FactTypes.AnalysisGap && fact.RuleId == RuleIds.DotNetIlSqlObjectPath).ToArray();
+        var bodies = Bodies(language);
+        var originalRoots = bodies.Where(body => body.Observation.ObjectBody!.OwnerType.Contains("names:6:Caller)", StringComparison.Ordinal))
+            .Select(body => body.Observation.BodyIdentity).ToHashSet(StringComparer.Ordinal);
+        var tableRoots = bodies.Where(body => body.Observation.ObjectBody!.OwnerType.Contains("names:9:TableFlow)", StringComparison.Ordinal))
+            .Select(body => body.Observation.BodyIdentity).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(5, gaps.Count(fact => originalRoots.Contains(fact.TargetSymbol!)));
+        Assert.Equal(11, gaps.Count(fact => tableRoots.Contains(fact.TargetSymbol!)));
         var byId = result.Facts.ToDictionary(fact => fact.FactId);
         foreach (var path in paths)
         {
@@ -24,6 +32,9 @@ public sealed class IlSqlObjectPathExtractorTests
             Assert.Equal(RuleIds.DotNetIlSqlObjectPath, path.RuleId);
             Assert.Equal(result.Manifest.IlBodyProvenance!.GeneratorSha256, path.Properties["ilGeneratorSha256"]);
             Assert.Equal(result.Manifest.IlBodyProvenance.BoundedInputSha256, path.Properties["ilBoundedInputSha256"]);
+            var tablePath = path.Properties["consumerRelation"] == "fresh-empty-table-schema-union-candidate";
+            Assert.Equal(tablePath, path.Properties.ContainsKey("consumerTableIdentity"));
+            Assert.Equal(tablePath, path.Properties.ContainsKey("filledTableIdentity"));
             Assert.Equal(path.TargetSymbol, byId[path.Properties["rootBodyFactId"]].TargetSymbol);
             using var sites = System.Text.Json.JsonDocument.Parse(path.Properties["sites"]);
             foreach (var site in sites.RootElement.EnumerateArray())
@@ -135,7 +146,8 @@ public sealed class IlSqlObjectPathExtractorTests
     public void Independently_authored_twenty_root_matrix_preserves_positive_and_negative_legs(string language)
     {
         var bodies = Bodies(language);
-        var roots = bodies.Where(body => body.Input.Role == "caller" && IlSqlObjectPathExtractor.IsRoot(body.Observation)).ToArray();
+        var roots = bodies.Where(body => body.Input.Role == "caller" && IlSqlObjectPathExtractor.IsRoot(body.Observation)
+            && body.Observation.ObjectBody!.OwnerType.Contains("names:6:Caller)", StringComparison.Ordinal)).ToArray();
         Assert.Equal(10, roots.Length);
         var positives = new[] { "Direct", "Forwarded", "FieldObject", "PropertyObject", "MergeFresh" };
         foreach (var root in roots)
@@ -166,6 +178,93 @@ public sealed class IlSqlObjectPathExtractorTests
             }
             else Assert.Equal(path.FilledDataSetIdentity, path.ConsumerDataSetIdentity);
         }
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void Table_flow_preserves_selected_execution_and_distinct_allocations(string language)
+    {
+        var bodies = Bodies(language);
+        var paths = new List<IlSqlObjectPathExtractor.Path>();
+        foreach (var name in new[] { "First", "Second" })
+        {
+            var root = bodies.Single(body => body.Input.Role == "caller" && body.Observation.ObjectBody!.Name == name);
+            var result = IlSqlObjectPathExtractor.Extract(root, bodies, new(100_000));
+            Assert.Empty(result.Gaps);
+            var path = Assert.Single(result.Paths);
+            Assert.Equal("fresh-empty-table-schema-union-candidate", path.Relation);
+            Assert.NotNull(path.ConsumerTableIdentity);
+            Assert.NotNull(path.FilledTableIdentity);
+            Assert.NotEqual(path.ConsumerTableIdentity, path.FilledTableIdentity);
+            Assert.NotEqual(path.FilledDataSetIdentity, path.ConsumerDataSetIdentity);
+            Assert.Equal(2, path.Sites.Count(site => site.Action == "fill"));
+            Assert.Equal(2, path.Sites.Count(site => site.Action == "fresh-named-table"));
+            Assert.Equal(2, path.Sites.Count(site => site.Action == "fresh-empty-table-schema-union"));
+            Assert.Contains(path.Sites, site => site.Action == "fill" && $"{site.Frame}:{site.Offset}" == path.ExecutionIdentity);
+            paths.Add(path);
+        }
+        Assert.NotEqual(paths[0].CommandText, paths[1].CommandText);
+        Assert.NotEqual(paths[0].ExecutionIdentity, paths[1].ExecutionIdentity);
+        Assert.NotEqual(paths[0].ConsumerTableIdentity, paths[1].ConsumerTableIdentity);
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void Table_flow_mutation_helpers_and_exception_alternatives_are_unknown(string language)
+    {
+        var bodies = Bodies(language);
+        var roots = bodies.Where(body => body.Input.Role == "caller" && IlSqlObjectPathExtractor.IsRoot(body.Observation)
+            && body.Observation.ObjectBody!.OwnerType.Contains("names:9:TableFlow)", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(13, roots.Length);
+        foreach (var root in roots.Where(body => body.Observation.ObjectBody!.Name is not ("First" or "Second")))
+        {
+            var result = IlSqlObjectPathExtractor.Extract(root, bodies, new(100_000));
+            Assert.Empty(result.Paths);
+            Assert.NotEmpty(result.Gaps);
+        }
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void Table_flow_requires_inspected_accessors_exact_framework_and_available_budget(string language)
+    {
+        var bodies = Bodies(language);
+        var root = bodies.Single(body => body.Observation.ObjectBody!.Name == "First");
+        foreach (var name in new[] { "get_State", "set_State", "FetchFirst", "FetchSecond" })
+        {
+            var target = bodies.Single(body => body.Observation.ObjectBody!.Name == name);
+            foreach (var variant in new[]
+            {
+                bodies.Where(body => body != target).ToArray(),
+                bodies.Append(target).ToArray(),
+                bodies.Select(body => body == target ? body with { Input = body.Input with { RawFileSha256 = "invalid" } } : body).ToArray(),
+                bodies.Select(body => body == target ? body with { Observation = body.Observation with { ExceptionRegionCount = 1 } } : body).ToArray()
+            })
+            {
+                var result = IlSqlObjectPathExtractor.Extract(root, variant, new(100_000));
+                Assert.Empty(result.Paths);
+                Assert.NotEmpty(result.Gaps);
+            }
+            if (name == "set_State")
+            {
+                var missingField = bodies.Select(body => body == target ? body with { Observation = body.Observation with
+                    { ObjectBody = body.Observation.ObjectBody! with { PrivateInstanceFields = [] } } } : body).ToArray();
+                Assert.Empty(IlSqlObjectPathExtractor.Extract(root, missingField, new(100_000)).Paths);
+            }
+        }
+        var wrongApi = root with { Observation = root.Observation with
+        {
+            Calls = root.Observation.Calls.Select(call => call.TargetIdentity.Contains("|member:5:Merge|", StringComparison.Ordinal)
+                ? call with { TargetIdentity = call.TargetIdentity.Replace("b77a5c561934e089", "0000000000000000", StringComparison.Ordinal) } : call).ToArray()
+        } };
+        Assert.Empty(IlSqlObjectPathExtractor.Extract(wrongApi, bodies.Select(body => body == root ? wrongApi : body).ToArray(), new(100_000)).Paths);
+        var budget = new IlBodyEvidenceExtractor.IlWorkBudget(100_000);
+        Assert.Single(IlSqlObjectPathExtractor.Extract(root, bodies, budget).Paths);
+        Assert.Single(IlSqlObjectPathExtractor.Extract(root, bodies, new(budget.Consumed)).Paths);
+        Assert.Empty(IlSqlObjectPathExtractor.Extract(root, bodies, new(budget.Consumed - 1)).Paths);
     }
 
     private static IReadOnlyList<IlSqlObjectPathExtractor.Body> Bodies(string language)

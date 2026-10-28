@@ -1,98 +1,64 @@
 # Consolidated compiled-wrapper evidence handoff
 
-Work on the public corpus in `samples/sql-compiled-wrapper-evidence`. Read AGENTS,
-the spec under `.kiro/specs/sql-compiled-wrapper-evidence`, its implementation state,
-`docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md`, current IL command/value rules,
-and source SQL parameter/DataSet/helper contracts before editing.
+Read AGENTS, `.kiro/specs/sql-compiled-wrapper-evidence/`,
+`docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md`, the current IL rules and
+source SQL contracts. Verify the exact branch/head and validation receipts first.
+Use only the public corpus in `samples/sql-compiled-wrapper-evidence`.
+Do not request another work-machine run to rediscover known unsupported shapes.
 
-This branch has bounded static object-path evidence, not SQL-A acceptance. Its finite matrix has
-20 entry cases, two local Tier3 SQL-shape candidates, 10 static object-path candidates and 10 unknowns.
-Do not turn expected unknowns passing a smoke into a clean application verdict.
-Do not request private inputs or a work-machine retry to fix missing capabilities.
+## Implemented bounded scope
 
-First verify the exact branch head and existing validation record. Reproduce the
-focused tests and compile-only native matrix. Preserve every existing source and
-IL comparison contract, refusal, provenance field and budget. Never invoke fixture
-methods, SQL providers, containers, a database or deployed application.
+IL extractor 0.2.3 supports a closed, dual-reader-agreed static object protocol:
+unique compiled call bodies, positional substitution, scalar constructor fields
+and getters, attached parameters, fresh DataSet Fill/return, and constant named
+first-row consumers. Evidence remains Tier3, not SQL contract or runtime proof.
 
-The bounded closed object protocol is implemented for this finite corpus. Verify
-each leg without widening the claims:
+Preserve two independent matrices:
 
-1. Actual encoded custom constructor stores and corresponding field/getter loads,
-   exact unique caller/callee/type identities, positional argument substitution,
-   assignment spans as IL locations, and binary/provenance binding. No name-based
-   wrapper exceptions or source-derived assumptions about a compiled body.
-2. Forward a fresh parameter object and returned DataSet through the exact call
-   instance; refuse alias/escape/mutation, recursion, virtual ambiguity, unsupported
-   control flow and competing assembly/body candidates. Keep IL at Tier3.
-3. Verify only the admitted fresh-empty Merge/field consumer relation. Incoming data is
-   not destination data; preserve unknown existing destination schema, schema
-   union, mutation and aliases. Never claim row/value/type/null/runtime behavior.
-4. Keep contract comparison **unproven**: the compiled path is not a legacy source
-   parameter/result binding. An independent admitted contract and explicit binding
-   to the same operation/execution/consumer are still required before matches.
+- Original: 20 roots across C#/VB, 10 static candidates and 10 unknowns, two local
+  shape facts. Direct, Forwarded, FieldObject, PropertyObject and MergeFresh are
+  positive; Mutated, Escaped, Branch, MergeExisting and MergeMutated are unknown.
+- Named-table: 26 roots across C#/VB, four static candidates and 22 unknowns.
+  First/Second each allocate a property-held fresh DataSet, add two distinct named
+  tables, merge first tables from two different returned DataSets, and consume
+  destination slot zero or one. Conditional, Mutated, UnknownHelper, RepeatedMerge,
+  ClearMerge, Existing, Exceptional, DuplicateName, OutOfRange, DynamicSlot and
+  ThirdTable remain refused.
 
-Expected positive roots in each language: Direct, Forwarded, FieldObject,
-PropertyObject and MergeFresh. Mutated, Escaped, Branch, MergeExisting and
-MergeMutated remain unknown. MergeFresh has distinct filled/consumer allocation
-IDs and `fresh-empty-schema-union-candidate`, never original-result identity.
+Each named-table candidate binds the selected execution, command/parameters,
+filled and destination DataSets and distinct table identities. IDs are root-local;
+join them only with their root/body/binary/frame/offset context. The relation is
+`fresh-empty-table-schema-union-candidate`, not result aliasing or snapshot copying.
+The native smoke matrix schema is version 3; original `rows` and new `tableRows`
+have separate summaries. Never change expectations just to obtain a pass.
 
-Separate remaining blockers: complex DDL bodies with locals, joins, computed
-projections and ordering remain unsupported by existing admission. Explicit
-server/database/schema/procedure identity and source/binary/deployed correspondence
-remain owner inputs. A later finite schema-admission/comparison design needs its
-own scope; do not implement a general parser or silently relabel manual schema as
-independent synthetic declarations. Case-only names remain unknown. Do not request
-another private run merely to rediscover these known capability gaps.
+## Deliberate boundaries
 
-## Newly supplied fit shape: next public fixture, not current coverage
+Unknown helper effects, writes, Clear/re-Merge, conditional and exceptional paths
+refuse the entire candidate. In-memory lifecycle controls separately demonstrate
+guarded/unmatched replacement, preserved schema versus replaced values, and
+partial state at injected failure boundaries. These do not establish positive
+extraction of mutations, exception rollback, session state or private behavior.
 
-Read the new application-shape section in the validation document. Before further
-implementation, independently author C#/VB fixtures for a holder property assigned
-a fresh DataSet with two named tables; two DIFFERENT DataSet-returning functions
-whose first tables are merged into destination indices zero and one; and later
-Select/filter/enrichment helpers. Preserve separate execution lineage, never a
-snapshot-copy assertion. Current route refuses these extensions.
+Remaining capabilities need separate bounded designs: custom parameters in
+ArrayList, cleanup/fallback alternatives, Select predicates and value writes,
+application-authored derived tables, session/refresh identity, complex DDL with
+locals/joins/computed projections/ordering, and compiled-candidate-to-contract
+comparison. No legacy binding can stand in for those missing proofs. Owner
+server/database/schema/procedure identity and exact binary/deployment correspondence
+remain separate inputs; manual declarations must retain their true origin.
 
-Add explicit controls for four custom parameters collected in ArrayList,
-open/execute/catch/log/finally-close and fresh fallback DataSet alternatives,
-holder aliases and helper exposure. Separate Select predicate reads, RHS column
-reads and LHS value writes; do not infer schema mutation merely from value writes
-or preserve overwritten value lineage. Unknown helper effects remain unknown.
+## Verification and return
 
-Keep an application-authored auxiliary table with seven typed columns, distinct
-keys, derived values and Rows.Add separate from stored-procedure result contracts.
-Model cross-method/class-state refresh initialization separately. One observed
-save caller does not prove save-only initialization or caller completeness, and
-commented initialization supplies no evidence. These are public-safe shape
-requirements, not exact private/OCR source to copy. Do not expand the frozen
-20-root success denominator or claim private fit until this new corpus is tested.
-Obtain the coordinator's implementation scope before widening the protocol.
+Reproduce focused object-path/lifecycle tests and the compile-only native matrix.
+Pin missing/ambiguous accessor bodies, wrong framework identity, private-field
+ownership and budget refusals. Preserve legacy source and IL contracts, hashes,
+tiers and denominators. Run one frozen full Debug `-warnaserror` gate for shared
+core changes, followed sequentially by retained smokes; document relevant pinned
+checks or explicit justified deferrals. Update tasks and implementation state.
 
-Include every correction control in the validation document: matched versus
-unmatched/skipped enrichment, unknown helper effects, failure before reset and
-after each merge, partial enrichment/list population, enclosing constructor
-catches, and explicit session-object replacement. Keep destination allocation,
-column/schema origin and read-time value origin separate. Never infer universal
-overwrite or an always-empty failure result from a single successful path.
-These controls are requirements, not already passing fixtures or supported routes.
-
-Use both existing C# and VB cases and their mutation/escape/branch/Merge controls.
-Add independent negatives for wrong assembly/key, stale hashes, missing/ambiguous
-bodies, changed constructor/store/load, limits and unsupported destinations before
-claiming any newly supported case. Do not remove unsupported cases or change their
-expectations merely to make the matrix green. Extend rule limitations and retain
-exact generator and bounded-input hashes on every new derived artifact.
-
-Run focused matrix/version/scope/bounds first, then one frozen full Debug suite with
-`-warnaserror`, relevant retained offline and pinned checks sequentially. No duplicate
-test infrastructure, full DNN runtime, general SQL parser, join inference or new ORM
-support. Push only the bounded validated branch when authorized; no PR, merge, ACK
-policy change or review spend. Final return: exact head, supported legs, still-missing
-legs, unchanged denominators, gate failures/reruns, and the smallest next action.
-
-Return one consolidated matrix: exact tool/binary head, every finite leg's
-supported/unknown status, hashes, tiers/rules, contract origin, gaps and smallest
-remaining capability/input. No private inputs or work-machine acceptance are
-authorized by this local prompt. Owner schema/identity inputs and private fit are
-separate from the passing public synthetic corpus.
+Do not invoke fixture methods, SQL providers, containers, a private application,
+or private inputs. No PR, merge, ACK-policy change or review spend is authorized
+by this prompt. Return exact head, each matrix, provenance, failures/reruns,
+remaining gaps and the smallest next action. Passing synthetic candidates are
+not private SQL acceptance, deployment readiness or a clean application verdict.

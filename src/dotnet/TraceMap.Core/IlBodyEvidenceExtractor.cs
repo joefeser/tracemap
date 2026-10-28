@@ -703,7 +703,11 @@ internal static class IlBodyEvidenceExtractor
                         ("filledDataSetIdentity", path.FilledDataSetIdentity), ("consumerDataSetIdentity", path.ConsumerDataSetIdentity),
                         ("consumerRelation", path.Relation), ("sites", System.Text.Json.JsonSerializer.Serialize(sites)),
                         ("limitation", IlSqlObjectPathExtractor.Limitation)
-                    })));
+                    }.Concat(path.ConsumerTableIdentity is null ? [] : new (string Key, string Value)[]
+                    {
+                        ("consumerTableIdentity", path.ConsumerTableIdentity),
+                        ("filledTableIdentity", path.FilledTableIdentity!)
+                    }).ToArray())));
             }
             foreach (var gap in result.Gaps)
                 facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlSqlObjectPath,

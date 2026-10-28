@@ -112,3 +112,35 @@ validated denominator. Complex DDL admission/identity/comparison remain separate
 This results-only update follows the frozen implementation; no source changes
 occurred during final gates. Ready to publish the branch, not a PR/merge or private
 application acceptance. No SQL/container/private-input execution occurred.
+
+### Lifecycle behavior regression controls
+
+Added `DataSetLifecycleBoundaryTests`: 12 public synthetic in-memory cases,
+focused Debug `-warnaserror` passed with no failures or skips. This is a test-only
+addition after the earlier freeze, not another full-suite validation. It verifies
+conditional replacement, column import versus value origin, Clear/re-Merge and
+seven injected failure boundaries plus enclosing-catch control flow. Failures
+are injected between operations, not within Merge. No SQL/provider/private input
+was executed. Full application-shape extraction, VB parity and session/skip-flag
+analysis remain pending; no support denominator or production rule was widened.
+
+### Bounded named-table implementation freeze
+
+Implemented the separate two-execution named-table continuation with IL extractor
+0.2.3. The original 20-root denominator remains 10 paths/10 unknowns; the new
+26-root C#/VB denominator is four paths/22 unknowns. Source and destination
+DataSet/table identities and selected execution are retained separately. Unknown
+helpers, row writes, conditional/exception paths, existing state, repeated Merge,
+Clear/re-Merge, duplicate names, dynamic/out-of-range slots and a third table refuse.
+No general session, predicate, derived-schema or wrapper parameter admission is
+claimed. Twelve in-memory lifecycle controls remain separate from extraction.
+
+Focused extraction/lifecycle gate: 28 passed. Broader IL gate: 206 passed,
+one skip, zero failures. Five Python smoke guards passed. Development native
+smoke matches both denominators. Initial assertion failures reflected the new
+native paths and were repaired by separating original/new owner identities;
+expectations were not weakened. A smoke invocation with an incorrect CLI filename
+failed before scanning; the corrected tracemap.dll invocation passed.
+
+Frozen full-suite, repeated native replay and retained regression gates are still
+pending. This note does not claim final validation or publication.

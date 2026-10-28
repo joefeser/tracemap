@@ -24,6 +24,13 @@ class CompiledWrapperSmokeGuards(unittest.TestCase):
         with self.assertRaises(ValueError):
             MODULE.inspect([], "csharp", {"caller": "a", "wrapper": "b"})
 
+    def test_table_matrix_is_separate_and_bounded(self):
+        self.assertEqual(MODULE.TABLE_CASES, ("First", "Second", "Conditional", "Mutated", "UnknownHelper",
+                         "RepeatedMerge", "ClearMerge", "Existing", "Exceptional", "DuplicateName",
+                         "OutOfRange", "DynamicSlot", "ThirdTable"))
+        self.assertEqual(len(set(MODULE.TABLE_CASES)), 13)
+        self.assertEqual(len(MODULE.CASES), 10)
+
     def test_duplicate_native_identity_fails(self):
         with self.assertRaisesRegex(ValueError, "duplicate fact identity"):
             MODULE.inspect([{"factId": "same"}, {"factId": "same"}], "vb", {})

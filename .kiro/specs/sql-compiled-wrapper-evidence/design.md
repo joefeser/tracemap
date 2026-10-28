@@ -45,3 +45,19 @@ The route follows only fully inspected unique nonvirtual bodies and refuses all
 unrecognized calls, exceptional/conditional flow, object mutations and escapes.
 Local aliases are usable only when every use is inspected; no uninspected alias
 or preexisting field ownership is inferred. Scalar strings remain hashed.
+
+## Table-flow continuation matrix (before extraction validation)
+
+Preserve the ten original roots per language as their own denominator. Add a
+separate TableFlow corpus: First and Second each allocate one property-backed
+DataSet and two named tables, merge first-result tables from two distinct fetch
+methods, then consume destination ordinal zero or one. Each must preserve the
+selected execution, filled DataSet, source-table and destination-table identities.
+No match or runtime ownership claim follows from this static candidate.
+Conditional writes, unknown helpers, catch/finally, repeated Merge, existing
+destination, out-of-range ordinals and duplicate table names must remain refused.
+The separate matrix is 13 roots per language: First and Second positive;
+Conditional, Mutated, UnknownHelper, RepeatedMerge, ClearMerge, Existing,
+Exceptional, DuplicateName, OutOfRange, DynamicSlot and ThirdTable unknown.
+The original matrix stays at ten roots per language. All candidates remain Tier3;
+conditional mutation and exception-state computation are not implemented.
