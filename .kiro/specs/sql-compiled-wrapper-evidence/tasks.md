@@ -61,3 +61,12 @@
 - [x] Compile the CLI and update limitations/work-machine prompt for the new, behaviorally unvalidated protocol.
 - [ ] Run the new focused entry tests and retained regressions (explicitly deferred by Joe; no pass claimed).
 - [ ] Run the shared-core full gate and work-machine acceptance (not run; prior baseline validation does not cover this patch).
+
+
+## Metadata handoff continuation — 2026-10-28 (tests explicitly deferred)
+- [x] Preserve independently agreed raw/call/object metadata when generic value summaries disagree; keep all independent object/raw/call refusal gates.
+- [x] Charge actual retained text under the unchanged 1 MiB/256-instruction/64-field caps and expose per-reader admission reasons/credits.
+- [x] Add root/callee/constructor-stage failure receipts and independent scale-shaped C#/VB fixtures with 160 unrelated methods before a producer.
+- [x] Author regression definitions and a single sanitized Claude diagnostic/reproducer fallback; compile-check and publish the patch.
+- [ ] Run retention/agreement/entry tests and native scale replay (explicitly deferred by Joe; not claimed).
+- [ ] Establish real-input lineage success after metadata admission (not claimed by compilation).

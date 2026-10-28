@@ -106,6 +106,12 @@ public sealed class IlSqlLifecycleEntryTests
             var root = Assert.Single(bodies, b => b.Observation.ObjectBody?.Name == name);
             var fact = Assert.Single(facts, f => f.TargetSymbol == root.Observation.BodyIdentity
                 && f.FactType == FactTypes.ManagedIlSqlLifecycleEntryCandidate);
+            var declared = Assert.Single(facts, item => item.TargetSymbol == root.Observation.BodyIdentity
+                && item.FactType == FactTypes.ManagedIlBodyDeclared);
+            Assert.Equal("retained", declared.Properties["objectBodyState"]);
+            Assert.Equal("il-object-body-retention/1", declared.Properties["objectBodyMetadataSchema"]);
+            Assert.True(declared.Properties.ContainsKey("objectBodyRetention"));
+            Assert.True(declared.Properties.ContainsKey("objectBodyAgreement"));
             Assert.Equal(IlSqlLifecycleExtractor.EntrySchema, fact.Properties["sqlLifecycleSchema"]);
             Assert.Equal(RuleIds.DotNetIlSqlLifecycle, fact.RuleId);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);

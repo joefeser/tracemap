@@ -5,6 +5,36 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
+## Current metadata-handoff repair
+
+Use the newly fetched public head, including IL extractor **0.2.5** and policy
+`explicit-il-body-evidence.v9`. Both this repair and the preceding entry patch are
+compile-only publications: Joe explicitly deferred tests. Do not apply historical
+87/5,527 pass totals to either patch, and do not run test suites for this iteration.
+
+The repair keeps independently agreed object metadata when generic value summaries
+fail and charges actual retained text under unchanged bounds. Its scale fixture has
+160 unrelated methods before a producer. This is a proposed repair, not a private
+acceptance claim. No new photos or manually supplied inputs are needed.
+
+After one bounded native run, inspect the selected roots and exact callees using:
+
+- `ManagedIlBodyDeclared.objectBodyMetadataSchema` = `il-object-body-retention/1`;
+- `objectBodyState`, `objectBodyRetention`, `objectBodyAgreement` (JSON properties);
+- lifecycle gap `bodyMetadataFailure` (JSON), including stage, failing body/token,
+  instruction count, retention/agreement, and constructor-search counts if present.
+
+`root-metadata` / `callee-metadata` mean metadata was missing before that body was
+interpreted. Do not infer unsupported try/catch or delegated enumeration from
+`lifecycle-body-unavailable`. The interpreter already follows inspected callees.
+Raw `il-complete` / admitted status does not establish structured metadata presence.
+`provenanceState: unbound` does not say whether arguments or object metadata were
+retained. A constructor-selection gap alone does not prove multiple-overload ambiguity.
+
+If this run still has no entry candidate for the actual path, execute the failure-only
+Claude request at the end of this file using the output already produced. Do not
+start a second whole-app scan just to repeat it. Return one capsule with the result.
+
 ## Entry patch status and execution constraint
 
 The published branch now includes an entry-protocol patch after the previously
@@ -246,3 +276,46 @@ and whether later flow legs remain unsupported. Do not call an all-unknown repor
 acceptance or call the overall SQL effort, runtime, deployment or private application
 complete. Do not change implementation merely to clear a test; report concrete
 failures and evidence first.
+
+
+## Failure-only Claude request: one diagnostic capsule and independent sample
+
+Use this only if the new metadata-handoff iteration still cannot produce the
+selected native entry lineage. Do the work locally; do not ask Joe for more pictures,
+private source pasted into chat, DLL uploads, hash transcription or another full scan.
+Use the existing output and available local source/metadata inspection.
+
+1. Privately identify the first failed root/callee/constructor stage. Link the exact
+   current tool SHA and local body fact, metadata token, binary and receipt. Retain
+   private names, paths, hashes and mappings only in the private evidence note.
+2. Return one sanitized table with stable opaque aliases and the actual reason code,
+   instruction count, declared-field count, requested character credits, used-before
+   credits and cap for each reader, plus raw/call/value/object agreement flags.
+   Distinguish missing peer, actual disagreement, field/instruction/text cap and
+   retention-budget refusal. If a receipt is absent, say absent; do not invent it.
+3. For constructor selection, report the admitted parameterless match count and
+   unavailable-metadata count. Privately inspect whether the needed parameterless
+   constructor exists and whether its metadata was retained. Other overloads are
+   not automatically an ambiguity. Distinguish absent, dropped and multiple matches.
+4. If metadata is retained and interpretation fails later, record the exact native
+   gap and public framework API/opcode shape needed to reproduce it. Do not call it
+   a body-retention failure or assume it is the last blocker.
+5. Independently author the smallest synthetic C#/VB sample that reproduces that
+   single failing property using neutral names/literals and public APIs. It should
+   represent the relevant field/method counts, argument/constructor shape, root and
+   callee relation or control operation. Include an opaque root label and expected
+   native outcome/reason; distinguish executed observations from proposed expectations.
+   Never copy, transliterate, or merely rename employer code/SQL. Include that independently authored neutral sample in this requested sanitized
+   return only after checking it contains no employer identifiers/source/SQL. If
+   that cannot be assured, retain it locally and return one precise abstract shape
+   detail instead. This does not authorize public commits or publication.
+6. If no faithful public-safe reproducer can be authored, identify one specific
+   missing metadata fact or shape detail. Do not return two speculative causes or
+   demand another broad investigation. A native positive on one leg does not close
+   missing downstream transformation/schema/runtime legs.
+
+Deliver once: the sanitized diagnostic table, the independently authored sample or
+one precise missing detail, and separate entry-lineage/consumer/schema statuses.
+Keep the exact evidence note and all employer artifacts on the work machine. Do not
+execute the application/SQL or change implementation, ACK policy, accepted baselines,
+push/PR/merge/deployment state. Test suites remain deferred unless Joe authorizes them.

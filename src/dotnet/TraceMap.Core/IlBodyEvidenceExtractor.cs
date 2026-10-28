@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v8";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v9";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -180,6 +180,7 @@ internal static class IlBodyEvidenceExtractor
                 IlSqlObjectPathExtractor.MaxFrames, IlSqlObjectPathExtractor.MaxObjects, IlSqlObjectPathExtractor.MaxSites,
                 maxIndexedBodies = 4096, maxInstructions = 256, maxFields = 64,
                 retainedCharacterBudgetPerReader = Math.Min(limits.MaxTotalWorkUnits, 1_048_576),
+                retentionProfile = "actual-retained-text.v2", independentObjectBodyAgreement = true,
                 aggregateWork = limits.MaxTotalWorkUnits },
             sqlLifecycleLimits = new { IlSqlLifecycleExtractor.Schema, maxSteps = 8192, maxFrames = 24,
                 maxObjects = 256, maxExecutions = 8, maxFailures = 256, maxIndexedBodies = 4096,
@@ -497,6 +498,10 @@ internal static class IlBodyEvidenceExtractor
                 bodyProperties["maxStack"] = body.MaxStack;
                 bodyProperties["initLocals"] = body.InitLocals ? "true" : "false";
                 bodyProperties["limitation"] = BodyLimitation;
+                bodyProperties["objectBodyMetadataSchema"] = "il-object-body-retention/1";
+                bodyProperties["objectBodyState"] = body.ObjectBody is null ? "unavailable" : "retained";
+                bodyProperties["objectBodyRetention"] = SqlServerSchemaEvidence.Json(body.ObjectBodyRetention);
+                bodyProperties["objectBodyAgreement"] = SqlServerSchemaEvidence.Json(body.ObjectBodyAgreement);
                 if (compiledMethodsByLocatorAndToken.TryGetValue((outcome.SafeLocator, body.MetadataToken), out var candidates)
                     && candidates.Count == 1)
                     bodyProperties["compiledFactId"] = candidates[0].FactId;
@@ -707,14 +712,18 @@ internal static class IlBodyEvidenceExtractor
                         })));
                 }
                 foreach (var gap in result.Gaps)
+                {
+                    var gapProperties = CopyToSorted(common, new (string Key, string Value)[]
+                    {
+                        ("sqlLifecycleSchema", lifecycleSchema), ("guard", guard), ("gapKind", gap),
+                        ("limitation", IlSqlLifecycleExtractor.Limitation)
+                    });
+                    if (result.MetadataFailure is not null)
+                        gapProperties["bodyMetadataFailure"] = SqlServerSchemaEvidence.Json(result.MetadataFailure);
                     facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlSqlLifecycle,
                         EvidenceTiers.Tier4Unknown, IlEvidence(root.Input.SafeLocator), targetSymbol: root.Observation.BodyIdentity,
-                        contractElement: "il-sql-lifecycle:" + guard + ":" + gap,
-                        properties: CopyToSorted(common, new (string Key, string Value)[]
-                        {
-                            ("sqlLifecycleSchema", lifecycleSchema), ("guard", guard), ("gapKind", gap),
-                            ("limitation", IlSqlLifecycleExtractor.Limitation)
-                        })));
+                        contractElement: "il-sql-lifecycle:" + guard + ":" + gap, properties: gapProperties));
+                }
             }
         }
     }
@@ -822,13 +831,77 @@ internal static class IlBodyEvidenceExtractor
         IReadOnlyList<IlBodyObservation> srm)
     {
         var byToken = srm.ToDictionary(body => body.MetadataToken, StringComparer.Ordinal);
-        return cecil.Select(body => byToken.TryGetValue(body.MetadataToken, out var other)
-            && body.Calls.Count == other.Calls.Count
-            && body.Calls.Zip(other.Calls, (left, right) => left.StackShape == right.StackShape).All(equal => equal)
-            && System.Text.Json.JsonSerializer.Serialize(body.ValueFlow) == System.Text.Json.JsonSerializer.Serialize(other.ValueFlow)
-                ? body with { ObjectBody = System.Text.Json.JsonSerializer.Serialize(body.ObjectBody)
-                    == System.Text.Json.JsonSerializer.Serialize(other.ObjectBody) ? body.ObjectBody : null }
-                : body with { ValueFlow = new([], ["IlValueReaderDisagreementOrLimit"]), ObjectBody = null }).ToArray();
+        return cecil.Select(body =>
+        {
+            byToken.TryGetValue(body.MetadataToken, out var other);
+            var raw = other is not null && RawBodiesAgree(body, other);
+            var callShapes = other is not null && body.Calls.Count == other.Calls.Count
+                && body.Calls.Zip(other.Calls, (left, right) => left.StackShape == right.StackShape).All(equal => equal);
+            var values = raw && callShapes && System.Text.Json.JsonSerializer.Serialize(body.ValueFlow)
+                == System.Text.Json.JsonSerializer.Serialize(other!.ValueFlow);
+            // The object interpreter uses independently decoded instructions and call
+            // shapes, not the generic operand-value summary. Its evidence is agreed
+            // separately; a value-summary refusal must not erase an agreed body.
+            var objects = raw && callShapes && body.ObjectBody is not null && other!.ObjectBody is not null
+                && System.Text.Json.JsonSerializer.Serialize(body.ObjectBody)
+                    == System.Text.Json.JsonSerializer.Serialize(other.ObjectBody);
+            var reason = objects ? "dual-reader-agreed"
+                : other is null ? "object-body-peer-missing"
+                : !raw ? "object-body-raw-disagreement"
+                : !callShapes ? "object-body-call-shape-disagreement"
+                : body.ObjectBody is null ? body.ObjectBodyRetention?.Reason ?? "object-body-cecil-unavailable"
+                : other.ObjectBody is null ? other.ObjectBodyRetention?.Reason ?? "object-body-srm-unavailable"
+                : "object-body-reader-disagreement";
+            var retention = (body.ObjectBody is not null && other?.ObjectBody is null
+                ? other?.ObjectBodyRetention : body.ObjectBodyRetention)
+                ?? new("unavailable", reason, -1, 0, 0, 0);
+            return body with
+            {
+                ValueFlow = values ? body.ValueFlow : new([], ["IlValueReaderDisagreementOrLimit"]),
+                ObjectBody = objects ? body.ObjectBody : null,
+                ObjectBodyRetention = retention with { State = objects ? "retained" : "unavailable", Reason = reason },
+                ObjectBodyAgreement = new(raw, callShapes, values, objects, body.ObjectBodyRetention, other?.ObjectBodyRetention)
+            };
+        }).ToArray();
+    }
+
+    private static bool RawBodiesAgree(IlBodyObservation left, IlBodyObservation right)
+        => left.BodyIdentity == right.BodyIdentity && left.MethodIdentity == right.MethodIdentity
+            && left.InstructionCount == right.InstructionCount && left.InstructionsSha256 == right.InstructionsSha256
+            && left.OpcodesSha256 == right.OpcodesSha256 && left.LocalCount == right.LocalCount
+            && left.LocalsSha256 == right.LocalsSha256 && left.ExceptionRegionCount == right.ExceptionRegionCount
+            && left.ExceptionRegionsSha256 == right.ExceptionRegionsSha256 && left.MaxStack == right.MaxStack
+            && left.InitLocals == right.InitLocals && left.Calls.Count == right.Calls.Count
+            && left.Calls.Zip(right.Calls, (a, b) => a.Offset == b.Offset && a.Opcode == b.Opcode
+                && a.ReferenceKind == b.ReferenceKind && a.ReferenceToken == b.ReferenceToken
+                && a.TargetIdentity == b.TargetIdentity).All(equal => equal);
+
+    internal static IlObjectBody? RetainObjectBody(int instructionCount, int declaringFieldCount,
+        Func<IlObjectBody> create, IlBodyLimits limits, IlWorkBudget budget, out IlObjectBodyRetention retention)
+    {
+        var before = budget.Consumed;
+        var reason = instructionCount > 256 ? "object-body-instruction-limit"
+            : declaringFieldCount > 64 ? "object-body-field-limit" : null;
+        if (reason is not null)
+        {
+            retention = new("unavailable", reason, declaringFieldCount, 0, before, budget.Maximum);
+            return null;
+        }
+        var candidate = create();
+        // Charge the strings actually retained, including signature/owner/name and
+        // private field identities. Do not reserve MaxTextLength for every declared
+        // field on every method; public/static fields are not retained in this lane.
+        var characters = candidate.Instructions.Sum(text => (long)text.Length)
+            + (candidate.ExceptionRegions ?? []).Sum(text => (long)text.Length)
+            + candidate.PrivateInstanceFields.Sum(text => (long)text.Length)
+            + candidate.MemberReference.Length + candidate.OwnerType.Length + candidate.Name.Length;
+        if (candidate.MemberReference.Length > limits.MaxTextLength || candidate.OwnerType.Length > limits.MaxTextLength
+            || candidate.Name.Length > limits.MaxTextLength || candidate.PrivateInstanceFields.Any(field => field.Length > limits.MaxTextLength))
+            reason = "object-body-text-limit";
+        else if (!budget.TryConsume(characters)) reason = "object-body-retention-budget";
+        retention = new(reason is null ? "retained" : "unavailable", reason ?? "reader-retained",
+            declaringFieldCount, characters, before, budget.Maximum);
+        return reason is null ? candidate : null;
     }
 
     // Addresses are used internally for conservative object exposure, never
@@ -943,6 +1016,13 @@ internal static class IlBodyEvidenceExtractor
         var bodyIdentity = $"{methodIdentity}|il-body:instructions:{instructions.Count.ToString(CultureInfo.InvariantCulture)}:sha256:{bodySha256}";
         if (bodyIdentity.Length > limits.MaxTextLength)
             throw new IlEvidenceException("IlTextLimitExceeded");
+        var objectBody = RetainObjectBody(instructions.Count, method.DeclaringType.Fields.Count,
+            () => new IlObjectBody(instructions, $"memberref|type:{ScopedNamedType(method.DeclaringType)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(method.Name)}|{signature}",
+                    ScopedNamedType(method.DeclaringType), method.Name, method.Parameters.Count, method.HasThis,
+                    method.ReturnType.FullName != "System.Void", method.IsVirtual,
+                    method.HasGenericParameters || method.DeclaringType.HasGenericParameters,
+                    method.DeclaringType.Fields.Where(field => field.IsPrivate && !field.IsStatic)
+                        .Select(field => CecilFieldIdentity(field)["fielddef|".Length..]).Order(StringComparer.Ordinal).ToArray(), handlers), limits, objectBudget, out var objectRetention);
         return new IlBodyObservation(
             ManagedMetadataExtractor.Token(unchecked((int)method.MetadataToken.ToUInt32())),
             methodIdentity,
@@ -960,15 +1040,7 @@ internal static class IlBodyEvidenceExtractor
             calls,
             retainDiagnosticInstructions ? instructions : null,
             ExtractCallValues(instructions, calls, body.MaxStackSize, handlers, valueBudget),
-            instructions.Count <= 256 && method.DeclaringType.Fields.Count <= 64
-                && objectBudget.TryConsume(instructions.Sum(item => (long)item.Length) + handlers.Sum(item => (long)item.Length)
-                    + (long)method.DeclaringType.Fields.Count * limits.MaxTextLength)
-                ? new IlObjectBody(instructions, $"memberref|type:{ScopedNamedType(method.DeclaringType)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(method.Name)}|{signature}",
-                    ScopedNamedType(method.DeclaringType), method.Name, method.Parameters.Count, method.HasThis,
-                    method.ReturnType.FullName != "System.Void", method.IsVirtual,
-                    method.HasGenericParameters || method.DeclaringType.HasGenericParameters,
-                    method.DeclaringType.Fields.Where(field => field.IsPrivate && !field.IsStatic)
-                        .Select(field => CecilFieldIdentity(field)["fielddef|".Length..]).Order(StringComparer.Ordinal).ToArray(), handlers) : null);
+            objectBody, objectRetention);
     }
 
     // Cecil and Reflection.Emit may use different display names for an opcode.
@@ -1406,6 +1478,19 @@ internal static class IlBodyEvidenceExtractor
         var bodyIdentity = $"{methodIdentity}|il-body:instructions:{instructions.Count.ToString(CultureInfo.InvariantCulture)}:sha256:{bodySha256}";
         if (bodyIdentity.Length > limits.MaxTextLength)
             throw new IlEvidenceException("IlTextLimitExceeded");
+        var objectBody = RetainObjectBody(instructions.Count, reader.GetTypeDefinition(declaringTypeHandle).GetFields().Count,
+            () => new IlObjectBody(instructions, $"memberref|type:{provider.GetTypeFromEntityHandle(declaringTypeHandle)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(name)}|{signature}",
+                    provider.GetTypeFromEntityHandle(declaringTypeHandle), name, decoded.ParameterTypes.Length,
+                    decoded.Header.IsInstance, decoded.ReturnType != "type(namespace:6:System|names:4:Void)",
+                    (method.Attributes & System.Reflection.MethodAttributes.Virtual) != 0,
+                    method.GetGenericParameters().Count != 0 || reader.GetTypeDefinition(declaringTypeHandle).GetGenericParameters().Count != 0,
+                    reader.GetTypeDefinition(declaringTypeHandle).GetFields().Where(fieldHandle =>
+                    {
+                        var attributes = reader.GetFieldDefinition(fieldHandle).Attributes;
+                        return (attributes & System.Reflection.FieldAttributes.FieldAccessMask) == System.Reflection.FieldAttributes.Private
+                            && (attributes & System.Reflection.FieldAttributes.Static) == 0;
+                    }).Select(fieldHandle => SrmFieldIdentity(reader, provider, fieldHandle)["fielddef|".Length..])
+                        .Order(StringComparer.Ordinal).ToArray(), handlers), limits, objectBudget, out var objectRetention);
         return new IlBodyObservation(
             ManagedMetadataExtractor.Token(MetadataTokens.GetToken(handle)),
             methodIdentity,
@@ -1423,21 +1508,7 @@ internal static class IlBodyEvidenceExtractor
             calls,
             retainDiagnosticInstructions ? instructions : null,
             ExtractCallValues(instructions, calls, body.MaxStack, handlers, valueBudget),
-            instructions.Count <= 256 && reader.GetTypeDefinition(declaringTypeHandle).GetFields().Count <= 64
-                && objectBudget.TryConsume(instructions.Sum(item => (long)item.Length) + handlers.Sum(item => (long)item.Length)
-                    + (long)reader.GetTypeDefinition(declaringTypeHandle).GetFields().Count * limits.MaxTextLength)
-                ? new IlObjectBody(instructions, $"memberref|type:{provider.GetTypeFromEntityHandle(declaringTypeHandle)}|member:{ManagedMetadataExtractor.EncodeIdentityComponent(name)}|{signature}",
-                    provider.GetTypeFromEntityHandle(declaringTypeHandle), name, decoded.ParameterTypes.Length,
-                    decoded.Header.IsInstance, decoded.ReturnType != "type(namespace:6:System|names:4:Void)",
-                    (method.Attributes & System.Reflection.MethodAttributes.Virtual) != 0,
-                    method.GetGenericParameters().Count != 0 || reader.GetTypeDefinition(declaringTypeHandle).GetGenericParameters().Count != 0,
-                    reader.GetTypeDefinition(declaringTypeHandle).GetFields().Where(fieldHandle =>
-                    {
-                        var attributes = reader.GetFieldDefinition(fieldHandle).Attributes;
-                        return (attributes & System.Reflection.FieldAttributes.FieldAccessMask) == System.Reflection.FieldAttributes.Private
-                            && (attributes & System.Reflection.FieldAttributes.Static) == 0;
-                    }).Select(fieldHandle => SrmFieldIdentity(reader, provider, fieldHandle)["fielddef|".Length..])
-                        .Order(StringComparer.Ordinal).ToArray(), handlers) : null);
+            objectBody, objectRetention);
     }
 
     private static (string Kind, string Token, string Identity) SrmBoundedTarget(string kind, string token, string identity, IlBodyLimits limits)
@@ -2061,6 +2132,7 @@ internal static class IlBodyEvidenceExtractor
         private long remaining = maximum;
         private readonly long initialMaximum = maximum;
         internal long Consumed => initialMaximum - remaining;
+        internal long Maximum => initialMaximum;
         internal long RefusedRequests { get; private set; }
         public bool TryConsume(long units)
         {

@@ -66,7 +66,17 @@ internal static class IlSqlLifecycleExtractor
         public string Claim => "conditional-static-lineage;normal-completion;row-existence-unproven";
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public EntryOutput? Entry { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public BodyMetadataFailure? MetadataFailure { get; init; }
     }
+    internal sealed record BodyMetadataFailure(string Stage, string Body, string Binary, string MetadataToken,
+        int InstructionCount, IlObjectBodyRetention? Retention, IlObjectBodyAgreement? Agreement,
+        int? AdmittedConstructorMatches = null, int? UnavailableBodiesInModule = null);
+    private static BodyMetadataFailure MetadataFailure(Body body, string stage,
+        int? constructorMatches = null, int? unavailableInModule = null)
+        => new(stage, body.Observation.BodyIdentity, body.Input.RawFileSha256!, body.Observation.MetadataToken,
+            body.Observation.InstructionCount, body.Observation.ObjectBodyRetention, body.Observation.ObjectBodyAgreement,
+            constructorMatches, unavailableInModule);
     internal sealed record GuardedRun(string Predicate, bool Value, Result Result);
 
     internal static IReadOnlyList<GuardedRun> ExtractGuarded(Body root, IReadOnlyList<Body> bodies,
@@ -92,13 +102,16 @@ internal static class IlSqlLifecycleExtractor
         internal bool Frozen, Attached;
         internal int Moves = 0;
     }
-    private sealed class Refusal(string message) : Exception(message);
+    private sealed class Refusal(string message, BodyMetadataFailure? metadataFailure = null) : Exception(message)
+    {
+        internal BodyMetadataFailure? MetadataFailure { get; } = metadataFailure;
+    }
 
     internal static Result Extract(Body root, IReadOnlyList<Body> bodies, bool enabled,
         IlBodyEvidenceExtractor.IlWorkBudget budget)
     {
         try { return new Machine(bodies, budget).Run(root, enabled); }
-        catch (Refusal error) { return new([], [], null, [error.Message]); }
+        catch (Refusal error) { return new Result([], [], null, [error.Message]) { MetadataFailure = error.MetadataFailure }; }
     }
 
     private sealed class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget)
@@ -141,7 +154,7 @@ internal static class IlSqlLifecycleExtractor
             if (bodies.Count > 4096 || !budget.TryConsume(bodies.Count)) throw new Refusal("lifecycle-index-limit");
             if (!bodies.Contains(root) || bodies.GroupBy(b => b.Observation.MethodIdentity, StringComparer.Ordinal).Any(g => g.Count() != 1))
                 throw new Refusal("lifecycle-ambiguous-input");
-            var meta = root.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable");
+            var meta = root.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable", MetadataFailure(root, "root-metadata"));
             var readRoot = IsReadRoot(root.Observation);
             var producer = IlSqlLifecycleApis.ReturnsDataSet(meta.MemberReference);
             var loader = IlSqlLifecycleApis.ReturnsVoid(meta.MemberReference);
@@ -155,7 +168,9 @@ internal static class IlSqlLifecycleExtractor
                 instance = New("custom", meta.OwnerType);
                 var ctor = bodies.Where(b => b.Observation.ObjectBody is { Name: ".ctor", ParameterCount: 0 } m
                     && m.OwnerType == meta.OwnerType).Take(2).ToArray();
-                if (ctor.Length != 1) throw new Refusal("lifecycle-constructor-unresolved");
+                if (ctor.Length != 1) throw new Refusal("lifecycle-constructor-unresolved",
+                    MetadataFailure(root, "constructor-selection", ctor.Length,
+                        bodies.Count(body => body.Input.RawFileSha256 == root.Input.RawFileSha256 && body.Observation.ObjectBody is null)));
                 Invoke(ctor[0], [instance], 0);
             }
             var guarded = IsGuardedRoot(root.Observation);
@@ -202,7 +217,7 @@ internal static class IlSqlLifecycleExtractor
 
         private Value Invoke(Body body, Value[] args, int depth)
         {
-            var meta = body.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable");
+            var meta = body.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable", MetadataFailure(body, "callee-metadata"));
             if (depth >= 24 || !active.Add(body.Observation.MethodIdentity)) throw new Refusal("lifecycle-recursion-limit");
             try
             {
@@ -384,7 +399,8 @@ internal static class IlSqlLifecycleExtractor
                             var targets = bodies.Where(b => b.Observation.MethodIdentity == call.TargetIdentity
                                 || b.Observation.ObjectBody?.MemberReference == call.TargetIdentity).Take(2).ToArray();
                             if (targets.Length != 1) throw new Refusal("lifecycle-unknown-call:" + call.TargetIdentity);
-                            var targetMeta = targets[0].Observation.ObjectBody!;
+                            var targetMeta = targets[0].Observation.ObjectBody
+                                ?? throw new Refusal("lifecycle-body-unavailable", MetadataFailure(targets[0], "callee-metadata"));
                             if (targetMeta.ParameterCount != shape.ParameterCount || targetMeta.HasThis != shape.HasThis
                                 || targetMeta.ReturnsValue != shape.ReturnsValue || op == "newobj" && targetMeta.Name != ".ctor")
                                 throw new Refusal("lifecycle-callee-shape");

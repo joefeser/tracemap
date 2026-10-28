@@ -110,7 +110,14 @@ internal sealed record IlBodyObservation(
     IReadOnlyList<IlCallObservation> Calls,
     IReadOnlyList<string>? DiagnosticInstructions = null,
     IlValueFlowObservation? ValueFlow = null,
-    IlObjectBody? ObjectBody = null);
+    IlObjectBody? ObjectBody = null,
+    IlObjectBodyRetention? ObjectBodyRetention = null,
+    IlObjectBodyAgreement? ObjectBodyAgreement = null);
+
+internal sealed record IlObjectBodyRetention(string State, string Reason, int DeclaringFieldCount,
+    long RequestedCharacters, long BudgetUsedBefore, long BudgetMaximum);
+internal sealed record IlObjectBodyAgreement(bool RawBody, bool CallShapes, bool ValueFlow, bool ObjectBody,
+    IlObjectBodyRetention? Cecil, IlObjectBodyRetention? Srm);
 
 internal sealed record IlObjectBody(IReadOnlyList<string> Instructions, string MemberReference,
     string OwnerType, string Name, int ParameterCount, bool HasThis, bool ReturnsValue,

@@ -559,3 +559,64 @@ Both compile-only fixture projects also built with `--no-restore -c Debug -warna
 `samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj`, zero warnings/errors.
 No fixture methods were invoked. The new test source was not executed or compiled
 as a test-project gate. `git diff --check` passed.
+
+
+## Metadata handoff repair — 2026-10-28 (compile-only publication)
+
+Starting head `b56a4d4e9452be5fad8f7049419a1532eb93b506`, clean worktree on
+`codex/sql-compiled-wrapper-evidence`. Joe authorized this fix/push and retained the
+no-tests instruction. No tests, native scan or provider/application execution was
+run locally. The CLI and public C#/VB end-to-end fixture projects compile under
+Debug `--no-restore -warnaserror`, zero warnings/errors. This is not behavioral proof.
+
+Object-body metadata now has an independent agreement decision. Generic value-flow
+summary disagreement still invalidates that summary; it no longer erases matching
+object-body instructions/metadata. Raw method/body identities, instruction/opcode,
+locals/region hashes, call references and call stack shapes must agree, and both
+object metadata records must be present/equal. Missing/disagreeing peers still refuse.
+There is no one-reader or guessed-body fallback.
+
+The retention cap is still at most 1,048,576 character credits per reader, shared
+across inputs. The body/instruction/field/text and overall work caps remain. Accounting
+now charges actual retained instruction/handler/private-field/signature/owner/name
+characters, including repeated retained strings, rather than reserving MaxTextLength
+for every declared field on every method. Public/static fields that are not stored
+in IlObjectBody are not charged as retained strings. This is bounded character
+accounting, not a measurement of all allocations or a cap increase. It can still
+exhaust on sufficiently large inputs; no root-sliced decoding/CLI selector was added
+in this bounded first repair. Such a follow-up would require explicit diagnostics,
+not another arbitrary cap increase.
+
+IL extractor identity is now `il-body-evidence/0.2.5+srm-10.0.0+cecil-0.11.6`, policy
+`explicit-il-body-evidence.v9`. ManagedIlBodyDeclared includes schema
+`il-object-body-retention/1`, objectBodyState, objectBodyRetention and
+objectBodyAgreement properties. Receipts expose declared-field count, requested
+characters, credits used before admission, cap, per-reader reason and raw/call/value/
+object agreement flags. Raw il-complete/admitted coverage remains a separate claim.
+
+Lifecycle metadata failures retain the existing gap kind plus bodyMetadataFailure:
+root-metadata or callee-metadata, exact failed body/binary/token/instruction count and
+its metadata receipts. Constructor-selection failures record admitted parameterless
+matches and unavailable bodies in that module; multiple constructor overloads alone
+are not treated as proof of ambiguity. No instruction is claimed executed merely
+because a root was selected or a metadata receipt was emitted.
+
+Independent `A_RetentionScale.cs/.vb` fixtures have twelve public fields and 160
+unrelated methods before a forwarding DataSet producer. The old maximum-width
+reservation would exceed the 1 MiB cap on the noise; the new accounting charges the
+actual retained metadata. Test definitions cover value/object-lane separation, raw/
+call/object disagreement refusals, scale retention, tiny-budget drop receipts and
+unchanged shape caps, plus native entry fact metadata. These tests were authored,
+not executed. No result is inferred from the fixture source or successful build.
+
+The work-machine prompt includes one failure-only Claude request: from the existing
+new output, produce one opaque-alias diagnostic matrix and an independently authored
+synthetic reproducer, with private evidence retained locally. No new screenshots,
+private code/binaries/hashes, speculative root/callee/control-flow explanations or
+repeated whole-app scans are requested. If a failure remains, use that capsule to
+make the next change reproducible locally. Do not claim this patch closes private
+acceptance, constructor/session initialization, predicates or overall SQL work.
+
+The verified-callee invocation path now explicitly handles a resolved method whose
+ObjectBody is absent, emitting the callee metadata receipt instead of dereferencing
+null before invocation. A regression definition covers that path; it was not run.

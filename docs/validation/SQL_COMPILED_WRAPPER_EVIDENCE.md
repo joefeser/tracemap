@@ -1,5 +1,29 @@
 # Public compiled-wrapper SQL evidence
 
+## Metadata handoff repair — compile-only, 2026-10-28
+
+IL extractor 0.2.5 / policy `explicit-il-body-evidence.v9` separates generic
+value-summary agreement from structured object-body agreement. Object retention
+still requires matching raw IL/call references, call stack shapes and independently
+present/equal object metadata. Raw, call or object disagreements still refuse.
+The shared per-reader 1 MiB character bound, 256-instruction and 64-field limits are
+unchanged. Actual retained text is charged instead of worst-case maximum-width
+reservations for every declared field per method.
+
+Body facts now expose `il-object-body-retention/1` state/retention/agreement properties;
+lifecycle gaps can include `bodyMetadataFailure` for root metadata, callee metadata
+or constructor selection. Budget/text/field/instruction limits and peer disagreement
+are distinguished. `il-complete` describes the raw body lane; it does not establish
+that structured metadata exists or instructions were interpreted. Provenance
+`unbound` is not an argument-origin or metadata-retention verdict.
+
+The CLI and scale-shaped C#/VB fixture projects compile with warnings as errors.
+Tests/native scans were explicitly not run. New definitions include 160 unrelated
+methods before a producer and agreement/exhaustion controls. Historical pass totals
+do not validate this patch. A failure-only sanitized diagnostic/reproducer request
+is included in the work-machine prompt. The cap can still exhaust; no success or
+private-application acceptance is promised from compilation.
+
 ## Entry-protocol patch — unvalidated behavior, 2026-10-28
 
 A separate `ManagedIlSqlLifecycleEntryCandidate` / `il-sql-lifecycle-entry/1` contract
