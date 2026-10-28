@@ -161,3 +161,33 @@ Exact results and hashes are in the validation document. Publication uses a
 docs-only results commit after the frozen implementation. The consolidated
 continuation prompt is current; broader unchecked tasks remain separate scope,
 not claimed implementation. No private acceptance, SQL execution or PR/merge.
+
+### Active end-to-end goal: failing integration baseline
+
+The previous goal completed only a bounded candidate slice. The current goal
+requires actual linked SQL comparison for the representative lifecycle; the old
+completion is not evidence of this outcome. See `end-to-end-acceptance.md` for the
+independently authored matrix. Successful cases may not be replaced by unknowns.
+
+Added isolated `csharp/end-to-end` and `vb/end-to-end` projects, referencing the
+existing separate wrapper projects. Both build with `-warnaserror`, zero warnings
+and errors. They include two property-held destination tables, independent wrapper
+executions, an application-authored auxiliary table, guarded helper row writes,
+raw and typed-projection reads, Clear/re-Merge, reload and swallowed-exception
+paths. They are compile-only; no method or provider was executed.
+
+Actual CLI baseline using existing frozen binaries and both exact compiled inputs:
+each language emits nine `IlSqlObjectBodyUnsupported` gaps and zero object paths.
+The initial scan used relative compiled inputs and failed admission; the corrected
+absolute-input scans admitted both assemblies and exposed the actual body gaps.
+The source-reader result comparison also explicitly refuses Tier3 IL candidates;
+there is no compiled-lineage comparison bridge. These are confirmed implementation
+gaps, not a work-machine input problem.
+
+Next implementation must preserve existing closed object-path contracts and add a
+separate bounded lifecycle representation: multiple consumers, guarded value
+origins distinct from schema identity, inspected helper effects, collection-loop
+summary and exception alternatives. Then add dedicated binding validation and
+comparison, with independent shape declarations. No provenance downgrade or manual
+lineage annotation may substitute for extracted evidence. Existing smoke projects
+and expected denominators remain unchanged. No PR or private retry yet.
