@@ -678,3 +678,41 @@ Compile-only verification also included the authored test source (no test execut
 passed with zero warnings/errors. `git diff --check` passed. Existing public fixture
 sources were unchanged in this iteration. The ArrayList blocker is not declared
 closed until selected real-input lineage is emitted and inspected.
+
+
+## Exact legacy base-call continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting head
+`53cfd08c4b836b7cfcf92f411d4d16aacc3ca29e`, clean worktree. Standing user authority:
+fix/push without running tests. Source inspection confirms the lifecycle delegated
+base-call catalog previously admitted only mscorlib 4.0.0.0. No employer photograph,
+transcript or private implementation was copied into this repository.
+
+## Exact legacy Object base constructor — compile-only, 2026-10-28
+
+IL extractor 0.2.7 / policy `explicit-il-body-evidence.v11` adds one identity to
+the lifecycle framework catalog: signed neutral mscorlib 2.0.0.0 (token
+b77a5c561934e089), System.Object, instance/non-generic/default-call/parameterless
+.ctor returning Void. It invokes the existing neutral base-call action only on a
+tracked custom object, then continues inspecting subsequent field stores. There
+is no global assembly-version normalization or arbitrary constructor skipping.
+The existing 4.0.0.0 base call, exact ArrayList/System.Data identities, object-path
+route and SQL compare contracts remain unchanged. Legacy ArrayList identities
+still refuse. Missing fields, unknown values and unsupported calls remain gaps.
+
+New test definitions rewrite only the encoded base-constructor reference in the
+independently authored public C#/VB InputParameter fixture, in memory, then require
+Cecil/SRM agreement before checking end-to-end field/parameter/execution lineage.
+Negative catalog definitions vary version, token, assembly, culture, type, instance
+shape, arity and parameters. These tests were authored and compile-checked, not
+executed. No application or SQL execution, private input publication, native replay
+or ArrayList acceptance claim is included.
+
+Compile-only command:
+`dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`.
+No tests/scans were run. A fresh work-machine selected-root check remains required;
+this does not close the ArrayList blocker or the overall SQL effort.
+
+Result: test-project build (including CLI dependencies) succeeded with zero warnings
+and zero errors; this compiles tests without executing them. `git diff --check`
+passed. No native lifecycle candidate success is claimed from these checks.

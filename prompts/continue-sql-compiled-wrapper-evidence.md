@@ -5,10 +5,28 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
+## Current exact legacy base-constructor repair
+
+The current head additionally recognizes only the exact signed neutral
+`mscorlib, Version=2.0.0.0, PublicKeyToken=b77a5c561934e089` instance,
+non-generic, parameterless `System.Object::.ctor() -> Void` in the lifecycle route.
+It uses the existing neutral base-call behavior on a tracked custom receiver,
+then continues inspecting constructor field stores. It does not skip arbitrary
+constructors, normalize versions globally or admit legacy ArrayList/System.Data
+APIs. Existing net48 identities and all other refusals remain.
+
+This is compile-only publication, with C#/VB in-memory public fixture rewrite
+regression definitions authored but not executed. Do not claim this was the last
+blocker or rerun tests. Use the same selected roots/DLLs and a fresh output directory.
+Check whether the base call is now followed by linked field stores, actual parameter
+construction/attachment and Fill. If another exact identity fails, retain its full
+local receipt and request the single sanitized capsule/sample described below;
+do not respond by skipping a class of calls or blanket version normalization.
+
 ## Current root-sliced metadata repair
 
-Use the newly fetched public head, IL extractor **0.2.6**, policy
-`explicit-il-body-evidence.v10`. This iteration is compile-only: Joe explicitly
+Use the newly fetched public head, IL extractor **0.2.7**, policy
+`explicit-il-body-evidence.v11`. This iteration is compile-only: Joe explicitly
 requested no tests. Historical pass totals do not validate this patch.
 
 The previous actual-text accounting repair could still exhaust the shared corpus

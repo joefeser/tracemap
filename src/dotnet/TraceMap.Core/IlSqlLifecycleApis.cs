@@ -1,9 +1,10 @@
 namespace TraceMap.Core;
 
-/// <summary>Exact signed net48 framework signatures; never a method-name allowlist.</summary>
+/// <summary>Exact signed framework signatures; never a method-name allowlist.</summary>
 internal static class IlSqlLifecycleApis
 {
     private const string Core = "scope(assembly:name:8:mscorlib|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
+    private const string LegacyCore = "scope(assembly:name:8:mscorlib|version:7:2.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
     private const string Data = "scope(assembly:name:11:System.Data|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
     private static string Type(string ns, string name) => $"type(namespace:{ns.Length}:{ns}|names:{name.Length}:{name})";
     private static string Primitive(string name) => Type("System", name);
@@ -45,6 +46,9 @@ internal static class IlSqlLifecycleApis
         void Add(string label, string owner, string name, string returns, bool instance, params string[] args)
             => result.Add(Member(owner, name, returns, instance, args), label);
         var obj = Primitive("Object"); var text = Primitive("String"); var nothing = Primitive("Void");
+        // Only this exact neutral base call is admitted from the legacy core assembly.
+        // ArrayList, other constructors and all other APIs keep their existing identities.
+        Add("object-base", LegacyCore + Primitive("Object"), ".ctor", nothing, true);
         Add("table-new", DataType("DataTable"), ".ctor", nothing, true, text);
         Add("columns", DataType("DataTable"), "get_Columns", DataType("DataColumnCollection"), true);
         Add("column-add", DataType("DataColumnCollection"), "Add", DataType("DataColumn"), true, text, CoreType("Type"));

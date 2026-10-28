@@ -79,3 +79,10 @@
 - [x] Author C#/VB selected-root controls and selector refusals; update limitations/state/work-machine prompt; compile CLI.
 - [ ] Execute new focused controls and a complete actual-cost starvation replay (deferred; no behavioral success claimed).
 - [ ] Establish real-input ArrayList lineage after slice admission (work-machine check outstanding).
+
+
+## Exact legacy base-call continuation — 2026-10-28 (tests deferred)
+- [x] Admit only the exact signed mscorlib 2.0.0.0 parameterless Object base constructor in the lifecycle route.
+- [x] Preserve custom receiver validation, inspected field stores, exact collection identities and other refusals.
+- [x] Author C#/VB compiled-metadata rewrite and forged-identity controls; update rule limitations/state/prompt.
+- [ ] Execute the new controls and verify selected real-input parameter lineage (explicitly deferred; not claimed).

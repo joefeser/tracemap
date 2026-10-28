@@ -1,5 +1,25 @@
 # Public compiled-wrapper SQL evidence
 
+## Exact legacy Object base constructor — compile-only, 2026-10-28
+
+IL extractor 0.2.7 / policy `explicit-il-body-evidence.v11` adds one identity to
+the lifecycle framework catalog: signed neutral mscorlib 2.0.0.0 (token
+b77a5c561934e089), System.Object, instance/non-generic/default-call/parameterless
+.ctor returning Void. It invokes the existing neutral base-call action only on a
+tracked custom object, then continues inspecting subsequent field stores. There
+is no global assembly-version normalization or arbitrary constructor skipping.
+The existing 4.0.0.0 base call, exact ArrayList/System.Data identities, object-path
+route and SQL compare contracts remain unchanged. Legacy ArrayList identities
+still refuse. Missing fields, unknown values and unsupported calls remain gaps.
+
+New test definitions rewrite only the encoded base-constructor reference in the
+independently authored public C#/VB InputParameter fixture, in memory, then require
+Cecil/SRM agreement before checking end-to-end field/parameter/execution lineage.
+Negative catalog definitions vary version, token, assembly, culture, type, instance
+shape, arity and parameters. These tests were authored and compile-checked, not
+executed. No application or SQL execution, private input publication, native replay
+or ArrayList acceptance claim is included.
+
 ## Root-sliced retention — compile-only, 2026-10-28
 
 IL extractor 0.2.6 / policy `explicit-il-body-evidence.v10` adds repeatable
