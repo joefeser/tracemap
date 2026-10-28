@@ -730,7 +730,7 @@ public static class ScannerVersions
     public const string ManagedMetadataExtractor = "managed-metadata/0.2.0+cecil-0.11.6"; // 0.2.0: ManagedAssemblyDeclared gains runtimeFloor* properties (#853)
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.7+srm-10.0.0+cecil-0.11.6"; // 0.2.7: exact signed legacy Object base constructor in lifecycle protocol
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.8+srm-10.0.0+cecil-0.11.6"; // 0.2.8: closed signed legacy core ArrayList lifecycle profile
     public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
     public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";

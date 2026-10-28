@@ -5,28 +5,47 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
-## Current exact legacy base-constructor repair
+## Current closed legacy core profile
 
-The current head additionally recognizes only the exact signed neutral
-`mscorlib, Version=2.0.0.0, PublicKeyToken=b77a5c561934e089` instance,
-non-generic, parameterless `System.Object::.ctor() -> Void` in the lifecycle route.
-It uses the existing neutral base-call behavior on a tracked custom receiver,
-then continues inspecting constructor field stores. It does not skip arbitrary
-constructors, normalize versions globally or admit legacy ArrayList/System.Data
-APIs. Existing net48 identities and all other refusals remain.
+The current head admits two explicit signed neutral mscorlib profiles (2.0.0.0 and
+4.0.0.0, token b77a5c561934e089) for the bounded ArrayList operations: parameterless
+construction, Add(Object), GetEnumerator, IEnumerator.Current/MoveNext and
+IDisposable.Dispose with the existing tracked-enumerator checks. The exact legacy
+Object base constructor remains admitted. The scalar/Object/IDisposable type
+operands and RuntimeHelpers.GetObjectValue helper also accept these exact core
+identities, preserving declared scalar types and unknown input values.
 
-This is compile-only publication, with C#/VB in-memory public fixture rewrite
-regression definitions authored but not executed. Do not claim this was the last
-blocker or rerun tests. Use the same selected roots/DLLs and a fresh output directory.
-Check whether the base call is now followed by linked field stores, actual parameter
-construction/attachment and Fill. If another exact identity fails, retain its full
-local receipt and request the single sanitized capsule/sample described below;
-do not respond by skipping a class of calls or blanket version normalization.
+This is a closed signature catalog, not global version normalization. Legacy
+generic collections, System.Data 2.0.0.0, unsupported ArrayList overloads/mutations,
+lookalike namespaces and incorrect signing/signatures remain unsupported. Existing
+bounds, element freezing, full enumeration and per-execution attachment rules remain.
+The object-path and SQL compare routes are unchanged.
+
+Tests are explicitly deferred. The C#/VB definitions rewrite the public fixtures'
+core AssemblyRefs in memory, require independent metadata agreement, and cover
+producer/reader paths, execution isolation and invalid collection/attachment cases.
+Compilation is not behavioral or private-input acceptance.
+
+Use the same privately verified DLLs/root selections with a fresh output directory.
+Before the one native run, inventory ALL distinct encoded framework call/type
+identities in the selected retained closure (max128 members and256 distinct
+framework identities; report truncation). Use existing body/call facts or local
+metadata inspection, not execution. Classify exact signatures against this head's
+catalog. Keep body links/tokens/private hashes local. A shareable summary may contain
+only public framework signatures and recognized/unsupported status, with no private
+owner, method, field, SQL or source content. This inventory is descriptive and must
+not be used to infer a candidate or skip an unsupported operation.
+
+If another identity fails, return the first native failure AND the inventory of all
+remaining unsupported public framework signatures in that closure, not just the
+next constructor name. Do not infer compiler behavior or target framework from an
+AssemblyRef version alone. Use the single sanitized capsule/sample fallback below.
+A throwing/omitted wrapper is an illustrative stub, not a complete replay.
 
 ## Current root-sliced metadata repair
 
-Use the newly fetched public head, IL extractor **0.2.7**, policy
-`explicit-il-body-evidence.v11`. This iteration is compile-only: Joe explicitly
+Use the newly fetched public head, IL extractor **0.2.8**, policy
+`explicit-il-body-evidence.v12`. This iteration is compile-only: Joe explicitly
 requested no tests. Historical pass totals do not validate this patch.
 
 The previous actual-text accounting repair could still exhaust the shared corpus
@@ -182,7 +201,7 @@ prerequisite discovery if a tool is missing. Report compile failures directly.
 Inspect the actual compiled bodies and source correspondence without executing them.
 The supported lifecycle pattern is:
 
-- Exact signed framework identities for `mscorlib` 4.0.0.0 `ArrayList` parameterless
+- Exact signed framework identities for `mscorlib` 2.0.0.0 or 4.0.0.0 `ArrayList` parameterless
   construction, `Add(Object)`, `GetEnumerator`, and `IEnumerator.Current/MoveNext`.
   Method names alone, `IList`/other collection dispatch, or lookalike APIs do not fit.
 - At most 16 inspected custom-object entries. Constructor field stores and inspected

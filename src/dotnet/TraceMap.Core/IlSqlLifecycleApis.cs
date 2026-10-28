@@ -11,7 +11,8 @@ internal static class IlSqlLifecycleApis
     private static string DataType(string name) => Data + Type("System.Data", name);
     private static string CoreType(string name) => Core + Primitive(name);
     internal static bool TypeOperand(string operand, string name)
-        => operand == "t:" + (name == "DataRow" ? DataType(name) : CoreType(name));
+        => name == "DataRow" ? operand == "t:" + DataType(name)
+            : operand == "t:" + CoreType(name) || operand == "t:" + LegacyCore + Primitive(name);
     internal static bool ReturnsDataSet(string signature)
         => signature.EndsWith("->" + DataType("DataSet"), StringComparison.Ordinal);
     internal static bool ReturnsVoid(string signature)
@@ -46,8 +47,7 @@ internal static class IlSqlLifecycleApis
         void Add(string label, string owner, string name, string returns, bool instance, params string[] args)
             => result.Add(Member(owner, name, returns, instance, args), label);
         var obj = Primitive("Object"); var text = Primitive("String"); var nothing = Primitive("Void");
-        // Only this exact neutral base call is admitted from the legacy core assembly.
-        // ArrayList, other constructors and all other APIs keep their existing identities.
+        // The base constructor is neutral only for a tracked custom receiver.
         Add("object-base", LegacyCore + Primitive("Object"), ".ctor", nothing, true);
         Add("table-new", DataType("DataTable"), ".ctor", nothing, true, text);
         Add("columns", DataType("DataTable"), "get_Columns", DataType("DataColumnCollection"), true);
@@ -55,20 +55,25 @@ internal static class IlSqlLifecycleApis
         Add("rows-add", DataType("DataRowCollection"), "Add", DataType("DataRow"), true, obj + "[]");
         Add("table-clear", DataType("DataTable"), "Clear", nothing, true);
         Add("row-write", DataType("DataRow"), "set_Item", nothing, true, text, obj);
-        Add("object-value", Core + Type("System.Runtime.CompilerServices", "RuntimeHelpers"), "GetObjectValue", obj, false, obj);
         Add("type-handle", CoreType("Type"), "GetTypeFromHandle", CoreType("Type"), false, CoreType("RuntimeTypeHandle"));
         Add("parameter-value", Data + Type("System.Data.SqlClient", "SqlParameter"), "set_Value", nothing, true, obj);
         Add("parameter-value", Data + Type("System.Data.Common", "DbParameter"), "set_Value", nothing, true, obj);
-        var enumerator = Core + Type("System.Collections", "IEnumerator");
-        var arrayList = Core + Type("System.Collections", "ArrayList");
-        Add("arraylist-new", arrayList, ".ctor", nothing, true);
-        Add("arraylist-add", arrayList, "Add", Primitive("Int32"), true, obj);
-        Add("arraylist-enumerator", arrayList, "GetEnumerator", enumerator, true);
+        foreach (var core in new[] { Core, LegacyCore })
+        {
+            // Two explicit signed core profiles; never normalize arbitrary versions,
+            // keys, signatures or non-core framework references.
+            var enumerator = core + Type("System.Collections", "IEnumerator");
+            var arrayList = core + Type("System.Collections", "ArrayList");
+            Add("arraylist-new", arrayList, ".ctor", nothing, true);
+            Add("arraylist-add", arrayList, "Add", Primitive("Int32"), true, obj);
+            Add("arraylist-enumerator", arrayList, "GetEnumerator", enumerator, true);
+            Add("enumerator-current", enumerator, "get_Current", obj, true);
+            Add("enumerator-next", enumerator, "MoveNext", Primitive("Boolean"), true);
+            Add("enumerator-dispose", core + Primitive("IDisposable"), "Dispose", nothing, true);
+            Add("object-value", core + Type("System.Runtime.CompilerServices", "RuntimeHelpers"), "GetObjectValue", obj, false, obj);
+        }
         foreach (var owner in new[] { "DataRowCollection", "InternalDataCollectionBase" })
-            Add("enumerator", DataType(owner), "GetEnumerator", enumerator, true);
-        Add("enumerator-current", enumerator, "get_Current", obj, true);
-        Add("enumerator-next", enumerator, "MoveNext", Primitive("Boolean"), true);
-        Add("enumerator-dispose", CoreType("IDisposable"), "Dispose", nothing, true);
+            Add("enumerator", DataType(owner), "GetEnumerator", Core + Type("System.Collections", "IEnumerator"), true);
         return result;
     }
 

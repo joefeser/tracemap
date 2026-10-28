@@ -86,3 +86,10 @@
 - [x] Preserve custom receiver validation, inspected field stores, exact collection identities and other refusals.
 - [x] Author C#/VB compiled-metadata rewrite and forged-identity controls; update rule limitations/state/prompt.
 - [ ] Execute the new controls and verify selected real-input parameter lineage (explicitly deferred; not claimed).
+
+
+## Closed legacy core profile continuation — 2026-10-28 (tests deferred)
+- [x] Add exact signed legacy ArrayList construction/Add/enumeration and core value/cleanup identities as one closed profile.
+- [x] Preserve stack/type/element/attachment refusals and all existing resource bounds; retain separate object-path and comparison contracts.
+- [x] Author C#/VB dual-reader compiled-metadata profile, execution-isolation and negative controls; version admission and update docs/prompt.
+- [ ] Execute focused profile controls and work-machine lineage check (explicitly deferred; no success claimed).

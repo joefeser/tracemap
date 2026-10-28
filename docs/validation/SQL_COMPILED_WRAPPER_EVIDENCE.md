@@ -1,5 +1,39 @@
 # Public compiled-wrapper SQL evidence
 
+## Closed legacy core ArrayList profile — compile-only, 2026-10-28
+
+IL extractor 0.2.8 / policy `explicit-il-body-evidence.v12` deliberately extends
+lifecycle admission to exact signed neutral mscorlib 2.0.0.0 alongside 4.0.0.0 for
+ArrayList parameterless construction, Add(Object), GetEnumerator, IEnumerator
+Current/MoveNext, IDisposable.Dispose and RuntimeHelpers.GetObjectValue. Method
+signatures, signing key, culture, namespace and type must match exactly. Enumerator
+return scope matches its owner's selected core profile. Existing primitive/Object/
+IDisposable type-operand checks admit either exact core identity; typed unknown
+boxing still requires the matching declared root scalar type. The previously added
+legacy Object base constructor remains neutral only on a tracked custom receiver.
+
+No global version normalization or general legacy-framework support is added.
+System.Data 2.0.0.0, legacy generic lists, alternate collection APIs/overloads,
+mutation, escape, invalid elements, incomplete/repeated enumeration and invalid
+attachment remain refusals. All size/work/heap/depth bounds remain. SQL read/entry
+schemas and compare routes are unchanged; this is an intentional additive versioned
+admission-profile change. The object-path catalog remains separate and unchanged.
+
+C#/VB regression definitions rewrite only core AssemblyRefs of independently
+public synthetic fixture bytes in memory, then require dual-reader agreement and
+check constructor fields, boxing, enumeration, producer/consumer lineage, separate
+executions and negative collection/attachment cases. Exact-identity controls keep
+wrong versions, keys, cultures, namespaces and stack shapes outside admission.
+Definitions are compile-checked only; no behavioral success is claimed. The prior
+4.0-only refusal expectation now rejects 3.0.0.0 because 2.0.0.0 is intentionally
+admitted for this closed protocol. Existing fixture source files are unchanged.
+
+The work-machine prompt requires a bounded full framework-identity inventory for
+the selected closure before one native run, so a later failure returns all known
+remaining framework mismatches rather than one constructor at a time. A stub with
+a throwing wrapper remains inadequate as complete replay proof. Private-input
+lineage, owner comparison and closure of the ArrayList blocker remain unproven.
+
 ## Exact legacy Object base constructor — compile-only, 2026-10-28
 
 IL extractor 0.2.7 / policy `explicit-il-body-evidence.v11` adds one identity to

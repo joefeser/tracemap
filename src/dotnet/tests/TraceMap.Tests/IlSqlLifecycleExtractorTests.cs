@@ -508,7 +508,7 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
             var identity = Assert.Single(calls, c => IlSqlLifecycleApis.Resolve(c, owners) == api);
             foreach (var forged in new[] {
                 identity.Replace("b77a5c561934e089", "0000000000000000", StringComparison.Ordinal),
-                identity.Replace("4.0.0.0", "2.0.0.0", StringComparison.Ordinal),
+                identity.Replace("4.0.0.0", "3.0.0.0", StringComparison.Ordinal),
                 identity.Replace("ArrayList", "ArrayLisp", StringComparison.Ordinal),
                 identity.Replace("hasThis:true", "hasThis:false", StringComparison.Ordinal) })
                 Assert.Null(IlSqlLifecycleApis.Resolve(forged, owners));
