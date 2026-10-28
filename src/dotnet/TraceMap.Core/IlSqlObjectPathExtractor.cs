@@ -67,6 +67,8 @@ internal static class IlSqlObjectPathExtractor
     }
     private sealed class Refusal(string gap) : Exception(gap);
 
+    internal static string? KnownFrameworkApi(string identity) => Apis.GetValueOrDefault(identity);
+
     internal static bool IsRoot(IlBodyObservation body) => body.Calls.Any(call => Apis.GetValueOrDefault(call.TargetIdentity) == "consumer");
 
     internal static Result Extract(Body root, IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget)

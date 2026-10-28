@@ -1,0 +1,480 @@
+using System.Globalization;
+using Body = TraceMap.Core.IlSqlObjectPathExtractor.Body;
+
+namespace TraceMap.Core;
+
+/// <summary>
+/// Internal lifecycle prototype. Not published as facts until the complete
+/// control-flow, failure and comparison contracts pass their acceptance matrix.
+/// Values describe successful-path symbolic origins, never actual database rows.
+/// </summary>
+internal static class IlSqlLifecycleExtractor
+{
+    internal sealed record Site(string Body, string Binary, long Offset, int Invocation);
+    internal sealed record Execution(string Id, string CommandHash, Site Site);
+    internal sealed record Origin(string Kind, string Table, string? Execution, string ColumnHash, Site? Assignment = null);
+    internal sealed record Read(Site Site, string Table, string ColumnHash,
+        IReadOnlyList<string> SchemaExecutions, Origin Value);
+    internal sealed record Loop(Site Site, string Table, string Meaning);
+    internal sealed record TableState(string Allocation, bool RowsCleared, string? Execution,
+        IReadOnlyList<string> SchemaExecutions, IReadOnlyDictionary<string, Origin> Writes);
+    internal sealed record ObjectSnapshot(string Allocation, string Kind, IReadOnlyList<string> Slots,
+        IReadOnlyDictionary<string, string> Fields);
+    internal sealed record Failure(Site Site, string Operation, Site CatchHandler,
+        IReadOnlyList<TableState> Before, IReadOnlyList<TableState> NormalCompletion,
+        bool MayPartiallyMutate, bool MayHaveCompletedEarlierRows,
+        IReadOnlyList<ObjectSnapshot> BeforeObjects, IReadOnlyList<ObjectSnapshot> NormalCompletionObjects)
+    {
+        public string Limitation => "possible-exception-boundary;not-observed;catch-continuation-not-executed;no-rollback-claim";
+    }
+    internal sealed record Result(IReadOnlyList<Execution> Executions, IReadOnlyList<Read> Reads,
+        Read? Returned, IReadOnlyList<string> Gaps, IReadOnlyList<Loop>? Loops = null,
+        IReadOnlyList<Failure>? Failures = null)
+    {
+        public string Claim => "conditional-static-lineage;normal-completion;row-existence-unproven";
+    }
+    internal sealed record GuardedRun(string Predicate, bool Value, Result Result);
+
+    internal static IReadOnlyList<GuardedRun> ExtractGuarded(Body root, IReadOnlyList<Body> bodies,
+        IlBodyEvidenceExtractor.IlWorkBudget budget)
+        => [new("argument:0", false, Extract(root, bodies, false, budget)),
+            new("argument:0", true, Extract(root, bodies, true, budget))];
+    private sealed record Region(string Kind, long Start, long End, long Handler, long HandlerEnd);
+    private sealed record Value(string Kind, string Text)
+    {
+        internal static readonly Value Unknown = new("unknown", "");
+    }
+    private sealed class ObjectState(string kind, string owner)
+    {
+        internal readonly string Kind = kind, Owner = owner;
+        internal readonly Dictionary<string, Value> Fields = new(StringComparer.Ordinal);
+        internal readonly List<Value> Slots = [];
+        internal readonly List<string> SchemaExecutions = [];
+        internal readonly HashSet<string> Columns = new(StringComparer.Ordinal);
+        internal readonly Dictionary<string, Origin> Writes = new(StringComparer.Ordinal);
+        internal Value Parent = Value.Unknown, Command = Value.Unknown, Type = Value.Unknown;
+        internal string? Execution;
+        internal bool Empty = true;
+        internal int Moves = 0;
+    }
+    private sealed class Refusal(string message) : Exception(message);
+
+    internal static Result Extract(Body root, IReadOnlyList<Body> bodies, bool enabled,
+        IlBodyEvidenceExtractor.IlWorkBudget budget)
+    {
+        try { return new Machine(bodies, budget).Run(root, enabled); }
+        catch (Refusal error) { return new([], [], null, [error.Message]); }
+    }
+
+    private sealed class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget)
+    {
+        private readonly Dictionary<string, ObjectState> heap = new(StringComparer.Ordinal);
+        private readonly List<Execution> executions = [];
+        private readonly List<Read> reads = [];
+        private readonly List<Loop> loops = [];
+        private readonly List<Failure> failures = [];
+        private readonly Stack<Site> catchHandlers = new();
+        private readonly HashSet<string> active = new(StringComparer.Ordinal);
+        private int frame, work;
+        private Value loopEnumerator = Value.Unknown, loopRow = Value.Unknown;
+        private int loopAllocationStart;
+        private Value New(string kind, string owner = "")
+        {
+            if (heap.Count >= 256) throw new Refusal("lifecycle-object-limit");
+            var id = "allocation:" + heap.Count.ToString(CultureInfo.InvariantCulture);
+            heap.Add(id, new(kind, owner)); return new("object", id);
+        }
+        private ObjectState Get(Value value, params string[] kinds)
+        {
+            if (value.Kind != "object" || !heap.TryGetValue(value.Text, out var state)
+                || !kinds.Contains(state.Kind, StringComparer.Ordinal)) throw new Refusal("lifecycle-object-origin:" + string.Join('/', kinds));
+            return state;
+        }
+        private Value View(string kind, Value parent)
+        { var result = New(kind); heap[result.Text].Parent = parent; return result; }
+        private static int Number(Value value)
+            => value.Kind == "int" && int.TryParse(value.Text, out var number) ? number : throw new Refusal("lifecycle-integer-unresolved");
+        private static string Text(Value value)
+            => value.Kind == "string" ? value.Text : throw new Refusal("lifecycle-string-unresolved");
+        private static Value Int(int value) => new("int", value.ToString(CultureInfo.InvariantCulture));
+        private static Site At(Body body, long offset, int invocation)
+            => new(body.Observation.BodyIdentity, body.Input.RawFileSha256!, offset, invocation);
+
+        internal Result Run(Body root, bool enabled)
+        {
+            if (bodies.Count > 4096 || !budget.TryConsume(bodies.Count)) throw new Refusal("lifecycle-index-limit");
+            if (!bodies.Contains(root) || bodies.GroupBy(b => b.Observation.MethodIdentity, StringComparer.Ordinal).Any(g => g.Count() != 1))
+                throw new Refusal("lifecycle-ambiguous-input");
+            var meta = root.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable");
+            if (!meta.HasThis || meta.ParameterCount > 1) throw new Refusal("lifecycle-root-shape");
+            var signature = meta.ParameterCount == 0 ? "|()->type(namespace:6:System|names:6:Object)"
+                : "|(type(namespace:6:System|names:7:Boolean))->type(namespace:6:System|names:6:Object)";
+            if (!meta.MemberReference.EndsWith(signature, StringComparison.Ordinal)) throw new Refusal("lifecycle-root-signature");
+            var instance = New("custom", meta.OwnerType);
+            var ctor = bodies.Where(b => b.Observation.ObjectBody is { Name: ".ctor", ParameterCount: 0 } m
+                && m.OwnerType == meta.OwnerType).Take(2).ToArray();
+            if (ctor.Length != 1) throw new Refusal("lifecycle-constructor-unresolved");
+            Invoke(ctor[0], [instance], 0);
+            var returned = Invoke(root, meta.ParameterCount == 0 ? [instance] : [instance, Int(enabled ? 1 : 0)], 0);
+            var result = returned.Kind == "read" ? reads[int.Parse(returned.Text, CultureInfo.InvariantCulture)] : null;
+            if (result is null) throw new Refusal("lifecycle-return-unresolved");
+            if (loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-loop-incomplete");
+            return new(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray());
+        }
+
+        private Value Invoke(Body body, Value[] args, int depth)
+        {
+            var meta = body.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable");
+            if (depth >= 24 || !active.Add(body.Observation.MethodIdentity)) throw new Refusal("lifecycle-recursion-limit");
+            try
+            {
+                if (body.Input.Outcome != "admitted" || body.Input.GapKinds.Count != 0
+                    || body.Input.RawFileSha256 is not { Length: 64 } sha || sha.Any(c => !char.IsAsciiHexDigit(c))
+                    || !Guid.TryParse(body.Input.ModuleMvid, out _)) throw new Refusal("lifecycle-provenance-unavailable");
+                if (meta.IsVirtual || meta.IsGeneric || meta.Instructions.Count > 256
+                    || args.Length != meta.ParameterCount + (meta.HasThis ? 1 : 0)) throw new Refusal("lifecycle-body-shape");
+                var invocation = ++frame;
+                var code = meta.Instructions.Select(line => line.Split(':', 4)).ToArray();
+                if (code.Any(p => p.Length != 4)) throw new Refusal("lifecycle-invalid-instruction");
+                var offsets = code.Select(p => Offset(p[1])).ToArray();
+                if (offsets.Distinct().Count() != offsets.Length || !offsets.SequenceEqual(offsets.Order()))
+                    throw new Refusal("lifecycle-invalid-instruction-offsets");
+                if (body.Observation.Calls.GroupBy(c => c.Offset).Any(g => g.Count() != 1))
+                    throw new Refusal("lifecycle-duplicate-call-offset");
+                var calls = body.Observation.Calls.ToDictionary(c => c.Offset);
+                var regions = (meta.ExceptionRegions ?? []).Select(ParseRegion).ToArray();
+                var continuations = new Stack<int>();
+                var stack = new List<Value>(); var locals = new Dictionary<int, Value>();
+                Value Pop()
+                {
+                    if (stack.Count == 0) throw new Refusal("lifecycle-stack-underflow");
+                    var value = stack[^1]; stack.RemoveAt(stack.Count - 1); return value;
+                }
+                int Target(string operand)
+                {
+                    if (!operand.StartsWith("br:0x", StringComparison.Ordinal)) throw new Refusal("lifecycle-branch-invalid");
+                    var target = Array.IndexOf(offsets, Offset(operand[5..]));
+                    return target < 0 ? throw new Refusal("lifecycle-branch-invalid") : target;
+                }
+                for (var i = 0; i < code.Length; i++)
+                {
+                    if (++work > 8192 || !budget.TryConsume(1) || stack.Count > 64 || locals.Count > 64) throw new Refusal("lifecycle-work-limit");
+                    var op = code[i][2]; var operand = code[i][3]; var offset = offsets[i];
+                    if (op == "nop") continue;
+                    if (Slot(op, operand, "ldarg", out var slot)) { stack.Add(slot < args.Length ? args[slot] : Value.Unknown); continue; }
+                    if (Slot(op, operand, "ldloc", out slot)) { stack.Add(locals.GetValueOrDefault(slot, Value.Unknown)); continue; }
+                    if (Slot(op, operand, "stloc", out slot)) { locals[slot] = Pop(); continue; }
+                    if (op == "ldstr") { stack.Add(new("string", operand)); continue; }
+                    if (op == "ldnull") { stack.Add(new("null", "")); continue; }
+                    if (op.StartsWith("ldc.i4", StringComparison.Ordinal))
+                    { stack.Add(new("int", op == "ldc.i4.m1" ? "-1" : op is "ldc.i4" or "ldc.i4.s" ? operand[2..] : op[7..])); continue; }
+                    if (op == "dup") { var value = Pop(); stack.Add(value); stack.Add(value); continue; }
+                    if (op == "pop") { _ = Pop(); continue; }
+                    if (op == "box")
+                    {
+                        if (!IlSqlLifecycleApis.TypeOperand(operand, "Int32")) throw new Refusal("lifecycle-box-type");
+                        var value = Pop(); _ = Number(value); stack.Add(value); continue;
+                    }
+                    if (op == "ldtoken") { stack.Add(new("type-token", operand)); continue; }
+                    if (op == "newarr")
+                    {
+                        if (!IlSqlLifecycleApis.TypeOperand(operand, "Object")) throw new Refusal("lifecycle-array-type");
+                        var count = Number(Pop()); if (count is < 0 or > 16) throw new Refusal("lifecycle-array-limit");
+                        var array = New("array"); heap[array.Text].Slots.AddRange(Enumerable.Repeat(Value.Unknown, count)); stack.Add(array); continue;
+                    }
+                    if (op == "stelem.ref")
+                    {
+                        var value = Pop(); var index = Number(Pop()); var array = Get(Pop(), "array");
+                        if (index < 0 || index >= array.Slots.Count) throw new Refusal("lifecycle-array-index");
+                        array.Slots[index] = value; continue;
+                    }
+                    if (op is "castclass" or "isinst")
+                    {
+                        if (!IlSqlLifecycleApis.TypeOperand(operand, op == "castclass" ? "DataRow" : "IDisposable"))
+                            throw new Refusal("lifecycle-cast-type");
+                        var value = Pop(); _ = Get(value, op == "castclass" ? "row" : "enumerator");
+                        stack.Add(value); continue;
+                    }
+                    if (op is "br" or "br.s")
+                    {
+                        var destination = Target(operand);
+                        if (destination <= i || loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-unproven-loop");
+                        i = destination - 1; continue;
+                    }
+                    if (op is "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s")
+                    {
+                        var value = Pop(); var destination = Target(operand);
+                        var truth = value.Kind == "object" || value.Kind == "int" && Number(value) != 0
+                            || value.Kind == "loop-test" && value.Text == "1";
+                        if (value.Kind is not ("object" or "int" or "null" or "loop-test")) throw new Refusal("lifecycle-guard-unresolved");
+                        if ((destination <= i || loopEnumerator.Kind != "unknown") && value.Kind != "loop-test")
+                            throw new Refusal("lifecycle-loop-dependent-control");
+                        if (value.Kind == "loop-test" && (!op.StartsWith("brtrue", StringComparison.Ordinal) || destination >= i))
+                            throw new Refusal("lifecycle-loop-test-shape");
+                        if (truth == op.StartsWith("brtrue", StringComparison.Ordinal)) i = destination - 1;
+                        continue;
+                    }
+                    if (op is "leave" or "leave.s")
+                    {
+                        var destination = Target(operand);
+                        var handlers = regions.Where(r => r.Kind == "finally" && offset >= r.Start && offset < r.End
+                            && (offsets[destination] < r.Start || offsets[destination] >= r.End))
+                            .OrderBy(r => r.End - r.Start).ToArray();
+                        stack.Clear();
+                        if (handlers.Length == 0) i = destination - 1;
+                        else
+                        {
+                            continuations.Push(destination);
+                            for (var h = handlers.Length - 1; h > 0; h--) continuations.Push(Index(handlers[h].Handler));
+                            i = Index(handlers[0].Handler) - 1;
+                        }
+                        continue;
+                    }
+                    if (op == "endfinally")
+                    {
+                        if (continuations.Count == 0 || stack.Count != 0) throw new Refusal("lifecycle-finally-flow-invalid");
+                        i = continuations.Pop() - 1; continue;
+                    }
+                    if (op is "ldfld" or "stfld")
+                    {
+                        var parts = operand.Split(':', 4);
+                        if (parts.Length != 4 || parts[1] != "field") throw new Refusal("lifecycle-field-invalid");
+                        var identity = parts[3][(parts[3].IndexOf('|') + 1)..];
+                        var value = op == "stfld" ? Pop() : Value.Unknown;
+                        var instanceValue = Pop(); var instance = Get(instanceValue, "custom");
+                        if (!identity.StartsWith("type:" + instance.Owner + "|member:", StringComparison.Ordinal)) throw new Refusal("lifecycle-field-owner");
+                        if (op == "stfld")
+                        {
+                            if (loopEnumerator.Kind != "unknown" && !LoopAllocated(instanceValue)) throw new Refusal("lifecycle-loop-carried-field");
+                            instance.Fields[identity] = value;
+                        }
+                        else stack.Add(instance.Fields.GetValueOrDefault(identity, Value.Unknown));
+                        continue;
+                    }
+                    if (op is "call" or "callvirt" or "newobj")
+                    {
+                        if (!calls.TryGetValue(offset, out var call) || call.StackShape is not { Supported: true } shape
+                            || shape.ParameterCount > 16 || shape.ByReferenceParameters.Contains('1')) throw new Refusal("lifecycle-call-shape");
+                        var values = new Value[shape.ParameterCount];
+                        for (var arg = values.Length - 1; arg >= 0; arg--) values[arg] = Pop();
+                        var receiver = op != "newobj" && shape.HasThis ? Pop() : Value.Unknown;
+                        var site = At(body, offset, invocation);
+                        Value returned;
+                        var localCatch = regions.Where(r => r.Kind == "catch" && offset >= r.Start && offset < r.End)
+                            .OrderBy(r => r.End - r.Start).FirstOrDefault();
+                        if (localCatch is not null) catchHandlers.Push(At(body, localCatch.Handler, invocation));
+                        try
+                        {
+                        var api = IlSqlObjectPathExtractor.KnownFrameworkApi(call.TargetIdentity)
+                            ?? IlSqlLifecycleApis.Resolve(call.TargetIdentity, bodies.Select(b => b.Observation.ObjectBody?.OwnerType));
+                        if (api is not null)
+                        {
+                            var recordFailure = catchHandlers.Count > 0 && api is "fill" or "table-merge" or "row-write" or "list-add";
+                            var before = recordFailure ? Snapshot() : [];
+                            var beforeObjects = recordFailure ? ObjectsSnapshot() : [];
+                            var inLoop = loopEnumerator.Kind != "unknown";
+                            returned = Framework(api, receiver, values, site);
+                            if (recordFailure)
+                            {
+                                if (failures.Count >= 256) throw new Refusal("lifecycle-failure-limit");
+                                failures.Add(new(site, api, catchHandlers.Peek(), before, Snapshot(), true, inLoop,
+                                    beforeObjects, ObjectsSnapshot()));
+                            }
+                        }
+                        else
+                        {
+                            if (loopEnumerator.Kind != "unknown" && op != "newobj") throw new Refusal("lifecycle-loop-helper-effect");
+                            if (!budget.TryConsume(bodies.Count)) throw new Refusal("lifecycle-work-limit");
+                            var targets = bodies.Where(b => b.Observation.MethodIdentity == call.TargetIdentity
+                                || b.Observation.ObjectBody?.MemberReference == call.TargetIdentity).Take(2).ToArray();
+                            if (targets.Length != 1) throw new Refusal("lifecycle-unknown-call:" + call.TargetIdentity);
+                            var targetMeta = targets[0].Observation.ObjectBody!;
+                            if (targetMeta.ParameterCount != shape.ParameterCount || targetMeta.HasThis != shape.HasThis
+                                || targetMeta.ReturnsValue != shape.ReturnsValue || op == "newobj" && targetMeta.Name != ".ctor")
+                                throw new Refusal("lifecycle-callee-shape");
+                            if (op == "newobj") receiver = New("custom", targetMeta.OwnerType);
+                            returned = Invoke(targets[0], shape.HasThis ? new[] { receiver }.Concat(values).ToArray() : values, depth + 1);
+                            if (op == "newobj") returned = receiver;
+                        }
+                        }
+                        finally { if (localCatch is not null) _ = catchHandlers.Pop(); }
+                        if (op == "newobj" || shape.ReturnsValue) stack.Add(returned);
+                        continue;
+                    }
+                    if (op == "ret")
+                    {
+                        if (stack.Count != (meta.ReturnsValue ? 1 : 0)) throw new Refusal("lifecycle-return-stack");
+                        return meta.ReturnsValue ? Pop() : Value.Unknown;
+                    }
+                    throw new Refusal("lifecycle-opcode:" + op);
+                }
+                throw new Refusal("lifecycle-no-return");
+                int Index(long offset)
+                {
+                    var index = Array.IndexOf(offsets, offset);
+                    return index >= 0 ? index : throw new Refusal("lifecycle-handler-offset-invalid");
+                }
+            }
+            finally { active.Remove(body.Observation.MethodIdentity); }
+        }
+
+        private Value Framework(string api, Value receiver, Value[] args, Site site)
+        {
+            if (loopEnumerator.Kind != "unknown" && api is not ("enumerator-next" or "enumerator-current"
+                or "rows" or "row" or "consumer" or "row-write" or "object-value" or "object-base" or "list-add"))
+                throw new Refusal("lifecycle-loop-effect:" + api);
+            switch (api)
+            {
+                case "enumerator":
+                    var rows = Get(receiver, "rows");
+                    return View("enumerator", rows.Parent);
+                case "enumerator-next":
+                    var enumerator = Get(receiver, "enumerator");
+                    if (enumerator.Moves > 1) throw new Refusal("lifecycle-enumerator-reused");
+                    if (enumerator.Moves++ == 0)
+                    {
+                        if (loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-nested-enumerator");
+                        loopEnumerator = receiver; loopAllocationStart = heap.Count;
+                        loops.Add(new(site, enumerator.Parent.Text, "per-existing-row-on-normal-completion;row-count-unproven"));
+                        return new("loop-test", "1");
+                    }
+                    if (loopEnumerator != receiver) throw new Refusal("lifecycle-enumerator-order");
+                    loopEnumerator = Value.Unknown; loopRow = Value.Unknown;
+                    return new("loop-test", "0");
+                case "enumerator-current":
+                    enumerator = Get(receiver, "enumerator");
+                    if (enumerator.Moves != 1 || loopEnumerator != receiver || loopRow.Kind != "unknown")
+                        throw new Refusal("lifecycle-enumerator-position");
+                    loopRow = View("row", enumerator.Parent); return loopRow;
+                case "enumerator-dispose": _ = Get(receiver, "enumerator"); return Value.Unknown;
+                case "row-write":
+                    if (loopEnumerator.Kind == "unknown" || receiver != loopRow) throw new Refusal("lifecycle-row-write-scope");
+                    var writeParent = Get(receiver, "row").Parent;
+                    var writeTable = Get(writeParent, "table"); var writeColumn = Text(args[0]);
+                    if (args[1].Kind != "read" || !int.TryParse(args[1].Text, out var readIndex)
+                        || readIndex < 0 || readIndex >= reads.Count) throw new Refusal("lifecycle-write-value-unresolved");
+                    writeTable.Writes[writeColumn] = reads[readIndex].Value with { Assignment = site };
+                    return Value.Unknown;
+                case "list-new": return New("list");
+                case "list-clear": Get(receiver, "list").Slots.Clear(); return Value.Unknown;
+                case "list-add":
+                    var list = Get(receiver, "list");
+                    if (list.Slots.Count >= 16) throw new Refusal("lifecycle-list-limit");
+                    if (loopEnumerator.Kind != "unknown" && !LoopAllocated(args[0])) throw new Refusal("lifecycle-loop-shared-projection");
+                    _ = Get(args[0], "custom"); list.Slots.Add(args[0]); return Value.Unknown;
+                case "list-item":
+                    list = Get(receiver, "list"); var listIndex = Number(args[0]);
+                    if (listIndex < 0 || listIndex >= list.Slots.Count) throw new Refusal("lifecycle-list-index");
+                    return list.Slots[listIndex];
+                case "object-value":
+                    if (args[0].Kind is not ("read" or "int" or "string" or "null")) throw new Refusal("lifecycle-object-copy-unresolved");
+                    return args[0];
+                case "type-handle":
+                    if (args[0].Kind != "type-token") throw new Refusal("lifecycle-type-handle-unresolved");
+                    return new("type", args[0].Text);
+                case "table-new":
+                    var created = New("table"); heap[created.Text].Command = new("string", Text(args[0])); return created;
+                case "columns": _ = Get(receiver, "table"); return View("columns", receiver);
+                case "column-add":
+                    var columnTable = Get(Get(receiver, "columns").Parent, "table");
+                    if (columnTable.Execution is not null || !columnTable.Empty || args[1].Kind != "type"
+                        || columnTable.Columns.Count >= 64 || !columnTable.Columns.Add(Text(args[0]))) throw new Refusal("lifecycle-column-declaration");
+                    return New("column");
+                case "rows-add":
+                    var rowParent = Get(receiver, "rows").Parent;
+                    var rowTable = Get(rowParent, "table"); var array = Get(args[0], "array");
+                    if (!rowTable.Empty || rowTable.Execution is not null || array.Slots.Count != rowTable.Columns.Count
+                        || array.Slots.Any(v => v.Kind is not ("int" or "string" or "null"))) throw new Refusal("lifecycle-application-row-shape");
+                    rowTable.Empty = false; return View("row", rowParent);
+                case "table-clear":
+                    var cleared = Get(receiver, "table"); cleared.Empty = true; cleared.Writes.Clear(); return Value.Unknown;
+                case "object-base": _ = Get(receiver, "custom"); return Value.Unknown;
+                case "dataset": return New("dataset");
+                case "command":
+                    var command = New("command"); heap[command.Text].Command = new("string", Text(args[0])); return command;
+                case "command-type": Get(receiver, "command").Type = args[0]; return Value.Unknown;
+                case "parameters": _ = Get(receiver, "command"); return View("parameters", receiver);
+                case "parameter": return New("parameter");
+                case "add": Get(Get(receiver, "parameters").Parent, "command").Slots.Add(args[0]); return args[0];
+                case "adapter": _ = Get(args[0], "command"); return View("adapter", args[0]);
+                case "fill":
+                    var cmd = Get(Get(receiver, "adapter").Parent, "command"); var set = Get(args[0], "dataset");
+                    if (Number(cmd.Type) != 4 || set.Slots.Count != 0 || executions.Count >= 8) throw new Refusal("lifecycle-execution-shape");
+                    var execution = "execution:" + executions.Count.ToString(CultureInfo.InvariantCulture);
+                    executions.Add(new(execution, Text(cmd.Command), site));
+                    var table = New("table"); var state = heap[table.Text];
+                    state.Parent = args[0]; state.Execution = execution; state.SchemaExecutions.Add(execution); state.Empty = false;
+                    set.Slots.Add(table); return Int(0);
+                case "tables": _ = Get(receiver, "dataset"); return View("tables", receiver);
+                case "table-add":
+                    set = Get(Get(receiver, "tables").Parent, "dataset");
+                    if (set.Slots.Count >= 16) throw new Refusal("lifecycle-table-limit");
+                    table = New("table"); heap[table.Text].Command = new("string", Text(args[0])); set.Slots.Add(table); return table;
+                case "table":
+                    set = Get(Get(receiver, "tables").Parent, "dataset"); var index = Number(args[0]);
+                    if (index < 0 || index >= set.Slots.Count) throw new Refusal("lifecycle-table-index");
+                    return set.Slots[index];
+                case "table-merge":
+                    var target = Get(receiver, "table"); var source = Get(args[0], "table");
+                    if (!target.Empty || source.Execution is null) throw new Refusal("lifecycle-merge-existing-or-unknown");
+                    target.Execution = source.Execution; target.SchemaExecutions.AddRange(source.SchemaExecutions);
+                    target.Empty = false; target.Writes.Clear(); return Value.Unknown;
+                case "rows": _ = Get(receiver, "table"); return View("rows", receiver);
+                case "row":
+                    if (Number(args[0]) != 0) throw new Refusal("lifecycle-row-index");
+                    var rowSource = Get(receiver, "rows").Parent;
+                    if (loopEnumerator.Kind != "unknown" && rowSource == Get(loopEnumerator, "enumerator").Parent)
+                        throw new Refusal("lifecycle-cross-row-read");
+                    return View("row", rowSource);
+                case "consumer":
+                    var parent = Get(receiver, "row").Parent; state = Get(parent, "table"); var column = Text(args[0]);
+                    var origin = state.Writes.GetValueOrDefault(column,
+                        new(state.Execution is null ? "application" : "sql", parent.Text, state.Execution, column));
+                    if (state.Execution is null && !state.Columns.Contains(column)) throw new Refusal("lifecycle-application-column-unknown");
+                    reads.Add(new(site, parent.Text, column, state.SchemaExecutions.Distinct(StringComparer.Ordinal).ToArray(), origin));
+                    return new("read", (reads.Count - 1).ToString(CultureInfo.InvariantCulture));
+                default: throw new Refusal("lifecycle-framework-pending:" + api);
+            }
+        }
+        private bool LoopAllocated(Value value)
+            => value.Kind == "object" && value.Text.StartsWith("allocation:", StringComparison.Ordinal)
+                && int.TryParse(value.Text[11..], NumberStyles.None, CultureInfo.InvariantCulture, out var allocation)
+                && allocation >= loopAllocationStart;
+        private TableState[] Snapshot()
+            => heap.Where(pair => pair.Value.Kind == "table").Select(pair => new TableState(pair.Key,
+                pair.Value.Empty, pair.Value.Execution, pair.Value.SchemaExecutions.ToArray(),
+                new Dictionary<string, Origin>(pair.Value.Writes, StringComparer.Ordinal))).ToArray();
+        private ObjectSnapshot[] ObjectsSnapshot()
+            => heap.Where(pair => pair.Value.Kind is "custom" or "dataset" or "list").Select(pair => new ObjectSnapshot(pair.Key,
+                pair.Value.Kind, pair.Value.Slots.Select(v => v.Kind + ":" + v.Text).ToArray(),
+                pair.Value.Fields.ToDictionary(f => f.Key, f => f.Value.Kind + ":" + f.Value.Text, StringComparer.Ordinal))).ToArray();
+        private static bool Slot(string op, string operand, string prefix, out int slot)
+        {
+            slot = -1;
+            if (op == prefix || op == prefix + ".s") return operand.StartsWith("v:", StringComparison.Ordinal) && int.TryParse(operand[2..], out slot) && slot >= 0;
+            return op.StartsWith(prefix + ".", StringComparison.Ordinal) && int.TryParse(op[(prefix.Length + 1)..], out slot) && slot >= 0;
+        }
+    }
+
+    private static long Offset(string value)
+        => long.TryParse(value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var offset) && offset >= 0
+            ? offset : throw new Refusal("lifecycle-invalid-offset");
+
+    private static Region ParseRegion(string text)
+    {
+        var parts = text.Split(':', 10);
+        if (parts.Length != 10 || parts[0] != "kind" || parts[2] != "try" || parts[4] != "handler"
+            || parts[6] != "filter" || parts[7] != "-1" || parts[8] != "catch"
+            || parts[1] is not ("finally" or "catch")) throw new Refusal("lifecycle-handler-shape");
+        (long Start, long End) Range(string value)
+        {
+            var range = value.Split('+');
+            if (range.Length != 2 || !long.TryParse(range[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var start)
+                || !long.TryParse(range[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var length)
+                || start < 0 || length <= 0 || start > long.MaxValue - length) throw new Refusal("lifecycle-handler-range");
+            return (start, start + length);
+        }
+        var body = Range(parts[3]); var handler = Range(parts[5]);
+        return new(parts[1], body.Start, body.End, handler.Start, handler.End);
+    }
+}

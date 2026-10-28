@@ -73,5 +73,19 @@ Namespace PublicSql.VisualBasic
         Public Function Escaped() As Object
             Load(False) : GC.KeepAlive(State) : Return State.Tables(0).Rows(0)("Name")
         End Function
+        Public Function CrossRow() As Object
+            Load(False)
+            For Each row As DataRow In State.Tables(0).Rows
+                row("Score") = State.Tables(0).Rows(0)("Score")
+            Next
+            Return State.Tables(0).Rows(0)("Score")
+        End Function
+        Public Function LoopCarried() As Object
+            Load(False)
+            For Each row As DataRow In State.Tables(0).Rows
+                Failed = True
+            Next
+            Return State.Tables(0).Rows(0)("Name")
+        End Function
     End Class
 End Namespace

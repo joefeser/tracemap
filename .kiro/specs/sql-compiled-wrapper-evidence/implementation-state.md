@@ -213,3 +213,35 @@ tests passed with Debug `-warnaserror`, no failures or skips. The earlier eight
 lineage-only tests also passed. Full frozen and CLI end-to-end gates remain pending;
 the baseline lifecycle still has no positive comparison evidence. No goal completion,
 public acceptance, PR or work-machine retry is claimed.
+
+### Internal lifecycle interpreter checkpoint (goal remains active)
+
+Added a separate internal prototype, not yet emitted as facts or admitted by a
+comparison route. It follows the two compiled-wrapper executions through the
+property-held named tables, an application-created auxiliary table, guarded
+per-row overwrite, typed projection, Clear/re-Merge and fresh reload. Schema
+execution ancestry remains separate from value origin; overwrites retain an
+assignment site. Boolean alternatives remain separate correlated runs.
+
+Exact signed framework signatures admit only the narrow fixture operations.
+Loop summaries describe existing-row normal completion, not row existence or
+runtime execution. Cross-row dependence, loop-carried field effects and escapes
+discard positive claims. Invalid offsets, substituted type operands and mismatched
+callee shapes are refused. Both fixture projects build through the test project;
+the provider methods are not executed.
+
+Potential failure records retain before and normal-completion table/object states
+and partial-loop flags. They explicitly do not execute catch continuations or
+claim atomicity, rollback, observed failures or a final post-catch state. This
+remaining distinction must be preserved in the comparison contract.
+
+Focused Debug `-warnaserror` gate: 44 passed, zero failures/skips. This includes
+20 lifecycle tests plus retained object-path and lineage model tests. Development
+repairs included an uninitialized-field warning, an xUnit predicate assertion,
+ambiguous fixture method selection and nullable-flow warning; no expected matrix
+cell was weakened. The preceding 42-test checkpoint also passed.
+
+Still required: complete provenance/soundness review, extracted CLI evidence and
+dedicated bindings/comparison route, actual CLI end-to-end acceptance matrix,
+retained smoke denominators and frozen full validation. No complete implementation,
+private readiness, PR or work-machine retry is claimed at this checkpoint.

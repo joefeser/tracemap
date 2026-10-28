@@ -54,5 +54,18 @@ namespace PublicSql.CSharp
         }
         public object Reload() { Load(true); Load(false); return State.Tables[0].Rows[0]["Score"]; }
         public object Escaped() { Load(false); GC.KeepAlive(State); return State.Tables[0].Rows[0]["Name"]; }
+        public object CrossRow()
+        {
+            Load(false);
+            foreach (DataRow row in State.Tables[0].Rows)
+                row["Score"] = State.Tables[0].Rows[0]["Score"];
+            return State.Tables[0].Rows[0]["Score"];
+        }
+        public object LoopCarried()
+        {
+            Load(false);
+            foreach (DataRow row in State.Tables[0].Rows) Failed = true;
+            return State.Tables[0].Rows[0]["Name"];
+        }
     }
 }
