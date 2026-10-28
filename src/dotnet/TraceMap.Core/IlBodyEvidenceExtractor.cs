@@ -181,6 +181,9 @@ internal static class IlBodyEvidenceExtractor
                 maxIndexedBodies = 4096, maxInstructions = 256, maxFields = 64,
                 retainedCharacterBudgetPerReader = Math.Min(limits.MaxTotalWorkUnits, 1_048_576),
                 aggregateWork = limits.MaxTotalWorkUnits },
+            sqlLifecycleLimits = new { IlSqlLifecycleExtractor.Schema, maxSteps = 8192, maxFrames = 24,
+                maxObjects = 256, maxExecutions = 8, maxFailures = 256, maxIndexedBodies = 4096,
+                maxInstructions = 256, aggregateWork = limits.MaxTotalWorkUnits },
             outcomes = outcomes.Select(item => new
             {
                 item.SafeLocator,
@@ -666,7 +669,52 @@ internal static class IlBodyEvidenceExtractor
         }
 
         EmitSqlObjectPaths(manifest, evaluation, provenance, facts);
+        EmitSqlLifecycles(manifest, evaluation, provenance, facts);
         return facts;
+    }
+
+    private static void EmitSqlLifecycles(ScanManifest manifest, IlBodyEvaluation evaluation, IlBodyProvenance provenance, List<CodeFact> facts)
+    {
+        var bodies = evaluation.Inputs.OrderBy(input => input.Outcome.SafeLocator, StringComparer.Ordinal)
+            .SelectMany(input => input.Bodies.Select(body => new IlSqlObjectPathExtractor.Body(body, input.Outcome))).ToArray();
+        var bodyFacts = facts.Where(f => f.FactType == FactTypes.ManagedIlBodyDeclared)
+            .GroupBy(f => (f.Properties["rawFileSha256"], f.TargetSymbol!)).ToDictionary(g => g.Key, g => g.First());
+        var budget = new IlWorkBudget(provenance.EffectiveLimits.MaxTotalWorkUnits);
+        foreach (var root in bodies.Where(b => IlSqlLifecycleExtractor.IsRoot(b.Observation)))
+        {
+            var guarded = root.Observation.ObjectBody!.ParameterCount == 1;
+            foreach (var enabled in guarded ? new[] { false, true } : new[] { false })
+            {
+                var result = IlSqlLifecycleExtractor.Extract(root, bodies, enabled, budget);
+                var common = CommonProperties(provenance, root.Input);
+                var guard = guarded ? "argument:0=" + (enabled ? "true" : "false") : "unconditional";
+                if (result.Returned is not null && result.Executions.Count > 0)
+                {
+                    var links = result.Bodies!.Select(site => new { site.Body, site.Binary, site.Invocation,
+                        bodyFactId = bodyFacts[(site.Binary, site.Body)].FactId }).ToArray();
+                    facts.Add(FactFactory.Create(manifest, FactTypes.ManagedIlSqlLifecycleCandidate,
+                        RuleIds.DotNetIlSqlLifecycle, EvidenceTiers.Tier3SyntaxOrTextual, IlEvidence(root.Input.SafeLocator),
+                        targetSymbol: root.Observation.BodyIdentity, contractElement: "il-sql-lifecycle:" + guard,
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("sqlLifecycleSchema", IlSqlLifecycleExtractor.Schema), ("guard", guard),
+                            ("rootBodyFactId", bodyFacts[(root.Input.RawFileSha256!, root.Observation.BodyIdentity)].FactId),
+                            ("lifecycle", SqlServerSchemaEvidence.Json(result)),
+                            ("bodyLinks", SqlServerSchemaEvidence.Json(links)),
+                            ("limitation", IlSqlLifecycleExtractor.Limitation)
+                        })));
+                }
+                foreach (var gap in result.Gaps)
+                    facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlSqlLifecycle,
+                        EvidenceTiers.Tier4Unknown, IlEvidence(root.Input.SafeLocator), targetSymbol: root.Observation.BodyIdentity,
+                        contractElement: "il-sql-lifecycle:" + guard + ":" + gap,
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("sqlLifecycleSchema", IlSqlLifecycleExtractor.Schema), ("guard", guard), ("gapKind", gap),
+                            ("limitation", IlSqlLifecycleExtractor.Limitation)
+                        })));
+            }
+        }
     }
 
     private static void EmitSqlObjectPaths(ScanManifest manifest, IlBodyEvaluation evaluation, IlBodyProvenance provenance, List<CodeFact> facts)

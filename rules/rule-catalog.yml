@@ -322,6 +322,28 @@ rules:
       - At most 4096 indexed bodies, 256 instructions per body, 64 fields, 2048 interpreted steps, 16 call depth, 64 heap objects, 256 evidence sites, 16 parameters and 64 stack/local slots. Retained instruction/field text has a separate bounded per-reader character budget capped at 1048576; interpreter work is separately capped at the provenance-bound MaxTotalWorkUnits. Limits are explicit unknowns and never absence proof.
       - Legacy source and IL routes are unchanged. No complex DDL admission, joins, schema union validation, server identity or private-application acceptance is established by this candidate.
 
+  - id: dotnet.compiled.il-sql-lifecycle.v1
+    description: Separate guarded compiled SQL lifecycle candidate with execution-specific table ancestry, helper writes, raw and typed-projection reads, and potential partial-operation boundaries.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [ManagedIlSqlLifecycleCandidate, AnalysisGap]
+    limitations:
+      - Conditional normal-completion evidence only. Boolean arguments produce separate alternatives; symbolic loops describe existing rows and do not establish row existence, cardinality or execution. A fresh root instance and inspected constructor are required; session or externally supplied state is not modeled.
+      - Exact signed net48 framework signatures and uniquely admitted dual-reader-agreed compiled bodies are required. Cross-row dependencies, loop-carried state, unknown helpers, escapes, recursion, virtual/generic dispatch and unsupported control flow withhold the candidate.
+      - SQL schema ancestry remains separate from current value origin. Application writes cannot create a SQL column or establish its declared type. Clear and re-Merge preserve schema ancestry while changing the value execution. The candidate alone does not perform SQL-contract comparison.
+      - Failure snapshots identify potential exception boundaries, before and normal-completion states, and possible partial mutation. Catch continuations are not executed. There is no final post-catch state, atomicity, rollback or observed-failure claim.
+      - Bounds include 4096 bodies, 256 instructions per body, 8192 steps, 24 call depth, 256 objects, eight SQL executions, 256 failure boundaries and 64 stack/local slots. Aggregate work is provenance-bound. Exhaustion is unknown, not absence evidence.
+      - No source equivalence, deployment, framework lifecycle, identity/session validity, runtime correctness, private-application acceptance or migration readiness is claimed. Existing object-path and source-reader routes retain their separate contracts.
+
+  - id: database.sqlserver.compiled-lifecycle-comparison.v1
+    description: Offline column-identity comparison for explicitly bound compiled lifecycle candidates against independent public synthetic first-result declarations.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits: [SqlServerLifecycleReport]
+    limitations:
+      - Partial selected-consumer coverage only. Exact candidate digest, repository revision, invoked-body links, execution command hashes and consumer table/read sites must agree. This route does not admit legacy source or parameter bindings as substitutes.
+      - A match establishes a column name in declared SQL schema ancestry, not SQL origin of its current value. Conditional application writes are reported separately. Types, nullability, row existence, values, runtime execution and private application acceptance remain unproven.
+      - Missing names are mismatches only against complete shapes. Case-only or duplicate names and incomplete shapes remain unknown. Only independently admitted public JSON first-result declarations are supported, not live catalogs or general DDL.
+      - Encoded failure boundaries do not execute catch continuations or prove final post-catch state. Selected normal-completion reads do not establish whole-program safety or exhaustive coverage.
+
   - id: dotnet.compiled.il-sql-shape.v1
     status: active
     name: Bounded encoded SQL parameter and Fill-return shape

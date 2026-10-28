@@ -245,3 +245,24 @@ Still required: complete provenance/soundness review, extracted CLI evidence and
 dedicated bindings/comparison route, actual CLI end-to-end acceptance matrix,
 retained smoke denominators and frozen full validation. No complete implementation,
 private readiness, PR or work-machine retry is claimed at this checkpoint.
+
+## Native comparison checkpoint — 2026-10-28
+
+Native scanning now emits separate Tier3 lifecycle candidates with guard alternatives,
+exact invoked-body fact links, and provenance-bound interpretation limits. The new
+`sqlserver-compiled-lifecycle compare` route requires independent public result
+declarations plus execution-specific and consumer-specific bindings. It preserves
+SQL schema ancestry separately from application-derived current values.
+
+Focused Debug `-warnaserror`: 46 passed, zero failures/skips, including C# and VB
+native scan emission and CLI comparison publication. Independent complete shapes
+produce matches, missing columns produce mismatches, and incomplete shapes produce
+unknowns. Wrong execution, table, binary and stale candidate bindings are rejected.
+Repeated CLI reports are byte-identical; existing output destinations are refused.
+An intermediate test compile failed because the test used `Manifest.Repo` rather
+than `Manifest.RepoName`; this was corrected without changing expectations.
+
+This is not final acceptance. The complete independent end-to-end CLI scan matrix,
+failure-boundary report presentation, additional soundness/negative controls,
+retained smoke denominators and frozen full suite remain required. The goal stays
+active; no PR, private-app acceptance or work-machine retry is claimed.

@@ -129,6 +129,7 @@ public static class TraceMapCommand
                 "sqlserver-dataset-result" => SqlServerDataSetCommand.Help,
                 "sqlserver-helper-result" => SqlServerHelperResultCommand.Help,
                 "sqlserver-internal-helper-result" => SqlServerInternalHelperResultCommand.Help,
+                "sqlserver-compiled-lifecycle" => SqlServerCompiledLifecycleCommand.Help,
                 "sqlserver-field-read" => SqlServerFieldReadCommand.Help,
                 "scan" => ScanHelp(),
                 "version" => VersionHelp(),
@@ -166,7 +167,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "sqlserver-field-read" or "sqlserver-internal-helper-result" or "sqlserver-helper-result" or "sqlserver-dataset-result" or "sqlserver-datatable-result" or "sqlserver-ddl-table-result" or "sqlserver-ddl-result" or "sqlserver-result-schema" or "sqlserver-ddl" or "sqlserver-schema" or "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "sqlserver-compiled-lifecycle" or "sqlserver-field-read" or "sqlserver-internal-helper-result" or "sqlserver-helper-result" or "sqlserver-dataset-result" or "sqlserver-datatable-result" or "sqlserver-ddl-table-result" or "sqlserver-ddl-result" or "sqlserver-result-schema" or "sqlserver-ddl" or "sqlserver-schema" or "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -183,6 +184,7 @@ public static class TraceMapCommand
                 "sqlserver-dataset-result" => SqlServerDataSetCommand.Run(rest, output),
                 "sqlserver-helper-result" => SqlServerHelperResultCommand.Run(rest, output),
                 "sqlserver-internal-helper-result" => SqlServerInternalHelperResultCommand.Run(rest, output),
+                "sqlserver-compiled-lifecycle" => SqlServerCompiledLifecycleCommand.Run(rest, output),
                 "sqlserver-field-read" => SqlServerFieldReadCommand.Run(rest, output),
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "versions" => rest.Length == 0
@@ -2932,6 +2934,7 @@ public static class TraceMapCommand
               tracemap sqlserver-dataset-result compare --help
               tracemap sqlserver-helper-result compare --help
               tracemap sqlserver-internal-helper-result compare --help
+              tracemap sqlserver-compiled-lifecycle compare --help
               tracemap sqlserver-field-read compare --help
               tracemap database-design-review --index <combined.sqlite> --out <path>
               tracemap webforms-modernization --index <index.sqlite> --out <directory>

@@ -10,6 +10,13 @@ namespace TraceMap.Core;
 /// </summary>
 internal static class IlSqlLifecycleExtractor
 {
+    internal const string Schema = "il-sql-lifecycle/1";
+    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. No source, deployment, session, framework, type, nullability, value or migration proof.";
+    internal static bool IsRoot(IlBodyObservation body)
+        => body.ObjectBody is { HasThis: true, ParameterCount: <= 1, ReturnsValue: true, IsGeneric: false, IsVirtual: false } meta
+            && (meta.ParameterCount == 0
+                ? meta.MemberReference.EndsWith("|()->type(namespace:6:System|names:6:Object)", StringComparison.Ordinal)
+                : meta.MemberReference.EndsWith("|(type(namespace:6:System|names:7:Boolean))->type(namespace:6:System|names:6:Object)", StringComparison.Ordinal));
     internal sealed record Site(string Body, string Binary, long Offset, int Invocation);
     internal sealed record Execution(string Id, string CommandHash, Site Site);
     internal sealed record Origin(string Kind, string Table, string? Execution, string ColumnHash, Site? Assignment = null);
@@ -29,7 +36,7 @@ internal static class IlSqlLifecycleExtractor
     }
     internal sealed record Result(IReadOnlyList<Execution> Executions, IReadOnlyList<Read> Reads,
         Read? Returned, IReadOnlyList<string> Gaps, IReadOnlyList<Loop>? Loops = null,
-        IReadOnlyList<Failure>? Failures = null)
+        IReadOnlyList<Failure>? Failures = null, IReadOnlyList<Site>? Bodies = null)
     {
         public string Claim => "conditional-static-lineage;normal-completion;row-existence-unproven";
     }
@@ -73,6 +80,7 @@ internal static class IlSqlLifecycleExtractor
         private readonly List<Read> reads = [];
         private readonly List<Loop> loops = [];
         private readonly List<Failure> failures = [];
+        private readonly List<Site> invokedBodies = [];
         private readonly Stack<Site> catchHandlers = new();
         private readonly HashSet<string> active = new(StringComparer.Ordinal);
         private int frame, work;
@@ -119,7 +127,7 @@ internal static class IlSqlLifecycleExtractor
             var result = returned.Kind == "read" ? reads[int.Parse(returned.Text, CultureInfo.InvariantCulture)] : null;
             if (result is null) throw new Refusal("lifecycle-return-unresolved");
             if (loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-loop-incomplete");
-            return new(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray());
+            return new(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray());
         }
 
         private Value Invoke(Body body, Value[] args, int depth)
@@ -134,6 +142,7 @@ internal static class IlSqlLifecycleExtractor
                 if (meta.IsVirtual || meta.IsGeneric || meta.Instructions.Count > 256
                     || args.Length != meta.ParameterCount + (meta.HasThis ? 1 : 0)) throw new Refusal("lifecycle-body-shape");
                 var invocation = ++frame;
+                invokedBodies.Add(At(body, 0, invocation));
                 var code = meta.Instructions.Select(line => line.Split(':', 4)).ToArray();
                 if (code.Any(p => p.Length != 4)) throw new Refusal("lifecycle-invalid-instruction");
                 var offsets = code.Select(p => Offset(p[1])).ToArray();

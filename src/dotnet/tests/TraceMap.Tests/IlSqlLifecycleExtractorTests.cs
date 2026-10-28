@@ -1,11 +1,107 @@
 using System.Security.Cryptography;
 using TraceMap.Core;
+using TraceMap.Cli;
 using Xunit.Abstractions;
 
 namespace TraceMap.Tests;
 
 public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public async Task Native_scan_emits_guarded_lifecycle_with_all_invoked_body_links(string language)
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
+        Assert.NotNull(root);
+        var config = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var fixture = Path.Combine(root.FullName, "samples", "sql-compiled-wrapper-evidence", language);
+        var inputs = new[] { "end-to-end", "wrapper" }.Select(role => Path.Combine(fixture, role, "bin", config,
+            "net48", $"PublicSql.{language}.{role}.dll")).ToArray();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(fixture, "end-to-end"),
+            IlBodyEvidenceExtractorShared.TempOutput(), CompiledInputPaths: inputs, IlBodyEvidence: true));
+        var candidates = scan.Facts.Where(f => f.FactType == FactTypes.ManagedIlSqlLifecycleCandidate).ToArray();
+        Assert.NotEmpty(candidates);
+        var scoreBody = Assert.Single(Bodies(language), b => b.Observation.ObjectBody?.Name == "Score").Observation.BodyIdentity;
+        var score = candidates.Where(f => f.TargetSymbol == scoreBody).ToArray();
+        Assert.Equal(2, score.Length);
+        Assert.Equal(new[] { "argument:0=false", "argument:0=true" }, score.Select(f => f.Properties["guard"]).Order().ToArray());
+        var byId = scan.Facts.ToDictionary(f => f.FactId);
+        foreach (var candidate in candidates)
+        {
+            Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, candidate.EvidenceTier);
+            Assert.Equal(RuleIds.DotNetIlSqlLifecycle, candidate.RuleId);
+            Assert.Equal(scan.Manifest.IlBodyProvenance!.GeneratorSha256, candidate.Properties["ilGeneratorSha256"]);
+            using var links = System.Text.Json.JsonDocument.Parse(candidate.Properties["bodyLinks"]);
+            foreach (var link in links.RootElement.EnumerateArray())
+            {
+                var body = byId[link.GetProperty("bodyFactId").GetString()!];
+                Assert.Equal(FactTypes.ManagedIlBodyDeclared, body.FactType);
+                Assert.Equal(body.TargetSymbol, link.GetProperty("body").GetString());
+                Assert.Equal(body.Properties["rawFileSha256"], link.GetProperty("binary").GetString());
+            }
+            var state = SqlServerSchemaEvidence.Read<IlSqlLifecycleExtractor.Result>(candidate.Properties["lifecycle"]);
+            Assert.Empty(state.Gaps); Assert.NotNull(state.Returned); Assert.NotEmpty(state.Bodies!);
+            Assert.DoesNotContain("public.first", candidate.Properties["lifecycle"], StringComparison.Ordinal);
+        }
+        var firstIdentity = new SqlServerObjectIdentity("synthetic", "sample", "public", "first");
+        var secondIdentity = new SqlServerObjectIdentity("synthetic", "sample", "public", "second");
+        var declarations = new SqlServerResultDeclarations("sqlserver-result-declarations/1", scan.Manifest.RepoName,
+            scan.Manifest.CommitSha, "independent-synthetic-result-declarations", "ordinal-exact-no-aliases",
+            [new(firstIdentity, "schema/first.sql", 1, 3, "first", "complete", null,
+                [new("Name", 0, 1, null), new("Score", 1, 2, null)]),
+             new(secondIdentity, "schema/second.sql", 1, 2, "first", "complete", null, [new("Count", 0, 1, null)])]);
+        var schema = SqlServerResultEvidence.Produce(SqlServerSchemaEvidence.Json(declarations));
+        var bound = score.Select(fact =>
+        {
+            var state = SqlServerSchemaEvidence.Read<IlSqlLifecycleExtractor.Result>(fact.Properties["lifecycle"]);
+            var read = state.Returned!;
+            return new SqlServerLifecycleBinding(fact.FactId, SqlServerCompiledLifecycleEvidence.EvidenceDigest(fact),
+                read.Table, "Score", read.Site.Body, read.Site.Binary, read.Site.Offset, read.Site.Invocation,
+                [new("execution:0", "public.first", firstIdentity), new("execution:1", "public.second", secondIdentity)]);
+        }).ToArray();
+        var bindings = new SqlServerLifecycleBindings("sqlserver-compiled-lifecycle-bindings/1", scan.Manifest.RepoName, scan.Manifest.CommitSha, bound);
+        var report = SqlServerCompiledLifecycleEvidence.Compare(schema, bindings, scan.Facts, scan.Manifest.RepoName, scan.Manifest.CommitSha);
+        Assert.Equal(2, report.Comparisons.Count);
+        Assert.All(report.Comparisons, row => Assert.Equal("match", row.Status));
+        Assert.Equal("application", Assert.Single(report.Comparisons, r => r.Guard == "argument:0=true").ValueOrigin);
+        Assert.Equal("sql", Assert.Single(report.Comparisons, r => r.Guard == "argument:0=false").ValueOrigin);
+        foreach (var substituted in new[]
+        {
+            bound[0] with { ConsumerTable = "allocation:wrong" },
+            bound[0] with { ReadBinary = new string('0', 64) },
+            bound[0] with { EvidenceSha256 = new string('0', 64) },
+            bound[0] with { Executions = [new("execution:0", "public.second", secondIdentity), new("execution:1", "public.first", firstIdentity)] }
+        })
+            Assert.Throws<ArgumentException>(() => SqlServerCompiledLifecycleEvidence.Compare(schema,
+                bindings with { Candidates = [substituted] }, scan.Facts, scan.Manifest.RepoName, scan.Manifest.CommitSha));
+        var missing = declarations with { Shapes = [declarations.Shapes[0] with { Columns = [new("Name", 0, 1, null)] }, declarations.Shapes[1]] };
+        Assert.All(SqlServerCompiledLifecycleEvidence.Compare(SqlServerResultEvidence.Produce(SqlServerSchemaEvidence.Json(missing)), bindings,
+            scan.Facts, scan.Manifest.RepoName, scan.Manifest.CommitSha).Comparisons, row => Assert.Equal("mismatch", row.Status));
+        var incomplete = missing with { Shapes = [missing.Shapes[0] with { Completeness = "unknown", UnknownReason = "partial-shape" }, missing.Shapes[1]] };
+        Assert.All(SqlServerCompiledLifecycleEvidence.Compare(SqlServerResultEvidence.Produce(SqlServerSchemaEvidence.Json(incomplete)), bindings,
+            scan.Facts, scan.Manifest.RepoName, scan.Manifest.CommitSha).Comparisons, row => Assert.Equal("unknown", row.Status));
+        var directory = IlBodyEvidenceExtractorShared.TempOutput();
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "declarations.json"), SqlServerSchemaEvidence.Json(declarations));
+        File.WriteAllText(Path.Combine(directory, "schema.json"), SqlServerSchemaEvidence.Json(schema));
+        File.WriteAllText(Path.Combine(directory, "bindings.json"), SqlServerSchemaEvidence.Json(bindings));
+        File.WriteAllLines(Path.Combine(directory, "facts.ndjson"), scan.Facts.Select(SqlServerSchemaEvidence.Json));
+        string[] Command(string destination) => ["sqlserver-compiled-lifecycle", "compare",
+            "--declarations", Path.Combine(directory, "declarations.json"), "--schema", Path.Combine(directory, "schema.json"),
+            "--bindings", Path.Combine(directory, "bindings.json"), "--facts", Path.Combine(directory, "facts.ndjson"),
+            "--repo", scan.Manifest.RepoName, "--revision", scan.Manifest.CommitSha, "--out", Path.Combine(directory, destination)];
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+        Assert.True(await TraceMapCommand.RunAsync(Command("report1"), stdout, stderr) == 0, stderr.ToString());
+        Assert.True(await TraceMapCommand.RunAsync(Command("report2"), stdout, stderr) == 0, stderr.ToString());
+        Assert.NotEqual(0, await TraceMapCommand.RunAsync(Command("report1"), stdout, stderr));
+        Assert.Equal(File.ReadAllText(Path.Combine(directory, "report1", "compiled-lifecycle-comparison.json")),
+            File.ReadAllText(Path.Combine(directory, "report2", "compiled-lifecycle-comparison.json")));
+        Assert.Contains("Coverage: partial", File.ReadAllText(Path.Combine(directory, "report1", "report.md")), StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("csharp")]
     [InlineData("vb")]

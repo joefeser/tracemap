@@ -458,6 +458,7 @@ public static class FactTypes
     public const string ManagedIlDatabaseCommandCandidate = nameof(ManagedIlDatabaseCommandCandidate);
     public const string ManagedIlSqlShapeCandidate = nameof(ManagedIlSqlShapeCandidate);
     public const string ManagedIlSqlObjectPathCandidate = nameof(ManagedIlSqlObjectPathCandidate);
+    public const string ManagedIlSqlLifecycleCandidate = nameof(ManagedIlSqlLifecycleCandidate);
     public const string ManagedIlRewriteObserved = nameof(ManagedIlRewriteObserved);
     public const string ManagedIlCallRetargetObserved = nameof(ManagedIlCallRetargetObserved);
     public const string ManagedIlRewritePdbObserved = nameof(ManagedIlRewritePdbObserved);
@@ -696,6 +697,7 @@ public static class RuleIds
     public const string DotNetIlCommandBinding = "dotnet.compiled.il-command-binding.v1";
     public const string DotNetIlSqlShape = "dotnet.compiled.il-sql-shape.v1";
     public const string DotNetIlSqlObjectPath = "dotnet.compiled.il-sql-object-path.v1";
+    public const string DotNetIlSqlLifecycle = "dotnet.compiled.il-sql-lifecycle.v1";
     public const string DotNetIlGap = "dotnet.compiled.il-gap.v1";
     public const string DotNetIlRewrite = "dotnet.compiled.il-rewrite.v1";
     public const string DotNetIlRewriteGap = "dotnet.compiled.il-rewrite-gap.v1";
@@ -726,7 +728,7 @@ public static class ScannerVersions
     public const string ManagedMetadataExtractor = "managed-metadata/0.2.0+cecil-0.11.6"; // 0.2.0: ManagedAssemblyDeclared gains runtimeFloor* properties (#853)
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.3+srm-10.0.0+cecil-0.11.6"; // 0.2.3: bounded named-table Merge paths with separate execution origins
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.4+srm-10.0.0+cecil-0.11.6"; // 0.2.4: separate guarded lifecycle candidates
     public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
     public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
