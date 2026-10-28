@@ -682,22 +682,24 @@ internal static class IlBodyEvidenceExtractor
         var budget = new IlWorkBudget(provenance.EffectiveLimits.MaxTotalWorkUnits);
         foreach (var root in bodies.Where(b => IlSqlLifecycleExtractor.IsRoot(b.Observation)))
         {
-            var guarded = root.Observation.ObjectBody!.ParameterCount == 1;
+            var guarded = IlSqlLifecycleExtractor.IsGuardedRoot(root.Observation);
+            var lifecycleSchema = IlSqlLifecycleExtractor.IsReadRoot(root.Observation)
+                ? IlSqlLifecycleExtractor.Schema : IlSqlLifecycleExtractor.EntrySchema;
             foreach (var enabled in guarded ? new[] { false, true } : new[] { false })
             {
                 var result = IlSqlLifecycleExtractor.Extract(root, bodies, enabled, budget);
                 var common = CommonProperties(provenance, root.Input);
                 var guard = guarded ? "argument:0=" + (enabled ? "true" : "false") : "unconditional";
-                if (result.Returned is not null && result.Executions.Count > 0)
+                if ((result.Returned is not null || result.Entry is not null) && result.Executions.Count > 0)
                 {
                     var links = result.Bodies!.Select(site => new { site.Body, site.Binary, site.Invocation,
                         bodyFactId = bodyFacts[(site.Binary, site.Body)].FactId }).ToArray();
-                    facts.Add(FactFactory.Create(manifest, FactTypes.ManagedIlSqlLifecycleCandidate,
+                    facts.Add(FactFactory.Create(manifest, result.Entry is null ? FactTypes.ManagedIlSqlLifecycleCandidate : FactTypes.ManagedIlSqlLifecycleEntryCandidate,
                         RuleIds.DotNetIlSqlLifecycle, EvidenceTiers.Tier3SyntaxOrTextual, IlEvidence(root.Input.SafeLocator),
                         targetSymbol: root.Observation.BodyIdentity, contractElement: "il-sql-lifecycle:" + guard,
                         properties: CopyToSorted(common, new (string Key, string Value)[]
                         {
-                            ("sqlLifecycleSchema", IlSqlLifecycleExtractor.Schema), ("guard", guard),
+                            ("sqlLifecycleSchema", lifecycleSchema), ("guard", guard),
                             ("rootBodyFactId", bodyFacts[(root.Input.RawFileSha256!, root.Observation.BodyIdentity)].FactId),
                             ("lifecycle", SqlServerSchemaEvidence.Json(result)),
                             ("bodyLinks", SqlServerSchemaEvidence.Json(links)),
@@ -710,7 +712,7 @@ internal static class IlBodyEvidenceExtractor
                         contractElement: "il-sql-lifecycle:" + guard + ":" + gap,
                         properties: CopyToSorted(common, new (string Key, string Value)[]
                         {
-                            ("sqlLifecycleSchema", IlSqlLifecycleExtractor.Schema), ("guard", guard), ("gapKind", gap),
+                            ("sqlLifecycleSchema", lifecycleSchema), ("guard", guard), ("gapKind", gap),
                             ("limitation", IlSqlLifecycleExtractor.Limitation)
                         })));
             }

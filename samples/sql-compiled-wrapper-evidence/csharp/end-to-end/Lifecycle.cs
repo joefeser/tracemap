@@ -4,6 +4,29 @@ using System.Data;
 namespace PublicSql.CSharp
 {
     // Compile-only integration fixture. Never invoke these provider-backed methods.
+    public sealed class EntryProtocol
+    {
+        private DataSet stored;
+        public static DataSet ProduceInputs(int first, int second, string third, bool fourth)
+        {
+            var parameters = new System.Collections.ArrayList();
+            parameters.Add(new InputParameter("@First", SqlDbType.NVarChar, 20, first));
+            parameters.Add(new InputParameter("@Second", SqlDbType.NVarChar, 20, second));
+            parameters.Add(new InputParameter("@Third", SqlDbType.NVarChar, 20, third));
+            parameters.Add(new InputParameter("@Fourth", SqlDbType.NVarChar, 20, fourth));
+            return Wrapper.ArrayInputs("public.first", parameters);
+        }
+        public void StoreInputs() { stored = ProduceInputs(1, 2, "three", true); }
+        public object StoredInputRead() { StoreInputs(); return stored.Tables[0].Rows[0]["Name"]; }
+        public static DataSet EmptyProducer() { return new DataSet(); }
+        public static DataSet UnknownCommand(string command) { return Wrapper.Direct(command); }
+        public static DataSet UnknownGuard(int first, int second, string third, bool fourth)
+        {
+            if (!fourth) return new DataSet();
+            return ProduceInputs(first, second, third, fourth);
+        }
+        public static void DiscardInputs() { ProduceInputs(1, 2, "three", true); }
+    }
     public sealed class ArrayLifecycle
     {
         public object ArrayParameterRead()

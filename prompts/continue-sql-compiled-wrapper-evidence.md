@@ -5,6 +5,15 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
+## Entry patch status and execution constraint
+
+The published branch now includes an entry-protocol patch after the previously
+validated ArrayList implementation. **Joe explicitly requested no tests for this
+quick iteration.** Compile the tool once, then inspect the bounded native behavior
+on the available real inputs. Do not run unit/full test suites unless Joe separately
+asks. The new source tests/fixtures exist but have not been executed. Compilation
+is not behavioral validation; previous 87/5,527 results cover the older baseline.
+
 ## Inputs and revision
 
 Discover these inputs locally. Joe does not need to fill in a worksheet or know a
@@ -13,7 +22,7 @@ checkouts/build outputs; ask only when the application checkout cannot be identi
 or multiple plausible target flows need a human choice.
 
 ```text
-VALIDATED_IMPLEMENTATION_COMMIT = b4526fcec6b7ab5e814a1f55051e4229bff9139c
+HISTORICAL_VALIDATED_BASELINE = b4526fcec6b7ab5e814a1f55051e4229bff9139c
 TOOL_BRANCH = codex/sql-compiled-wrapper-evidence
 EXPECTED_TOOL_COMMIT = AUTO: exact fetched branch SHA, verified and recorded below
 PRIVATE_SOURCE_ROOT = AUTO: locate the work application checkout
@@ -29,10 +38,11 @@ Read AGENTS.md, the current continuation section of
 `docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md`, and lifecycle rule limitations.
 Fetch `origin/codex/sql-compiled-wrapper-evidence`. If the handoff supplied an exact
 prompt/tool SHA, verify and use it. Otherwise resolve the fetched branch SHA once
-and record it as EXPECTED_TOOL_COMMIT. Verify that it descends from the validated
-implementation commit above and that subsequent changes are documentation only.
-If implementation, tests, fixtures or rules changed, inspect their validation before
-claiming the recorded gate applies. Use a clean tool checkout at the verified SHA
+and record it as EXPECTED_TOOL_COMMIT. Verify that it descends from the historical
+baseline above. Implementation/fixture/test/rule changes for the new entry protocol
+are expected and explicitly unvalidated. Record that status; do not stop solely
+because the user deferred tests, and do not apply the historical pass totals to it.
+Use a clean tool checkout at the verified SHA
 without resetting any dirty checkout. Record this public tool SHA separately from
 the private application's revision.
 
@@ -63,7 +73,7 @@ public synthetic results; the work-machine test is still required.
 
 ## Authority and privacy
 
-This prompt authorizes bounded offline inspection, tool build/tests, a new native
+This prompt authorizes bounded offline inspection, tool compilation, a new native
 scan when inputs fit, and optional conditional schema comparison. Do not execute
 the application, SQL, provider methods, containers, live requests or impersonation
 flows. Do not alter application source, accepted baselines, existing output,
@@ -90,16 +100,13 @@ Build the tool once using .NET 10 and the repository's documented prerequisites:
 
 ```text
 dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj -c Debug -warnaserror
-dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter "FullyQualifiedName~IlSqlLifecycleExtractorTests|FullyQualifiedName~SqlServerOwnerResultEvidenceTests|FullyQualifiedName~IlSqlObjectPathExtractorTests|FullyQualifiedName~IlSqlShapeExtractorTests|FullyQualifiedName~CompiledSql"
 ```
 
-The focused command should pass 87 tests. Record actual exit codes/results and local
-CLI/Core/Reporting hashes. A work-machine rebuild need not have the same byte hashes
-as the macOS build; pin the actual bytes used. If a required tool is missing, follow
-AGENTS.md's Homebrew/path discovery where applicable before reporting it missing.
-Do not launch another full suite just to repeat the already recorded unchanged-code
-gate; use the focused gate and the real-input checks below unless new failures or
-implementation changes justify broader validation.
+Record actual build exit codes and local CLI/Core/Reporting hashes. The earlier
+87 focused passes are historical, not an expected result for this untested patch.
+Do not run test suites during this iteration. A work-machine rebuild need not have
+the same bytes as a macOS build; pin the actual bytes used. Follow AGENTS.md's local
+prerequisite discovery if a tool is missing. Report compile failures directly.
 
 ## 2. Check whether the actual compiled flow fits
 
@@ -120,10 +127,16 @@ The supported lifecycle pattern is:
 - Existing bounds remain: 4,096 bodies, 256 instructions/body, 8,192 steps, 24 call
   depth, 256 heap objects, eight executions and 64 stack/local slots, plus aggregate
   work/retained-metadata budgets. Do not increase bounds to force acceptance.
-- The root must fit the implemented fresh-instance lifecycle entry contract: an
-  inspected unique constructor, nonvirtual/nongeneric instance method returning
-  `Object`, with no arguments or one Boolean argument. Both Boolean alternatives
-  are analyzed. Existing property-held DataSet/helper/consumer restrictions still apply.
+- The root must fit a bounded lifecycle entry contract: a
+  nonvirtual/nongeneric entry. The original Object-returning column-read route still
+  takes zero arguments or one Boolean. The separate entry route admits exact signed
+  DataSet-returning producers and SQL-related Void loaders, static or with a fresh
+  inspected parameterless instance constructor, up to 16 opaque unbound arguments.
+  A single Boolean argument has both alternatives; other unknown control/scalars
+  remain gaps. Instance/session state is not fabricated. A producer must return a
+  tracked SQL-derived DataSet; a Void loader must retain such a dataset in a direct
+  instance field/property or perform an observed read. DataSet subclasses are not
+  silently treated as framework DataSet. Existing helper/consumer restrictions apply.
 
 Do not edit or wrap the application to manufacture a supported root. Do not equate
 an accepted ArrayList leg with acceptance of a later unsupported Select predicate,
@@ -143,8 +156,14 @@ assembly; do not omit the wrapper or substitute source-reader evidence.
 dotnet <local-built-tracemap.dll> scan --repo <PRIVATE_SOURCE_ROOT> --out <new-private-scan-directory> --il-body-evidence --compiled-input <caller.dll> --compiled-input <wrapper.dll>
 ```
 
-Inspect the actual `ManagedIlSqlLifecycleCandidate` / `AnalysisGap` facts under
-`dotnet.compiled.il-sql-lifecycle.v1`, schema `il-sql-lifecycle/1`, Tier3.
+Inspect all three fact kinds under `dotnet.compiled.il-sql-lifecycle.v1`, Tier3:
+`ManagedIlSqlLifecycleCandidate` (`il-sql-lifecycle/1`, returned column read),
+`ManagedIlSqlLifecycleEntryCandidate` (`il-sql-lifecycle-entry/1`, producer/loader
+completion), and `AnalysisGap`. Do not count only the older candidate type and
+mistake new entry facts for zero output. Entry payload `entry` retains root argument
+origins, root signature hash, returned/stored datasets, tables and commands with
+per-execution parameter allocations. Count each kind separately for the actual
+selected roots; record specific admission/body/argument/output gaps.
 Retain native fact IDs, generator/bounded-input hashes, invoked-body links,
 body/binary/offset/invocation, command hashes, execution identity and table/read
 lineage locally. Verify that the intended custom constructor and getter/field loads,
@@ -164,6 +183,13 @@ A native ArrayList success is a lineage result, not parameter-to-SQL-contract
 comparison; that comparison route has not been added for ArrayList inputs.
 
 ## 4. Optional independent schema comparison
+
+Only original returned-column `ManagedIlSqlLifecycleCandidate` facts are accepted
+by this comparison route. Producer/loader entry facts establish a separate bounded
+leg and must not be fabricated into a returned read. If only entry facts exist,
+report native entry success/partial coverage and defer column/schema comparison
+with that explicit missing consumer leg.
+
 
 Keep these routes distinct:
 
@@ -207,7 +233,7 @@ or runtime claims.
 
 ## Return one consolidated result
 
-Return a sanitized matrix with the public tool SHA, actual tool-test result, private
+Return a sanitized matrix with the public tool SHA, actual build result and tests-not-run status, private
 input presence/build state, root fit, native ArrayList/custom-object/SqlParameter/
 attachment/Fill/read legs, execution isolation, schema versus current-value origin,
 optional owner-declared comparison status, baseline preservation, native gap IDs,

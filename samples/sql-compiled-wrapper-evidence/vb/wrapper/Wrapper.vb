@@ -23,7 +23,29 @@ Namespace PublicSql.VisualBasic
             Me.Size = size
         End Sub
     End Class
+    Public NotInheritable Class InputParameter
+        Public ReadOnly Name As String
+        Public ReadOnly Type As SqlDbType
+        Public ReadOnly Size As Integer
+        Public ReadOnly Value As Object
+        Public Sub New(name As String, type As SqlDbType, size As Integer, value As Object)
+            Me.Name = name : Me.Type = type : Me.Size = size : Me.Value = value
+        End Sub
+    End Class
     Public Module Wrapper
+        Public Function ArrayInputs(procedure As String, parameters As System.Collections.ArrayList) As DataSet
+            Dim command = New SqlCommand(procedure)
+            command.CommandType = CommandType.StoredProcedure
+            For Each value As InputParameter In parameters
+                Dim parameter = New SqlParameter(value.Name, value.Type, value.Size)
+                parameter.Value = value.Value
+                command.Parameters.Add(parameter)
+            Next
+            Dim result = New DataSet()
+            Dim adapter = New SqlDataAdapter(command)
+            adapter.Fill(result)
+            Return result
+        End Function
         Public Function ArrayParameters(procedure As String, parameters As System.Collections.ArrayList) As DataSet
             Dim command = New SqlCommand(procedure)
             command.CommandType = CommandType.StoredProcedure

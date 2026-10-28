@@ -52,3 +52,12 @@
 - [x] Finish stable-file focused and broader validation and record exact results in implementation-state.md (87 focused/regression; 5,527 full Debug passes, three existing skips; unchanged 20/26-root native matrices; five Python guards).
 
 - [x] Refresh the consolidated work-machine prompt for the verified ArrayList lifecycle and separate conditional owner-declaration route after explicit publication authorization.
+
+
+## Entry protocol continuation — 2026-10-28 (tests explicitly deferred)
+- [x] Add separate DataSet producer / Void loader entry facts without fabricating returned column reads.
+- [x] Preserve unbound arguments, observable dataset state and execution-specific parameter allocations; keep unknown control/scalars fail-closed.
+- [x] Add SQL-related root admission diagnostics and independent public C#/VB fixtures/test definitions.
+- [x] Compile the CLI and update limitations/work-machine prompt for the new, behaviorally unvalidated protocol.
+- [ ] Run the new focused entry tests and retained regressions (explicitly deferred by Joe; no pass claimed).
+- [ ] Run the shared-core full gate and work-machine acceptance (not run; prior baseline validation does not cover this patch).

@@ -1,5 +1,27 @@
 # Public compiled-wrapper SQL evidence
 
+## Entry-protocol patch — unvalidated behavior, 2026-10-28
+
+A separate `ManagedIlSqlLifecycleEntryCandidate` / `il-sql-lifecycle-entry/1` contract
+now admits exact signed DataSet-returning producers and SQL-related Void loaders.
+Static roots or fresh inspected instances may have up to 16 unbound arguments;
+unknown values are not replaced with defaults. Single-Boolean roots enumerate both
+alternatives. Unknown required scalars/control, missing bodies, invalid initialization
+and unsupported output shapes emit gaps. SQL-related entry rejection is now visible.
+
+Entry facts retain returned/stored datasets, table/read lineage and execution-specific
+parameter allocations. Value setters preserve opaque input origins before attachment.
+A Void method needs observable stored SQL dataset state or a tracked read; a producer
+needs a SQL-derived returned DataSet. Runtime values, ambient/session state, arbitrary
+DataSet subclasses, predicates and catch/fallback completion remain unproven.
+The old returned-column candidate and comparison contracts are unchanged; entry facts
+cannot be bound as column-read evidence by `compare` or `compare-owner`.
+
+**Tests were explicitly skipped at Joe's request.** New C#/VB fixtures and test
+source are included for later execution. A warnings-as-errors CLI build passed;
+that is compilation only. Historical test pass totals below do not validate this
+patch. See the latest spec implementation-state section and work-machine prompt.
+
 ## End-to-end lifecycle route (public synthetic acceptance verified)
 
 IL extractor 0.2.4 adds the separate `ManagedIlSqlLifecycleCandidate` contract

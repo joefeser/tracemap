@@ -22,8 +22,28 @@ namespace PublicSql.CSharp
         public int Size { get; set; }
         public MutableParameter(int size) { Size = size; }
     }
+    public sealed class InputParameter
+    {
+        public readonly string Name;
+        public readonly SqlDbType Type;
+        public readonly int Size;
+        public readonly object Value;
+        public InputParameter(string name, SqlDbType type, int size, object value)
+        { Name = name; Type = type; Size = size; Value = value; }
+    }
     public static class Wrapper
     {
+        public static DataSet ArrayInputs(string procedure, System.Collections.ArrayList parameters)
+        {
+            var command = new SqlCommand(procedure); command.CommandType = CommandType.StoredProcedure;
+            foreach (InputParameter value in parameters)
+            {
+                var parameter = new SqlParameter(value.Name, value.Type, value.Size);
+                parameter.Value = value.Value;
+                command.Parameters.Add(parameter);
+            }
+            var result = new DataSet(); new SqlDataAdapter(command).Fill(result); return result;
+        }
         public static DataSet ArrayParameters(string procedure, System.Collections.ArrayList parameters)
         {
             var command = new SqlCommand(procedure); command.CommandType = CommandType.StoredProcedure;

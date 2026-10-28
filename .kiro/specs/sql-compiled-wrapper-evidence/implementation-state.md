@@ -500,3 +500,62 @@ unavailable. Only prompt/validation/state prose changed after the passing full g
 implementation, test sources and binaries remain unchanged. No additional full
 suite rerun is warranted for this prose-only publication preparation. No PR, merge,
 ACK-policy change, deployment or private evidence publication is authorized.
+
+
+## Entry protocol patch — 2026-10-28, explicitly not test-validated
+
+Joe requested implementing/pushing the entry fix and explicitly said not to run
+tests. That instruction overrides the normal local test gate for this publication;
+no unit tests, full suite or native scan was run for this patch. CLI compilation
+with `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug
+-warnaserror` passed with zero warnings/errors. The earlier 87/5,527 pass receipts
+apply only to the prior implementation, not this entry patch.
+
+The original `ManagedIlSqlLifecycleCandidate` / `il-sql-lifecycle/1` column-read
+contract stays separate. New `ManagedIlSqlLifecycleEntryCandidate` facts use
+`il-sql-lifecycle-entry/1` under the same lifecycle rule, with generator/input hashes
+and invoked-body links. Exact signed DataSet returns and SQL-related Void methods
+are selected even with multiple arguments. Rejected related roots emit explicit
+admission gaps rather than disappearing at the initial Object-return filter.
+
+Nonvirtual/nongeneric entries accept at most 16 arguments. Root inputs are opaque
+unbound origins indexed against the exact root signature hash and body; there is
+no invented zero/null/string input. Closed scalar type identities are retained from
+the exact root signature; only a matching primitive box can preserve an opaque
+argument into a parameter Value. Unknown/custom signature shapes retain unknown
+type information and do not gain boxing assumptions. A single Boolean argument still has explicit
+false/true alternatives. Unknown branches and required scalar arguments fail closed.
+Exact SqlParameter/DbParameter Value setters before attachment preserve unknown
+argument origins without claiming runtime values. Existing size/depth/heap/work,
+mutation/escape, call/body identity and allocation/attachment guards remain.
+
+Static entry methods are supported without a fabricated instance. Instance entries
+still require a uniquely inspected parameterless constructor and fresh state; session
+state, ambient initialization and arbitrary object arguments are not conjured.
+Producer completion requires an actual tracked SQL-derived returned DataSet. Void
+completion requires a directly stored tracked SQL dataset or observed read; merely
+executing/discarding a SQL result is insufficient. Entry output includes stored field
+hashes, dataset/table identities, schema ancestry, read sites and command-specific
+parameter allocations/origins. Entry facts are not column/schema comparison inputs.
+DataSet subclasses, unknown control/command values and actual catch/fallback execution
+remain gaps. This patch does not prove the actual application's remaining wrapper
+or transformation legs, and does not add predicate support.
+
+Independent public fixtures now contain a four-argument static producer (two Int32,
+a String and a Boolean),
+custom parameter objects forwarded through ArrayList into actual parameter Value
+assignment/construction/attachment/Fill, a Void loader storing the result, and a
+legacy column-read consumer. New `IlSqlLifecycleEntryTests` definitions cover these
+and unknown guards/commands, empty/discarded outputs and admission refusals, plus
+native CLI fact separation. They were authored, not run. No private names, code,
+report text, photos or work-screen derivatives were added to the repository.
+
+Publication includes a revised work-machine prompt that identifies the new fact
+contract and explicitly skips test suites under the user's instruction. No PR,
+merge, ACK-policy, deployment or SQL/application execution is included.
+
+Both compile-only fixture projects also built with `--no-restore -c Debug -warnaserror`:
+`samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj` and
+`samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj`, zero warnings/errors.
+No fixture methods were invoked. The new test source was not executed or compiled
+as a test-project gate. `git diff --check` passed.

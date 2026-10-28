@@ -3,6 +3,37 @@ Imports System.Collections.Generic
 Imports System.Data
 Namespace PublicSql.VisualBasic
     ' Compile-only integration fixture. Never invoke provider-backed methods.
+    Public NotInheritable Class EntryProtocol
+        Private stored As DataSet
+        Public Shared Function ProduceInputs(first As Integer, second As Integer, third As String, fourth As Boolean) As DataSet
+            Dim parameters = New System.Collections.ArrayList()
+            parameters.Add(New InputParameter("@First", SqlDbType.NVarChar, 20, first))
+            parameters.Add(New InputParameter("@Second", SqlDbType.NVarChar, 20, second))
+            parameters.Add(New InputParameter("@Third", SqlDbType.NVarChar, 20, third))
+            parameters.Add(New InputParameter("@Fourth", SqlDbType.NVarChar, 20, fourth))
+            Return Wrapper.ArrayInputs("public.first", parameters)
+        End Function
+        Public Sub StoreInputs()
+            stored = ProduceInputs(1, 2, "three", True)
+        End Sub
+        Public Function StoredInputRead() As Object
+            StoreInputs()
+            Return stored.Tables(0).Rows(0)("Name")
+        End Function
+        Public Shared Function EmptyProducer() As DataSet
+            Return New DataSet()
+        End Function
+        Public Shared Function UnknownCommand(command As String) As DataSet
+            Return Wrapper.Direct(command)
+        End Function
+        Public Shared Function UnknownGuard(first As Integer, second As Integer, third As String, fourth As Boolean) As DataSet
+            If Not fourth Then Return New DataSet()
+            Return ProduceInputs(first, second, third, fourth)
+        End Function
+        Public Shared Sub DiscardInputs()
+            ProduceInputs(1, 2, "three", True)
+        End Sub
+    End Class
     Public NotInheritable Class ArrayLifecycle
         Public Function ArrayParameterRead() As Object
             Dim parameters = New System.Collections.ArrayList()

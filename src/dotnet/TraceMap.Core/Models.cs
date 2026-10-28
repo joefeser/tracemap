@@ -459,6 +459,7 @@ public static class FactTypes
     public const string ManagedIlSqlShapeCandidate = nameof(ManagedIlSqlShapeCandidate);
     public const string ManagedIlSqlObjectPathCandidate = nameof(ManagedIlSqlObjectPathCandidate);
     public const string ManagedIlSqlLifecycleCandidate = nameof(ManagedIlSqlLifecycleCandidate);
+    public const string ManagedIlSqlLifecycleEntryCandidate = nameof(ManagedIlSqlLifecycleEntryCandidate);
     public const string ManagedIlRewriteObserved = nameof(ManagedIlRewriteObserved);
     public const string ManagedIlCallRetargetObserved = nameof(ManagedIlCallRetargetObserved);
     public const string ManagedIlRewritePdbObserved = nameof(ManagedIlRewritePdbObserved);

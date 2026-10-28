@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 using Body = TraceMap.Core.IlSqlObjectPathExtractor.Body;
 
 namespace TraceMap.Core;
@@ -10,12 +12,36 @@ namespace TraceMap.Core;
 internal static class IlSqlLifecycleExtractor
 {
     internal const string Schema = "il-sql-lifecycle/1";
-    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. No source, deployment, session, framework, type, nullability, value or migration proof.";
-    internal static bool IsRoot(IlBodyObservation body)
+    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. Entry producers/loaders retain unbound argument origins; unknown control or required scalar values refuse. Entry facts are separate from column-read comparison facts. No source, deployment, session, framework, type, nullability, value or migration proof.";
+    internal static bool IsReadRoot(IlBodyObservation body)
         => body.ObjectBody is { HasThis: true, ParameterCount: <= 1, ReturnsValue: true, IsGeneric: false, IsVirtual: false } meta
             && (meta.ParameterCount == 0
                 ? meta.MemberReference.EndsWith("|()->type(namespace:6:System|names:6:Object)", StringComparison.Ordinal)
                 : meta.MemberReference.EndsWith("|(type(namespace:6:System|names:7:Boolean))->type(namespace:6:System|names:6:Object)", StringComparison.Ordinal));
+    internal const string EntrySchema = "il-sql-lifecycle-entry/1";
+    internal static bool IsRoot(IlBodyObservation body)
+    {
+        if (IsReadRoot(body)) return true;
+        var meta = body.ObjectBody;
+        if (meta is { Name: ".ctor" or ".cctor" }) return false;
+        if (meta is not null && IlSqlLifecycleApis.ReturnsDataSet(meta.MemberReference)) return true;
+        // SQL-related methods are also selected when metadata/entry admission fails,
+        // so a rejected entry has an explicit gap rather than disappearing silently.
+        return body.Calls.Any(call => IlSqlLifecycleApis.MentionsDataSet(call.TargetIdentity)
+            || IlSqlObjectPathExtractor.KnownFrameworkApi(call.TargetIdentity) is "command" or "fill" or "adapter"
+            || IlSqlLifecycleApis.Resolve(call.TargetIdentity, []) is "arraylist-new" or "arraylist-add" or "arraylist-enumerator");
+    }
+    internal static bool IsGuardedRoot(IlBodyObservation body)
+        => body.ObjectBody is { } meta && IlSqlLifecycleApis.HasSingleBooleanArgument(meta);
+    internal sealed record RootArgument(int Index, string Origin, string? DeclaredType);
+    internal sealed record DataSetOutput(string Allocation, IReadOnlyList<string> Tables);
+    internal sealed record StoredDataSet(string OwnerAllocation, string FieldSha256, string DataSetAllocation);
+    internal sealed record ParameterOutput(string Allocation, string NameHash, int SqlDbType, int Size, string ValueOrigin);
+    internal sealed record CommandOutput(string Execution, string Allocation, IReadOnlyList<ParameterOutput> Parameters);
+    internal sealed record EntryOutput(string Kind, string RootSignatureSha256, IReadOnlyList<RootArgument> Arguments,
+        string? ReturnedDataSet, IReadOnlyList<DataSetOutput> DataSets, IReadOnlyList<StoredDataSet> StoredDataSets,
+        IReadOnlyList<TableState> Tables, IReadOnlyList<CommandOutput> Commands);
+    private static string Hash(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
     internal sealed record Site(string Body, string Binary, long Offset, int Invocation);
     internal sealed record Execution(string Id, string CommandHash, Site Site);
     internal sealed record Origin(string Kind, string Table, string? Execution, string ColumnHash, Site? Assignment = null);
@@ -38,6 +64,8 @@ internal static class IlSqlLifecycleExtractor
         IReadOnlyList<Failure>? Failures = null, IReadOnlyList<Site>? Bodies = null)
     {
         public string Claim => "conditional-static-lineage;normal-completion;row-existence-unproven";
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public EntryOutput? Entry { get; init; }
     }
     internal sealed record GuardedRun(string Predicate, bool Value, Result Result);
 
@@ -46,7 +74,7 @@ internal static class IlSqlLifecycleExtractor
         => [new("argument:0", false, Extract(root, bodies, false, budget)),
             new("argument:0", true, Extract(root, bodies, true, budget))];
     private sealed record Region(string Kind, long Start, long End, long Handler, long HandlerEnd);
-    private sealed record Value(string Kind, string Text)
+    private sealed record Value(string Kind, string Text, string? DeclaredType = null)
     {
         internal static readonly Value Unknown = new("unknown", "");
     }
@@ -114,23 +142,62 @@ internal static class IlSqlLifecycleExtractor
             if (!bodies.Contains(root) || bodies.GroupBy(b => b.Observation.MethodIdentity, StringComparer.Ordinal).Any(g => g.Count() != 1))
                 throw new Refusal("lifecycle-ambiguous-input");
             var meta = root.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable");
-            if (!meta.HasThis || meta.ParameterCount > 1) throw new Refusal("lifecycle-root-shape");
-            var signature = meta.ParameterCount == 0 ? "|()->type(namespace:6:System|names:6:Object)"
-                : "|(type(namespace:6:System|names:7:Boolean))->type(namespace:6:System|names:6:Object)";
-            if (!meta.MemberReference.EndsWith(signature, StringComparison.Ordinal)) throw new Refusal("lifecycle-root-signature");
-            var instance = New("custom", meta.OwnerType);
-            var ctor = bodies.Where(b => b.Observation.ObjectBody is { Name: ".ctor", ParameterCount: 0 } m
-                && m.OwnerType == meta.OwnerType).Take(2).ToArray();
-            if (ctor.Length != 1) throw new Refusal("lifecycle-constructor-unresolved");
-            Invoke(ctor[0], [instance], 0);
-            var returned = Invoke(root, meta.ParameterCount == 0 ? [instance] : [instance, Int(enabled ? 1 : 0)], 0);
+            var readRoot = IsReadRoot(root.Observation);
+            var producer = IlSqlLifecycleApis.ReturnsDataSet(meta.MemberReference);
+            var loader = IlSqlLifecycleApis.ReturnsVoid(meta.MemberReference);
+            if (meta.IsVirtual || meta.IsGeneric || meta.Name is ".ctor" or ".cctor"
+                || meta.ParameterCount is < 0 or > 16 || (!readRoot && !producer && !loader)
+                || producer && !meta.ReturnsValue || loader && meta.ReturnsValue)
+                throw new Refusal("lifecycle-root-admission-shape");
+            var instance = Value.Unknown;
+            if (meta.HasThis)
+            {
+                instance = New("custom", meta.OwnerType);
+                var ctor = bodies.Where(b => b.Observation.ObjectBody is { Name: ".ctor", ParameterCount: 0 } m
+                    && m.OwnerType == meta.OwnerType).Take(2).ToArray();
+                if (ctor.Length != 1) throw new Refusal("lifecycle-constructor-unresolved");
+                Invoke(ctor[0], [instance], 0);
+            }
+            var guarded = IsGuardedRoot(root.Observation);
+            var inputTypes = IlSqlLifecycleApis.RootArgumentTypes(meta);
+            var inputs = Enumerable.Range(0, meta.ParameterCount)
+                .Select(i => guarded ? Int(enabled ? 1 : 0) : new Value("input", i.ToString(CultureInfo.InvariantCulture), inputTypes[i])).ToArray();
+            var returned = Invoke(root, meta.HasThis ? new[] { instance }.Concat(inputs).ToArray() : inputs, 0);
             var result = returned.Kind == "read" ? reads[int.Parse(returned.Text, CultureInfo.InvariantCulture)] : null;
-            if (result is null) throw new Refusal("lifecycle-return-unresolved");
+            if (readRoot && result is null) throw new Refusal("lifecycle-return-unresolved");
             if (loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-loop-incomplete");
             if (heap.Values.Any(state => state.Kind == "collection-enumerator"
                 && state.Moves != Get(state.Parent, "arraylist").Slots.Count + 1))
                 throw new Refusal("lifecycle-collection-enumeration-incomplete");
-            return new(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray());
+            var completed = new Result(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray());
+            if (readRoot) return completed;
+            if (executions.Count == 0) throw new Refusal("lifecycle-entry-no-sql-execution");
+            string? returnedSet = null;
+            if (producer) { _ = Get(returned, "dataset"); returnedSet = returned.Text; }
+            var stored = instance.Kind == "object" ? Get(instance, "custom").Fields
+                .Where(field => field.Value.Kind == "object" && heap[field.Value.Text].Kind == "dataset")
+                .Select(field => new StoredDataSet(instance.Text, Hash(field.Key), field.Value.Text)).ToArray() : [];
+            var visible = stored.Select(field => field.DataSetAllocation)
+                .Concat(returnedSet is null ? Array.Empty<string>() : [returnedSet]).Distinct(StringComparer.Ordinal).ToArray();
+            var outputs = visible.Select(id => new DataSetOutput(id, heap[id].Slots.Select(slot => slot.Text).ToArray())).ToArray();
+            var outputTables = outputs.SelectMany(output => output.Tables).ToHashSet(StringComparer.Ordinal);
+            var tables = Snapshot().Where(table => outputTables.Contains(table.Allocation)).ToArray();
+            if (producer && !tables.Any(table => table.SchemaExecutions.Count > 0))
+                throw new Refusal("lifecycle-entry-returned-dataset-origin");
+            if (loader && !tables.Any(table => table.SchemaExecutions.Count > 0) && reads.Count == 0)
+                throw new Refusal("lifecycle-entry-void-output-unresolved");
+            var commands = heap.Where(pair => pair.Value.Kind == "command" && pair.Value.Execution is not null)
+                .Select(pair => new CommandOutput(pair.Value.Execution!, pair.Key, pair.Value.Slots.Select(value =>
+                {
+                    var parameter = Get(value, "parameter");
+                    var origin = parameter.Fields.GetValueOrDefault("parameter-value", Value.Unknown);
+                    return new ParameterOutput(value.Text, Text(parameter.Command), Number(parameter.Type),
+                        Number(parameter.Slots[0]), origin.Kind == "input" ? "argument:" + origin.Text : origin.Kind);
+                }).ToArray())).ToArray();
+            return completed with { Entry = new(producer ? "dataset-return" : "void-completion", Hash(meta.MemberReference),
+                Enumerable.Range(0, meta.ParameterCount).Select(i => new RootArgument(i,
+                    guarded ? "guarded-boolean" : "unbound-root-argument", inputTypes[i])).ToArray(),
+                returnedSet, outputs, stored, tables, commands) };
         }
 
         private Value Invoke(Body body, Value[] args, int depth)
@@ -184,8 +251,16 @@ internal static class IlSqlLifecycleExtractor
                     if (op == "pop") { _ = Pop(); continue; }
                     if (op == "box")
                     {
-                        if (!IlSqlLifecycleApis.TypeOperand(operand, "Int32")) throw new Refusal("lifecycle-box-type");
-                        var value = Pop(); _ = Number(value); stack.Add(value); continue;
+                        var value = Pop();
+                        if (value.Kind == "input" && IlSqlLifecycleApis.IsInputBox(operand, value.DeclaredType))
+                        { stack.Add(value); continue; }
+                        if (IlSqlLifecycleApis.TypeOperand(operand, "Boolean"))
+                        {
+                            if (Number(value) is not (0 or 1)) throw new Refusal("lifecycle-box-type");
+                        }
+                        else if (IlSqlLifecycleApis.TypeOperand(operand, "Int32")) _ = Number(value);
+                        else throw new Refusal("lifecycle-box-type");
+                        stack.Add(value); continue;
                     }
                     if (op == "ldtoken") { stack.Add(new("type-token", operand)); continue; }
                     if (op == "newarr")
@@ -448,6 +523,10 @@ internal static class IlSqlLifecycleExtractor
                     heap[parameter.Text].Type = Int(Number(args[1]));
                     heap[parameter.Text].Slots.Add(Int(Number(args[2])));
                     return parameter;
+                case "parameter-value":
+                    var valuedParameter = Get(receiver, "parameter");
+                    if (valuedParameter.Attached) throw new Refusal("lifecycle-parameter-mutated-after-attachment");
+                    valuedParameter.Fields["parameter-value"] = args[0]; return Value.Unknown;
                 case "add":
                     var attachedCommand = Get(Get(receiver, "parameters").Parent, "command");
                     var attachedParameter = Get(args[0], "parameter");
@@ -460,6 +539,7 @@ internal static class IlSqlLifecycleExtractor
                     if (Number(cmd.Type) != 4 || cmd.Attached || set.Slots.Count != 0 || executions.Count >= 8) throw new Refusal("lifecycle-execution-shape");
                     cmd.Attached = true;
                     var execution = "execution:" + executions.Count.ToString(CultureInfo.InvariantCulture);
+                    cmd.Execution = execution;
                     executions.Add(new(execution, Text(cmd.Command), site));
                     var table = New("table"); var state = heap[table.Text];
                     state.Parent = args[0]; state.Execution = execution; state.SchemaExecutions.Add(execution); state.Empty = false;
