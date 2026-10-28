@@ -5,6 +5,23 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
+## Confirmed work-machine finding and next check
+
+Joe reports that Claude tested this use case and confirmed the connection-string
+getter/initializer chain is its last remaining blocker. Treat that as the reported
+tested finding for this bounded use case; do not restart broad blocker discovery
+or ask Joe for more sample source or photographs. The underlying test receipts stay
+on the work machine. This finding does not itself verify the newly published patch.
+
+Use implementation commit `49102ea8c646304f72d71363097818fbf04d58c5` or its verified
+descendant, keeping the same application DLLs and selected roots. Enable
+`--il-opaque-root-initializers` for the targeted run. Confirm that the initializer
+boundary is recorded and that `il-sql-lifecycle-opaque-entry/1` links inspected custom
+parameter fields to actual SqlParameter construction, command attachment and Fill,
+with execution-specific parameter identity preserved. If it still refuses, report
+the exact native gap and initializer rejection/body receipt from that run; do not
+speculate about another blocker. Return a short sanitized text result only.
+
 ## Current opaque root-scalar initializer boundary
 
 Use IL extractor **0.2.9**, policy `explicit-il-body-evidence.v13`. For the already
