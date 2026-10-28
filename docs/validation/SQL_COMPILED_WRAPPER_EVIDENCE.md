@@ -1,6 +1,6 @@
 # Public compiled-wrapper SQL evidence
 
-## End-to-end lifecycle route (implementation; final validation pending)
+## End-to-end lifecycle route (public synthetic acceptance verified)
 
 IL extractor 0.2.4 adds the separate `ManagedIlSqlLifecycleCandidate` contract
 (`il-sql-lifecycle/1`, rule `dotnet.compiled.il-sql-lifecycle.v1`, Tier3). Earlier
@@ -34,9 +34,62 @@ do not execute catch continuations, and do not prove rollback or final post-catc
 The independently authored acceptance matrix lives in the spec's
 `end-to-end-acceptance.md`. Actual CLI scan and comparison tests exercise both languages,
 12 selected alternatives each (11 schema matches/one mismatch, two unknown current
-origins), six refusal controls, tamper rejection and byte-identical replay. These are
-development results until the frozen full and retained smoke gates below are recorded.
+origins), six refusal controls, tamper rejection and byte-identical replay. The frozen
+full and retained smoke gates below verify this public synthetic scope.
 No private acceptance, framework/session execution, SQL execution or migration claim.
+
+### Final frozen validation — 2026-10-28
+
+Implementation head: `7715833f9db6c6e4fd326dbec3013e3c5be8c0c5`. Source, HEAD and
+CLI/Core/Reporting binaries stayed unchanged through the full suite and sequential
+smokes. Subsequent closeout changes are documentation only.
+
+| Gate | Result |
+| --- | --- |
+| Focused lifecycle/object-path/lineage, Debug `-warnaserror` | 52 passed, zero failures/skips |
+| Full solution, Debug `-warnaserror` | 5,498 passed, zero failures, three expected skips; 30m 56s |
+| Actual CLI lifecycle scan + compare, C# and VB | 12 alternatives each; 11 schema matches/one mismatch; two explicitly unknown current-value origins; six refusal roots per language |
+| Original compiled native matrix, repeated twice | 20 roots: 10 candidates/10 unknowns; two local shapes; persisted C#/VB facts byte-identical |
+| Named-table native matrix | 26 roots: four candidates/22 unknowns, unchanged |
+| JSON and DDL parameter smokes | Each 8 matches/12 mismatches/32 unknowns |
+| Result-column smoke | JSON 36/10/36; DDL 36/10/58; 20 refusals |
+| Table-result smoke | 44/10/88; 24 refusals |
+| DataTable smoke | 108/24/176; 22 refusals |
+| DataSet smoke | 156/24/176; 24 refusals |
+| Private-helper smoke | 84/30/116; 24 refusals |
+| Internal-helper smoke | 72/24/60; 24 refusals |
+| Field-read smoke | 78/36/42; 52 refusals |
+| Python smoke guards | Compiled-wrapper five passed; SQL smoke guards 59 passed |
+| Pinned C#/VB compatibility scans | 12,949 / 114,806 facts; artifact validators passed; reduced coverage |
+
+Smoke triples above are match/mismatch/unknown. The three full-suite skips are the
+existing full generated golden sweep, HTTP provenance interop check and deep
+projectless Windows ASP.NET publish check. No full-suite failure or rerun occurred
+at this frozen head. Earlier development failures and corrections remain in the
+spec implementation history; they were not erased or converted to passing expectations.
+
+Pinned compatibility revisions: C# `2a8e72c8f5680edf2096b05ac08c39d47a95cef8`,
+VB `20d2a51dfc9f342848ad134952ceaa8d79302559`. Both repositories have no SQL calls;
+these are adapter compatibility checks, not SQL coverage or application acceptance.
+
+Frozen SHA-256s, verified unchanged after retained and pinned smokes:
+
+- CLI: `e41cfa0fe312cb8f91eb930d0ebb3ead56ac6a08d10e554daa51ac5bc369f964`
+- Core: `741fb6761d93b00b6147e62e02100ae7542c9660b5e485aca0a03006c6bc7162`
+- Reporting: `f34cfcb1e01b73ed66b8ac334835740cb2026dc116f96ead94788e4d9ef3be4d`
+
+The successful public flow is positively linked, not accepted merely as unknown.
+Schema ancestry and current-value origin are independently checked: overlay values
+remain application-origin, and a retained column absent from a later Merge result
+does not acquire false SQL attribution. Failure records preserve possible partial
+table/list state without claiming executed catch continuations or rollback.
+
+The single later handoff is `prompts/continue-sql-compiled-wrapper-evidence.md`.
+It checks retained input fit before any new scan and stops at known unsupported
+private shapes or unadmitted production schemas. The comparison route's synthetic
+JSON admission is not owner-DDL/catalog admission. No runtime SQL, container,
+private-input, application-build, deployment, session/framework or migration
+acceptance is established by these gates.
 
 This is a finite compile-only corpus and a **partial** native evidence addition,
 not completed SQL-A acceptance. No SQL, provider methods, containers or private

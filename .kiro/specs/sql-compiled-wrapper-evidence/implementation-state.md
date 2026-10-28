@@ -309,3 +309,35 @@ The preceding lifecycle-only checkpoints passed 24 and then 28 tests. No runtime
 provider calls or private inputs were used. Implementation and independent CLI
 matrix tasks are complete; retained denominator checks, frozen full validation,
 publication and goal completion remain pending.
+
+## Final public lifecycle acceptance — 2026-10-28
+
+Frozen implementation head `7715833f9db6c6e4fd326dbec3013e3c5be8c0c5` passed the
+full Debug solution gate with `-warnaserror`: 5,498 passed, zero failed, three
+expected skips, 30m 56s. No rerun of this full gate was needed. The preceding
+focused gate passed 52 tests, including actual CLI scan/comparison in both languages.
+
+Sequential post-suite gates passed: repeated original/named compiled matrices,
+JSON/DDL parameter, result-column, table-result, DataTable, DataSet, private-helper,
+internal-helper and Field-read smokes. All retained denominators remained unchanged.
+Persisted compiled facts were byte-identical across replays. Pinned C#/VB scans
+passed artifact validation at 12,949/114,806 facts with reduced coverage; neither
+public repository has SQL calls. CLI/Core/Reporting hashes remained byte-identical
+through every gate. Exact hashes and matrix counts are in the validation document.
+
+Completion evidence maps to the outcome contract: separate caller/wrapper bodies;
+two exact execution identities and named destinations; property state; auxiliary
+application table and guarded helper overlay; distinct raw/projection reads;
+retained destination versus fresh reload identity; before/normal table and list
+snapshots with partial/earlier-row flags; schema/value separation; mismatch and
+incomplete-shape controls; six unsupported roots per language and provenance rejection.
+The 12 selected alternatives per language include 11 schema matches and one mismatch,
+with two deliberately unknown value origins. Successful paths are not all-unknown.
+
+This closeout changes docs/tasks/the consolidated later work-machine prompt only.
+The old mixed historical instructions were removed from that prompt. The next work
+machine action is retained-input fit checking, not automatic rescanning: current
+synthetic JSON admission cannot be repurposed as production DDL/catalog admission.
+Select predicates, custom ArrayList protocols, actual catch execution, session and
+framework behavior, private acceptance and migration remain separate capabilities.
+No private input, provider execution, SQL/container execution, PR or merge occurred.

@@ -1,109 +1,77 @@
-# Consolidated compiled-wrapper evidence handoff
+# Compiled SQL lifecycle: consolidated work-machine fit check
 
-## Later work-machine acceptance: use only after local final gates are recorded
-
-Inputs (keep values and artifacts private on the work machine):
+## Fill in these inputs locally
 
 ```text
-EXPECTED_TOOL_COMMIT = <published validated branch commit>
+EXPECTED_TOOL_COMMIT = <published branch head with the recorded validated implementation ancestor>
 PRIVATE_SOURCE_ROOT = <existing source checkout>
 PRIVATE_ACCEPTANCE_ROOT = <existing retained notes, indexes and receipts>
-COMPILED_INPUTS = <exact caller and wrapper assemblies, with available correspondence evidence>
+COMPILED_INPUTS = <exact caller and wrapper assemblies, plus available source/deployment correspondence evidence>
 ROOT_CLASS_AND_PROPERTY = <class.property under investigation>
 PROCEDURE_IDENTITIES_AND_DDL = <owner-provided server/database/schema/procedure identities and scripts>
 ```
 
-This is one consolidated read-only fit check, not permission to run the application,
-SQL, containers, impersonation flows or requests. Preserve accepted baseline hashes.
-First verify exact tool revision and CLI/Core/Reporting provenance, then read the
-recorded local end-to-end gate in the validation document. If still pending, stop
-before a private retry and report that prerequisite; do not repeat old diagnostic runs.
+Read AGENTS, `docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md`, the lifecycle rule
+limitations, and `.kiro/specs/sql-compiled-wrapper-evidence/end-to-end-acceptance.md`.
+Verify the requested revision and its recorded validation before doing anything else.
+If final local gates are absent or pending, report that prerequisite and stop.
 
-Inspect retained artifacts first. Map the chosen root's actual operations to the
-new separate lifecycle route and record unsupported operations with file/line or
-compiled-body evidence. Do not use the legacy object-path or source-reader routes
-as substitutes. A source-backed Select predicate, ArrayList custom parameter object,
-unavailable wrapper body, complex DDL, or unresolved deployment correspondence is
-still a distinct boundary; synthetic passing cases do not remove it.
+## Authority and privacy
 
-Only if the inputs and exact shape fit, perform a fresh offline scan into a new
-private output directory. Keep source/index/binary correspondence explicit. Bind
-every observed execution to the independently supplied identity, and every consumer
-to its exact table, column and read site. The new comparison route currently admits
-synthetic JSON result declarations only: do not relabel owner DDL or a manually
-transcribed production schema as synthetic evidence. If no truthful admitted schema
-route exists, report that gap rather than manufacture a passing comparison.
+This is a read-only, offline capability-fit check. Do not execute the application,
+SQL, provider methods, containers, requests or impersonation flows. Do not modify
+application code, accepted baselines or existing outputs. Keep all private source,
+paths, SQL, identities and hashes on this machine. No PR or merge is authorized.
 
-Return one sanitized matrix: input presence, exact revision/binary verification,
-root/guard, execution/table/column linkage, SQL schema origin versus application value
-origin, raw/projection consumers, refresh ordering, potential partial-failure states,
-baseline preservation, refusal reason and smallest remaining capability. Preserve
-unknowns and partial coverage. No private source, paths, SQL text or hashes in public
-commits. No PR, merge, runtime/deployment or migration-readiness claim.
+## Inspect retained evidence first; avoid another unnecessary scan
 
-The historical foundation instructions below describe the unchanged older route;
-the lifecycle additions above and current validation document supersede them only
-for the separate lifecycle contract.
+1. Verify the exact tool revision and CLI/Core/Reporting byte provenance. Preserve
+   the accepted baseline hashes before and after the check.
+2. Resolve the exact root class/property, caller/wrapper bodies and their binary
+   identity. Separate source correspondence from deployed-binary correspondence;
+   neither is implied by a successful tool build.
+3. Map the actual flow against the separate `il-sql-lifecycle/1` route: two
+   independent executions, property-held DataSet, named Merge destinations,
+   application-built auxiliary table, guarded helper writes, raw and projection
+   reads, reload/re-Merge ordering and potential partial failure boundaries.
+4. Record every indispensable unsupported operation with private file/line or
+   compiled-body evidence. Known boundaries include custom ArrayList parameter
+   protocols, unsupported Select predicates, unavailable wrapper bodies, complex
+   production DDL, catch/fallback execution and unresolved deployment identity.
+   Do not substitute a legacy object-path or source-reader route, invent a body,
+   simplify the actual application flow or call an all-unknown result acceptance.
+5. The current comparison route admits independently authored **synthetic JSON**
+   result declarations only. Do not relabel owner DDL, production schema or a
+   manual transcription as synthetic evidence. If the real schema has no truthful
+   admitted route, record that capability gap and stop before a fresh scan.
 
-Read AGENTS, `.kiro/specs/sql-compiled-wrapper-evidence/`,
-`docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md`, the current IL rules and
-source SQL contracts. Verify the exact branch/head and validation receipts first.
-Use only the public corpus in `samples/sql-compiled-wrapper-evidence`.
-Do not request another work-machine run to rediscover known unsupported shapes.
+If a known indispensable gap remains, return the consolidated fit matrix now.
+Do not repeat an old diagnostic run merely to reproduce the same unsupported result.
 
-## Implemented bounded scope
+## Fresh offline validation only when the actual inputs and shape fit
 
-IL extractor 0.2.3 supports a closed, dual-reader-agreed static object protocol:
-unique compiled call bodies, positional substitution, scalar constructor fields
-and getters, attached parameters, fresh DataSet Fill/return, and constant named
-first-row consumers. Evidence remains Tier3, not SQL contract or runtime proof.
+Scan into a new private directory, retaining repo/revision, exact body/binary links,
+rule IDs, tiers, extractor versions and generator/bounded-input hashes. Bind each
+execution to an independently supported identity and each consumer to its exact
+table, column and body/binary/offset/invocation. Use
+`sqlserver-compiled-lifecycle compare` with the documented declarations, schema,
+bindings and persisted facts; never repurpose source-reader bindings.
 
-Preserve two independent matrices:
+Check SQL schema identity separately from current value origin. Guarded application
+overwrites must not be attributed to SQL values. Retained schema after Clear/re-Merge
+must not prove that the new execution supplied an old column. Retain both guard
+alternatives, raw/projection read sites and potential partial-failure snapshots.
+Those snapshots do not prove catch continuation, rollback or final runtime state.
 
-- Original: 20 roots across C#/VB, 10 static candidates and 10 unknowns, two local
-  shape facts. Direct, Forwarded, FieldObject, PropertyObject and MergeFresh are
-  positive; Mutated, Escaped, Branch, MergeExisting and MergeMutated are unknown.
-- Named-table: 26 roots across C#/VB, four static candidates and 22 unknowns.
-  First/Second each allocate a property-held fresh DataSet, add two distinct named
-  tables, merge first tables from two different returned DataSets, and consume
-  destination slot zero or one. Conditional, Mutated, UnknownHelper, RepeatedMerge,
-  ClearMerge, Existing, Exceptional, DuplicateName, OutOfRange, DynamicSlot and
-  ThirdTable remain refused.
+## Return once, sanitized
 
-Each named-table candidate binds the selected execution, command/parameters,
-filled and destination DataSets and distinct table identities. IDs are root-local;
-join them only with their root/body/binary/frame/offset context. The relation is
-`fresh-empty-table-schema-union-candidate`, not result aliasing or snapshot copying.
-The native smoke matrix schema is version 3; original `rows` and new `tableRows`
-have separate summaries. Never change expectations just to obtain a pass.
+Provide one matrix containing input presence, exact tool/binary verification,
+root/guard, execution/table/column linkage, schema versus value origin,
+raw/projection consumers, refresh ordering, partial-failure evidence, baseline
+preservation, each refusal and the smallest remaining capability or input.
 
-## Deliberate boundaries
-
-Unknown helper effects, writes, Clear/re-Merge, conditional and exceptional paths
-refuse the entire candidate. In-memory lifecycle controls separately demonstrate
-guarded/unmatched replacement, preserved schema versus replaced values, and
-partial state at injected failure boundaries. These do not establish positive
-extraction of mutations, exception rollback, session state or private behavior.
-
-Remaining capabilities need separate bounded designs: custom parameters in
-ArrayList, cleanup/fallback alternatives, Select predicates and value writes,
-application-authored derived tables, session/refresh identity, complex DDL with
-locals/joins/computed projections/ordering, and compiled-candidate-to-contract
-comparison. No legacy binding can stand in for those missing proofs. Owner
-server/database/schema/procedure identity and exact binary/deployment correspondence
-remain separate inputs; manual declarations must retain their true origin.
-
-## Verification and return
-
-Reproduce focused object-path/lifecycle tests and the compile-only native matrix.
-Pin missing/ambiguous accessor bodies, wrong framework identity, private-field
-ownership and budget refusals. Preserve legacy source and IL contracts, hashes,
-tiers and denominators. Run one frozen full Debug `-warnaserror` gate for shared
-core changes, followed sequentially by retained smokes; document relevant pinned
-checks or explicit justified deferrals. Update tasks and implementation state.
-
-Do not invoke fixture methods, SQL providers, containers, a private application,
-or private inputs. No PR, merge, ACK-policy change or review spend is authorized
-by this prompt. Return exact head, each matrix, provenance, failures/reruns,
-remaining gaps and the smallest next action. Passing synthetic candidates are
-not private SQL acceptance, deployment readiness or a clean application verdict.
+Separate manual source observations from native TraceMap findings. Mark partial
+coverage and unknowns explicitly. Public synthetic success is not private SQL
+acceptance, application-build, session/framework execution, runtime correctness,
+deployment or migration readiness. Do not include private source, paths, SQL text
+or hashes in the sanitized return or public commits.

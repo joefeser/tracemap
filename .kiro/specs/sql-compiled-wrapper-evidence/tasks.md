@@ -25,20 +25,20 @@
 - [x] Run frozen full/regression gates and publish exact results with consolidated prompt.
 
 ## Broader application fit (separate follow-up, not claimed completion)
-- [x] Pin in-memory conditional overwrite, clear/re-merge and failure-boundary behavior with synthetic tests; this is not C#/VB extraction support.
+- [x] Pin in-memory conditional overwrite, clear/re-merge and failure-boundary behavior with synthetic tests; the separate lifecycle continuation below now adds bounded C#/VB extraction.
 - [x] Independently author property-held/two-table/two-distinct-function Merge and unknown helper-effect fixtures.
 - [ ] Add supported Select/predicate analysis only under a separately bounded design.
 - [ ] Bound ArrayList custom-parameter and exceptional cleanup/fallback alternatives.
-- [ ] Separate predicate/RHS reads, LHS value writes and schema identity; retain unknown alias/helper effects.
-- [ ] Separate application-authored auxiliary table schema/derived values from SQL contracts and cross-method initialization.
-- [ ] Design explicit complex-DDL admission and compiled-candidate-to-contract binding with owner identity inputs; no general parser or false acceptance.
+- [x] Separate supported RHS reads, LHS value writes and schema identity in the lifecycle route; retain unknown alias/helper effects. Select/predicate support remains separate above.
+- [x] Separate bounded application-authored auxiliary table schema/value origins from SQL contracts across inspected helpers; general derived-value computation and application/session initialization remain unproven.
+- [ ] Design explicit complex-DDL admission with owner identity inputs; no general parser or false acceptance. Synthetic compiled-candidate-to-contract binding is completed below, not production DDL admission.
 
-## Active end-to-end goal (supersedes bounded-slice completion)
+## Public synthetic end-to-end goal (supersedes bounded-slice completion)
 - [x] Author independent outcome matrix in `end-to-end-acceptance.md` before integration implementation.
 - [x] Add isolated compile-only C#/VB lifecycle projects with two executions, property state, auxiliary schema, helper overlay, projection, refresh and catch paths.
 - [x] Establish actual CLI failing baseline for both languages without altering earlier matrices.
 - [x] Implement bounded multi-consumer lifecycle evidence with guards, schema/value-origin separation, loops/helper effects and failure alternatives.
 - [x] Add distinct compiled-lineage binding admission and SQL comparison CLI/report route; no source-reader substitution.
 - [x] Exercise independently authored schemas and exact execution bindings through the CLI; match all required successful cases and negative controls.
-- [ ] Pin C#/VB parity, deterministic replay, provenance tampering and retained denominators.
-- [ ] Run frozen full/regression gates; publish validated branch and consolidated work-machine prompt only after end-to-end acceptance passes.
+- [x] Pin C#/VB parity, deterministic replay, provenance tampering and retained denominators.
+- [x] Run frozen full/regression gates; publish validated branch and consolidated work-machine prompt only after end-to-end acceptance passes.
