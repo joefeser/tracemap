@@ -137,3 +137,11 @@
 - [x] Author public C#/VB combined four-handler/owner/trace/parameter and negative/native controls; compile and update limitations/state/three-flag text-only prompt.
 - [ ] Execute focused and broader shared-core tests (explicitly deferred by Joe).
 - [ ] Confirm the exact private transform qualifies and entry lineage completes under the conditional boundary (not claimed).
+
+## Computed trace argument boundary — 2026-10-29
+- [x] Add exact signed framework scalar string computations with unknown values and bounded provenance receipts.
+- [x] Mark computed trace arguments partial; preserve unknown helper, tracked object, computed SQL and default-route refusals.
+- [x] Version/document the 64-instruction trace bound and author C#/VB positive/negative tests; compile CLI, fixtures and test project with -warnaserror.
+- [x] Update the three-flag text-only work-machine prompt and implementation limitations.
+- [ ] Execute focused/full tests (explicitly deferred by Joe).
+- [ ] Confirm native private entry lineage and ArrayList blocker closure (not claimed).

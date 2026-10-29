@@ -68,9 +68,12 @@ internal static partial class IlSqlLifecycleExtractor
             : "conditional-static-lineage;normal-completion;row-existence-unproven")
             + (OpaqueInitializers?.Any(initializer => initializer.CompiledCallees is { Count: > 0 }) == true
                 ? ";compiled-scalar-normal-return-assumed;compiled-scalar-internal-control-unmodeled;transitive-effects-unmodeled" : "")
+            + (TraceStringComputations is { Count: > 0 } ? ";computed-string-values-unbound;argument-computation-normal-return-assumed" : "")
             + (ExternalTraces is { Count: > 0 } ? ";external-trace-normal-return-assumed;trace-receiver-non-null-unproven;tracked-heap-noninterference-assumed;external-effects-unmodeled" : "");
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ExternalTrace>? ExternalTraces { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<TraceStringComputation>? TraceStringComputations { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<OpaqueInitializer>? OpaqueInitializers { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -131,6 +134,7 @@ internal static partial class IlSqlLifecycleExtractor
         catch (Refusal error) { return new Result([], [], null, [error.Message]) { MetadataFailure = error.MetadataFailure,
             OpaqueInitializers = machine.Initializers.Count > 0 ? machine.Initializers.ToArray() : null,
             ExternalTraces = machine.TraceBoundaries.Count > 0 ? machine.TraceBoundaries.ToArray() : null,
+            TraceStringComputations = machine.StringComputations.Count > 0 ? machine.StringComputations.ToArray() : null,
             FieldOwnerFailure = machine.OwnerFailure,
             OpaqueInitializerRejection = machine.ReportedOpaqueRejection,
             ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
@@ -213,6 +217,7 @@ internal static partial class IlSqlLifecycleExtractor
             var completed = new Result(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray())
                 { OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null,
                     ExternalTraces = TraceBoundaries.Count > 0 ? TraceBoundaries.ToArray() : null,
+                    TraceStringComputations = StringComputations.Count > 0 ? StringComputations.ToArray() : null,
                     ConstructorOwnerViews = OwnerViews.Count > 0 ? OwnerViews.ToArray() : null };
             if (readRoot) return completed;
             if (executions.Count == 0) throw new Refusal("lifecycle-entry-no-sql-execution");
@@ -237,7 +242,8 @@ internal static partial class IlSqlLifecycleExtractor
                     var origin = parameter.Fields.GetValueOrDefault("parameter-value", Value.Unknown);
                     return new ParameterOutput(value.Text, Text(parameter.Command), Number(parameter.Type),
                         Number(parameter.Slots[0]), origin.Kind == "input" ? "argument:" + origin.Text
-                            : origin.Kind == "opaque-initializer" ? "opaque-field:" + origin.Text : origin.Kind);
+                            : origin.Kind == "opaque-initializer" ? "opaque-field:" + origin.Text
+                            : origin.Kind == "computed-string" ? origin.Text : origin.Kind);
                 }).ToArray())).ToArray();
             return completed with { Entry = new(producer ? "dataset-return" : "void-completion", Hash(meta.MemberReference),
                 Enumerable.Range(0, meta.ParameterCount).Select(i => new RootArgument(i,
@@ -314,7 +320,9 @@ internal static partial class IlSqlLifecycleExtractor
                     if (op == "ldtoken") { stack.Add(new("type-token", operand)); continue; }
                     if (op == "newarr")
                     {
-                        if (!IlSqlLifecycleApis.TypeOperand(operand, "Object")) throw new Refusal("lifecycle-array-type");
+                        if (!IlSqlLifecycleApis.TypeOperand(operand, "Object")
+                            && !(body.Observation.BodyIdentity == externalTraceRoot && depth == 0 && IlSqlLifecycleApis.TypeOperand(operand, "String")))
+                            throw new Refusal("lifecycle-array-type");
                         var count = Number(Pop()); if (count is < 0 or > 16) throw new Refusal("lifecycle-array-limit");
                         var array = New("array"); heap[array.Text].Slots.AddRange(Enumerable.Repeat(Value.Unknown, count)); stack.Add(array); continue;
                     }
@@ -422,7 +430,9 @@ internal static partial class IlSqlLifecycleExtractor
                         {
                         var api = IlSqlObjectPathExtractor.KnownFrameworkApi(call.TargetIdentity)
                             ?? IlSqlLifecycleApis.Resolve(call.TargetIdentity, bodies.Select(b => b.Observation.ObjectBody?.OwnerType));
-                        if (api is not null)
+                        if (body.Observation.BodyIdentity == externalTraceRoot && depth == 0 && IlSqlTraceStringApis.Resolve(call.TargetIdentity) is { } stringRule)
+                            returned = BuildTraceString(call, stringRule, receiver, values, site);
+                        else if (api is not null)
                         {
                             var recordFailure = catchHandlers.Count > 0 && api is "fill" or "table-merge" or "row-write" or "list-add";
                             var before = recordFailure ? Snapshot() : [];
@@ -566,7 +576,7 @@ internal static partial class IlSqlLifecycleExtractor
                     if (listIndex < 0 || listIndex >= list.Slots.Count) throw new Refusal("lifecycle-list-index");
                     return list.Slots[listIndex];
                 case "object-value":
-                    if (args[0].Kind is not ("read" or "int" or "string" or "null" or "opaque-initializer")) throw new Refusal("lifecycle-object-copy-unresolved");
+                    if (args[0].Kind is not ("read" or "int" or "string" or "null" or "opaque-initializer" or "computed-string")) throw new Refusal("lifecycle-object-copy-unresolved");
                     return args[0];
                 case "type-handle":
                     if (args[0].Kind != "type-token") throw new Refusal("lifecycle-type-handle-unresolved");

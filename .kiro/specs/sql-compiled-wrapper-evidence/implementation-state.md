@@ -1108,3 +1108,25 @@ Final CLI-dependency/test-source and public C#/VB fixture builds succeeded with 
 warnings/errors; `git diff --check` passed. No test/native/application/transform code
 was executed. Work-machine entry confirmation remains outstanding. The input/output
 is declared String metadata with unknown value, not an inferred passthrough result.
+
+## Computed external trace arguments — 2026-10-29
+
+Extractor 0.2.14 / evidence policy v18 / external trace policy 2 adds exact signed
+framework scalar string computations to selected producer/loader roots under the
+existing external-trace flag. Concat/Format, selected primitive conversions and
+String instance operations yield unbound String values with call/origin receipts.
+Only known scalar operands qualify; Object formatting of tracked/unproved objects,
+arbitrary argument helper calls, computed SQL names and default/read routes retain
+refusals. This does not skip arbitrary argument evaluation or prove Write pure.
+
+Partial trace receipts mark computed arguments and retain mayThrow, normal-return
+and external-effect assumptions. The versioned trace bound is64 instructions/chain
+(previously 16),16 expression stack items, 16 array elements, 32 computations/run and
+8 chains/root under existing work/heap bounds. Internal trace arrays are fresh;
+preexisting array mutation inside a trace chain refuses. Catch continuations remain
+unexecuted. Exception.Message on an unproved receiver remains unsupported.
+
+Public C#/VB positive and refusal test definitions were authored. Compile-only
+CLI, C# fixture, VB fixture and test-project builds passed with -warnaserror and
+zero warnings/errors. Tests and scans were NOT run, explicitly deferred by Joe.
+The private entry candidate and ArrayList blocker closure remain unproven.

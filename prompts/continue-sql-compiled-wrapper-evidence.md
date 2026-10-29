@@ -5,7 +5,43 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
-## Current bounded compiled scalar-transform check
+## Current computed trace-message check — 2026-10-29
+
+Use extractor **0.2.14**, policy `explicit-il-body-evidence.v18`, from the newly
+fetched clean public head. Select only the same verified INNER roots. Keep all three
+flags: `--il-opaque-root-initializers --il-external-trace-boundary --il-compiled-scalar-boundary`.
+No additional flag or framework DLL is required for this change. Tests remain deferred.
+
+The external trace policy is now `explicit-external-web-trace/2`: exact signed
+Current → Trace → Write with bounded known scalar string computations, including
+selected String.Concat/Format overloads, primitive conversions and prebuilt string
+locals. It does not evaluate strings or invent values. Computed argument origins
+remain unbound; `externalTraces[].argumentsPartial` and `argumentEffects` identify
+partial receipts, and `traceStringComputations` records each exact call/signature
+and scalar origins. Formatting an arbitrary Object, executing an unknown helper,
+exposing a tracked reference, or using a computed SQL identifier still refuses.
+A void Write does not make its argument computation safe to skip.
+
+Intentional versioned bound change: at most 64 instructions per trace chain (was 16),
+16 expression stack items, 16 scalar array elements, 32 string computations/run and
+8 trace chains/root, all under existing heap/root/aggregate bounds. Exact framework
+identities are required. Exceptions/normal return and external effects remain
+conditional; catch continuations are not executed. This is not arbitrary
+Exception.Message support or a general string evaluator.
+
+Run ONE targeted native scan in fresh private output with the same input hashes.
+Report clean tool SHA/build basis, flag recognition, first actual rejection call and
+phase, entry count, constructor/compiled-scalar/trace receipts and actual parameter
+allocation/attachment/Fill identity. If blocked, distinguish argument computation
+from final Write shape; report only sanitized opcode, declared receiver/argument
+types and exact gap reason. Keep private code and independently built samples on
+the work machine. Return short text only; no code samples or new photographs are
+needed. Do not claim lineage until a completed native entry candidate exists.
+
+The earlier scalar-transform protocol below still applies; its version references
+are historical and superseded by the current versions above.
+
+## Prior bounded compiled scalar-transform check
 
 Use IL extractor **0.2.13**, policy `explicit-il-body-evidence.v17`, at the newly
 fetched clean public head. The reported retained helper is a static String-to-String

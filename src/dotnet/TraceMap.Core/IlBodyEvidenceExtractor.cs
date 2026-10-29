@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v17";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v18";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -189,7 +189,7 @@ internal static class IlBodyEvidenceExtractor
                 policy = IlSqlLifecycleExtractor.CompiledScalarPolicy, maxInstructions = 128, maxHandlers = 4,
                 maxCalls = 32, maxLocals = 32, maxStack = 16, maxSummaries = 4 },
             externalTraceBoundary = new { enabled = options.IlExternalTraceBoundary,
-                policy = IlSqlLifecycleExtractor.ExternalTracePolicy, maxChains = 8, maxChainInstructions = 16 },
+                policy = IlSqlLifecycleExtractor.ExternalTracePolicy, maxChains = 8, maxChainInstructions = 64, maxExpressionStack = 16, maxStringComputations = 32, maxStringArrayElements = 16 },
             opaqueRootInitializers = new { enabled = options.IlOpaqueRootInitializers,
                 policy = IlSqlLifecycleExtractor.OpaquePolicy, maxFields = 8, maxChainInstructions = 32, maxChainCalls = 8,
                 maxCallArguments = 4, maxChainStack = 16 },
@@ -734,7 +734,7 @@ internal static class IlBodyEvidenceExtractor
                 var result = slice?.Failure is { } sliceFailure
                     ? new IlSqlLifecycleExtractor.Result([], [], null, [sliceFailure])
                     : IlSqlLifecycleExtractor.Extract(root, scopedBodies, enabled, budget, evaluation.OpaqueRootInitializers, evaluation.ExternalTraceBoundary, evaluation.CompiledScalarBoundary);
-                if (result.OpaqueInitializers is { Count: > 0 } || result.ExternalTraces is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.OpaqueEntrySchema;
+                if (result.OpaqueInitializers is { Count: > 0 } || result.ExternalTraces is { Count: > 0 } || result.TraceStringComputations is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.OpaqueEntrySchema;
                 var common = new Dictionary<string, string>(CommonProperties(provenance, root.Input), StringComparer.Ordinal);
                 if (evaluation.CompiledScalarBoundary)
                     common["compiledScalarPolicy"] = IlSqlLifecycleExtractor.CompiledScalarPolicy;
