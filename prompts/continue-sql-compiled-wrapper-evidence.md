@@ -1,46 +1,45 @@
-# Work-machine field-access diagnostic — one scan only
+# Work-machine trace rejection diagnosis — read only
 
 ## Active instruction — 2026-10-29
 
-This section supersedes every older instruction below. Build the clean published
-extractor 0.2.18 / evidence policy explicit-il-body-evidence.v19, then perform at
-most ONE targeted native scan and return ONE short sanitized text report. STOP
-immediately after that scan succeeds or fails. No retries, implementation changes,
-additional scans, subagents, tests or application runtime execution are authorized.
-One tool build is allowed; a failed build ends the task with its diagnostic.
+This section supersedes ALL older instructions below. Perform ONE bounded read-only
+inspection of the existing clean-scan evidence and dirty trace-handler diff. Return
+ONE short sanitized report, then STOP. No edits, builds, tests, scans, subagents,
+application execution, commits or pushes are authorized. Do not activate either
+local bypass. Preserve every dirty file, input and output unchanged.
 
-Preserve the existing dirty tool checkout, local patches, private inputs and every
-prior output. Do not reset, clean, overwrite or apply those patches to this run.
-Use an isolated clean public tool checkout of the fetched branch head; record its
-full SHA and verify extractor/evidence versions from the built tool and manifest.
-If isolation cannot be established without disturbing existing work, stop and
-report that condition. Do not build the dirty candidate or activate a field bypass.
+Goal: identify the concrete unsupported operation so the owner can inspect the
+corresponding code locally. A broad label such as unknown string is insufficient.
+An unknown value is not permission to skip its computation or discard a store.
 
-Use the previously verified INNER roots, unchanged private input hashes and the
-same three flags: --il-opaque-root-initializers --il-external-trace-boundary
---il-compiled-scalar-boundary. Write to ONE fresh private output directory. Do not
-change admission, selection or budgets to make the scan pass.
+1. Record the base Git SHA, dirty filenames and source/binary versions from existing
+   receipts. Compare ONLY IlSqlExternalTraceBoundary.cs against its public base;
+   inspect referenced helper changes in IlSqlLifecycleApis.cs only if necessary
+   to explain that diff. Do not inspect private source broadly or reread the repo.
+2. Describe each added trace opcode/call case in sanitized pseudocode: exact public
+   framework signature where available, argument/receiver checks, stack effects,
+   treatment of unknown values and tracked references, and any skipped calls or
+   stores. Distinguish actual behavior from a proposed safe interpretation.
+3. From the existing failed clean scan and retained compiled evidence, identify the
+   FIRST actual trace rejection: body token, IL offset, opcode or call signature,
+   rejection branch, operand/receiver abstract kinds and declared types. Identify
+   which particular operand is unknown and why (unbound input, unsupported call,
+   missing metadata, ambiguous body, unsupported opcode or lost origin). Do not
+   substitute a list of possibilities for the actual recorded operation.
+4. Give the owner a LOCAL navigation pointer: private source path, method and line
+   if exact PDB/source mapping is available; otherwise method token plus IL offset
+   and the nearest verified sequence point. Do not invent a source line or treat
+   a nearby sequence point as an exact instruction mapping. Save private names and
+   paths in a local note outside Git, and print its local path for the owner to open.
+   The shared report must use synthetic method/type aliases, token/offset and public
+   framework signatures only; keep private code, SQL and values on the work machine.
+5. If the existing evidence cannot locate the rejection or determine the operand,
+   say exactly which field is unavailable. Do not run another scan, invent an
+   explanation, or declare the dirty change safe because it got farther.
 
-The new diagnostic is lifecycle.fieldAccessFailure in the existing native gap
-fact. The field receiver refusal remains intact. Report the first such failure:
-
-- Clean tool SHA/build basis, extractor/evidence version and native gap kind.
-- Site body token and IL offset, opcode, receiver value kind, allocation ID and
-  heap kind. Null means unavailable, not a guessed framework type.
-- Field declared type using synthetic aliases where needed; field/owner hashes,
-  fieldOwnerAdmitted, receiverIsThis, executingConstructor and storedValueKind.
-- Agreement and metadataFailure, plus precedingOpcodes (at most seven). These
-  nearby opcodes are context, NOT proof of the receiver's full dataflow provenance.
-- Entry candidate count; whether constructor/scalar/trace phases completed.
-
-If fieldAccessFailure is absent, report the actual first gap and stop. Do not
-infer a field type or receiver kind from a list of possible framework objects.
-Do not claim stores can be dropped merely because allocation IDs survive.
-This release is diagnostic-only and does not close lineage or acceptance.
-
-Keep detailed receipts, private names/code and samples on the work machine.
-Return short sanitized TEXT only; no samples, screenshots or photographs requested.
-STOP after the one report, even if a likely fix appears obvious.
+Return at most 30 lines of sanitized text, plus the owner's local-note path.
+No sample code, screenshots or new photos requested. Do not publish the field
+load/store bypass. STOP after the report even if a likely fix seems obvious.
 
 ---
 
