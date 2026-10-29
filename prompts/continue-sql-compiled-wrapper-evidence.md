@@ -1,9 +1,53 @@
-# Work-machine test: compiled ArrayList SQL parameter lifecycle
+# Work-machine read-only field-access diagnosis
 
-Continue the offline TraceMap test on the work machine. Test the actual application
-pattern using the published implementation; do not implement another speculative
-extractor or repeat the previous unsupported-ArrayList diagnosis without checking
-the new native evidence.
+## Active instruction — 2026-10-29
+
+This section supersedes ALL implementation, build, test and scan instructions below.
+Do not start another scan or try another patch. Do not execute application code.
+The remaining sections are historical context only.
+
+Perform ONE bounded read-only inspection of the existing tool source and most recent
+completed local receipt, return ONE short sanitized text result, then STOP. Do not
+launch another agent or continue iterating after reporting. If evidence is missing,
+report exactly what is unavailable and stop instead of generating another scan.
+
+Preserve every local change and existing output. Do not reset, clean, overwrite,
+stash away, commit or push local implementation changes. Do not change selected
+roots, flags, inputs, budgets, admission rules or ACK policy. Do not fetch/pull or
+rebuild as part of this diagnosis. Read existing files only.
+
+Report these items, using synthetic aliases instead of private identifiers:
+
+1. Current base Git SHA, dirty filenames and extractor version recorded in the
+   latest completed receipt. Distinguish source version from built binary version;
+   if correspondence cannot be established from existing evidence, say unknown.
+2. Describe the current field-load/store receiver admission logic in sanitized
+   pseudocode, including any local bypass absent from the published base. Do not
+   copy private source. State whether a bypass drops a store, substitutes an unknown
+   load, preserves the actual value, or changes heap state.
+3. For the FIRST failing field operation only: opcode, module-local body token,
+   IL offset, receiver abstract value kind and heap kind, field declared type, and
+   whether field owner matches the modeled receiver owner. Use synthetic type aliases
+   where needed; do not return private field/method names or raw identity strings.
+4. Explain how that receiver reached the operand stack using a small sanitized
+   opcode/type sequence from retained evidence. Include field value versus field
+   receiver position, instance/static shape, constructor-owner view if relevant,
+   and whether independent metadata readers agree. Missing evidence stays unknown.
+5. State whether ignoring this operation could lose command, parameter, connection
+   or result-object mutations, attachment links, or allocation/execution identity.
+   Do not declare the bypass sound merely because it reaches the next instruction.
+
+Use existing native gap/receipt metadata first, then only the implicated handler and
+bounded neighboring source/evidence. Do not reread the repository. Keep private
+code, sample programs and detailed receipts on the work machine. Return text only;
+no code samples, screenshots or new photographs are requested. This diagnosis does
+not authorize a fix or establish entry lineage, acceptance or SQL-effort completion.
+
+STOP after the report, even if the likely fix seems obvious.
+
+---
+
+# Historical scan protocol — inactive until separately authorized
 
 ## Current computed trace-message check — 2026-10-29
 
