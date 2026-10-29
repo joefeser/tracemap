@@ -78,6 +78,8 @@ internal static partial class IlSqlLifecycleExtractor
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public FieldOwnerRejection? FieldOwnerFailure { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public OpaqueChainRejection? OpaqueInitializerRejection { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ConstructorOwnerView>? ConstructorOwnerViews { get; init; }
     }
     internal sealed record BodyMetadataFailure(string Stage, string Body, string Binary, string MetadataToken,
@@ -128,6 +130,7 @@ internal static partial class IlSqlLifecycleExtractor
             OpaqueInitializers = machine.Initializers.Count > 0 ? machine.Initializers.ToArray() : null,
             ExternalTraces = machine.TraceBoundaries.Count > 0 ? machine.TraceBoundaries.ToArray() : null,
             FieldOwnerFailure = machine.OwnerFailure,
+            OpaqueInitializerRejection = machine.ReportedOpaqueRejection,
             ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
     }
 
@@ -438,6 +441,16 @@ internal static partial class IlSqlLifecycleExtractor
                             var targets = bodies.Where(b => b.Observation.MethodIdentity == call.TargetIdentity
                                 || b.Observation.ObjectBody?.MemberReference == call.TargetIdentity
                                 || b.MemberReferenceAlias == call.TargetIdentity).Take(2).ToArray();
+                            if (targets.Length != 1 && pendingOpaqueRejection is { } rejected
+                                && rejected.ChainStart.Body == body.Observation.BodyIdentity
+                                && rejected.ChainStart.Invocation == invocation
+                                && offset >= rejected.ChainStart.Offset && offset <= rejected.RejectedCall.Site.Offset)
+                            {
+                                ReportedOpaqueRejection = rejected with { TriggerCall = new(site, Hash(call.TargetIdentity)) };
+                                throw new Refusal("lifecycle-opaque-initializer-" + rejected.Reason
+                                    + ":call-sha256:" + rejected.RejectedCall.SignatureSha256,
+                                    MetadataFailure(body, "opaque-initializer-lookahead"));
+                            }
                             if (targets.Length != 1) throw new Refusal(
                                 (opaqueConstructor == body.Observation.BodyIdentity ? "lifecycle-opaque-initializer-" + opaqueRejection : "lifecycle-unknown-call")
                                     + ":" + call.TargetIdentity,

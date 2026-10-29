@@ -33,6 +33,7 @@ namespace PublicSql.CSharp
     }
     public static class Wrapper
     {
+        public static string PublicScalarEcho(string value) { return value; }
         public static DataSet ArrayInputs(string procedure, System.Collections.ArrayList parameters)
         {
             var command = new SqlCommand(procedure); command.CommandType = CommandType.StoredProcedure;

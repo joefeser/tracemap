@@ -11,12 +11,21 @@ internal static partial class IlSqlLifecycleExtractor
         string DeclaredType, IReadOnlyList<OpaqueCall> Calls,
         string Boundary = "conditional-normal-return;external-effects-unmodeled;no-tracked-reference-arguments;tracked-heap-noninterference-assumed;not-purity-proof");
 
+    internal sealed record OpaqueCalleeMatch(string Body, string Binary, string MetadataToken, string MetadataState, string InputRole, string InputOutcome,
+        IlObjectBodyRetention? Retention, bool AliasMatched, int InstructionCount, int ExceptionRegions,
+        int CallCount, bool? HasBranches, bool? WritesFields, bool? HasThrow, bool? IsVirtual, bool? IsGeneric);
+    internal sealed record OpaqueChainRejection(string Reason, Site ChainStart, OpaqueCall RejectedCall,
+        string ReturnKind, bool HasThis, int ParameterCount, IReadOnlyList<OpaqueCalleeMatch> Matches,
+        OpaqueCall? TriggerCall = null);
+
     private sealed partial class Machine
     {
         internal readonly List<OpaqueInitializer> Initializers = [];
         private readonly HashSet<string> opaqueFields = new(StringComparer.Ordinal);
         private string? opaqueConstructor, opaqueInstance;
         private string opaqueRejection = "chain-shape-unproven";
+        private OpaqueChainRejection? pendingOpaqueRejection;
+        internal OpaqueChainRejection? ReportedOpaqueRejection;
         private bool RejectOpaque(string reason) { opaqueRejection = reason; return false; }
         private static readonly string[] OpaqueScalars = ["String", "Boolean", "Byte", "SByte", "Int16", "UInt16",
             "Int32", "UInt32", "Int64", "UInt64", "Single", "Double", "Char"];
@@ -25,6 +34,25 @@ internal static partial class IlSqlLifecycleExtractor
         // A deliberately opt-in abstraction boundary, not a proof of purity/freshness
         // of unknown return objects. Only a fresh tracked root's private scalar store
         // survives the boundary. Every intervening return is otherwise opaque.
+        private OpaqueCalleeMatch DescribeOpaqueMatch(Body candidate, string identity)
+        {
+            var observation = candidate.Observation;
+            string[]? ops = null;
+            if (observation.ObjectBody is { } meta)
+            {
+                if (!budget.TryConsume(meta.Instructions.Count)) throw new Refusal("lifecycle-work-limit");
+                ops = meta.Instructions.Select(line => line.Split(':', 4)).Select(parts => parts.Length == 4 ? parts[2] : "invalid").ToArray();
+            }
+            return new(observation.BodyIdentity, candidate.Input.RawFileSha256!, observation.MetadataToken,
+                observation.ObjectBody is null ? "unavailable" : "retained", candidate.Input.Role, candidate.Input.Outcome, observation.ObjectBodyRetention,
+                candidate.MemberReferenceAlias == identity, observation.InstructionCount, observation.ExceptionRegionCount,
+                observation.Calls.Count, ops is null ? null : ops.Any(op => op.StartsWith("b", StringComparison.Ordinal) && op is not ("box" or "break")
+                    || op is "switch" or "leave" or "leave.s"),
+                ops is null ? null : ops.Any(op => op is "stfld" or "stsfld"),
+                ops is null ? null : ops.Any(op => op is "throw" or "rethrow"),
+                observation.ObjectBody?.IsVirtual, observation.ObjectBody?.IsGeneric);
+        }
+
         private bool TryOpaqueInitializer(Body body, Value[] args, int depth, string[][] code,
             long[] offsets, Dictionary<long, IlCallObservation> calls, int start, int invocation, out int terminal)
         {
@@ -34,6 +62,7 @@ internal static partial class IlSqlLifecycleExtractor
                 || !Slot(code[start][2], code[start][3], "ldarg", out var arg) || arg != 0)
                 return false;
             opaqueRejection = "chain-shape-unproven";
+            pendingOpaqueRejection = null;
             var meta = body.Observation.ObjectBody!;
             if (!budget.TryConsume(code.Length)) throw new Refusal("lifecycle-work-limit");
             if (meta.Name != ".ctor" || meta.ParameterCount != 0 || !meta.HasThis || meta.ReturnsValue
@@ -65,9 +94,22 @@ internal static partial class IlSqlLifecycleExtractor
                     if (!budget.TryConsume(bodies.Count)) throw new Refusal("lifecycle-work-limit");
                     // An available or metadata-failed compiled callee is never replaced
                     // with an assumption about an external opaque call.
-                    if (bodies.Any(candidate => candidate.Observation.MethodIdentity == call.TargetIdentity
+                    var matches = bodies.Where(candidate => candidate.Observation.MethodIdentity == call.TargetIdentity
                         || candidate.Observation.ObjectBody?.MemberReference == call.TargetIdentity
-                        || candidate.MemberReferenceAlias == call.TargetIdentity)) return RejectOpaque("compiled-callee-requires-inspection");
+                        || candidate.MemberReferenceAlias == call.TargetIdentity).Take(2).ToArray();
+                    if (matches.Length > 0)
+                    {
+                        var reason = matches.Length > 1 ? "compiled-callee-ambiguous"
+                            : matches[0].Observation.ObjectBody is null ? "compiled-callee-metadata-unavailable"
+                            : "compiled-callee-requires-inspection";
+                        var arrowAt = call.TargetIdentity.LastIndexOf("->", StringComparison.Ordinal);
+                        var returned = arrowAt < 0 ? "" : call.TargetIdentity[(arrowAt + 2)..];
+                        var kind = OpaqueScalars.FirstOrDefault(name => returned == Scalar(name)) ?? "reference-or-other";
+                        pendingOpaqueRejection = new(reason, At(body, offsets[start], invocation),
+                            new(At(body, offsets[index], invocation), Hash(call.TargetIdentity)), kind, shape.HasThis, shape.ParameterCount,
+                            matches.Select(candidate => DescribeOpaqueMatch(candidate, call.TargetIdentity)).ToArray());
+                        return RejectOpaque(reason);
+                    }
                     var consumed = shape.ParameterCount + (shape.HasThis ? 1 : 0);
                     if (values.Count < consumed + 1 || values.Skip(values.Count - consumed)
                         .Any(value => value.Kind is not ("initializer-literal" or "initializer-temporary"))) return RejectOpaque("tracked-reference-or-stack");

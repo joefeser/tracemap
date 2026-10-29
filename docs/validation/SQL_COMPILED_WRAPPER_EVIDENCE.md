@@ -1,5 +1,40 @@
 # Public compiled-wrapper SQL evidence
 
+## Opaque lookahead rejection attribution — compile-only, 2026-10-28
+
+IL extractor 0.2.12 / policy `explicit-il-body-evidence.v16` fixes a diagnostic bug,
+without relaxing admission. Opaque lookahead already allows eligible external calls
+with NO matching admitted body. Its compiled-callee refusal is reached only when a
+body/metadata alias DOES match. Previously a later rejected compiled helper could
+be mislabeled with the earlier configuration getter where normal interpretation
+first stopped. That message did not prove System.Configuration input was required.
+
+The interpreter now preserves the actual rejected call/site/signature hash, chain
+start and normal-interpretation trigger separately. Gap opaqueInitializerRejection
+lists at most two exact matched body/binary/token bindings, input role/outcome,
+retained/unavailable metadata/retention state, scalar return kind and call shape.
+Bounded instruction/handler/call counts and opcode-level branch/field-write/throw
+flags describe available bodies only; null flags mean unavailable metadata. They
+are not purity, reachability or normal-return proofs. The gap names the actual
+rejected signature hash; metadata stage is opaque-initializer-lookahead.
+
+One retained match, one metadata-unavailable raw/alias match and multiple matches
+have distinct reasons. Missing metadata and ambiguity remain refusals. The guard
+against silently replacing available compiled behavior with an opaque assumption
+is unchanged. Normal inspection of a fully interpretable helper still proceeds
+when no earlier external unknown prevents ordinary interpretation. Pending lookahead
+state is not reported as a rejection on such a successful path. Candidate schemas,
+SQL/execution identity, all bounds and existing read/compare contracts are unchanged.
+
+Independent public C#/VB fixtures use a standard external configuration/string chain
+with no System.Configuration compiled input; another adds a small admitted scalar
+helper later in that chain. Definitions cover external-boundary eligibility, exact
+later-helper attribution, ordinary known-helper inspection, missing metadata and
+ambiguous matches. They compile only; tests/configuration/provider calls/native
+scans are not executed. No employer source or helper identity was copied into Git.
+The work-machine prompt inspects existing evidence first and returns a short text
+helper-shape capsule, not code/photos or an assumed framework-policy fix.
+
 ## Metadata-proved constructor field owners — compile-only, 2026-10-28
 
 IL extractor 0.2.11 / policy `explicit-il-body-evidence.v15` retains each body's

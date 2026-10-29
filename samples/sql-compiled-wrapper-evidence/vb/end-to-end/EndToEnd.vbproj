@@ -3,4 +3,5 @@
   <ItemGroup><PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" /></ItemGroup>
   <ItemGroup><ProjectReference Include="../wrapper/Wrapper.vbproj" /></ItemGroup>
   <ItemGroup><Reference Include="System.Web" /></ItemGroup>
+  <ItemGroup><Reference Include="System.Configuration" /></ItemGroup>
 </Project>

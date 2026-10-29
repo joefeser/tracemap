@@ -33,6 +33,9 @@ Namespace PublicSql.VisualBasic
         End Sub
     End Class
     Public Module Wrapper
+        Public Function PublicScalarEcho(value As String) As String
+            Return value
+        End Function
         Public Function ArrayInputs(procedure As String, parameters As System.Collections.ArrayList) As DataSet
             Dim command = New SqlCommand(procedure)
             command.CommandType = CommandType.StoredProcedure

@@ -977,3 +977,65 @@ Final CLI-dependency/test-source and both public fixture builds succeeded with z
 warnings and zero errors. `git diff --check` passed. These are compilation checks,
 not behavioral/native acceptance. The public ownership case is covered by authored
 controls; whether it is the private failure mechanism remains to be established.
+
+
+## Opaque lookahead diagnostic continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting clean head
+`209b74b711867936293bed1af1689af9f207a1e5`. Standing fix/push and no-tests authority
+retained. The reported explanation of unavailable external calls conflicts with
+the published nonempty-body-match guard. Source inspection establishes a diagnostic
+misattribution bug: lookahead can stop at a later matching compiled callee, while
+ordinary interpretation then labels the failure with the first external getter.
+The exact private matched helper remains unknown; its semantics are not invented.
+
+## Opaque lookahead rejection attribution — compile-only, 2026-10-28
+
+IL extractor 0.2.12 / policy `explicit-il-body-evidence.v16` fixes a diagnostic bug,
+without relaxing admission. Opaque lookahead already allows eligible external calls
+with NO matching admitted body. Its compiled-callee refusal is reached only when a
+body/metadata alias DOES match. Previously a later rejected compiled helper could
+be mislabeled with the earlier configuration getter where normal interpretation
+first stopped. That message did not prove System.Configuration input was required.
+
+The interpreter now preserves the actual rejected call/site/signature hash, chain
+start and normal-interpretation trigger separately. Gap opaqueInitializerRejection
+lists at most two exact matched body/binary/token bindings, input role/outcome,
+retained/unavailable metadata/retention state, scalar return kind and call shape.
+Bounded instruction/handler/call counts and opcode-level branch/field-write/throw
+flags describe available bodies only; null flags mean unavailable metadata. They
+are not purity, reachability or normal-return proofs. The gap names the actual
+rejected signature hash; metadata stage is opaque-initializer-lookahead.
+
+One retained match, one metadata-unavailable raw/alias match and multiple matches
+have distinct reasons. Missing metadata and ambiguity remain refusals. The guard
+against silently replacing available compiled behavior with an opaque assumption
+is unchanged. Normal inspection of a fully interpretable helper still proceeds
+when no earlier external unknown prevents ordinary interpretation. Pending lookahead
+state is not reported as a rejection on such a successful path. Candidate schemas,
+SQL/execution identity, all bounds and existing read/compare contracts are unchanged.
+
+Independent public C#/VB fixtures use a standard external configuration/string chain
+with no System.Configuration compiled input; another adds a small admitted scalar
+helper later in that chain. Definitions cover external-boundary eligibility, exact
+later-helper attribution, ordinary known-helper inspection, missing metadata and
+ambiguous matches. They compile only; tests/configuration/provider calls/native
+scans are not executed. No employer source or helper identity was copied into Git.
+The work-machine prompt inspects existing evidence first and returns a short text
+helper-shape capsule, not code/photos or an assumed framework-policy fix.
+
+Compile-only commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No tests, native scans, configuration/provider/application methods were executed.
+No PR/merge/ACK policy/deployment changes. This fixes diagnostic attribution only;
+private entry lineage remains incomplete and the matched helper still needs actual
+bounded inspection/metadata evidence before any admission change is justified.
+
+Final CLI-dependency/test-source and both public fixture builds passed with zero
+warnings/errors. `git diff --check` passed. No test methods or native scan were run.
+The private owner refusal is reported resolved; actual lookahead callee attribution
+and complete native entry lineage remain outstanding. No admission gate was removed.

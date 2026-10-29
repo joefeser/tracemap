@@ -120,3 +120,11 @@
 - [x] Update rule limitations, state and clean-head inner-root text-only prompt without claiming recovery of the unavailable dirty diff.
 - [ ] Run focused/full tests (explicitly deferred by Joe).
 - [ ] Confirm the private field-owner mismatch matches this metadata-proved case and completes lineage (not claimed).
+
+
+## Opaque lookahead attribution — 2026-10-28
+- [x] Separate actual later rejected compiled call from earlier normal-interpretation trigger; keep admission and bounds unchanged.
+- [x] Emit bounded exact matched-body/metadata state and opcode-shape diagnostics; distinguish retained, unavailable and ambiguous matches.
+- [x] Author independent C#/VB external configuration, later-helper, ordinary helper and metadata/ambiguity regression definitions; compile and update limitations/state/text-only prompt.
+- [ ] Execute new focused/full controls (explicitly deferred by Joe).
+- [ ] Identify the actual private matched helper and establish bounded entry lineage (not claimed).
