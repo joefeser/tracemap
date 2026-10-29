@@ -1039,3 +1039,72 @@ Final CLI-dependency/test-source and both public fixture builds passed with zero
 warnings/errors. `git diff --check` passed. No test methods or native scan were run.
 The private owner refusal is reported resolved; actual lookahead callee attribution
 and complete native entry lineage remain outstanding. No admission gate was removed.
+
+
+## Retained compiled scalar boundary — 2026-10-29
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting clean head
+`80ad2e46146122ca3def4215f26451daf1d56ab2`. The precise work-machine capsule now
+identifies an available static scalar transform with internal control/handlers.
+Standing fix/push and no-tests authority retained. The implementation is an explicit
+conditional effect boundary, not an inference of purity from no direct field writes.
+No private helper name, code, algorithm, body identity or receipt was copied to Git.
+
+## Explicit retained compiled scalar transformation — compile-only, 2026-10-29
+
+IL extractor 0.2.13 / policy `explicit-il-body-evidence.v17` adds
+`--il-compiled-scalar-boundary`, requiring opaque root initialization and selected
+roots. Default compiled-callee refusals remain. Only unique admitted/provenance-
+bound, dual-reader raw/call/object-agreed static/nonvirtual/nongeneric String-to-
+String callees qualify. Caller arguments must be scalar string temporaries/literals;
+no tracked root/reference argument or unknown receiver is admitted.
+
+Bounds are 128 instructions, 4 exception regions, 32 call observations, 32 locals,
+stack 16 and 4 summaries/root, under existing aggregate work/chain/field/heap caps.
+Instruction offsets, branch/switch targets and exception ranges are checked. Catch,
+finally, filter and fault metadata are retained structurally. An over-approximate
+bounded control graph must expose a return, not prove runtime reachability. Direct
+field writes, explicit throws/rethrows, indirect calls/jumps, block/pointer stores,
+field-address/delegate construction, incomplete calls/metadata and wrong signatures
+refuse. Unknown or ambiguous body matches do not become opaque external calls.
+
+This is a conditional scalar-transform boundary, not a purity or passthrough proof.
+Internal branches, handlers and calls are NOT executed or semantically resolved.
+No direct field-write opcode does not establish absence of transitive effects or
+escapes. Normal return and noninterference with unpassed tracked heap are explicit
+assumptions; possible throws and transitive effects remain unmodeled. The declared
+String result is unbound, never assumed equal to its input or successfully decrypted.
+Root constructor linearity/private scalar terminal-store checks still apply, and
+SQL identifier/type/size/control consumption of unknown values still refuses.
+
+Only after the complete caller terminal store qualifies are compiledCallees receipts
+committed inside opaqueInitializers. They bind actual call/signature, target body/
+binary/token, handler kinds and bounds to the containing generator/input provenance.
+Policy is explicit-inspected-compiled-scalar/1; candidate schema remains the separate
+il-sql-lifecycle-opaque-entry/1 conditional entry contract. Current read/comparison
+routes and execution/allocation identities are unchanged. Ordinary compiled calls
+outside this opt-in constructor boundary remain inspected/refused as before.
+
+Independent public C#/VB fixtures combine a four-region branching string transform,
+constructed-reference ownership, opaque configuration inputs, parameter attachment/
+Fill and external trace. They use only public synthetic constants/APIs; no private
+transform/decryption source or algorithm is copied. Negative definitions cover
+writes/throws, SQL/control use, instance/generic/missing agreement and resource caps.
+Native definitions check three flags, conditional schema and summary provenance.
+All are compile-checked only: no tests, native scans, configuration/transform/provider/
+application methods are executed. Real-input lineage/whole SQL completion is unproven.
+
+Compile-only validation commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No tests, native scans, configuration/transform/provider/application methods were
+executed. No PR/merge/ACK policy/deployment changes. Work-machine confirmation and
+later consumer/schema comparison remain outstanding; whole SQL effort is incomplete.
+
+Final CLI-dependency/test-source and public C#/VB fixture builds succeeded with zero
+warnings/errors; `git diff --check` passed. No test/native/application/transform code
+was executed. Work-machine entry confirmation remains outstanding. The input/output
+is declared String metadata with unknown value, not an inferred passthrough result.

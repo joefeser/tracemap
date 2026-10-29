@@ -128,3 +128,12 @@
 - [x] Author independent C#/VB external configuration, later-helper, ordinary helper and metadata/ambiguity regression definitions; compile and update limitations/state/text-only prompt.
 - [ ] Execute new focused/full controls (explicitly deferred by Joe).
 - [ ] Identify the actual private matched helper and establish bounded entry lineage (not claimed).
+
+
+## Explicit retained scalar transform — 2026-10-29
+- [x] Add separate selected-root/opaque-only flag for unique retained static String-to-String transformation boundaries; preserve default compiled-callee refusals.
+- [x] Bound instructions/handlers/calls/locals/stack/summaries/work and validate structural control; reject direct writes/throws/unsafe or incomplete metadata.
+- [x] Record unknown result, exact callee provenance and internal-control/transitive-effect assumptions without executing handlers or claiming purity/passthrough.
+- [x] Author public C#/VB combined four-handler/owner/trace/parameter and negative/native controls; compile and update limitations/state/three-flag text-only prompt.
+- [ ] Execute focused and broader shared-core tests (explicitly deferred by Joe).
+- [ ] Confirm the exact private transform qualifies and entry lineage completes under the conditional boundary (not claimed).

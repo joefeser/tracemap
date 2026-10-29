@@ -5,61 +5,56 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
-## Current next step: identify the actual lookahead callee
+## Current bounded compiled scalar-transform check
 
-Use IL extractor **0.2.12**, policy `explicit-il-body-evidence.v16`. The latest owner
-refusal is reported resolved. The remaining compiled-callee-requires-inspection
-message was misleading: the old interpreter could report the first unknown external
-configuration getter even when lookahead rejected a LATER matching compiled helper.
-That is a tool diagnostic bug, not evidence that System.Configuration must be supplied.
+Use IL extractor **0.2.13**, policy `explicit-il-body-evidence.v17`, at the newly
+fetched clean public head. The reported retained helper is a static String-to-String
+transform with internal control and exception handling, not a proven passthrough or
+pure function. Its input/output metadata is available; no framework DLL needs adding.
 
-Read the published guard: it rejects when at least one admitted body matches the
-lookahead call. A call with no admitted matching body is already eligible for the
-explicit opaque boundary, subject to its existing chain/type/escape limits. Do not
-add System.Configuration.dll, raise bounds, remove the compiled-callee guard or
-claim all unavailable-body calls now require inspection. The admission policy is
-unchanged in this diagnostic patch.
+Select the same verified INNER roots and application DLLs. Add ALL THREE flags:
+`--il-opaque-root-initializers --il-external-trace-boundary --il-compiled-scalar-boundary`.
+The new scalar flag requires the opaque-initializer flag and explicit root selections.
+Defaults retain the compiled-callee refusal. No private helper name is allowlisted.
 
-FIRST use existing scan/call/body/slice facts and local compiled metadata to identify
-the first matching compiled call along the actual constructor chain. The getter
-printed by the earlier gap may only have triggered the failed normal interpretation.
-Keep source/body identities and hashes local. No new broad scan, tests, application/
-configuration/SQL execution or sample-source transfer is needed for that inspection.
-If existing artifacts cannot establish the actual match, build this diagnostic head
-and do at most ONE targeted run on the same inner roots/DLLs/both existing flags.
+A compiled match qualifies only when unique, admitted/provenance-bound, independently
+raw/call/object agreed, static/nonvirtual/nongeneric, and exactly String -> String.
+Its actual argument must be a typed scalar string temporary/literal, never a tracked
+root/object reference. Bounds: 128 instructions, 4 exception regions, 32 call observations,
+32 locals, stack 16 and 4 summaries/root under existing aggregate work limits. Direct
+field writes, explicit throw/rethrow, indirect calls/jumps, pointer/block stores,
+field-address/delegate construction and incomplete metadata refuse. Structural branch,
+switch and handler ranges must stay inside the retained body and expose an abstract
+return; that does not prove runtime reachability/normal completion. Catch/finally/
+filter/fault regions are retained structurally but not executed or selected.
 
-The new gap property `opaqueInitializerRejection` separates chainStart, rejectedCall
-and triggerCall. rejectedCall is the actual inspected-lookahead rejection site/hash;
-triggerCall is the earlier call where ordinary interpretation stopped. matches lists
-at most two exact admitted body/binary/token bindings, input role/outcome, metadata
-retained/unavailable status, retention diagnostics and bounded opcode-level counts.
-Reasons distinguish compiled-callee-requires-inspection (one retained match),
-compiled-callee-metadata-unavailable (one raw/alias match with missing object metadata)
-and compiled-callee-ambiguous (multiple matches). bodyMetadataFailure stage is
-opaque-initializer-lookahead; the gap references the rejected signature HASH, not
-the earlier getter's name. Missing body metadata still refuses; it is not absence
-of a compiled input. No positive lineage is emitted for this rejected chain.
+Branches/handlers/internal calls are NOT interpreted by this boundary. The final
+result remains unbound of its declared String type; do not call it equal to the
+input, decrypted, successful, pure or effect-free. Transitive effects and exceptions
+remain unmodeled. Normal return and noninterference with unpassed tracked heap are
+explicit assumptions. No direct field-write opcode is not proof of no transitive
+mutation/escape. Unknown required SQL identifiers/types/sizes and control still refuse.
+The caller initializer must still be a bounded linear own-private-scalar terminal
+store. No reference-field opaque admission or post-constructor helper bypass is added.
 
-Return ONE SHORT SANITIZED TEXT capsule:
-- Is the actual rejected call the configuration getter or a later helper? Use an
-  opaque helper alias for non-public symbols, never a private qualified name.
-- Match count, metadata state and input role; static/instance, parameter count,
-  primitive return kind, virtual/generic flags, instruction/handler/call counts, raw branch/field-write/
-  throw opcode flags. These flags do not prove purity, reachability or normal return.
-- One abstract use/body shape for the actual matched helper, derived locally: e.g.
-  scalar forwarding, a bounded external-call chain, branching, state mutation,
-  exception handling or missing metadata. No source or raw private opcode operands.
-- Whether trigger and rejected sites differ; constructor owner and entry statuses.
+After one targeted run in fresh private output (tests remain deferred), inspect
+`lifecycle.opaqueInitializers[].compiledCallees` under
+`il-sql-lifecycle-opaque-entry/1`. It binds policy `explicit-inspected-compiled-scalar/1`,
+actual call/signature hash, target body/binary/token, bounds/handler kinds and unknown
+result origin. The claim names compiled internal-control assumptions. Check existing
+constructor-owner views, trace receipts, actual SqlParameter/attachment/Fill links and
+execution-specific parameter identities. Adding the flag alone is not boundary use.
 
-This capsule determines whether the next implementation needs bounded inspection of
-an AVAILABLE scalar helper or metadata repair. Do not infer a new unavailable-callee
-policy from the old message. The external configuration case and the misleading
-later-helper case now have independent public C#/VB regression definitions, authored
-and compile-checked only. Joe does not need to return sample code or photographs.
+Return one SHORT SANITIZED TEXT matrix: clean public tool SHA/build/tests-not-run,
+selected-inner-root fit, owner/opaque/compiled-scalar/trace boundary counts, candidate
+schema/count, execution isolation and exact first gap if any. If scalar qualification
+refuses, return its specific reason and the existing matched-body counts/shape only.
+Keep actual helper/body/field identities, hashes, source and samples local. Joe needs
+no code transfer or photographs. Do not broaden limits or patch private inputs.
 
 ## Current constructor-ownership check
 
-Use IL extractor **0.2.12**, policy `explicit-il-body-evidence.v16`, at the newly
+Use IL extractor **0.2.13**, policy `explicit-il-body-evidence.v17`, at the newly
 fetched public head. The previous clean build still refused a constructor field
 owner. The old work-machine dirty diff is unavailable/empty; this publication does
 not claim to recover or review that missing patch. A lifecycle-field-owner gap
@@ -103,7 +98,7 @@ receipts; deselect the outer façades that construct/load another data-access ob
 Do not broaden the scalar policy to reference-type fields or raise initializer caps.
 Joe does not need to type tokens, transfer code or take more photographs.
 
-Use IL extractor **0.2.12**, policy `explicit-il-body-evidence.v16`, and add BOTH
+Use IL extractor **0.2.13**, policy `explicit-il-body-evidence.v17`, and add BOTH
 `--il-opaque-root-initializers` and `--il-external-trace-boundary` with the same
 verified application DLLs and the inner selected roots. The second flag requires
 selected roots. It recognizes only exact signed neutral System.Web 4.0.0.0/token
@@ -158,7 +153,7 @@ build is partial evidence for that exact local build, not release acceptance.
 
 ## Current opaque root-scalar initializer boundary
 
-Use IL extractor **0.2.12**, policy `explicit-il-body-evidence.v16`. For the already
+Use IL extractor **0.2.13**, policy `explicit-il-body-evidence.v17`. For the already
 identified external scalar initializer blocker, add `--il-opaque-root-initializers`
 to the same selected-root scan command. This flag requires `--il-lifecycle-root`;
 the default remains strict. Do not rebuild or edit the private application.
@@ -234,8 +229,8 @@ A throwing/omitted wrapper is an illustrative stub, not a complete replay.
 
 ## Current root-sliced metadata repair
 
-Use the newly fetched public head, IL extractor **0.2.12**, policy
-`explicit-il-body-evidence.v16`. This iteration is compile-only: Joe explicitly
+Use the newly fetched public head, IL extractor **0.2.13**, policy
+`explicit-il-body-evidence.v17`. This iteration is compile-only: Joe explicitly
 requested no tests. Historical pass totals do not validate this patch.
 
 The previous actual-text accounting repair could still exhaust the shared corpus
@@ -431,7 +426,7 @@ concrete failure. Use the built CLI and repeat `--compiled-input` for each neces
 assembly; do not omit the wrapper or substitute source-reader evidence.
 
 ```text
-dotnet <local-built-tracemap.dll> scan --repo <PRIVATE_SOURCE_ROOT> --out <new-private-scan-directory> --il-body-evidence --il-opaque-root-initializers --il-external-trace-boundary --compiled-input <caller.dll> --compiled-input <wrapper.dll> --il-lifecycle-root <privately-derived-sha256>:<privately-derived-MethodDef-token>
+dotnet <local-built-tracemap.dll> scan --repo <PRIVATE_SOURCE_ROOT> --out <new-private-scan-directory> --il-body-evidence --il-opaque-root-initializers --il-external-trace-boundary --il-compiled-scalar-boundary --compiled-input <caller.dll> --compiled-input <wrapper.dll> --il-lifecycle-root <privately-derived-sha256>:<privately-derived-MethodDef-token>
 ```
 
 Inspect all three fact kinds under `dotnet.compiled.il-sql-lifecycle.v1`, Tier3:

@@ -1,5 +1,49 @@
 # Public compiled-wrapper SQL evidence
 
+## Explicit retained compiled scalar transformation — compile-only, 2026-10-29
+
+IL extractor 0.2.13 / policy `explicit-il-body-evidence.v17` adds
+`--il-compiled-scalar-boundary`, requiring opaque root initialization and selected
+roots. Default compiled-callee refusals remain. Only unique admitted/provenance-
+bound, dual-reader raw/call/object-agreed static/nonvirtual/nongeneric String-to-
+String callees qualify. Caller arguments must be scalar string temporaries/literals;
+no tracked root/reference argument or unknown receiver is admitted.
+
+Bounds are 128 instructions, 4 exception regions, 32 call observations, 32 locals,
+stack 16 and 4 summaries/root, under existing aggregate work/chain/field/heap caps.
+Instruction offsets, branch/switch targets and exception ranges are checked. Catch,
+finally, filter and fault metadata are retained structurally. An over-approximate
+bounded control graph must expose a return, not prove runtime reachability. Direct
+field writes, explicit throws/rethrows, indirect calls/jumps, block/pointer stores,
+field-address/delegate construction, incomplete calls/metadata and wrong signatures
+refuse. Unknown or ambiguous body matches do not become opaque external calls.
+
+This is a conditional scalar-transform boundary, not a purity or passthrough proof.
+Internal branches, handlers and calls are NOT executed or semantically resolved.
+No direct field-write opcode does not establish absence of transitive effects or
+escapes. Normal return and noninterference with unpassed tracked heap are explicit
+assumptions; possible throws and transitive effects remain unmodeled. The declared
+String result is unbound, never assumed equal to its input or successfully decrypted.
+Root constructor linearity/private scalar terminal-store checks still apply, and
+SQL identifier/type/size/control consumption of unknown values still refuses.
+
+Only after the complete caller terminal store qualifies are compiledCallees receipts
+committed inside opaqueInitializers. They bind actual call/signature, target body/
+binary/token, handler kinds and bounds to the containing generator/input provenance.
+Policy is explicit-inspected-compiled-scalar/1; candidate schema remains the separate
+il-sql-lifecycle-opaque-entry/1 conditional entry contract. Current read/comparison
+routes and execution/allocation identities are unchanged. Ordinary compiled calls
+outside this opt-in constructor boundary remain inspected/refused as before.
+
+Independent public C#/VB fixtures combine a four-region branching string transform,
+constructed-reference ownership, opaque configuration inputs, parameter attachment/
+Fill and external trace. They use only public synthetic constants/APIs; no private
+transform/decryption source or algorithm is copied. Negative definitions cover
+writes/throws, SQL/control use, instance/generic/missing agreement and resource caps.
+Native definitions check three flags, conditional schema and summary provenance.
+All are compile-checked only: no tests, native scans, configuration/transform/provider/
+application methods are executed. Real-input lineage/whole SQL completion is unproven.
+
 ## Opaque lookahead rejection attribution — compile-only, 2026-10-28
 
 IL extractor 0.2.12 / policy `explicit-il-body-evidence.v16` fixes a diagnostic bug,

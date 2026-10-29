@@ -66,6 +66,8 @@ internal static partial class IlSqlLifecycleExtractor
         public string Claim => (OpaqueInitializers is { Count: > 0 }
             ? "conditional-static-lineage;opaque-initialization-normal-return-assumed;tracked-heap-noninterference-assumed;external-effects-unmodeled;row-existence-unproven"
             : "conditional-static-lineage;normal-completion;row-existence-unproven")
+            + (OpaqueInitializers?.Any(initializer => initializer.CompiledCallees is { Count: > 0 }) == true
+                ? ";compiled-scalar-normal-return-assumed;compiled-scalar-internal-control-unmodeled;transitive-effects-unmodeled" : "")
             + (ExternalTraces is { Count: > 0 } ? ";external-trace-normal-return-assumed;trace-receiver-non-null-unproven;tracked-heap-noninterference-assumed;external-effects-unmodeled" : "");
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ExternalTrace>? ExternalTraces { get; init; }
@@ -122,9 +124,9 @@ internal static partial class IlSqlLifecycleExtractor
     }
 
     internal static Result Extract(Body root, IReadOnlyList<Body> bodies, bool enabled,
-        IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers = false, bool externalTraceBoundary = false)
+        IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers = false, bool externalTraceBoundary = false, bool compiledScalarBoundary = false)
     {
-        var machine = new Machine(bodies, budget, opaqueRootInitializers, externalTraceBoundary);
+        var machine = new Machine(bodies, budget, opaqueRootInitializers, externalTraceBoundary, compiledScalarBoundary);
         try { return machine.Run(root, enabled); }
         catch (Refusal error) { return new Result([], [], null, [error.Message]) { MetadataFailure = error.MetadataFailure,
             OpaqueInitializers = machine.Initializers.Count > 0 ? machine.Initializers.ToArray() : null,
@@ -134,7 +136,7 @@ internal static partial class IlSqlLifecycleExtractor
             ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
     }
 
-    private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary)
+    private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary, bool compiledScalarBoundary)
     {
         private readonly Dictionary<string, ObjectState> heap = new(StringComparer.Ordinal);
         private readonly List<Execution> executions = [];

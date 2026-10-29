@@ -34,6 +34,27 @@ namespace PublicSql.CSharp
     public static class Wrapper
     {
         public static string PublicScalarEcho(string value) { return value; }
+        public static string PublicScalarTransform(string value)
+        {
+            string result = value;
+            try
+            {
+                try
+                {
+                    try { if (value == null) result = "public-fallback"; else result = value.Trim(); }
+                    finally { System.GC.KeepAlive(value); }
+                }
+                finally { System.GC.KeepAlive(result); }
+            }
+            catch (System.ArgumentException) { result = "public-fallback"; }
+            finally { System.GC.KeepAlive(value); }
+            return result;
+        }
+        private static string scalarState;
+        public static string PublicScalarWrites(string value) { scalarState = value; return scalarState; }
+        public static string PublicScalarThrows(string value)
+        { if (value == null) throw new System.ArgumentException(); return value; }
+
         public static DataSet ArrayInputs(string procedure, System.Collections.ArrayList parameters)
         {
             var command = new SqlCommand(procedure); command.CommandType = CommandType.StoredProcedure;
