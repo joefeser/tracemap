@@ -85,6 +85,8 @@ internal static partial class IlSqlLifecycleExtractor
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public FieldAccessRejection? FieldAccessFailure { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public ExternalTraceRejection? ExternalTraceFailure { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public OpaqueChainRejection? OpaqueInitializerRejection { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ConstructorOwnerView>? ConstructorOwnerViews { get; init; }
@@ -139,6 +141,7 @@ internal static partial class IlSqlLifecycleExtractor
             TraceStringComputations = machine.StringComputations.Count > 0 ? machine.StringComputations.ToArray() : null,
             FieldOwnerFailure = machine.OwnerFailure,
             FieldAccessFailure = machine.FieldAccessFailure,
+            ExternalTraceFailure = machine.TraceFailure,
             OpaqueInitializerRejection = machine.ReportedOpaqueRejection,
             ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
     }

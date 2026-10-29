@@ -18,7 +18,7 @@ internal static class IlSqlExternalTraceApis
 
 internal static partial class IlSqlLifecycleExtractor
 {
-    internal const string ExternalTracePolicy = "explicit-external-web-trace/2";
+    internal const string ExternalTracePolicy = "explicit-external-web-trace/3";
     internal sealed record ExternalTrace(string Policy, IReadOnlyList<OpaqueCall> Calls,
         IReadOnlyList<string> ArgumentOrigins, Site? EnclosingCatch,
         string Boundary = "normal-return-assumed;receiver-non-null-unproven;external-effects-unmodeled;tracked-heap-noninterference-assumed;not-purity-proof")
@@ -27,9 +27,15 @@ internal static partial class IlSqlLifecycleExtractor
         public string ArgumentEffects { get; init; } = "scalar-values-only";
     }
 
+    internal sealed record ExternalTraceRejection(Site Site, string MetadataToken, string Reason,
+        string Opcode, string? CallSignatureSha256, IlCallStackShape? CallShape,
+        IReadOnlyList<string> StackValueKinds,
+        string Limitation = "diagnostic-only;abstract-stack-not-runtime-values;unsupported-evaluation-refused");
+
     private sealed partial class Machine
     {
         internal readonly List<ExternalTrace> TraceBoundaries = [];
+        internal ExternalTraceRejection? TraceFailure;
         private string? externalTraceRoot;
         private static bool TraceShape(IlCallObservation call, string identity, int count, bool instance, bool returns)
             => call.TargetIdentity == identity && call.ReferenceKind == "memberref"
@@ -44,16 +50,22 @@ internal static partial class IlSqlLifecycleExtractor
             if (body.Observation.BodyIdentity != externalTraceRoot || depth != 0 || code[start][2] != "call"
                 || !calls.TryGetValue(offsets[start], out var current)
                 || !TraceShape(current, IlSqlExternalTraceApis.Current, 0, false, true)) return false;
+            var diagnosticIndex = start;
+            var values = new List<Value>();
+            string[] diagnosticStackKinds = [];
             if (loopEnumerator.Kind != "unknown") Fail("loop-effect");
             if (TraceBoundaries.Count >= 8) Fail("chain-limit");
             if (!budget.TryConsume(code.Length)) throw new Refusal("lifecycle-work-limit");
             var sites = new List<OpaqueCall> { new(At(body, offsets[start], invocation), Hash(current.TargetIdentity)) };
-            var values = new List<Value>();
             var expressionArrays = new HashSet<string>(StringComparer.Ordinal);
             var membership = Membership(offsets[start]);
+            var storedLocals = new HashSet<int>();
+            var stackNameCalls = 0;
             var foundTrace = false;
-            for (var index = start + 1; index < code.Length && index <= start + 63; index++)
+            for (var index = start + 1; index < code.Length && index <= start + 127; index++)
             {
+                diagnosticIndex = index;
+                diagnosticStackKinds = values.Take(16).Select(value => value.Kind).ToArray();
                 if (++work > 8192 || !budget.TryConsume(1)) throw new Refusal("lifecycle-work-limit");
                 if (Membership(offsets[index]) != membership) Fail("exception-boundary-crossing");
                 var op = code[index][2]; var operand = code[index][3];
@@ -84,12 +96,50 @@ internal static partial class IlSqlLifecycleExtractor
                         handler is null ? null : At(body, handler.Handler, invocation))
                         { ArgumentsPartial = values.Any(value => value.Kind == "computed-string"),
                             ArgumentEffects = values.Any(value => value.Kind == "computed-string") ? "partial-unbound-values;computation-calls-recorded;may-throw" : "scalar-values-only" });
+                    TraceFailure = null;
                     terminal = index; return true;
                 }
                 Value PopExpression()
                 {
                     if (values.Count == 0) { Fail("sink-escape-or-expression-underflow"); return Value.Unknown; }
                     var last = values[^1]; values.RemoveAt(values.Count - 1); return last;
+                }
+                if (Slot(op, operand, "stloc", out var storedSlot))
+                {
+                    if (storedSlot >= body.Observation.LocalCount || storedLocals.Count >= 16 && !storedLocals.Contains(storedSlot)) Fail("local-store-limit");
+                    var storedValue = PopExpression();
+                    if (!TraceScalarValue(storedValue) && !(storedValue.Kind == "object" && expressionArrays.Contains(storedValue.Text)))
+                        Fail("local-store-tracked-or-unproved-value");
+                    locals[storedSlot] = storedValue; storedLocals.Add(storedSlot); continue;
+                }
+                if (op is "newobj" or "callvirt" && calls.TryGetValue(offsets[index], out var stackCall)
+                    && IlSqlTraceStackNameApis.Resolve(stackCall.TargetIdentity) is { } stackRule)
+                {
+                    if (stackRule.Constructor != (op == "newobj")
+                        || !TraceShape(stackCall, stackCall.TargetIdentity, stackRule.Parameters, true, !stackRule.Constructor)) Fail("stack-name-call-shape");
+                    if (++stackNameCalls > 32) Fail("stack-name-call-limit");
+                    if (stackRule.Parameters == 1)
+                    {
+                        var frameIndex = PopExpression();
+                        if (frameIndex.Kind != "int" || Number(frameIndex) is < 0 or > 31) Fail("stack-name-frame-index");
+                    }
+                    if (!stackRule.Constructor)
+                    {
+                        var stackReceiver = PopExpression();
+                        if (stackReceiver.Kind != stackRule.ReceiverKind || stackReceiver.DeclaredType != stackRule.FrameworkVersion) Fail("stack-name-receiver");
+                    }
+                    var site = At(body, offsets[index], invocation);
+                    sites.Add(new(site, Hash(stackCall.TargetIdentity)));
+                    if (stackRule.ResultKind == "computed-string")
+                    {
+                        if (StringComputations.Count >= 32) Fail("string-computation-limit");
+                        var id = "computed-string:" + StringComputations.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                        StringComputations.Add(new(id, new(site, Hash(stackCall.TargetIdentity)), ["external-stack-method-name"],
+                            Effects: "stack-inspection-unmodeled;normal-return-and-receiver-non-null-assumed;name-unbound"));
+                        values.Add(new("computed-string", id, IlSqlExternalTraceApis.StringType));
+                    }
+                    else values.Add(new(stackRule.ResultKind, "external-stack-reference", stackRule.FrameworkVersion));
+                    continue;
                 }
                 if (op == "ldstr") { values.Add(new("string", operand)); continue; }
                 if (op == "ldnull") { values.Add(new("null", "")); continue; }
@@ -166,7 +216,14 @@ internal static partial class IlSqlLifecycleExtractor
             }
             Fail("chain-instruction-limit"); return false;
 
-            void Fail(string reason) => throw new Refusal("lifecycle-external-trace-" + reason, MetadataFailure(body, "external-trace"));
+            void Fail(string reason)
+            {
+                calls.TryGetValue(offsets[diagnosticIndex], out var rejectedCall);
+                TraceFailure = new(At(body, offsets[diagnosticIndex], invocation), body.Observation.MetadataToken,
+                    reason, code[diagnosticIndex][2], rejectedCall is null ? null : Hash(rejectedCall.TargetIdentity),
+                    rejectedCall?.StackShape, diagnosticStackKinds);
+                throw new Refusal("lifecycle-external-trace-" + reason, MetadataFailure(body, "external-trace"));
+            }
             string Membership(long offset) => string.Join(',', regions.Select((region, index) =>
                 offset >= region.Start && offset < region.End ? index + ":try"
                     : offset >= region.Handler && offset < region.HandlerEnd ? index + ":handler" : "").Where(value => value.Length > 0));

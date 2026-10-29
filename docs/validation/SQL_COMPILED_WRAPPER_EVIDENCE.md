@@ -866,3 +866,49 @@ mismatch diagnostics. Tests/scans remain deferred by Joe. The work-machine promp
 permits one isolated clean-head build and at most one native scan, then a hard
 stop; existing dirty patches/outputs must be preserved. Native lineage and the
 ArrayList blocker remain unproven.
+
+## Logging-only stack-name expressions — 2026-10-29
+
+Extractor 0.2.19 / evidence policy v20 / external trace policy3 adds scalar and
+fresh trace-array local stores plus a closed exact signed mscorlib 2/4 sequence:
+StackTrace parameterless constructor, GetFrame(Int32), StackFrame.GetMethod and
+MemberInfo.Name. Intermediate stack/frame/method markers remain expression-only
+and framework-version-consistent; local storage of these references, arbitrary
+calls, general reflection and dynamic/out-of-range frame indices refuse. Names
+are unbound computed strings, not actual runtime identities. All four call sites
+are retained with signature hashes and mayThrow/unmodeled receipts. Normal return,
+non-null intermediate receivers and noninterference remain conditional assumptions.
+No stack capture, reflection, application code or SQL is executed by the extractor.
+
+Intentional versioned trace-chain limit 128 (was 64), with 32 stack-name calls/chain,
+16 distinct local stores/chain and frame indices 0..31. Existing stack 16, array 16,
+string-computation 32, chains 8, heap 256, body 256 and aggregate work/call-depth bounds
+remain. Local stores preserve modeled values and fresh-array allocation identity;
+array writes still require an array allocated inside that trace expression. Field
+loads/stores have no bypass. Unsupported default and read roots remain strict.
+
+Trace refusals now optionally expose externalTraceFailure: exact body/binary/
+invocation/token/offset, opcode, reason, optional call signature hash/shape and at
+most16 abstract stack kinds. This diagnostic contains no source snippets, message
+values or runtime stack names. Existing generator/input provenance binds it.
+
+Independent public C#/VB fixtures and test definitions cover short local-array
+and eight-capture expressions, exact identity mutations, dynamic frames, general
+reflection, strict default and stack-reference local escape. CLI/test-project and
+both fixture projects compiled with --no-restore -c Debug -warnaserror, zero
+warnings/errors. Tests and native scans were NOT run, deferred by Joe. Work-machine
+prompt permits one isolated build and one scan only, then stop.
+
+Why earlier checks missed this: the selected fixture coverage did not assert a
+compiler-generated local-array spill together with stack-name reflection. Compile
+success checks types, not interpreter behavior, and authored tests were unexecuted.
+Generic trace failures omitted instruction/offset, while dirty-tool progress was
+not equivalent to clean-public-head behavior. The new trace diagnostic addresses
+that evidence omission; it does not justify accepting the unpublished field bypass.
+
+Known remaining limits are not a count of private blockers: general reflection,
+other stack constructors/dynamic frames, reference escape, arbitrary argument
+helpers, branch/handler/loop-crossing trace expressions, and non-custom field
+receivers remain unsupported. A later field-receiver failure was reported only
+from a dirty tool; its exact operation is still unproven on the clean path. Native
+entry lineage, owner-schema comparison and overall SQL completion remain unproven.

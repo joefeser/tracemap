@@ -1,45 +1,48 @@
-# Work-machine trace rejection diagnosis — read only
+# Work-machine stack-name trace boundary — one scan only
 
 ## Active instruction — 2026-10-29
 
-This section supersedes ALL older instructions below. Perform ONE bounded read-only
-inspection of the existing clean-scan evidence and dirty trace-handler diff. Return
-ONE short sanitized report, then STOP. No edits, builds, tests, scans, subagents,
-application execution, commits or pushes are authorized. Do not activate either
-local bypass. Preserve every dirty file, input and output unchanged.
+This section supersedes ALL older instructions below. Use the newly fetched clean
+public head, extractor 0.2.19 / evidence policy explicit-il-body-evidence.v20 /
+external trace policy explicit-external-web-trace/3. Preserve all existing dirty
+patches and outputs. Use an isolated clean public tool checkout; do not reset,
+clean, overwrite, apply or activate the dirty trace or field-access bypasses.
 
-Goal: identify the concrete unsupported operation so the owner can inspect the
-corresponding code locally. A broad label such as unknown string is insufficient.
-An unknown value is not permission to skip its computation or discard a store.
+Perform at most ONE tool build and ONE targeted native scan, then return ONE
+short sanitized text report and STOP. No retries, edits, tests, extra scans,
+subagents or application runtime execution are authorized. If build/isolation
+fails, report that failure and stop without scanning. Tests remain deferred.
 
-1. Record the base Git SHA, dirty filenames and source/binary versions from existing
-   receipts. Compare ONLY IlSqlExternalTraceBoundary.cs against its public base;
-   inspect referenced helper changes in IlSqlLifecycleApis.cs only if necessary
-   to explain that diff. Do not inspect private source broadly or reread the repo.
-2. Describe each added trace opcode/call case in sanitized pseudocode: exact public
-   framework signature where available, argument/receiver checks, stack effects,
-   treatment of unknown values and tracked references, and any skipped calls or
-   stores. Distinguish actual behavior from a proposed safe interpretation.
-3. From the existing failed clean scan and retained compiled evidence, identify the
-   FIRST actual trace rejection: body token, IL offset, opcode or call signature,
-   rejection branch, operand/receiver abstract kinds and declared types. Identify
-   which particular operand is unknown and why (unbound input, unsupported call,
-   missing metadata, ambiguous body, unsupported opcode or lost origin). Do not
-   substitute a list of possibilities for the actual recorded operation.
-4. Give the owner a LOCAL navigation pointer: private source path, method and line
-   if exact PDB/source mapping is available; otherwise method token plus IL offset
-   and the nearest verified sequence point. Do not invent a source line or treat
-   a nearby sequence point as an exact instruction mapping. Save private names and
-   paths in a local note outside Git, and print its local path for the owner to open.
-   The shared report must use synthetic method/type aliases, token/offset and public
-   framework signatures only; keep private code, SQL and values on the work machine.
-5. If the existing evidence cannot locate the rejection or determine the operand,
-   say exactly which field is unavailable. Do not run another scan, invent an
-   explanation, or declare the dirty change safe because it got farther.
+Use the same verified INNER roots and private input hashes, all three flags:
+--il-opaque-root-initializers --il-external-trace-boundary --il-compiled-scalar-boundary.
+Write to a fresh private output directory. Do not alter selections or budgets.
 
-Return at most 30 lines of sanitized text, plus the owner's local-note path.
-No sample code, screenshots or new photos requested. Do not publish the field
-load/store bypass. STOP after the report even if a likely fix seems obvious.
+The new logging-only policy supports scalar/fresh trace-array local stores and
+exact signed mscorlib 2/4 StackTrace::.ctor() -> GetFrame(Int32) ->
+StackFrame.GetMethod() -> MemberInfo.get_Name. Frame indices must be known 0..31.
+It never executes reflection, determines the runtime stack or invents method names.
+Names remain unbound strings with partial receipts and normal-return/non-null/
+unmodeled-stack assumptions. Stack/reflection references cannot be stored in locals,
+passed to arbitrary calls or escape the chain. General reflection remains refused.
+
+Versioned limits: 128 instructions/trace chain, 32 stack-name calls/chain, 16 stored
+local slots/chain, existing 16 expression stack/array elements, 32 string computations
+per run, 8 trace chains/root, existing aggregate work/heap/call limits. The field
+receiver refusal and exact allocation/execution identity remain unchanged.
+
+Report clean tool SHA/build basis, versions, input-hash verification, entry count,
+constructor/scalar/trace receipts and actual parameter/attachment/Fill identity.
+If blocked, report the FIRST native gap plus lifecycle.externalTraceFailure or
+lifecycle.fieldAccessFailure when present. Trace diagnostics now include method
+token, IL offset, actual rejected opcode, call signature hash/shape and abstract
+stack kinds. Keep private names/source/values and detailed metadata on the work
+machine; map signature hashes locally and share public framework signatures or
+synthetic aliases only. Unknown metadata stays unknown. Do not infer purity or
+safe dropped stores from getting farther. Keep any owner navigation note local.
+
+Return at most 30 lines of sanitized TEXT, no code/sample transfer or new photos
+requested. STOP after that report. This is not an assertion that the ArrayList
+blocker or the SQL effort is complete.
 
 ---
 

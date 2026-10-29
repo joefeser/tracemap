@@ -151,3 +151,11 @@
 - [x] Author C#/VB regression definitions and update limitations/state and isolated one-scan prompt.
 - [ ] Execute focused/full tests (explicitly deferred by Joe).
 - [ ] Establish actual native failing field operation and completed entry lineage (not claimed).
+
+## Logging-only stack-name expressions — 2026-10-29
+- [x] Preserve scalar/fresh-array local stores and recognize exact signed closed stack-name chains with unbound string receipts.
+- [x] Bound calls/locals/frame indices and version the 128-instruction chain limit; preserve field and general-reflection refusals.
+- [x] Emit exact trace rejection site/opcode/call-shape/stack-kind diagnostics.
+- [x] Author independent C#/VB positive/negative controls; compile fixture and test projects with -warnaserror; update limitations, state and one-scan prompt.
+- [ ] Execute focused/full tests (explicitly deferred by Joe).
+- [ ] Confirm native entry lineage and actual remaining field operation (not claimed).
