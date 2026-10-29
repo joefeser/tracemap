@@ -184,5 +184,5 @@
 - [x] Preserve parameter/Fill/result identity and summarize post-Fill names as unbound under a separate entry schema.
 - [x] Author independent C#/VB whole-path fixtures, callback/metadata/identity/reuse/cross-connection negative controls, native CLI and replay tests.
 - [x] Complete focused and full Debug -warnaserror gates on the final code (198 focused; 5652 full passed, 3 existing skips, 0 failures; no warnings).
-- [ ] Publish implementation plus one-scan work-machine prompt after local gates pass.
+- [x] Publish implementation 850042739468b57bf3b261bcabaaad344874221e plus one-scan work-machine prompt after local gates pass.
 - [ ] Establish private entry lineage and consumer schema comparison (not claimed).

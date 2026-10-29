@@ -4,6 +4,8 @@
 ## Current continuation — 2026-10-29 InfoMessage boundary
 
 Branch `codex/sql-compiled-wrapper-evidence`; baseline 97e2a2ab4, initially clean.
+Implementation `850042739468b57bf3b261bcabaaad344874221e` committed and pushed; the following
+docs-only publication receipt pins that implementation in the work-machine prompt.
 Independent public C#/VB fixture shape, not employer source or identifiers.
 Extractor 0.2.22 / policy v23, opt-in `--il-info-message-boundary`, separate
 `il-sql-lifecycle-info-message-entry/1`. No default-mode refusal was relaxed.

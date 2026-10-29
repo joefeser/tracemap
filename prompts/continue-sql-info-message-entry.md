@@ -2,8 +2,13 @@
 
 This supersedes the prior inspection-only prompts for this next run. The public
 implementation is extractor 0.2.22, evidence policy explicit-il-body-evidence.v23,
-InfoMessage policy explicit-sql-info-message/1. Use the implementation commit that
-adds this prompt (or its docs-only child), verified in fetched branch history.
+InfoMessage policy explicit-sql-info-message/1.
+
+EXPECTED_IMPLEMENTATION_COMMIT: `850042739468b57bf3b261bcabaaad344874221e`
+
+Use that exact implementation or a verified docs-only descendant. Record the
+actual build SHA and verify that any descendant changes only documentation/prompts,
+not implementation, fixtures, tests or rules. Do not use a dirty tool build.
 
 Read AGENTS.md. Preserve existing dirty patches, inputs, receipts and outputs.
 Use an isolated clean public tool checkout; do not reset, clean, overwrite or apply
