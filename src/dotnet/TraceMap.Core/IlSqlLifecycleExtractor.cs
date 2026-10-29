@@ -12,7 +12,7 @@ namespace TraceMap.Core;
 internal static partial class IlSqlLifecycleExtractor
 {
     internal const string Schema = "il-sql-lifecycle/1";
-    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. Entry producers/loaders retain unbound argument origins; unknown control or required scalar values refuse. Entry facts are separate from column-read comparison facts. Opt-in opaque root scalar initialization uses a separate entry schema, conditional normal-return and tracked-heap noninterference assumptions, and unmodeled external effects; it is not constructor-completion or purity proof. No source, deployment, session, framework, type, nullability, value or migration proof.";
+    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. Entry producers/loaders retain unbound argument origins; unknown control or required scalar values refuse. Entry facts are separate from column-read comparison facts. Opt-in opaque root scalar initialization uses a separate entry schema, conditional normal-return and tracked-heap noninterference assumptions, and unmodeled external effects; it is not constructor-completion or purity proof. Opt-in inspected InfoMessage callbacks retain external-event dependence and partial post-Fill result naming under a separate schema; callback execution, names, table count and naming success remain unproven. No source, deployment, session, framework, type, nullability, value or migration proof.";
     internal static bool IsReadRoot(IlBodyObservation body)
         => body.ObjectBody is { HasThis: true, ParameterCount: <= 1, ReturnsValue: true, IsGeneric: false, IsVirtual: false } meta
             && (meta.ParameterCount == 0
@@ -69,6 +69,7 @@ internal static partial class IlSqlLifecycleExtractor
             + (OpaqueInitializers?.Any(initializer => initializer.CompiledCallees is { Count: > 0 }) == true
                 ? ";compiled-scalar-normal-return-assumed;compiled-scalar-internal-control-unmodeled;transitive-effects-unmodeled" : "")
             + (TraceStringComputations is { Count: > 0 } ? ";computed-string-values-unbound;argument-computation-normal-return-assumed" : "")
+            + (InfoMessages is { Count: > 0 } ? ";info-message-and-naming-normal-return-assumed;info-message-event-timing-unproven;callback-values-unbound;external-effects-unmodeled;result-names-unbound" : "")
             + (ExternalTraces is { Count: > 0 } ? ";external-trace-normal-return-assumed;trace-receiver-non-null-unproven;tracked-heap-noninterference-assumed;external-effects-unmodeled" : "");
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ExternalTrace>? ExternalTraces { get; init; }
@@ -92,6 +93,12 @@ internal static partial class IlSqlLifecycleExtractor
         public OpaqueChainRejection? OpaqueInitializerRejection { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ConstructorOwnerView>? ConstructorOwnerViews { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<InfoMessageReceipt>? InfoMessages { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<ResultNamingReceipt>? ResultNaming { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public InfoMessageRejection? InfoMessageFailure { get; init; }
     }
     internal sealed record InvocationFrame(Site Entry, string MetadataToken, Site? Caller);
     internal sealed record OpcodeRejection(BodyMetadataFailure SelectedRoot, Site Site, string MetadataToken,
@@ -137,9 +144,9 @@ internal static partial class IlSqlLifecycleExtractor
     }
 
     internal static Result Extract(Body root, IReadOnlyList<Body> bodies, bool enabled,
-        IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers = false, bool externalTraceBoundary = false, bool compiledScalarBoundary = false)
+        IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers = false, bool externalTraceBoundary = false, bool compiledScalarBoundary = false, bool infoMessageBoundary = false)
     {
-        var machine = new Machine(bodies, budget, opaqueRootInitializers, externalTraceBoundary, compiledScalarBoundary);
+        var machine = new Machine(bodies, budget, opaqueRootInitializers, externalTraceBoundary, compiledScalarBoundary, infoMessageBoundary);
         try { return machine.Run(root, enabled); }
         catch (Refusal error) { return new Result([], [], null, [error.Message]) { MetadataFailure = error.MetadataFailure,
             OpaqueInitializers = machine.Initializers.Count > 0 ? machine.Initializers.ToArray() : null,
@@ -150,10 +157,12 @@ internal static partial class IlSqlLifecycleExtractor
             ExternalTraceFailure = machine.TraceFailure,
             OpcodeFailure = machine.OpcodeFailure,
             OpaqueInitializerRejection = machine.ReportedOpaqueRejection,
+            InfoMessages = machine.InfoReceipts.Count > 0 ? machine.InfoReceipts.ToArray() : null,
+            ResultNaming = machine.NamingReceipts.Count > 0 ? machine.NamingReceipts.ToArray() : null, InfoMessageFailure = machine.InfoFailure,
             ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
     }
 
-    private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary, bool compiledScalarBoundary)
+    private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary, bool compiledScalarBoundary, bool infoMessageBoundary)
     {
         private readonly Dictionary<string, ObjectState> heap = new(StringComparer.Ordinal);
         private readonly List<Execution> executions = [];
@@ -199,6 +208,7 @@ internal static partial class IlSqlLifecycleExtractor
             selectedRootMetadata = MetadataFailure(root, "selected-root");
             var meta = root.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable", MetadataFailure(root, "root-metadata"));
             var readRoot = IsReadRoot(root.Observation);
+            if (infoMessageBoundary && readRoot) throw new Refusal("lifecycle-info-entry-roots-only");
             var producer = IlSqlLifecycleApis.ReturnsDataSet(meta.MemberReference);
             var loader = IlSqlLifecycleApis.ReturnsVoid(meta.MemberReference);
             if (meta.IsVirtual || meta.IsGeneric || meta.Name is ".ctor" or ".cctor"
@@ -235,6 +245,8 @@ internal static partial class IlSqlLifecycleExtractor
                 { OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null,
                     ExternalTraces = TraceBoundaries.Count > 0 ? TraceBoundaries.ToArray() : null,
                     TraceStringComputations = StringComputations.Count > 0 ? StringComputations.ToArray() : null,
+                    InfoMessages = InfoReceipts.Count > 0 ? InfoReceipts.ToArray() : null,
+                    ResultNaming = NamingReceipts.Count > 0 ? NamingReceipts.ToArray() : null,
                     ConstructorOwnerViews = OwnerViews.Count > 0 ? OwnerViews.ToArray() : null };
             if (readRoot) return completed;
             if (executions.Count == 0) throw new Refusal("lifecycle-entry-no-sql-execution");
@@ -407,6 +419,13 @@ internal static partial class IlSqlLifecycleExtractor
                         if (continuations.Count == 0 || stack.Count != 0) throw new Refusal("lifecycle-finally-flow-invalid");
                         i = continuations.Pop() - 1; continue;
                     }
+                    if (op == "ldftn" && infoMessageBoundary)
+                    {
+                        if (!calls.TryGetValue(offset, out var function)) throw new Refusal("lifecycle-info-target-missing");
+                        if (i + 1 >= code.Length || code[i + 1][2] != "newobj" || !calls.TryGetValue(offsets[i + 1], out var delegateCall)
+                            || delegateCall.TargetIdentity != IlSqlInfoMessageApis.DelegateCtor) throw new Refusal("lifecycle-info-function-escape");
+                        stack.Add(InfoFunction(function)); continue;
+                    }
                     if (op is "ldfld" or "stfld")
                     {
                         var parts = operand.Split(':', 4);
@@ -438,6 +457,10 @@ internal static partial class IlSqlLifecycleExtractor
                         }
                         if (op == "stfld")
                         {
+                            if (value.Kind == "object" && heap[value.Text].Kind == "info-delegate" && heap[value.Text].Parent != instanceValue)
+                                throw new Refusal("lifecycle-info-delegate-escape");
+                            if (infoCapturedFields.Contains(instanceValue.Text + ":" + identity))
+                                throw new Refusal("lifecycle-info-name-list-field-mutated");
                             if (opaqueFields.Contains(instanceValue.Text + ":" + identity))
                                 throw new Refusal("lifecycle-opaque-field-mutated");
                             if (instance.Frozen) throw new Refusal("lifecycle-parameter-object-mutated");
@@ -466,6 +489,7 @@ internal static partial class IlSqlLifecycleExtractor
                             ?? IlSqlLifecycleApis.Resolve(call.TargetIdentity, bodies.Select(b => b.Observation.ObjectBody?.OwnerType));
                         if (body.Observation.BodyIdentity == externalTraceRoot && depth == 0 && IlSqlTraceStringApis.Resolve(call.TargetIdentity) is { } stringRule)
                             returned = BuildTraceString(call, stringRule, receiver, values, site);
+                        else if (infoMessageBoundary && TryInfoCall(call, op, receiver, values, site, out var infoReturned)) returned = infoReturned;
                         else if (api is not null)
                         {
                             var recordFailure = catchHandlers.Count > 0 && api is "fill" or "table-merge" or "row-write" or "list-add";
@@ -509,7 +533,8 @@ internal static partial class IlSqlLifecycleExtractor
                             if (op == "newobj") receiver = New("custom", targetMeta.OwnerType);
                             else if (targetMeta.Name == ".ctor")
                                 AdmitConstructorOwnerView(body, meta, targets[0], targetMeta, receiver, args, op, site);
-                            returned = Invoke(targets[0], shape.HasThis ? new[] { receiver }.Concat(values).ToArray() : values, depth + 1, site);
+                            if (infoMessageBoundary && TryResultNaming(targets[0], receiver, values, site)) returned = Value.Unknown;
+                            else returned = Invoke(targets[0], shape.HasThis ? new[] { receiver }.Concat(values).ToArray() : values, depth + 1, site);
                             if (op == "newobj") returned = receiver;
                         }
                         }
@@ -647,6 +672,7 @@ internal static partial class IlSqlLifecycleExtractor
                     heap[parameter.Text].Slots.Add(Int(Number(args[2])));
                     return parameter;
                 case "parameter-value":
+                    if (args[0].Kind == "info-function" || args[0].Kind == "object" && (infoMessageBoundary || heap[args[0].Text].Kind == "info-delegate")) throw new Refusal("lifecycle-info-parameter-reference-escape");
                     var valuedParameter = Get(receiver, "parameter");
                     if (valuedParameter.Attached) throw new Refusal("lifecycle-parameter-mutated-after-attachment");
                     valuedParameter.Fields["parameter-value"] = args[0]; return Value.Unknown;
@@ -666,7 +692,7 @@ internal static partial class IlSqlLifecycleExtractor
                     executions.Add(new(execution, Text(cmd.Command), site));
                     var table = New("table"); var state = heap[table.Text];
                     state.Parent = args[0]; state.Execution = execution; state.SchemaExecutions.Add(execution); state.Empty = false;
-                    set.Slots.Add(table); return Int(0);
+                    set.Slots.Add(table); RecordInfoFill(cmd.Parent, args[0], execution); return Int(0);
                 case "tables": _ = Get(receiver, "dataset"); return View("tables", receiver);
                 case "table-add":
                     set = Get(Get(receiver, "tables").Parent, "dataset");

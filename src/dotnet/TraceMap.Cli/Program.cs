@@ -561,6 +561,7 @@ public static class TraceMapCommand
             IlOpaqueRootInitializers = values.HasFlag("--il-opaque-root-initializers"),
             IlExternalTraceBoundary = values.HasFlag("--il-external-trace-boundary"),
             IlCompiledScalarBoundary = values.HasFlag("--il-compiled-scalar-boundary"),
+            IlInfoMessageBoundary = values.HasFlag("--il-info-message-boundary"),
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
             CiHintWorkflows = ReadCiHintsOption(values),
@@ -2577,7 +2578,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--index-deps-json" or "--index-ci-producers" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-opaque-root-initializers" or "--il-external-trace-boundary" or "--il-compiled-scalar-boundary" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
+            if (arg is "--restore" or "--index-deps-json" or "--index-ci-producers" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-opaque-root-initializers" or "--il-external-trace-boundary" or "--il-compiled-scalar-boundary" or "--il-info-message-boundary" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
@@ -3111,6 +3112,9 @@ public static class TraceMapCommand
               --il-compiled-scalar-boundary
                                        Opt in to bounded retained static String-to-String transforms inside root scalar initializer chains.
                                        Requires opaque-root-initializers and selected roots; internal control/effects remain unmodeled.
+              --il-info-message-boundary
+                                       Opt in to bounded inspected SqlConnection.InfoMessage callbacks and partial post-Fill naming.
+                                       Requires selected roots; event timing, names, external effects and normal return remain unproven.
               --il-external-trace-boundary
                                        Opt in to exact signed System.Web Current/Trace/Write root chains with scalar string arguments.
                                        Requires selected roots; external effects/throws remain unmodeled and conditional.

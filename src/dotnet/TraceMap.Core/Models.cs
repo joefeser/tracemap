@@ -184,6 +184,7 @@ public sealed record ScanOptions(
     public bool IlOpaqueRootInitializers { get; init; }
     public bool IlExternalTraceBoundary { get; init; }
     public bool IlCompiledScalarBoundary { get; init; }
+    public bool IlInfoMessageBoundary { get; init; }
     public bool IndexDepsJson { get; init; }
     public DepsJsonLimits? DepsJsonLimits { get; init; }
     public string? WebFormsVbImportContextPath { get; init; }
@@ -735,7 +736,7 @@ public static class ScannerVersions
     public const string ManagedMetadataExtractor = "managed-metadata/0.2.0+cecil-0.11.6"; // 0.2.0: ManagedAssemblyDeclared gains runtimeFloor* properties (#853)
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.21+srm-10.0.0+cecil-0.11.6"; // 0.2.21: preserve unknown typed scalar inputs through exact framework value-copy
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.22+srm-10.0.0+cecil-0.11.6"; // 0.2.22: opt-in inspected InfoMessage delegates and partial post-Fill naming
     public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
     public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";

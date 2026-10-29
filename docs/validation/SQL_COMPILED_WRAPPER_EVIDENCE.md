@@ -1068,3 +1068,64 @@ Full-suite skips retained by the existing tests (not counted as passes):
 - OracleGoldenLaneTests.Full_generated_golden_sweep
 - IlCommandBindingExtractorTests.Deep_projectless_Windows_ASPNET_publish_preserves_exact_chain_and_command_binding
 The opt-in full generated golden sweep was not executed.
+
+
+## Opt-in InfoMessage callback and partial result naming (0.2.22 / policy v23)
+
+`--il-info-message-boundary` requires explicit SHA/token-selected entry roots. It
+adds exact signed net48 `SqlInfoMessageEventHandler` construction, instance-field
+storage, `SqlConnection.InfoMessage` subscribe/unsubscribe and connection-linked
+`SqlCommand(string, SqlConnection)` construction. Existing boundary flags remain
+independent. General delegates, LINQ and `ldvirtftn` remain unsupported.
+
+The callback is inspected, not executed. Its exact nonvirtual/nongeneric instance
+signature and complete dual-reader metadata must agree. Bounded CFG analysis
+preserves protected receiver/list origins across branches and locals. Generic
+value-flow summary disagreement does not substitute for or disable this independent
+inspection; raw/call/object agreement is still required. Only own
+private ArrayList fields may be accessed, only strings may be appended, sender
+access and other captured fields refuse, and all calls must match the finite
+signed framework catalogue. XML/string/VB framework evaluation and effects remain
+unmodeled; arbitrary compiled helpers, writes and tracked-reference escapes refuse.
+
+A separate naming-body inspection permits only reads of those lists and writes
+to DataSetName/TableName through the supplied DataSet. It retains the actual filled
+and returned allocation and execution. It does not enumerate the runtime list,
+assume the event fired, evaluate names, prove a table count, verify an ordinal
+mapping or prove normal completion. Index errors, invalid names, duplicate names
+and other runtime failures remain possible. The symbolic list is never treated as
+an empty runtime list or as the custom SQL parameter-object collection.
+
+Facts using the boundary have `il-sql-lifecycle-info-message-entry/1`, with
+`infoMessages` and `resultNaming` receipts. Legacy read/comparison admission remains
+unchanged. Refusals inside inspection include `infoMessageFailure` body/binary/
+token/offset/phase/opcode/call-hash diagnostics; this is inspection evidence, not
+an invocation of the callback. Replacing captured name-list fields after subscription refuses. Shared event
+lists or naming on a DataSet filled
+through another connection refuse. Default mode retains prior refusals.
+
+Bounds: 256 instructions, 4096 inspection steps, 64 locals/stack, 8 handlers per
+body; four own fields and four callback targets; four subscriptions per connection,
+16 event receipts and eight naming receipts per root, plus existing global bounds.
+The independently authored C#/VB `InfoMessage` fixtures include constructor-bound
+instance handlers, fixed prefix checks, XML attributes/iteration, fallback strings,
+swallowed catch paths, separate Open/Fill/rename/return phases,
+custom parameter-object ArrayLists and two fresh executions. Negative controls
+cover captured command access, sender use, event-list reuse, wrong connection,
+wrong framework keys/versions, missing call/body agreement, instruction limits,
+receiver aliases crossing catch paths and name-list escape into SQL parameter values.
+No sample method, callback, SQL command or connection is executed by these tests.
+
+Focused command:
+```
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~LinqPipelineEvidenceTests'
+```
+Full shared-core gate:
+```
+dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'
+```
+Native C#/VB selected-root CLI scans are included in the focused tests and verify
+all five required outputs, separate schema and generator/bounded-input hashes.
+Private lineage, consumer-schema comparison, application runtime, deployment and
+overall SQL completion are not claimed. Adapter/pinned OSS smoke reruns are
+explicitly deferred: no language adapter or source semantic rule changes here.

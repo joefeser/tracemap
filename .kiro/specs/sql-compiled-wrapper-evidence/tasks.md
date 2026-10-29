@@ -176,3 +176,13 @@
 ## Local verified head — 2026-10-29
 - [x] Complete affected LINQ/IlSql controls (179 passed) and full Debug -warnaserror (5633 passed, 3 skipped, 0 failed) after the scalar-copy fix and space correction.
 - [ ] Private selected-root attribution, completed entry lineage and schema acceptance remain unproven.
+
+
+## InfoMessage event and partial result naming — 2026-10-29
+- [x] Inspect clean branch, current interpreter and sanitized structural findings; preserve private material outside Git.
+- [x] Implement opt-in exact delegate/event/connection identities and bounded callback CFG inspection without execution.
+- [x] Preserve parameter/Fill/result identity and summarize post-Fill names as unbound under a separate entry schema.
+- [x] Author independent C#/VB whole-path fixtures, callback/metadata/identity/reuse/cross-connection negative controls, native CLI and replay tests.
+- [x] Complete focused and full Debug -warnaserror gates on the final code (198 focused; 5652 full passed, 3 existing skips, 0 failures; no warnings).
+- [ ] Publish implementation plus one-scan work-machine prompt after local gates pass.
+- [ ] Establish private entry lineage and consumer schema comparison (not claimed).

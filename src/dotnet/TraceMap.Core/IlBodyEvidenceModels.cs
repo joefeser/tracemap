@@ -138,6 +138,7 @@ internal sealed record IlBodyEvaluation(
     internal bool OpaqueRootInitializers { get; init; }
     internal bool ExternalTraceBoundary { get; init; }
     internal bool CompiledScalarBoundary { get; init; }
+    internal bool InfoMessageBoundary { get; init; }
     internal long CompiledMaximumBytes { get; init; } = new CompiledInputLimits().MaxFileSizeBytes;
     internal CancellationToken SliceCancellationToken { get; init; }
     public static readonly IlBodyEvaluation Disabled = new(null, [], [], []);

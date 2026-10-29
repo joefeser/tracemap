@@ -1,5 +1,73 @@
 # Implementation state
 
+
+## Current continuation — 2026-10-29 InfoMessage boundary
+
+Branch `codex/sql-compiled-wrapper-evidence`; baseline 97e2a2ab4, initially clean.
+Independent public C#/VB fixture shape, not employer source or identifiers.
+Extractor 0.2.22 / policy v23, opt-in `--il-info-message-boundary`, separate
+`il-sql-lifecycle-info-message-entry/1`. No default-mode refusal was relaxed.
+
+Implemented exact signed event/delegate/connection signatures, same-instance
+private-field storage, bounded callback CFG inspection and connection-linked
+command identity. Callback is never invoked. Only string appends to own private
+ArrayLists are admitted; sender use, other captured fields, field writes,
+uninspected calls and protected-reference escapes refuse. Exact string/XML/VB
+framework calls remain unmodeled external effects. No arbitrary delegate/LINQ
+support, proprietary-name allowlist, constructor skip or field-store bypass.
+
+Post-Fill naming bodies are separately inspected for protected DataSet/table
+receivers and private-list reads. Receipts retain result allocation/execution,
+while names and ordinal association stay unbound. They assume normal return,
+not event firing or table-count/name success. No runtime list enumeration occurs.
+Reused lists and cross-connection naming refuse. Legacy SQL comparisons are not
+broadened to the new schema; private lineage/consumer comparison remains open.
+
+Final local validation on frozen code:
+- Affected IL SQL + source LINQ lane: **198 passed, 0 failed, 0 skipped**, exit 0,
+  no warnings (`/tmp/tracemap-info-final-mutation-regression.log`).
+- Full Debug `-warnaserror`: **5652 passed, 3 skipped, 0 failed**, exit 0,
+  40.3804 minutes (`/tmp/tracemap-info-full-debug-frozen.log`). Existing skips:
+  opt-in exhaustive Oracle golden sweep, native HTTP receipt interop, and deep
+  Windows ASP.NET publish. These paths are not claimed executed.
+- Native C#/VB selected-root CLI scans are in the focused/full gates: both emit
+  the separate schema, generator/bounded-input hashes and all five outputs.
+- `git diff --check` passed. Pinned OSS/adapter smoke reruns explicitly deferred:
+  no language adapter or source semantic rule changed. No private execution.
+
+Exact commands:
+```
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~LinqPipelineEvidenceTests'
+dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'
+```
+
+The final fixtures include fixed prefix checks, XML attributes/iteration,
+fallback strings and swallowed catch paths. The expanded fixtures caught cgt.un
+null checks; support is confined to the inspector. Generic value-flow summary
+disagreement does not replace independent raw/call/object agreement. Negative
+controls reject captured command/sender access, exception-local receiver escape,
+name-list escape into parameter values, captured list-field replacement, list
+reuse, cross-connection naming, wrong identities and incomplete/oversize metadata.
+The original negative field warning was fixed by explicit initialization, without
+suppression. Three preliminary full runs were cancelled for fixture/safety
+improvements; none is counted as passing. Only the final frozen run above passed.
+
+Changed files in this continuation:
+- Core: IlSqlInfoMessageBoundary.cs, IlSqlLifecycleExtractor.cs,
+  IlBodyEvidenceExtractor.cs, IlBodyEvidenceModels.cs, Models.cs.
+- CLI: Program.cs (new flag parsing/help).
+- Tests: IlSqlInfoMessageTests.cs (19 C#/VB cases including native scans).
+- Samples: csharp/end-to-end/InfoMessage.cs and vb/end-to-end/InfoMessage.vb
+  under samples/sql-compiled-wrapper-evidence/.
+- Documentation: this state, spec tasks.md, rules/rule-catalog.yml,
+  docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md and the new follow-up prompt.
+
+Active follow-up prompt: `prompts/continue-sql-info-message-entry.md`, one clean
+build + one scan + one sanitized report and stop, using the same selected inner
+roots and prior three flags plus the new flag. This is not overall SQL completion.
+
+---
+
 Base `d6186b1dc91e988e0b69d79bbc7915025fe8097a`; branch
 `codex/sql-compiled-wrapper-evidence`. Whole-path matrix authored before extractor
 changes. No private input, SQL or container execution authorized in this package.

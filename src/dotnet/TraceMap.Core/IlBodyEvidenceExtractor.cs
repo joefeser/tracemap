@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v22";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v23";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -45,6 +45,8 @@ internal static class IlBodyEvidenceExtractor
         var rootSelections = IlLifecycleRootSelection.Parse(options.IlLifecycleRoots);
         if (options.IlCompiledScalarBoundary && (!options.IlOpaqueRootInitializers || rootSelections.Count == 0))
             throw new ArgumentException("compiled-scalar-boundary-requires-opaque-selected-roots");
+        if (options.IlInfoMessageBoundary && rootSelections.Count == 0)
+            throw new ArgumentException("info-message-boundary-requires-selected-roots");
         if (options.IlExternalTraceBoundary && rootSelections.Count == 0)
             throw new ArgumentException("external-trace-boundary-requires-selected-roots");
         if (options.IlOpaqueRootInitializers && rootSelections.Count == 0)
@@ -185,6 +187,7 @@ internal static class IlBodyEvidenceExtractor
             expectedInputs = expected,
             effectiveLimits = limits,
             lifecycleRootSelections = rootSelections,
+            infoMessageBoundary = new { enabled = options.IlInfoMessageBoundary, policy = IlSqlLifecycleExtractor.InfoMessagePolicy, maxInstructions = 256, maxInspectionSteps = 4096, maxFields = 4, maxSubscriptions = 4, maxReceipts = 16, maxNamingReceipts = 8 },
             compiledScalarBoundary = new { enabled = options.IlCompiledScalarBoundary,
                 policy = IlSqlLifecycleExtractor.CompiledScalarPolicy, maxInstructions = 128, maxHandlers = 4,
                 maxCalls = 32, maxLocals = 32, maxStack = 16, maxSummaries = 4 },
@@ -250,7 +253,7 @@ internal static class IlBodyEvidenceExtractor
             .Select(value => $"IL body evidence coverage reduced: {value}.")
             .ToArray();
         return new IlBodyEvaluation(provenance, evaluated, knownGaps, admitted)
-        { LifecycleRoots = rootSelections, OpaqueRootInitializers = options.IlOpaqueRootInitializers, ExternalTraceBoundary = options.IlExternalTraceBoundary, CompiledScalarBoundary = options.IlCompiledScalarBoundary, CompiledMaximumBytes = compiledMaximumBytes, SliceCancellationToken = cancellationToken };
+        { LifecycleRoots = rootSelections, OpaqueRootInitializers = options.IlOpaqueRootInitializers, ExternalTraceBoundary = options.IlExternalTraceBoundary, CompiledScalarBoundary = options.IlCompiledScalarBoundary, InfoMessageBoundary = options.IlInfoMessageBoundary, CompiledMaximumBytes = compiledMaximumBytes, SliceCancellationToken = cancellationToken };
     }
 
     private static IEnumerable<string> DistinctGapKinds(IReadOnlyList<IlInputOutcome> outcomes, List<string> globalGapKinds) =>
@@ -733,9 +736,11 @@ internal static class IlBodyEvidenceExtractor
                     ? IlSqlLifecycleExtractor.Schema : IlSqlLifecycleExtractor.EntrySchema;
                 var result = slice?.Failure is { } sliceFailure
                     ? new IlSqlLifecycleExtractor.Result([], [], null, [sliceFailure])
-                    : IlSqlLifecycleExtractor.Extract(root, scopedBodies, enabled, budget, evaluation.OpaqueRootInitializers, evaluation.ExternalTraceBoundary, evaluation.CompiledScalarBoundary);
+                    : IlSqlLifecycleExtractor.Extract(root, scopedBodies, enabled, budget, evaluation.OpaqueRootInitializers, evaluation.ExternalTraceBoundary, evaluation.CompiledScalarBoundary, evaluation.InfoMessageBoundary);
                 if (result.OpaqueInitializers is { Count: > 0 } || result.ExternalTraces is { Count: > 0 } || result.TraceStringComputations is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.OpaqueEntrySchema;
+                if (result.InfoMessages is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.InfoMessageSchema;
                 var common = new Dictionary<string, string>(CommonProperties(provenance, root.Input), StringComparer.Ordinal);
+                if (evaluation.InfoMessageBoundary) common["infoMessagePolicy"] = IlSqlLifecycleExtractor.InfoMessagePolicy;
                 if (evaluation.CompiledScalarBoundary)
                     common["compiledScalarPolicy"] = IlSqlLifecycleExtractor.CompiledScalarPolicy;
                 if (evaluation.ExternalTraceBoundary)
@@ -771,6 +776,7 @@ internal static class IlBodyEvidenceExtractor
                         ("sqlLifecycleSchema", lifecycleSchema), ("guard", guard), ("gapKind", gap),
                         ("limitation", IlSqlLifecycleExtractor.Limitation)
                     });
+                    if (result.InfoMessageFailure is not null) gapProperties["infoMessageFailure"] = SqlServerSchemaEvidence.Json(result.InfoMessageFailure);
                     if (result.OpaqueInitializerRejection is not null)
                         gapProperties["opaqueInitializerRejection"] = SqlServerSchemaEvidence.Json(result.OpaqueInitializerRejection);
                     if (result.FieldAccessFailure is not null)
