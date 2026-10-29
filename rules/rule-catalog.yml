@@ -322,6 +322,17 @@ rules:
       - At most 4096 indexed bodies, 256 instructions per body, 64 fields, 2048 interpreted steps, 16 call depth, 64 heap objects, 256 evidence sites, 16 parameters and 64 stack/local slots. Retained instruction/field text has a separate bounded per-reader character budget capped at 1048576; interpreter work is separately capped at the provenance-bound MaxTotalWorkUnits. Limits are explicit unknowns and never absence proof.
       - Legacy source and IL routes are unchanged. No complex DDL admission, joins, schema union validation, server identity or private-application acceptance is established by this candidate.
 
+  - id: dotnet.semantic.linq-pipeline.v1
+    description: Compiler-bound C#/VB object grouping with captured count and named DataTable row-to-object projection dependencies.
+    evidenceTier: Tier1Semantic
+    emits: [LinqPipelineCandidate, AnalysisGap]
+    limitations:
+      - Source-semantic expression dependencies only. Does not execute callbacks, prove purity/equality/enumeration/cardinality/row existence/conversion success, bind a table to SqlDataAdapter.Fill, establish runtime allocation identity, serialize objects or authorize compiled lifecycle delegates. Existing SQL routes and comparisons are unchanged.
+      - Object collection reference -> exact signed Enumerable.GroupBy(identity) -> anonymous Select of grouping Key and Count -> Where of projected count equality against an external Int32 reference, optionally ToList. Captured values and default equality behavior remain unknown. Alternate keys, comparer overloads, indexed selectors, queryable providers and arbitrary helpers refuse or lie outside the rule.
+      - DataTable symbol or DataSet.Tables[constant ordinal 0..15] -> signed DataTableExtensions.AsEnumerable -> Enumerable/EnumerableRowCollectionExtensions.Select -> ToList. Parameterless typed object initializers assign only constant-name DataRow reads with observed Object/String.ToString, String.Trim, Int32.Parse(string) or direct scalar conversions. Dynamic columns, user conversions, arbitrary builders and unresolved sources refuse. Constructor/setter/ToString effects and null/value behavior are not proved.
+      - Signed declaration names, keys, versions, types, generic arities and non-indexed callback signatures are required. This is metadata binding, not binary authentication. Legacy profiles are mscorlib/System.Data 2.0.0.0 or 4.0.0.0 and System.Core/DataSetExtensions 3.5.0.0 or 4.0.0.0; modern signed System.Linq/Data.Common/Runtime/CoreLib profiles use major 4..10 with zero remaining version components and appropriate identity keys.
+      - Bounds are 20000 syntax nodes/document, 128 pipeline sites/document, 512 operations/expression, 128 operations/callback and 16 mappings. Loops, conditional callbacks, handlers, await/throws, unknown helpers and pipeline reconstruction across aliases are not modeled. Member/capture/column identifiers are hashed; no source snippets or values are retained. No dynamic DataTable.Select predicate or CopyToDataTable support. Tests are authored and compile-checked, not executed.
+
   - id: dotnet.compiled.il-sql-lifecycle.v1
     description: Separate guarded compiled SQL lifecycle candidate with execution-specific table ancestry, helper writes, raw and typed-projection reads, and potential partial-operation boundaries.
     evidenceTier: Tier3SyntaxOrTextual

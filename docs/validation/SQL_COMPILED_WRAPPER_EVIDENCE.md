@@ -941,3 +941,24 @@ opcode-path attribution, emitted native trace/opcode diagnostics and separation
 of an unrelated delegate root from a selected producer. Tests/scans remain deferred
 by Joe. The prompt permits at most one isolated build and one scan, then stop.
 No LINQ support, delegate bypass, field bypass, bound increase or completion claim.
+
+## Separate source-semantic LINQ evidence — 2026-10-29
+
+Rule `dotnet.semantic.linq-pipeline.v1` / extractor `linq-pipeline-evidence/0.1.0`
+adds compiler-bound C#/VB dependency candidates for object identity-grouping with
+anonymous key/count projection and an external count predicate, and DataTable row
+projection into typed properties/fields through a bounded named-column/conversion
+subset. Source table/dataset symbol references and constant table ordinals remain
+references, not proved Fill allocation/execution associations. Grouping equality,
+enumeration, callback/constructor/setter effects, values and conversion success
+remain unproven. Hashed member/column/capture identities replace raw names.
+
+These `LinqPipelineCandidate` facts are separate from existing SQL consumer and
+compiled lifecycle facts. Existing refusals and schema comparisons are not relaxed;
+in particular compiled `ldftn` is still refused. This source feature does not close
+the ArrayList blocker. Dynamic DataTable.Select strings remain out of scope.
+
+See `.kiro/specs/bounded-linq-pipeline-evidence/implementation-state.md` for exact
+bounds, signed declaration profiles, supported transformations and outstanding
+validation. Independent public C#/VB fixtures and tests are authored; compilation
+is checked, tests and scans remain deferred by Joe.

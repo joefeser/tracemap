@@ -462,6 +462,7 @@ public static class FactTypes
     public const string ManagedIlDatabaseCommandCandidate = nameof(ManagedIlDatabaseCommandCandidate);
     public const string ManagedIlSqlShapeCandidate = nameof(ManagedIlSqlShapeCandidate);
     public const string ManagedIlSqlObjectPathCandidate = nameof(ManagedIlSqlObjectPathCandidate);
+    public const string LinqPipelineCandidate = nameof(LinqPipelineCandidate);
     public const string ManagedIlSqlLifecycleCandidate = nameof(ManagedIlSqlLifecycleCandidate);
     public const string ManagedIlSqlLifecycleEntryCandidate = nameof(ManagedIlSqlLifecycleEntryCandidate);
     public const string ManagedIlRewriteObserved = nameof(ManagedIlRewriteObserved);
@@ -702,6 +703,7 @@ public static class RuleIds
     public const string DotNetIlCommandBinding = "dotnet.compiled.il-command-binding.v1";
     public const string DotNetIlSqlShape = "dotnet.compiled.il-sql-shape.v1";
     public const string DotNetIlSqlObjectPath = "dotnet.compiled.il-sql-object-path.v1";
+    public const string DotNetSemanticLinqPipeline = "dotnet.semantic.linq-pipeline.v1";
     public const string DotNetIlSqlLifecycle = "dotnet.compiled.il-sql-lifecycle.v1";
     public const string DotNetIlGap = "dotnet.compiled.il-gap.v1";
     public const string DotNetIlRewrite = "dotnet.compiled.il-rewrite.v1";
@@ -758,5 +760,6 @@ public static class ScannerVersions
     public const string LegacyDataSymbolComposition = "legacy-data-composition/0.1.0";
     public const string AccessExtractor = "legacy-access/0.3.2";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
+    public const string LinqPipelineEvidenceExtractor = "linq-pipeline-evidence/0.1.0";
     public const string RazorBindingExtractor = "csharp-razor-binding/0.1.0";
 }

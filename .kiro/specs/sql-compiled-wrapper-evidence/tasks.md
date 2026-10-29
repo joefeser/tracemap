@@ -166,3 +166,7 @@
 - [x] Author public C#/VB and native attribution/isolation regression definitions; update limitations/state and one-scan prompt.
 - [ ] Execute focused/full tests (explicitly deferred by Joe).
 - [ ] Reconcile private gap fact/root/binary attribution and establish native lineage (not claimed).
+
+## Separate source LINQ evidence follow-up — 2026-10-29
+- [x] Add independent C#/VB synthetic object-grouping and DataTable projection cases with a separate semantic evidence rule; see bounded-linq-pipeline-evidence spec.
+- [ ] Compiled LINQ/delegate interpretation and native ArrayList blocker closure remain unimplemented/unproven; no lifecycle refusal was relaxed.

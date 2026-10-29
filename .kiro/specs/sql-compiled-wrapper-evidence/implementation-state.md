@@ -1229,3 +1229,12 @@ by Joe. The prompt permits at most one isolated build and one scan, then stop.
 No LINQ support, delegate bypass, field bypass, bound increase or completion claim.
 
 Compile-only validation: C# and VB end-to-end fixture builds plus `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror` passed with zero warnings/errors (CLI included). An initial test compilation failed for a missing CLI namespace import; corrected before the successful final build. `git diff --check` passed. No tests/scans executed.
+
+## Separate LINQ source coverage — 2026-10-29
+
+A separate bounded C#/VB semantic pipeline rule was added under
+`.kiro/specs/bounded-linq-pipeline-evidence/`. It records object grouping/captured
+count and DataTable column-to-object projection dependencies. This does NOT add
+compiled delegate/LINQ interpretation or change the active opcode-attribution
+protocol. Dynamic DataTable.Select predicates remain excluded. Do not retry a
+compiled-only acceptance scan expecting this source feature to clear ldftn.
