@@ -87,10 +87,16 @@ internal static partial class IlSqlLifecycleExtractor
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public ExternalTraceRejection? ExternalTraceFailure { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public OpcodeRejection? OpcodeFailure { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public OpaqueChainRejection? OpaqueInitializerRejection { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ConstructorOwnerView>? ConstructorOwnerViews { get; init; }
     }
+    internal sealed record InvocationFrame(Site Entry, string MetadataToken, Site? Caller);
+    internal sealed record OpcodeRejection(BodyMetadataFailure SelectedRoot, Site Site, string MetadataToken,
+        string Opcode, int RetainedInstructionCount, IReadOnlyList<InvocationFrame> InvocationPath,
+        string Limitation = "actual-interpreter-invocations;not-whole-program-runtime-reachability;no-opcode-bypass");
     internal sealed record BodyMetadataFailure(string Stage, string Body, string Binary, string MetadataToken,
         int InstructionCount, IlObjectBodyRetention? Retention, IlObjectBodyAgreement? Agreement,
         int? AdmittedConstructorMatches = null, int? UnavailableBodiesInModule = null);
@@ -142,6 +148,7 @@ internal static partial class IlSqlLifecycleExtractor
             FieldOwnerFailure = machine.OwnerFailure,
             FieldAccessFailure = machine.FieldAccessFailure,
             ExternalTraceFailure = machine.TraceFailure,
+            OpcodeFailure = machine.OpcodeFailure,
             OpaqueInitializerRejection = machine.ReportedOpaqueRejection,
             ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
     }
@@ -154,6 +161,9 @@ internal static partial class IlSqlLifecycleExtractor
         private readonly List<Loop> loops = [];
         private readonly List<Failure> failures = [];
         private readonly List<Site> invokedBodies = [];
+        private readonly List<InvocationFrame> invocationPath = [];
+        private BodyMetadataFailure? selectedRootMetadata;
+        internal OpcodeRejection? OpcodeFailure;
         private readonly Stack<Site> catchHandlers = new();
         private readonly HashSet<string> active = new(StringComparer.Ordinal);
         private int frame, work;
@@ -186,6 +196,7 @@ internal static partial class IlSqlLifecycleExtractor
             if (bodies.Count > 4096 || !budget.TryConsume(bodies.Count)) throw new Refusal("lifecycle-index-limit");
             if (!bodies.Contains(root) || bodies.GroupBy(b => b.Observation.MethodIdentity, StringComparer.Ordinal).Any(g => g.Count() != 1))
                 throw new Refusal("lifecycle-ambiguous-input");
+            selectedRootMetadata = MetadataFailure(root, "selected-root");
             var meta = root.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable", MetadataFailure(root, "root-metadata"));
             var readRoot = IsReadRoot(root.Observation);
             var producer = IlSqlLifecycleApis.ReturnsDataSet(meta.MemberReference);
@@ -257,19 +268,22 @@ internal static partial class IlSqlLifecycleExtractor
                 returnedSet, outputs, stored, tables, commands) };
         }
 
-        private Value Invoke(Body body, Value[] args, int depth)
+        private Value Invoke(Body body, Value[] args, int depth, Site? caller = null)
         {
             var meta = body.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable", MetadataFailure(body, "callee-metadata"));
             if (depth >= 24 || !active.Add(body.Observation.MethodIdentity)) throw new Refusal("lifecycle-recursion-limit");
+            var pathAdded = false;
             try
             {
                 if (body.Input.Outcome != "admitted" || body.Input.GapKinds.Count != 0
                     || body.Input.RawFileSha256 is not { Length: 64 } sha || sha.Any(c => !char.IsAsciiHexDigit(c))
                     || !Guid.TryParse(body.Input.ModuleMvid, out _)) throw new Refusal("lifecycle-provenance-unavailable");
                 if (meta.IsVirtual || meta.IsGeneric || meta.Instructions.Count > 256
-                    || args.Length != meta.ParameterCount + (meta.HasThis ? 1 : 0)) throw new Refusal("lifecycle-body-shape");
+                    || args.Length != meta.ParameterCount + (meta.HasThis ? 1 : 0)) throw new Refusal("lifecycle-body-shape", MetadataFailure(body, "body-shape"));
                 var invocation = ++frame;
                 invokedBodies.Add(At(body, 0, invocation));
+                invocationPath.Add(new(At(body, 0, invocation), body.Observation.MetadataToken, caller));
+                pathAdded = true;
                 var code = meta.Instructions.Select(line => line.Split(':', 4)).ToArray();
                 if (code.Any(p => p.Length != 4)) throw new Refusal("lifecycle-invalid-instruction");
                 var offsets = code.Select(p => Offset(p[1])).ToArray();
@@ -495,7 +509,7 @@ internal static partial class IlSqlLifecycleExtractor
                             if (op == "newobj") receiver = New("custom", targetMeta.OwnerType);
                             else if (targetMeta.Name == ".ctor")
                                 AdmitConstructorOwnerView(body, meta, targets[0], targetMeta, receiver, args, op, site);
-                            returned = Invoke(targets[0], shape.HasThis ? new[] { receiver }.Concat(values).ToArray() : values, depth + 1);
+                            returned = Invoke(targets[0], shape.HasThis ? new[] { receiver }.Concat(values).ToArray() : values, depth + 1, site);
                             if (op == "newobj") returned = receiver;
                         }
                         }
@@ -508,7 +522,9 @@ internal static partial class IlSqlLifecycleExtractor
                         if (stack.Count != (meta.ReturnsValue ? 1 : 0)) throw new Refusal("lifecycle-return-stack");
                         return meta.ReturnsValue ? Pop() : Value.Unknown;
                     }
-                    throw new Refusal("lifecycle-opcode:" + op);
+                    OpcodeFailure = new(selectedRootMetadata!, At(body, offset, invocation), body.Observation.MetadataToken,
+                        op, meta.Instructions.Count, invocationPath.ToArray());
+                    throw new Refusal("lifecycle-opcode:" + op, MetadataFailure(body, "opcode"));
                 }
                 throw new Refusal("lifecycle-no-return");
                 int Index(long offset)
@@ -517,7 +533,7 @@ internal static partial class IlSqlLifecycleExtractor
                     return index >= 0 ? index : throw new Refusal("lifecycle-handler-offset-invalid");
                 }
             }
-            finally { active.Remove(body.Observation.MethodIdentity); }
+            finally { if (pathAdded) invocationPath.RemoveAt(invocationPath.Count - 1); active.Remove(body.Observation.MethodIdentity); }
         }
 
         private Value Framework(string api, Value receiver, Value[] args, Site site)

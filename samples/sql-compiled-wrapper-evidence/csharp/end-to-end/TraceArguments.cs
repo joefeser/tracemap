@@ -31,6 +31,13 @@ namespace PublicSql.CSharp
             return EntryProtocol.ProduceInputs(1, 2, message, true);
         }
         private static string UnknownBuilder(string message) { return message; }
+        public DataSet TraceDelegateOpcodeRefusal(string message)
+        {
+            var callback = new System.Func<string, string>(PublicIdentity);
+            System.GC.KeepAlive(callback);
+            return EntryProtocol.ProduceInputs(1, 2, message, true);
+        }
+        private static string PublicIdentity(string value) { return value; }
         public DataSet TraceComputedCommandRefusal(string message)
         {
             var command = string.Concat("public-", message);

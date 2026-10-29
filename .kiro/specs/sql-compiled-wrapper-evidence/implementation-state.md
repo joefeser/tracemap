@@ -1198,3 +1198,34 @@ helpers, branch/handler/loop-crossing trace expressions, and non-custom field
 receivers remain unsupported. A later field-receiver failure was reported only
 from a dirty tool; its exact operation is still unproven on the clean path. Native
 entry lineage, owner-schema comparison and overall SQL completion remain unproven.
+
+## Exact opcode attribution and native gap wiring — 2026-10-29
+
+Extractor 0.2.20 / policy v21 fixes a diagnostic integration omission: interpreter
+FieldAccessFailure and ExternalTraceFailure were not serialized onto AnalysisGap
+facts. They now appear as fieldAccessFailure and externalTraceFailure properties.
+Earlier absence of these properties could not establish successful or unreached
+phases. This corrects prior handoff assumptions. No admission changes are made.
+
+Generic unsupported-opcode refusals now emit opcodeFailure with selected-root
+metadata, actual failing body/binary/token/offset, retained instruction count and
+a snapshot of the actual bounded interpreter invocation path. Each frame records
+its entry/invocation and caller site; the path uses the existing depth 24 bound
+and is captured before unwind. Constructor entry is distinguished by selected-root
+metadata even when the initial frame is the root constructor. Body-shape refusals
+also retain bodyMetadataFailure. Invocation evidence is not runtime reachability.
+
+Code inspection confirms selected-root slicing follows forward reference edges
+plus the root constructor, and interpretation invokes exact matched call targets.
+A body being present in the corpus/slice does not itself execute that body. An
+unreachable sibling's opcode gap therefore requires checking exact fact rule/root,
+module-local token AND binary, actual call resolution and receipt provenance;
+no corpus-wide interpretation cause is established by the private report.
+
+Public C#/VB delegate-refusal fixtures and regression definitions cover nested
+opcode-path attribution, emitted native trace/opcode diagnostics and separation
+of an unrelated delegate root from a selected producer. Tests/scans remain deferred
+by Joe. The prompt permits at most one isolated build and one scan, then stop.
+No LINQ support, delegate bypass, field bypass, bound increase or completion claim.
+
+Compile-only validation: C# and VB end-to-end fixture builds plus `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror` passed with zero warnings/errors (CLI included). An initial test compilation failed for a missing CLI namespace import; corrected before the successful final build. `git diff --check` passed. No tests/scans executed.

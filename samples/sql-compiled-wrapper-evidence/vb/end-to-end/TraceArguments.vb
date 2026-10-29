@@ -26,6 +26,14 @@ Namespace PublicSql.VisualBasic
         Private Shared Function UnknownBuilder(message As String) As String
             Return message
         End Function
+        Public Function TraceDelegateOpcodeRefusal(message As String) As DataSet
+            Dim callback As New System.Func(Of String, String)(AddressOf PublicIdentity)
+            System.GC.KeepAlive(callback)
+            Return EntryProtocol.ProduceInputs(1, 2, message, True)
+        End Function
+        Private Shared Function PublicIdentity(value As String) As String
+            Return value
+        End Function
         Public Function TraceComputedCommandRefusal(message As String) As DataSet
             Dim command = String.Concat("public-", message)
             Return Wrapper.ArrayInputs(command, New System.Collections.ArrayList())

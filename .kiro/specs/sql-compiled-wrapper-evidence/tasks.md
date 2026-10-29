@@ -159,3 +159,10 @@
 - [x] Author independent C#/VB positive/negative controls; compile fixture and test projects with -warnaserror; update limitations, state and one-scan prompt.
 - [ ] Execute focused/full tests (explicitly deferred by Joe).
 - [ ] Confirm native entry lineage and actual remaining field operation (not claimed).
+
+## Exact opcode attribution and native gap wiring — 2026-10-29
+- [x] Emit field/trace diagnostics on native AnalysisGap facts; preserve gaps and admission.
+- [x] Capture selected root, exact unsupported-opcode site and bounded actual invocation path before unwind.
+- [x] Author public C#/VB and native attribution/isolation regression definitions; update limitations/state and one-scan prompt.
+- [ ] Execute focused/full tests (explicitly deferred by Joe).
+- [ ] Reconcile private gap fact/root/binary attribution and establish native lineage (not claimed).

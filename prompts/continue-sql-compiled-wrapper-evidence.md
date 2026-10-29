@@ -1,54 +1,51 @@
-# Work-machine delegate diagnosis — read only
+# Work-machine exact lifecycle attribution — one scan only
 
 ## Active instruction — 2026-10-29
 
-This section supersedes ALL historical instructions below. Perform ONE bounded
-read-only inspection of the existing lifecycle-opcode:ldftn failure receipt and
-its retained compiled body. Return ONE short sanitized text report, then STOP.
-No scans, builds, tests, code changes, subagents, application execution, commits
-or pushes are authorized. Preserve all dirty files, private inputs and outputs.
-Do not activate any unpublished field-access or other bypass.
+This supersedes ALL older instructions below. Use the fetched clean public head,
+extractor 0.2.20 / evidence policy explicit-il-body-evidence.v21. This is a
+DIAGNOSTIC change: no LINQ/delegate support, no field bypass, no wider root scope.
+External trace policy remains explicit-external-web-trace/3.
 
-Use the existing clean-build receipt corresponding to implementation commit
-ed4f3d9beb6bd8a065a8a751963c876c86207a80 (extractor0.2.19, evidence policyv20).
-This prompt-only update does not change the tool implementation. Do not rebuild
-or rerun to obtain a newer receipt. Confirm the receipt's actual SHA/version;
-if the expected evidence is unavailable, report what is missing and stop.
+Preserve existing dirty patches, inputs and outputs; do not reset/clean/overwrite
+or apply local bypasses. Use an isolated clean public tool checkout. Perform at
+most ONE build and ONE targeted native scan, then ONE sanitized report and STOP.
+No retries, edits, tests, subagents or application execution. If build/isolation
+fails, report that failure and stop. Use the same verified INNER root selections,
+input hashes and all three existing boundary flags. Use a fresh private output.
 
-Inspect the FIRST recorded ldftn failure, using the exact body token and IL offset
-from the private receipt. Do not infer delegate behavior from ldftn alone.
-Use retained IL first; a bounded local disassembly is allowed if needed. Never
-load/execute application code. Inspect only the containing method, relevant
-signature metadata and, if present, the referenced callback's retained body.
+IMPORTANT correction: fieldAccessFailure and externalTraceFailure previously
+existed in the interpreter result but were NOT emitted on AnalysisGap facts.
+Their absence in old facts did not prove the corresponding stages passed or
+were not reached. This version emits these properties directly on gap facts.
+Do not look for lifecycle.fieldAccessFailure inside a missing lifecycle JSON value.
 
-Report:
-1. Receipt SHA/version, failing body token, IL offset and actual opcode. Confirm
-   whether both selected roots share this site/target or have distinct failures.
-2. Referenced target method as a synthetic alias; static/instance, parameter and
-   return types, generic/virtual shape and whether its body is retained/agreed.
-   Public framework type names/signatures may be reported exactly.
-3. Constructed delegate type and constructor signature, or explicitly state that
-   no delegate construction follows. Identify the target receiver: null/static,
-   root-this, closure, another object or unknown. Do not guess an unrecorded origin.
-4. Its next consumer and destination: local/field storage, event add/remove,
-   helper argument, direct Invoke or another use. Identify the exact public API
-   signature when available; use aliases for private methods/types. Trace only
-   the bounded relevant value flow, not the whole repository.
-5. Whether command, parameter, connection, DataSet or root/closure references are
-   captured or passed. Separate observed receiver/argument origins from unknown
-   transitive callback effects. Root-this capture is not proof of no SQL access.
-6. If a callback body is retained, summarize actual opcode-level field writes,
-   SQL/framework calls, branches and handlers without copying private source.
-   No direct field writes is NOT proof of purity or absence of transitive effects.
-7. Give the owner a LOCAL navigation note outside Git containing private source
-   path/method/line only where verified mapping exists, otherwise token/offset.
-   Keep those private identifiers local; return only a sanitized note location.
+For the FIRST gap on each selected root, read the fact's own ruleId, targetSymbol,
+guard, sqlLifecycleSchema, gapKind and lifecycleSlice.root. Verify binary SHA AND
+method token, not token alone (tokens are module-local). Do not substitute another
+rule's gap or another root's fact merely because its gap text is similar.
 
-Return at most30 lines of sanitized TEXT. Keep source, SQL, names, values,
-binaries and sample programs on the work machine. No code/email transfer or new
-photos requested. If metadata/dataflow is missing or ambiguous, say precisely
-what remains unknown. Do not propose skipping the delegate or accepting its
-consumer merely because it has a void return. STOP after the report.
+If gapKind is lifecycle-opcode:..., inspect gap properties opcodeFailure and
+bodyMetadataFailure. opcodeFailure binds selectedRoot, actual failing body/binary/
+token/offset/opcode, retainedInstructionCount and invocationPath. Each invocation
+frame has its body entry/token and the caller's exact site, when applicable.
+Use this recorded path to establish why the method was interpreted; presence in
+a slice by itself is not proof of invocation. Do not invent a corpus-wide pass or
+reverse call edge as an explanation. Source instruction counts and retained counts
+must be distinguished; a body-shape refusal is not an opcode refusal.
+
+Report at most 30 sanitized text lines: clean build SHA/versions, selected binary
+alias/token, exact gap rule/root, actual failing binary alias/token/offset/opcode,
+retained count, and the recorded root/constructor-to-callee caller-site chain.
+For field/trace gaps, return fieldAccessFailure/externalTraceFailure metadata using
+aliases instead of private names. If a property is absent, report absent, without
+inferring a passed phase. Include entry count and stop. Inspect existing metadata
+locally to reconcile the path if needed, without additional scans or code changes.
+
+Keep source, SQL, message values, private names/binaries and full receipts local.
+No email/code/sample transfer or new photos requested. No unsupported instruction,
+LINQ chain or store may be skipped. This run establishes attribution, not safety
+of an uninspected callback or completion of SQL lineage. STOP after the report.
 
 ---
 
