@@ -4,6 +4,21 @@ namespace PublicSql.CSharp
 {
     public sealed class TraceArgumentRoot
     {
+        public DataSet ScalarCopyProduce(string message)
+        {
+            System.Runtime.CompilerServices.RuntimeHelpers.GetObjectValue(message);
+            return EntryProtocol.ProduceInputs(1, 2, message, true);
+        }
+        public DataSet UntypedCopyRefusal(object value)
+        {
+            System.Runtime.CompilerServices.RuntimeHelpers.GetObjectValue(value);
+            return EntryProtocol.ProduceInputs(1, 2, "public", true);
+        }
+        public DataSet TrackedCopyRefusal()
+        {
+            System.Runtime.CompilerServices.RuntimeHelpers.GetObjectValue(new System.Data.SqlClient.SqlCommand("public"));
+            return EntryProtocol.ProduceInputs(1, 2, "public", true);
+        }
         public DataSet TraceComputedProduce(string message, int count)
         {
             HttpContext.Current.Trace.Write(string.Concat("public-", message, count.ToString()));

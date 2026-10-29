@@ -2,6 +2,18 @@ Imports System.Data
 Imports System.Web
 Namespace PublicSql.VisualBasic
     Public NotInheritable Class TraceArgumentRoot
+        Public Function ScalarCopyProduce(message As String) As DataSet
+            System.Runtime.CompilerServices.RuntimeHelpers.GetObjectValue(message)
+            Return EntryProtocol.ProduceInputs(1, 2, message, True)
+        End Function
+        Public Function UntypedCopyRefusal(value As Object) As DataSet
+            System.Runtime.CompilerServices.RuntimeHelpers.GetObjectValue(value)
+            Return EntryProtocol.ProduceInputs(1, 2, "public", True)
+        End Function
+        Public Function TrackedCopyRefusal() As DataSet
+            System.Runtime.CompilerServices.RuntimeHelpers.GetObjectValue(New System.Data.SqlClient.SqlCommand("public"))
+            Return EntryProtocol.ProduceInputs(1, 2, "public", True)
+        End Function
         Public Function TraceComputedProduce(message As String, count As Integer) As DataSet
             HttpContext.Current.Trace.Write(String.Concat("public-", message, count.ToString()))
             Return EntryProtocol.ProduceInputs(1, 2, message, True)

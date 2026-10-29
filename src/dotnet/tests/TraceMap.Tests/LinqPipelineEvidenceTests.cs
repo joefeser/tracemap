@@ -13,7 +13,7 @@ public sealed class LinqPipelineEvidenceTests
     public void Object_grouping_and_datarow_projection_are_distinct_bounded_semantic_dependencies(string language)
     {
         var (facts, gaps) = Extract(language);
-        Assert.Equal(3, facts.Count);
+        Assert.True(facts.Count == 3, string.Join("\n", facts.Select(fact => fact.ContractElement).Concat(gaps.Select(gap => gap.Properties!["gapKind"] + " at " + gap.Evidence.StartLine))));
         Assert.Equal(4, gaps.Count);
         Assert.All(facts, fact => {
             Assert.Equal(RuleIds.DotNetSemanticLinqPipeline, fact.RuleId);
@@ -49,6 +49,33 @@ public sealed class LinqPipelineEvidenceTests
         Assert.DoesNotContain(first.Facts, fact => fact.FactType is FactTypes.ManagedIlSqlLifecycleEntryCandidate or FactTypes.ManagedIlSqlLifecycleCandidate);
     }
 
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void Jtoken_filter_projection_and_join_bind_keys_without_claiming_JSON_origin_or_values(string language)
+    {
+        var (facts, gaps) = Extract(language, "JsonLinqPipelines");
+        Assert.True(facts.Count == 3, string.Join("\n", facts.Select(fact => fact.ContractElement).Concat(gaps.Select(gap => gap.Properties!["gapKind"] + " at " + gap.Evidence.StartLine))));
+        Assert.Equal(3, gaps.Count);
+        foreach (var fact in facts)
+        {
+            Assert.Equal("jtoken-filter-project-join", fact.ContractElement);
+            var serialized = fact.Properties!["pipeline"];
+            Assert.DoesNotContain("public-alpha", serialized, StringComparison.Ordinal);
+            Assert.DoesNotContain("caption", serialized, StringComparison.Ordinal);
+            using var json = JsonDocument.Parse(serialized);
+            Assert.Contains("json-origin-unmodeled", json.RootElement.GetProperty("sourceKind").GetString()!, StringComparison.Ordinal);
+            Assert.Equal(FactFactory.Hash("kind", 64), json.RootElement.GetProperty("jsonFilter").GetProperty("keySha256").GetString());
+            Assert.Equal(FactFactory.Hash("public-alpha", 64), json.RootElement.GetProperty("jsonFilter").GetProperty("comparedLiteralSha256").GetString());
+            Assert.Equal(FactFactory.Hash("caption", 64), json.RootElement.GetProperty("mappings")[0].GetProperty("columnSha256").GetString());
+            Assert.Equal(3, json.RootElement.GetProperty("operators").GetArrayLength());
+        }
+        Assert.Contains(gaps, fact => fact.Properties!["gapKind"] == "linq-pipeline-json-constant-token-key-required");
+        Assert.Contains(gaps, fact => fact.Properties!["gapKind"] == "linq-pipeline-json-value-string-identity");
+        Assert.Contains(gaps, fact => fact.Properties!["gapKind"] == "linq-pipeline-json-pipeline-alias-mutated-or-ref-escape");
+        Assert.Equal(facts.Select(fact => fact.Properties!["pipeline"]), Extract(language, "JsonLinqPipelines").Facts.Select(fact => fact.Properties!["pipeline"]));
+    }
+
     [Fact]
     public void Unsigned_framework_name_impostor_does_not_emit_pipeline_evidence()
     {
@@ -67,7 +94,7 @@ public sealed class LinqPipelineEvidenceTests
             """;
         var tree = CSharpSyntaxTree.ParseText(source);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
-            .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)).ToArray();
+            .Append(typeof(Newtonsoft.Json.Linq.JToken).Assembly.Location).Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)).ToArray();
         var compilation = CSharpCompilation.Create("PublicImpostor", [tree], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         Assert.Empty(compilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
@@ -77,25 +104,25 @@ public sealed class LinqPipelineEvidenceTests
         Assert.Empty(gaps);
     }
 
-    private static (List<SemanticFactCandidate> Facts, List<SemanticFactCandidate> Gaps) Extract(string language)
+    private static (List<SemanticFactCandidate> Facts, List<SemanticFactCandidate> Gaps) Extract(string language, string sampleName = "LinqPipelines")
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "AGENTS.md"))) directory = directory.Parent;
         Assert.NotNull(directory);
         var extension = language == "csharp" ? "cs" : "vb";
-        var path = Path.Combine(directory.FullName, "samples", "sql-compiled-wrapper-evidence", language, "end-to-end", "LinqPipelines." + extension);
+        var path = Path.Combine(directory.FullName, "samples", "sql-compiled-wrapper-evidence", language, "end-to-end", sampleName + "." + extension);
         var source = File.ReadAllText(path);
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
-            .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)).ToArray();
+            .Append(typeof(Newtonsoft.Json.Linq.JToken).Assembly.Location).Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)).ToArray();
         SyntaxTree tree; Compilation compilation;
         if (language == "csharp")
         {
-            tree = CSharpSyntaxTree.ParseText(source, path: "LinqPipelines.cs");
+            tree = CSharpSyntaxTree.ParseText(source, path: sampleName + ".cs");
             compilation = CSharpCompilation.Create("PublicLinq", [tree], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         }
         else
         {
-            tree = VisualBasicSyntaxTree.ParseText(source, path: "LinqPipelines.vb");
+            tree = VisualBasicSyntaxTree.ParseText(source, path: sampleName + ".vb");
             compilation = VisualBasicCompilation.Create("PublicLinq", [tree], references, new VisualBasicCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optionInfer: true));
         }
         Assert.Empty(compilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));

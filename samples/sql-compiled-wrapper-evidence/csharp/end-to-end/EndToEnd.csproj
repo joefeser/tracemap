@@ -5,4 +5,5 @@
   <ItemGroup><Reference Include="System.Web" /></ItemGroup>
   <ItemGroup><Reference Include="System.Configuration" /></ItemGroup>
   <ItemGroup><Reference Include="System.Data.DataSetExtensions" /></ItemGroup>
+  <ItemGroup><PackageReference Include="Newtonsoft.Json" Version="13.0.3" /></ItemGroup>
 </Project>

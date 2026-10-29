@@ -7,6 +7,26 @@ public sealed class IlSqlTraceArgumentTests
     [Theory]
     [InlineData("csharp")]
     [InlineData("vb")]
+    public void Value_copy_preserves_unknown_typed_scalar_origin_and_refuses_untyped_or_tracked_objects(string language)
+    {
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var root = Assert.Single(bodies, body => body.Observation.ObjectBody?.Name == "ScalarCopyProduce");
+        var result = IlSqlLifecycleExtractor.Extract(root, bodies, false, new(400_000));
+        Assert.Empty(result.Gaps);
+        Assert.NotNull(result.Entry);
+        Assert.Contains(Assert.Single(result.Entry.Commands).Parameters, parameter => parameter.ValueOrigin == "argument:0");
+        foreach (var name in new[] { "UntypedCopyRefusal", "TrackedCopyRefusal" })
+        {
+            var negative = Assert.Single(bodies, body => body.Observation.ObjectBody?.Name == name);
+            var refused = IlSqlLifecycleExtractor.Extract(negative, bodies, false, new(400_000));
+            Assert.Equal("lifecycle-object-copy-unresolved", Assert.Single(refused.Gaps));
+            Assert.Null(refused.Entry);
+        }
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
     public void Computed_scalar_messages_produce_partial_receipts_without_inventing_values(string language)
     {
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language);

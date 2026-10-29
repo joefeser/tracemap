@@ -612,7 +612,8 @@ internal static partial class IlSqlLifecycleExtractor
                     if (listIndex < 0 || listIndex >= list.Slots.Count) throw new Refusal("lifecycle-list-index");
                     return list.Slots[listIndex];
                 case "object-value":
-                    if (args[0].Kind is not ("read" or "int" or "string" or "null" or "opaque-initializer" or "computed-string")) throw new Refusal("lifecycle-object-copy-unresolved");
+                    if (args[0].Kind is not ("read" or "int" or "string" or "null" or "opaque-initializer" or "computed-string")
+                        && !(args[0].Kind == "input" && TraceScalarValue(args[0]))) throw new Refusal("lifecycle-object-copy-unresolved");
                     return args[0];
                 case "type-handle":
                     if (args[0].Kind != "type-token") throw new Refusal("lifecycle-type-handle-unresolved");

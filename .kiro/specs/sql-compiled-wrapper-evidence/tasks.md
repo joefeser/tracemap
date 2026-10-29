@@ -59,8 +59,9 @@
 - [x] Preserve unbound arguments, observable dataset state and execution-specific parameter allocations; keep unknown control/scalars fail-closed.
 - [x] Add SQL-related root admission diagnostics and independent public C#/VB fixtures/test definitions.
 - [x] Compile the CLI and update limitations/work-machine prompt for the new, behaviorally unvalidated protocol.
-- [ ] Run the new focused entry tests and retained regressions (explicitly deferred by Joe; no pass claimed).
-- [ ] Run the shared-core full gate and work-machine acceptance (not run; prior baseline validation does not cover this patch).
+- [x] Run the new entry tests and retained regressions locally after verification authorization; affected lane 179 passed and full Debug 5633 passed/3 skipped.
+- [x] Run the local shared-core full gate:5633 passed, 3 skipped,0 failed.
+- [ ] Complete work-machine acceptance (not claimed).
 
 
 ## Metadata handoff continuation — 2026-10-28 (tests explicitly deferred)
@@ -68,7 +69,8 @@
 - [x] Charge actual retained text under the unchanged 1 MiB/256-instruction/64-field caps and expose per-reader admission reasons/credits.
 - [x] Add root/callee/constructor-stage failure receipts and independent scale-shaped C#/VB fixtures with 160 unrelated methods before a producer.
 - [x] Author regression definitions and a single sanitized Claude diagnostic/reproducer fallback; compile-check and publish the patch.
-- [ ] Run retention/agreement/entry tests and native scale replay (explicitly deferred by Joe; not claimed).
+- [x] Execute retention/agreement/entry tests through the affected lane and full Debug suite.
+- [ ] Complete the separate native scale replay protocol (not substituted by the full test suite).
 - [ ] Establish real-input lineage success after metadata admission (not claimed by compilation).
 
 
@@ -100,7 +102,7 @@
 - [x] Bound fields/instructions/calls/arguments/stack/work; refuse tracked-reference arguments, handlers, branches, compiled-callee blackboxing and opaque-field mutation.
 - [x] Separate opaque entry schema and receipts from existing read/comparison contracts; bind policy/flag into provenance.
 - [x] Add public C#/VB fixtures and focused/native/refusal test definitions; update rule limitations, state and work-machine text-return prompt.
-- [ ] Execute new focused controls and broader shared-core gate (explicitly deferred by Joe).
+- [x] Execute new focused controls and broader shared-core gate after local verification authorization; affected lane 179 passed, full Debug 5633 passed/3 skipped.
 - [ ] Establish real-input opaque-initializer/ArrayList lineage under the explicit boundary (not claimed).
 
 
@@ -109,7 +111,7 @@
 - [x] Bound chains/instructions/work; refuse escapes, context branches, tracked-reference arguments, wrong signatures, region crossings and loop effects.
 - [x] Emit conditional trace receipts/assumptions and preserve per-execution identity; select schemas independently per guarded run.
 - [x] Author public C#/VB positive/refusal/native controls; update limitations and inner-root/dirty-tool-preserving text-only prompt.
-- [ ] Execute focused and full shared-core tests (explicitly deferred by Joe).
+- [x] Execute focused and full shared-core tests after local verification authorization; affected lane 179 passed, full Debug 5633 passed/3 skipped.
 - [ ] Confirm native lineage on exact inner roots and account for unintegrated work-machine tool changes (not claimed).
 
 
@@ -118,7 +120,7 @@
 - [x] Add bounded inspected nonvirtual base-constructor owner views on the same allocation; preserve unrelated-owner refusals and scoped field keys.
 - [x] Add residual owner/body diagnostics and public C#/VB combined reference-constructor/opaque/trace and negative test definitions.
 - [x] Update rule limitations, state and clean-head inner-root text-only prompt without claiming recovery of the unavailable dirty diff.
-- [ ] Run focused/full tests (explicitly deferred by Joe).
+- [x] Run focused/full tests after local verification authorization; affected lane 179 passed, full Debug 5633 passed/3 skipped.
 - [ ] Confirm the private field-owner mismatch matches this metadata-proved case and completes lineage (not claimed).
 
 
@@ -135,7 +137,7 @@
 - [x] Bound instructions/handlers/calls/locals/stack/summaries/work and validate structural control; reject direct writes/throws/unsafe or incomplete metadata.
 - [x] Record unknown result, exact callee provenance and internal-control/transitive-effect assumptions without executing handlers or claiming purity/passthrough.
 - [x] Author public C#/VB combined four-handler/owner/trace/parameter and negative/native controls; compile and update limitations/state/three-flag text-only prompt.
-- [ ] Execute focused and broader shared-core tests (explicitly deferred by Joe).
+- [x] Execute focused and broader shared-core tests after local verification authorization; affected lane 179 passed, full Debug 5633 passed/3 skipped.
 - [ ] Confirm the exact private transform qualifies and entry lineage completes under the conditional boundary (not claimed).
 
 ## Computed trace argument boundary — 2026-10-29
@@ -143,13 +145,13 @@
 - [x] Mark computed trace arguments partial; preserve unknown helper, tracked object, computed SQL and default-route refusals.
 - [x] Version/document the 64-instruction trace bound and author C#/VB positive/negative tests; compile CLI, fixtures and test project with -warnaserror.
 - [x] Update the three-flag text-only work-machine prompt and implementation limitations.
-- [ ] Execute focused/full tests (explicitly deferred by Joe).
+- [x] Execute focused/full tests after local verification authorization; affected lane 179 passed, full Debug 5633 passed/3 skipped.
 - [ ] Confirm native private entry lineage and ArrayList blocker closure (not claimed).
 
 ## Field-access refusal diagnostics — 2026-10-29
 - [x] Capture exact rejected field site/receiver/owner/type and bounded opcode context without changing refusal or heap semantics.
 - [x] Author C#/VB regression definitions and update limitations/state and isolated one-scan prompt.
-- [ ] Execute focused/full tests (explicitly deferred by Joe).
+- [x] Execute focused/full tests after local verification authorization; affected lane 179 passed, full Debug 5633 passed/3 skipped.
 - [ ] Establish actual native failing field operation and completed entry lineage (not claimed).
 
 ## Logging-only stack-name expressions — 2026-10-29
@@ -157,16 +159,20 @@
 - [x] Bound calls/locals/frame indices and version the 128-instruction chain limit; preserve field and general-reflection refusals.
 - [x] Emit exact trace rejection site/opcode/call-shape/stack-kind diagnostics.
 - [x] Author independent C#/VB positive/negative controls; compile fixture and test projects with -warnaserror; update limitations, state and one-scan prompt.
-- [ ] Execute focused/full tests (explicitly deferred by Joe).
+- [x] Execute focused/full tests after local verification authorization; affected lane 179 passed, full Debug 5633 passed/3 skipped.
 - [ ] Confirm native entry lineage and actual remaining field operation (not claimed).
 
 ## Exact opcode attribution and native gap wiring — 2026-10-29
 - [x] Emit field/trace diagnostics on native AnalysisGap facts; preserve gaps and admission.
 - [x] Capture selected root, exact unsupported-opcode site and bounded actual invocation path before unwind.
 - [x] Author public C#/VB and native attribution/isolation regression definitions; update limitations/state and one-scan prompt.
-- [ ] Execute focused/full tests (explicitly deferred by Joe).
+- [x] Execute focused/full tests after local verification authorization; affected lane 179 passed, full Debug 5633 passed/3 skipped.
 - [ ] Reconcile private gap fact/root/binary attribution and establish native lineage (not claimed).
 
 ## Separate source LINQ evidence follow-up — 2026-10-29
 - [x] Add independent C#/VB synthetic object-grouping and DataTable projection cases with a separate semantic evidence rule; see bounded-linq-pipeline-evidence spec.
 - [ ] Compiled LINQ/delegate interpretation and native ArrayList blocker closure remain unimplemented/unproven; no lifecycle refusal was relaxed.
+
+## Local verified head — 2026-10-29
+- [x] Complete affected LINQ/IlSql controls (179 passed) and full Debug -warnaserror (5633 passed, 3 skipped, 0 failed) after the scalar-copy fix and space correction.
+- [ ] Private selected-root attribution, completed entry lineage and schema acceptance remain unproven.

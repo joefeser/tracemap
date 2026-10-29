@@ -1155,7 +1155,7 @@ Validation for this diagnostic change: `dotnet build src/dotnet/tests/TraceMap.T
 
 ## Logging-only stack-name expressions — 2026-10-29
 
-Extractor 0.2.19 / evidence policy v20 / external trace policy3 adds scalar and
+Extractor 0.2.19 / evidence policy v20 / external trace policy 3 adds scalar and
 fresh trace-array local stores plus a closed exact signed mscorlib 2/4 sequence:
 StackTrace parameterless constructor, GetFrame(Int32), StackFrame.GetMethod and
 MemberInfo.Name. Intermediate stack/frame/method markers remain expression-only
@@ -1238,3 +1238,55 @@ count and DataTable column-to-object projection dependencies. This does NOT add
 compiled delegate/LINQ interpretation or change the active opcode-attribution
 protocol. Dynamic DataTable.Select predicates remain excluded. Do not retry a
 compiled-only acceptance scan expecting this source feature to clear ldftn.
+
+## Executed compiled controls exposed a typed-scalar copy gap
+
+The first full Debug pass (now explicitly authorized by Joe) reached two failures
+in the previously unexecuted VB stack-name positives: lifecycle-object-copy-unresolved.
+That pass was stopped after the concrete failure to repair it before restarting.
+Exact signed RuntimeHelpers.GetObjectValue now preserves the SAME unknown input
+origin only when its declared type is one of the existing immutable scalar types.
+Untyped Object inputs and tracked command/parameter/DataSet references still refuse;
+no custom mutable struct, value assumption or object-identity substitution is added.
+Public C#/VB ScalarCopyProduce, UntypedCopyRefusal and TrackedCopyRefusal controls
+verify both sides. This intentional compiled change bumps IL extractor 0.2.21 and
+policy v22; external trace policy 3 is unchanged. Source LINQ remains a separate rule.
+
+Executed focused commands after the fix:
+- LinqPipelineEvidenceTests + IlSqlTraceStackNameTests + IlSqlTraceArgumentTests:
+  24 passed, 0 failed, 0 skipped.
+- LinqPipelineEvidenceTests + all IlSql test classes:
+  179 passed, 0 failed, 0 skipped (23seconds).
+Both used `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter ...`.
+The restarted full Debug solution suite is running; its result must be recorded
+before push. Earlier full-run output is a failed/canceled iteration, not a pass.
+
+## Final local verification — 2026-10-29
+
+Current code versions: source LINQ 0.2.0, compiled IL 0.2.21 / evidence policy v22;
+external trace policy 3. Joe explicitly authorized local verification, superseding
+the earlier test deferral for this run. No private inputs or acceptance run.
+
+- Focused source LINQ:7 passed, 0 failed, 0 skipped.
+- Source LINQ plus trace argument/stack-name controls after scalar-copy fix:
+  24 passed, 0 failed, 0 skipped.
+- Affected source LINQ plus all IlSql test classes:179 passed, 0 failed, 0 skipped.
+- Full Debug solution gate:5633 passed, 3 skipped,0 failed, exit 0,45.7511minutes.
+  Command: `dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'`.
+  Local log: /tmp/tracemap-linq-full-debug-after-space.log.
+- C#/VB source CLI smokes: each 6 LINQ candidates (1 grouping,2 DataTable,3 JToken)
+  and 7 intentional rule gaps; all five required outputs present. Whole scans
+  retained Level1SemanticAnalysisReduced, not complete-project acceptance.
+- `git diff --check` passed. Builds used -warnaserror; zero compiler/analyzer warnings.
+
+The first broad attempt exposed the old VB typed-input value-copy refusal; fixed
+and pinned by positive/untyped/tracked-reference controls. A later broad attempt
+was canceled after SQLite/IO storage-exhaustion failures; Joe corrected space and
+the full gate above then completed successfully. Failed/canceled runs are not
+counted as passes. Pinned OSS smoke reruns remain explicitly deferred; local public
+C#/VB native smokes and the full suite do not get relabeled as that separate gate.
+Windows/platform skips are retained; this is not private Windows acceptance.
+
+Compiled delegate/LINQ interpretation, dynamic DataTable.Select, private root
+attribution/lineage and owner-schema acceptance remain outside the proven result.
+No field bypass, SQL route weakening, application deployment, PR or ACK change.

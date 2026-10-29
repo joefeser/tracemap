@@ -5,16 +5,20 @@ using System.Globalization;
 namespace TraceMap.Core;
 
 /// <summary>Compiler-bound expression dependencies. Never executes callbacks or changes SQL admission.</summary>
-internal static class LinqPipelineEvidenceExtractor
+internal static partial class LinqPipelineEvidenceExtractor
 {
     internal const string Version = ScannerVersions.LinqPipelineEvidenceExtractor;
     internal const string Rule = RuleIds.DotNetSemanticLinqPipeline;
-    internal const string Limitation = "Bounded compiler-resolved expression dependencies only; no callback execution, purity, enumeration, cardinality, equality/comparer behavior, row existence, conversion success, SQL Fill association, runtime values, serialization or impact proof. Source semantic evidence does not authorize compiled lifecycle delegates. Dynamic DataTable.Select predicates remain unsupported.";
+    internal const string Limitation = "Bounded compiler-resolved expression dependencies only; no callback execution, purity, enumeration, cardinality, equality/comparer behavior, row existence, conversion success, SQL Fill association, upstream JSON/JSON-path origin, runtime values, serialization or impact proof. Source semantic evidence does not authorize compiled lifecycle delegates. Dynamic DataTable.Select predicates remain unsupported.";
     private const int MaxNodes = 20000, MaxSites = 128, MaxOperations = 512, MaxMappings = 16;
     internal sealed record Mapping(string TargetMemberSha256, string Origin, string? ColumnSha256, IReadOnlyList<string> Transforms);
     internal sealed record Summary(string Kind, string SourceKind, string SourceSymbolSha256, int? TableOrdinal,
         IReadOnlyList<string> Operators, IReadOnlyList<Mapping> Mappings, IReadOnlyList<string> Captures,
-        IReadOnlyList<string> FrameworkIdentities, string Coverage = "bounded-expression-dependencies;execution-unproven");
+        IReadOnlyList<string> FrameworkIdentities, string Coverage = "bounded-expression-dependencies;execution-unproven")
+    {
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public JsonFilter? JsonFilter { get; init; }
+    }
     private sealed class Rejection(string reason) : Exception(reason);
 
     internal static void Extract(string? projectPath, string filePath, SyntaxNode root, SemanticModel model,
@@ -53,6 +57,7 @@ internal static class LinqPipelineEvidenceExtractor
 
     private static bool Candidate(IInvocationOperation call)
     {
+        if (JsonCandidate(call)) return true;
         var method = Definition(call);
         if (!EnumerableType(method.ContainingType)) return false;
         if (method.Name == "ToList" && Source(call) is IInvocationOperation { } select && Definition(select).Name == "Select") return true;
@@ -77,7 +82,7 @@ internal static class LinqPipelineEvidenceExtractor
     private static IMethodSymbol Definition(IInvocationOperation call) => (call.TargetMethod.ReducedFrom ?? call.TargetMethod).OriginalDefinition;
     private static IOperation? Strip(IOperation? value)
     {
-        while (value is IConversionOperation { IsImplicit: true } conversion || value is IParenthesizedOperation)
+        while (value is IConversionOperation { IsImplicit: true, OperatorMethod: null } conversion || value is IParenthesizedOperation)
             value = value is IConversionOperation c ? c.Operand : ((IParenthesizedOperation)value).Operand;
         return value;
     }
@@ -150,7 +155,9 @@ internal static class LinqPipelineEvidenceExtractor
         var candidates = call.Arguments.Select(argument => Strip(argument.Value)).Select(value => value is IDelegateCreationOperation creation ? creation.Target : value).OfType<IAnonymousFunctionOperation>().ToArray();
         if (candidates.Length != 1 || candidates[0].Symbol.Parameters.Length != 1) throw new Rejection("inspected-single-parameter-lambda-required");
         var lambda = candidates[0]; var nodes = Walk(lambda.Body).Take(129).ToArray();
-        var returns = nodes.OfType<IReturnOperation>().ToArray();
+        var returns = nodes.OfType<IReturnOperation>().Where(operation => operation.ReturnedValue is not null
+            && !(lambda.Syntax is Microsoft.CodeAnalysis.VisualBasic.Syntax.SingleLineLambdaExpressionSyntax
+                && operation.IsImplicit && Strip(operation.ReturnedValue) is ILocalReferenceOperation { Local.IsFunctionValue: true })).ToArray();
         if (nodes.Length > 128 || returns.Length != 1 || returns[0].ReturnedValue is not { } value
             || nodes.Any(node => node is ILoopOperation or IConditionalOperation or IAwaitOperation or IThrowOperation or ITryOperation
                 or IIncrementOrDecrementOperation or ICompoundAssignmentOperation)) throw new Rejection("callback-body-shape");
@@ -162,6 +169,7 @@ internal static class LinqPipelineEvidenceExtractor
     internal static Summary Analyze(IInvocationOperation terminal)
     {
         if (Walk(terminal).Take(MaxOperations + 1).Count() > MaxOperations) throw new Rejection("operation-limit");
+        if (JsonCandidate(terminal)) return JsonPipeline(terminal);
         var identities = new List<string>();
         var operators = new List<string>();
         IOperation? current = terminal;
@@ -220,7 +228,7 @@ internal static class LinqPipelineEvidenceExtractor
             identities.Add(Identity(call.TargetMethod)); return column;
         }
         if (value is not IPropertyReferenceOperation indexer || !Data(indexer.Property.ContainingType, "DataRow")
-            || indexer.Property.Name != "Item" || indexer.Arguments.Length != 1 || !Parameter(indexer.Instance, row)
+            || indexer.Property.MetadataName != "Item" || indexer.Arguments.Length != 1 || !Parameter(indexer.Instance, row)
             || indexer.Property.Parameters.Length != 1 || indexer.Property.Parameters[0].Type.SpecialType != SpecialType.System_String
             || indexer.Arguments[0].Value.ConstantValue is not { HasValue: true, Value: string name } || name.Length > 256)
             throw new Rejection("constant-row-column-required");
@@ -234,7 +242,7 @@ internal static class LinqPipelineEvidenceExtractor
             && value is ILocalReferenceOperation or IParameterReferenceOperation or IFieldReferenceOperation)
             return ("datatable-symbol-reference;fill-unproven", HashSymbol(symbol), null);
         if (value is IPropertyReferenceOperation index && Data(index.Property.ContainingType, "DataTableCollection")
-            && index.Property.Name == "Item" && index.Property.Parameters.Length == 1
+            && index.Property.MetadataName == "Item" && index.Property.Parameters.Length == 1
             && index.Property.Parameters[0].Type.SpecialType == SpecialType.System_Int32
             && index.Arguments.Length == 1 && index.Arguments[0].Value.ConstantValue is { HasValue: true, Value: int ordinal }
             && ordinal is >= 0 and <= 15 && Strip(index.Instance) is IPropertyReferenceOperation tables

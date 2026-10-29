@@ -3,17 +3,18 @@
 ## Separate source LINQ update
 
 A new source-semantic rule dotnet.semantic.linq-pipeline.v1 records bounded C#/VB
-object grouping and DataTable row-projection dependencies when source compilation
-is available. It does NOT add compiled delegate/LINQ interpretation, alter the
-compiled extractor0.2.20, or clear lifecycle ldftn. Do not rerun compiled acceptance
+object grouping, DataTable row-projection and bounded JToken filter/project/join
+dependencies when source compilation is available. It does NOT add compiled delegate/LINQ interpretation, alter the
+compiled delegate policy, or clear lifecycle ldftn. Do not rerun compiled acceptance
 merely because these new source facts exist. The diagnostic protocol below remains
 the active compiled-work instruction.
 
 ## Active instruction — 2026-10-29
 
 This supersedes ALL older instructions below. Use the fetched clean public head,
-extractor 0.2.20 / evidence policy explicit-il-body-evidence.v21. This is a
-DIAGNOSTIC change: no LINQ/delegate support, no field bypass, no wider root scope.
+extractor 0.2.21 / evidence policy explicit-il-body-evidence.v22. This is a
+diagnostic release plus a tested exact-framework typed-scalar value-copy fix.
+No LINQ/delegate interpretation, field bypass or wider root scope was added.
 External trace policy remains explicit-external-web-trace/3.
 
 Preserve existing dirty patches, inputs and outputs; do not reset/clean/overwrite
