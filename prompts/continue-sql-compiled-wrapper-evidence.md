@@ -5,22 +5,48 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
-## Confirmed work-machine finding and next check
+## Current follow-up: resolve native gaps from existing receipts
 
-Joe reports that Claude tested this use case and confirmed the connection-string
-getter/initializer chain is its last remaining blocker. Treat that as the reported
-tested finding for this bounded use case; do not restart broad blocker discovery
-or ask Joe for more sample source or photographs. The underlying test receipts stay
-on the work machine. This finding does not itself verify the newly published patch.
+The latest reported run still has no completed entry candidate and identifies
+ConfigurationManager.get_ConnectionStrings plus HttpContext.get_Current calls.
+The earlier last-blocker finding is not confirmation of this newer native path.
+Do not raise caps or add a getter allowlist entry from the summary alone.
 
-Use implementation commit `49102ea8c646304f72d71363097818fbf04d58c5` or its verified
-descendant, keeping the same application DLLs and selected roots. Enable
-`--il-opaque-root-initializers` for the targeted run. Confirm that the initializer
-boundary is recorded and that `il-sql-lifecycle-opaque-entry/1` links inspected custom
-parameter fields to actual SqlParameter construction, command attachment and Fill,
-with execution-specific parameter identity preserved. If it still refuses, report
-the exact native gap and initializer rejection/body receipt from that run; do not
-speculate about another blocker. Return a short sanitized text result only.
+Use existing scan/body/call/slice/initializer receipts and local metadata inspection.
+Do not start another scan, execute application/configuration/provider code, or run
+tests for this diagnosis. Return one short sanitized text table; no sample source,
+private names/hashes/paths, code photographs or broad investigation request.
+
+1. Establish the exact PUBLIC tool revision: full 40-character `git rev-parse HEAD`,
+   ancestry from implementation 49102ea8c646304f72d71363097818fbf04d58c5, clean/dirty
+   state and public tool files changed since that implementation. Keep private
+   input/generator hashes local and verify the existing receipt matches the actual
+   built Core bytes. Do not silently repair an abbreviated or malformed SHA.
+2. For ConfigurationManager, read the exact native gap string and
+   bodyMetadataFailure stage, or report each absent. In the published source,
+   opaque cap/shape refusals use lifecycle-opaque-initializer-*; generic unknown-call
+   can indicate execution outside the selected fresh root constructor boundary.
+   Determine whether the failing body is that constructor, another object's
+   constructor, or a helper invoked during construction; report only opaque body
+   aliases, call depth category, and whether its receiver is the fresh root or a
+   different tracked allocation. Count actual opaque initialized fields, chain
+   instructions/calls and limit reasons only where established. Closure member
+   count is not initialized-field count and does not establish quota exhaustion.
+3. For HttpContext.Current, trace the returned value's complete bounded local use
+   through the inspected callee: public framework calls, local stores, null/control
+   tests, tracked-reference arguments, field/return escapes and handlers. Report a
+   short abstract opcode/use sequence and exact public framework signatures only.
+   A reference return does not itself establish an escape or external purity.
+   If it controls a branch, preserve the unknown outcome; never pick the non-null
+   or null branch, treat it as an empty context, or label a shared object fresh.
+4. State the narrowest proven missing capability separately for each case. If a
+   value-use link is unavailable, name that exact missing link instead of proposing
+   a general untracked-reference policy. No implementation change is authorized on
+   the work machine. Keep full private body identities, offsets and evidence local.
+
+After this receipt-only diagnosis, the implementation side can select a bounded
+change and author its own public fixtures. Joe need not transfer fixture source.
+Keep baseline outputs and the test-deferred status unchanged.
 
 ## Current opaque root-scalar initializer boundary
 
