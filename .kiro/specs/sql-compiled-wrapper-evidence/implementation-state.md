@@ -913,3 +913,67 @@ executed. The three reported work-machine source changes remain unintegrated and
 unreviewed here; this patch does not claim to reproduce their behavior. The next
 handoff must preserve and identify them rather than equating their mixed binary
 with a clean published SHA. Whole SQL effort/acceptance remains incomplete.
+
+
+## Constructor field-owner continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting head
+`01f2a1d821ecc8536e882c74d49a39e47be47959`, initially clean. Standing fix/push and
+no-tests instruction retained. A later clean-head report refuses at field ownership
+before initialization/trace. No former dirty implementation diff is available in
+this checkout or the report; it was not silently recreated or claimed reviewed.
+
+## Metadata-proved constructor field owners — compile-only, 2026-10-28
+
+IL extractor 0.2.11 / policy `explicit-il-body-evidence.v15` retains each body's
+exact direct BaseType independently through Cecil/SRM. It participates in object
+metadata agreement and actual-text charging under unchanged retention/field/body
+caps. No scope or assembly-version normalization is introduced.
+
+A fresh derived allocation initially owns only its concrete type's slots. A direct
+nonvirtual inspected base-constructor call may add one field-owner view only if:
+both source and target object metadata agree independently, the caller is a
+constructor whose this is the same tracked receiver, the caller owner is already
+admitted on that allocation, and its declared direct BaseType equals the target
+constructor owner exactly. Target provenance/shape checks remain. Same-class
+constructor delegation adds no ownership. At most 24 owner views/allocation and 256
+view records/run are allowed under existing call-depth/work/heap limits.
+
+This supports a reference-field initializer constructing a derived custom object
+whose inspected base constructor stores base-owned fields. It does not make
+reference fields opaque. Concrete allocation identity is unchanged. Fully scoped
+base/derived field keys remain separate, including same-named fields. Unrelated
+constructor/field owners, missing/unagreed metadata and generic/virtual targets
+remain unknown. Unmodeled calls inside a base constructor still refuse; root-only
+opaque scalar admission and the trace boundary are not widened.
+
+Optional constructorOwnerViews receipts bind call site, receiver allocation,
+derived/base owner hashes and exact target body/binary. Residual field-owner gaps
+include fieldOwnerFailure with executing/allocation owner hashes, field identity
+hash, admitted owner hashes, receiver-is-this, constructor flag, field-declared-on-
+executing-owner and stored value KIND. No value or raw source snippet is added.
+The existing read/entry/conditional schemas and comparison routes remain separate.
+
+The old work-machine diff is not available and has not been reviewed/restored.
+This is an independently implemented, metadata-proved ownership case, not a claim
+that reference-field type alone explains the private refusal. Public C#/VB fixtures
+combine a constructed reference field, same-named base/derived fields, opaque root
+initialization, SQL execution identity and external trace. Negative definitions
+remove/change the declared base, remove reader agreement and inject unrelated
+field slots. Tests are authored and compile-checked only; private matching and
+behavior remain unproven. No arbitrary owner-check bypass is added.
+
+Compile-only commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No tests, native scans, application/provider/environment/trace methods were run.
+No private code, owner names/tokens, tool diff or receipts were copied into Git.
+No PR/merge/ACK policy/deployment change. ArrayList/private lineage remains unproven.
+
+Final CLI-dependency/test-source and both public fixture builds succeeded with zero
+warnings and zero errors. `git diff --check` passed. These are compilation checks,
+not behavioral/native acceptance. The public ownership case is covered by authored
+controls; whether it is the private failure mechanism remains to be established.

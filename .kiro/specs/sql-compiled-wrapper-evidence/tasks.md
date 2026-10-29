@@ -111,3 +111,12 @@
 - [x] Author public C#/VB positive/refusal/native controls; update limitations and inner-root/dirty-tool-preserving text-only prompt.
 - [ ] Execute focused and full shared-core tests (explicitly deferred by Joe).
 - [ ] Confirm native lineage on exact inner roots and account for unintegrated work-machine tool changes (not claimed).
+
+
+## Metadata-proved constructor owners — 2026-10-28
+- [x] Retain independently agreed exact direct-base metadata under existing text caps.
+- [x] Add bounded inspected nonvirtual base-constructor owner views on the same allocation; preserve unrelated-owner refusals and scoped field keys.
+- [x] Add residual owner/body diagnostics and public C#/VB combined reference-constructor/opaque/trace and negative test definitions.
+- [x] Update rule limitations, state and clean-head inner-root text-only prompt without claiming recovery of the unavailable dirty diff.
+- [ ] Run focused/full tests (explicitly deferred by Joe).
+- [ ] Confirm the private field-owner mismatch matches this metadata-proved case and completes lineage (not claimed).

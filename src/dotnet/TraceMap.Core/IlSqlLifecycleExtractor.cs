@@ -75,6 +75,10 @@ internal static partial class IlSqlLifecycleExtractor
         public EntryOutput? Entry { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public BodyMetadataFailure? MetadataFailure { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public FieldOwnerRejection? FieldOwnerFailure { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<ConstructorOwnerView>? ConstructorOwnerViews { get; init; }
     }
     internal sealed record BodyMetadataFailure(string Stage, string Body, string Binary, string MetadataToken,
         int InstructionCount, IlObjectBodyRetention? Retention, IlObjectBodyAgreement? Agreement,
@@ -98,6 +102,7 @@ internal static partial class IlSqlLifecycleExtractor
     private sealed class ObjectState(string kind, string owner)
     {
         internal readonly string Kind = kind, Owner = owner;
+        internal readonly HashSet<string> FieldOwners = new(StringComparer.Ordinal) { owner };
         internal readonly Dictionary<string, Value> Fields = new(StringComparer.Ordinal);
         internal readonly List<Value> Slots = [];
         internal readonly List<string> SchemaExecutions = [];
@@ -121,7 +126,9 @@ internal static partial class IlSqlLifecycleExtractor
         try { return machine.Run(root, enabled); }
         catch (Refusal error) { return new Result([], [], null, [error.Message]) { MetadataFailure = error.MetadataFailure,
             OpaqueInitializers = machine.Initializers.Count > 0 ? machine.Initializers.ToArray() : null,
-            ExternalTraces = machine.TraceBoundaries.Count > 0 ? machine.TraceBoundaries.ToArray() : null }; }
+            ExternalTraces = machine.TraceBoundaries.Count > 0 ? machine.TraceBoundaries.ToArray() : null,
+            FieldOwnerFailure = machine.OwnerFailure,
+            ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
     }
 
     private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary)
@@ -200,7 +207,8 @@ internal static partial class IlSqlLifecycleExtractor
                 throw new Refusal("lifecycle-collection-enumeration-incomplete");
             var completed = new Result(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray())
                 { OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null,
-                    ExternalTraces = TraceBoundaries.Count > 0 ? TraceBoundaries.ToArray() : null };
+                    ExternalTraces = TraceBoundaries.Count > 0 ? TraceBoundaries.ToArray() : null,
+                    ConstructorOwnerViews = OwnerViews.Count > 0 ? OwnerViews.ToArray() : null };
             if (readRoot) return completed;
             if (executions.Count == 0) throw new Refusal("lifecycle-entry-no-sql-execution");
             string? returnedSet = null;
@@ -373,7 +381,15 @@ internal static partial class IlSqlLifecycleExtractor
                         var identity = parts[3][(parts[3].IndexOf('|') + 1)..];
                         var value = op == "stfld" ? Pop() : Value.Unknown;
                         var instanceValue = Pop(); var instance = Get(instanceValue, "custom");
-                        if (!identity.StartsWith("type:" + instance.Owner + "|member:", StringComparison.Ordinal)) throw new Refusal("lifecycle-field-owner");
+                        if (!instance.FieldOwners.Any(owner => identity.StartsWith("type:" + owner + "|member:", StringComparison.Ordinal)))
+                        {
+                            OwnerFailure = new(At(body, offset, invocation), op, instanceValue.Text, Hash(instance.Owner),
+                                Hash(meta.OwnerType), Hash(identity), instance.FieldOwners.Select(Hash).Order(StringComparer.Ordinal).ToArray(),
+                                meta.Name == ".ctor", args.Length > 0 && args[0] == instanceValue,
+                                identity.StartsWith("type:" + meta.OwnerType + "|member:", StringComparison.Ordinal),
+                                op == "stfld" ? value.Kind : "not-a-store");
+                            throw new Refusal("lifecycle-field-owner", MetadataFailure(body, "field-owner"));
+                        }
                         if (op == "stfld")
                         {
                             if (opaqueFields.Contains(instanceValue.Text + ":" + identity))
@@ -432,6 +448,8 @@ internal static partial class IlSqlLifecycleExtractor
                                 || targetMeta.ReturnsValue != shape.ReturnsValue || op == "newobj" && targetMeta.Name != ".ctor")
                                 throw new Refusal("lifecycle-callee-shape");
                             if (op == "newobj") receiver = New("custom", targetMeta.OwnerType);
+                            else if (targetMeta.Name == ".ctor")
+                                AdmitConstructorOwnerView(body, meta, targets[0], targetMeta, receiver, args, op, site);
                             returned = Invoke(targets[0], shape.HasThis ? new[] { receiver }.Concat(values).ToArray() : values, depth + 1);
                             if (op == "newobj") returned = receiver;
                         }

@@ -122,7 +122,7 @@ internal sealed record IlObjectBodyAgreement(bool RawBody, bool CallShapes, bool
 internal sealed record IlObjectBody(IReadOnlyList<string> Instructions, string MemberReference,
     string OwnerType, string Name, int ParameterCount, bool HasThis, bool ReturnsValue,
     bool IsVirtual, bool IsGeneric, IReadOnlyList<string> PrivateInstanceFields,
-    IReadOnlyList<string>? ExceptionRegions = null);
+    IReadOnlyList<string>? ExceptionRegions = null, string? BaseType = null);
 
 internal sealed record EvaluatedIlInput(
     IlInputOutcome Outcome,

@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v14";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v15";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -202,11 +202,11 @@ internal static class IlBodyEvidenceExtractor
                 IlSqlObjectPathExtractor.MaxFrames, IlSqlObjectPathExtractor.MaxObjects, IlSqlObjectPathExtractor.MaxSites,
                 maxIndexedBodies = 4096, maxInstructions = 256, maxFields = 64,
                 retainedCharacterBudgetPerReader = Math.Min(limits.MaxTotalWorkUnits, 1_048_576),
-                retentionProfile = "actual-retained-text.v2", independentObjectBodyAgreement = true,
+                retentionProfile = "actual-retained-text.v3", independentObjectBodyAgreement = true,
                 aggregateWork = limits.MaxTotalWorkUnits },
             sqlLifecycleLimits = new { IlSqlLifecycleExtractor.Schema, maxSteps = 8192, maxFrames = 24,
                 maxObjects = 256, maxExecutions = 8, maxFailures = 256, maxIndexedBodies = 4096,
-                maxInstructions = 256, aggregateWork = limits.MaxTotalWorkUnits },
+                maxInstructions = 256, maxConstructorOwnerViews = 24, maxConstructorOwnerRecords = 256, aggregateWork = limits.MaxTotalWorkUnits },
             outcomes = outcomes.Select(item => new
             {
                 item.SafeLocator,
@@ -764,6 +764,8 @@ internal static class IlBodyEvidenceExtractor
                         ("sqlLifecycleSchema", lifecycleSchema), ("guard", guard), ("gapKind", gap),
                         ("limitation", IlSqlLifecycleExtractor.Limitation)
                     });
+                    if (result.FieldOwnerFailure is not null)
+                        gapProperties["fieldOwnerFailure"] = SqlServerSchemaEvidence.Json(result.FieldOwnerFailure);
                     if (result.MetadataFailure is not null)
                         gapProperties["bodyMetadataFailure"] = SqlServerSchemaEvidence.Json(result.MetadataFailure);
                     facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.DotNetIlSqlLifecycle,
@@ -940,9 +942,9 @@ internal static class IlBodyEvidenceExtractor
         var characters = candidate.Instructions.Sum(text => (long)text.Length)
             + (candidate.ExceptionRegions ?? []).Sum(text => (long)text.Length)
             + candidate.PrivateInstanceFields.Sum(text => (long)text.Length)
-            + candidate.MemberReference.Length + candidate.OwnerType.Length + candidate.Name.Length;
+            + candidate.MemberReference.Length + candidate.OwnerType.Length + candidate.Name.Length + (candidate.BaseType?.Length ?? 0);
         if (candidate.MemberReference.Length > limits.MaxTextLength || candidate.OwnerType.Length > limits.MaxTextLength
-            || candidate.Name.Length > limits.MaxTextLength || candidate.PrivateInstanceFields.Any(field => field.Length > limits.MaxTextLength))
+            || candidate.Name.Length > limits.MaxTextLength || candidate.BaseType?.Length > limits.MaxTextLength || candidate.PrivateInstanceFields.Any(field => field.Length > limits.MaxTextLength))
             reason = "object-body-text-limit";
         else if (!budget.TryConsume(characters)) reason = "object-body-retention-budget";
         retention = new(reason is null ? "retained" : "unavailable", reason ?? "reader-retained",
@@ -1069,7 +1071,8 @@ internal static class IlBodyEvidenceExtractor
                     method.ReturnType.FullName != "System.Void", method.IsVirtual,
                     method.HasGenericParameters || method.DeclaringType.HasGenericParameters,
                     method.DeclaringType.Fields.Where(field => field.IsPrivate && !field.IsStatic)
-                        .Select(field => CecilFieldIdentity(field)["fielddef|".Length..]).Order(StringComparer.Ordinal).ToArray(), handlers), limits, objectBudget, out var objectRetention);
+                        .Select(field => CecilFieldIdentity(field)["fielddef|".Length..]).Order(StringComparer.Ordinal).ToArray(), handlers,
+                    method.DeclaringType.BaseType is { } baseType ? CecilTypeOperandIdentity(baseType) : null), limits, objectBudget, out var objectRetention);
         return new IlBodyObservation(
             ManagedMetadataExtractor.Token(unchecked((int)method.MetadataToken.ToUInt32())),
             methodIdentity,
@@ -1547,7 +1550,9 @@ internal static class IlBodyEvidenceExtractor
                         return (attributes & System.Reflection.FieldAttributes.FieldAccessMask) == System.Reflection.FieldAttributes.Private
                             && (attributes & System.Reflection.FieldAttributes.Static) == 0;
                     }).Select(fieldHandle => SrmFieldIdentity(reader, provider, fieldHandle)["fielddef|".Length..])
-                        .Order(StringComparer.Ordinal).ToArray(), handlers), limits, objectBudget, out var objectRetention);
+                        .Order(StringComparer.Ordinal).ToArray(), handlers,
+                    reader.GetTypeDefinition(declaringTypeHandle).BaseType.IsNil ? null
+                        : provider.GetTypeFromEntityHandle(reader.GetTypeDefinition(declaringTypeHandle).BaseType)), limits, objectBudget, out var objectRetention);
         return new IlBodyObservation(
             ManagedMetadataExtractor.Token(MetadataTokens.GetToken(handle)),
             methodIdentity,

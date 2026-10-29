@@ -1,5 +1,45 @@
 # Public compiled-wrapper SQL evidence
 
+## Metadata-proved constructor field owners — compile-only, 2026-10-28
+
+IL extractor 0.2.11 / policy `explicit-il-body-evidence.v15` retains each body's
+exact direct BaseType independently through Cecil/SRM. It participates in object
+metadata agreement and actual-text charging under unchanged retention/field/body
+caps. No scope or assembly-version normalization is introduced.
+
+A fresh derived allocation initially owns only its concrete type's slots. A direct
+nonvirtual inspected base-constructor call may add one field-owner view only if:
+both source and target object metadata agree independently, the caller is a
+constructor whose this is the same tracked receiver, the caller owner is already
+admitted on that allocation, and its declared direct BaseType equals the target
+constructor owner exactly. Target provenance/shape checks remain. Same-class
+constructor delegation adds no ownership. At most 24 owner views/allocation and 256
+view records/run are allowed under existing call-depth/work/heap limits.
+
+This supports a reference-field initializer constructing a derived custom object
+whose inspected base constructor stores base-owned fields. It does not make
+reference fields opaque. Concrete allocation identity is unchanged. Fully scoped
+base/derived field keys remain separate, including same-named fields. Unrelated
+constructor/field owners, missing/unagreed metadata and generic/virtual targets
+remain unknown. Unmodeled calls inside a base constructor still refuse; root-only
+opaque scalar admission and the trace boundary are not widened.
+
+Optional constructorOwnerViews receipts bind call site, receiver allocation,
+derived/base owner hashes and exact target body/binary. Residual field-owner gaps
+include fieldOwnerFailure with executing/allocation owner hashes, field identity
+hash, admitted owner hashes, receiver-is-this, constructor flag, field-declared-on-
+executing-owner and stored value KIND. No value or raw source snippet is added.
+The existing read/entry/conditional schemas and comparison routes remain separate.
+
+The old work-machine diff is not available and has not been reviewed/restored.
+This is an independently implemented, metadata-proved ownership case, not a claim
+that reference-field type alone explains the private refusal. Public C#/VB fixtures
+combine a constructed reference field, same-named base/derived fields, opaque root
+initialization, SQL execution identity and external trace. Negative definitions
+remove/change the declared base, remove reader agreement and inject unrelated
+field slots. Tests are authored and compile-checked only; private matching and
+behavior remain unproven. No arbitrary owner-check bypass is added.
+
 ## Exact external System.Web trace boundary — compile-only, 2026-10-28
 
 IL extractor 0.2.10 / policy `explicit-il-body-evidence.v14` adds the explicit

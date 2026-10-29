@@ -5,6 +5,43 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
+## Current constructor-ownership check
+
+Use IL extractor **0.2.11**, policy `explicit-il-body-evidence.v15`, at the newly
+fetched public head. The previous clean build still refused a constructor field
+owner. The old work-machine dirty diff is unavailable/empty; this publication does
+not claim to recover or review that missing patch. A lifecycle-field-owner gap
+compares field declaring ownership, not scalar/reference field type by itself.
+
+This head adds a narrow public metadata-backed case: an inspected constructor of
+a derived allocation can call its exact declared direct base constructor with the
+same tracked this. Both readers must agree on the direct base type and bodies.
+The base owner is then admitted as a field-owner view of that same allocation,
+without replacing its concrete owner or creating another object. Base/derived
+fields keep separate fully scoped keys. Unrelated, unavailable, unagreed, virtual/
+generic or unproved constructor-owner links remain gaps. Reference-type fields
+are not treated as opaque scalars, and arbitrary field-owner checks are not removed.
+
+Select the same verified INNER producers only; keep both existing opt-in flags.
+Use one fresh native output after source/binary checks, without running tests or
+editing/rebuilding the private application. Prefer the clean published tool build.
+Do not recreate a missing dirty patch or silently reapply an unreviewed policy.
+The previous work-machine run was clean; keep that source basis explicit. Preserve
+any new local changes rather than resetting/cleaning/overwriting them.
+
+Check `lifecycle.constructorOwnerViews` for exact base-constructor call/target body
+links and allocation identities, then constructor opaque receipts, external trace
+receipts and completed entry/parameter/Fill lineage. Do not declare the private
+case matched merely because a public compiled fixture was authored or built.
+If it still refuses, read `fieldOwnerFailure` and bodyMetadataFailure from THAT
+run. Return only: opcode, constructor/body phase, receiver-is-this,
+field-declared-on-executing-owner, stored VALUE KIND (not value), admitted-owner
+count, whether allocation/executing owner hashes agree, and exact native reason.
+Keep all actual owner/field/body identities and hashes in the private receipt.
+A constructor-owner-unproven gap specifically means the required direct-base link
+was not independently established. Do not label it a quota/reference-type failure.
+No sample code, private patch, broad rescan or photograph is required.
+
 ## Current check: inner roots plus an explicit external trace boundary
 
 The latest diagnosis separates wrong-root selection from a direct root-body trace
@@ -14,7 +51,7 @@ receipts; deselect the outer façades that construct/load another data-access ob
 Do not broaden the scalar policy to reference-type fields or raise initializer caps.
 Joe does not need to type tokens, transfer code or take more photographs.
 
-Use IL extractor **0.2.10**, policy `explicit-il-body-evidence.v14`, and add BOTH
+Use IL extractor **0.2.11**, policy `explicit-il-body-evidence.v15`, and add BOTH
 `--il-opaque-root-initializers` and `--il-external-trace-boundary` with the same
 verified application DLLs and the inner selected roots. The second flag requires
 selected roots. It recognizes only exact signed neutral System.Web 4.0.0.0/token
@@ -69,7 +106,7 @@ build is partial evidence for that exact local build, not release acceptance.
 
 ## Current opaque root-scalar initializer boundary
 
-Use IL extractor **0.2.10**, policy `explicit-il-body-evidence.v14`. For the already
+Use IL extractor **0.2.11**, policy `explicit-il-body-evidence.v15`. For the already
 identified external scalar initializer blocker, add `--il-opaque-root-initializers`
 to the same selected-root scan command. This flag requires `--il-lifecycle-root`;
 the default remains strict. Do not rebuild or edit the private application.
@@ -145,8 +182,8 @@ A throwing/omitted wrapper is an illustrative stub, not a complete replay.
 
 ## Current root-sliced metadata repair
 
-Use the newly fetched public head, IL extractor **0.2.10**, policy
-`explicit-il-body-evidence.v14`. This iteration is compile-only: Joe explicitly
+Use the newly fetched public head, IL extractor **0.2.11**, policy
+`explicit-il-body-evidence.v15`. This iteration is compile-only: Joe explicitly
 requested no tests. Historical pass totals do not validate this patch.
 
 The previous actual-text accounting repair could still exhaust the shared corpus
