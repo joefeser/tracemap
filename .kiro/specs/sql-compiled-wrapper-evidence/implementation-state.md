@@ -1130,3 +1130,25 @@ Public C#/VB positive and refusal test definitions were authored. Compile-only
 CLI, C# fixture, VB fixture and test-project builds passed with -warnaserror and
 zero warnings/errors. Tests and scans were NOT run, explicitly deferred by Joe.
 The private entry candidate and ArrayList blocker closure remain unproven.
+
+## Field-access refusal diagnostics — 2026-10-29
+
+Extractor 0.2.18 (skipping locally reported unpublished version numbers) / evidence
+policy v19 records the pending field operation before receiver/custom-owner checks.
+Optional fieldAccessFailure retains exact body/binary/invocation/offset/token,
+opcode, receiver abstract kind/allocation/heap kind, owner/field hashes, declared
+field type, nullable owner admission, this/constructor status, store-value kind,
+reader agreement and at most seven neighboring opcode names. No operand snippets
+or values are added. Opcode context is not full dataflow provenance. The receipt
+is cleared after successful field operations and retained when that operation
+refuses. Missing heap/type data stays null. Existing gap names and admission,
+loads/stores, allocation/execution identity and bounds are unchanged; no bypass.
+Existing fact generator/input provenance also binds this nested diagnostic.
+
+C#/VB regression definitions cover unknown receiver refusal and custom owner
+mismatch diagnostics. Tests/scans remain deferred by Joe. The work-machine prompt
+permits one isolated clean-head build and at most one native scan, then a hard
+stop; existing dirty patches/outputs must be preserved. Native lineage and the
+ArrayList blocker remain unproven.
+
+Validation for this diagnostic change: `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror` passed with zero warnings/errors, including CLI/Core and regression definition compilation. `git diff --check` passed. No tests or scans executed.

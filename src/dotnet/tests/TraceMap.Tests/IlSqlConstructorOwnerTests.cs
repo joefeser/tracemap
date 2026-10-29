@@ -75,9 +75,44 @@ public sealed class IlSqlConstructorOwnerTests
             false, new(400_000), opaqueRootInitializers: true);
         Assert.Equal("lifecycle-field-owner", Assert.Single(result.Gaps));
         Assert.NotNull(result.FieldOwnerFailure);
+        Assert.NotNull(result.FieldAccessFailure);
+        Assert.Equal("ldfld", result.FieldAccessFailure.Opcode);
+        Assert.Equal("custom", result.FieldAccessFailure.ReceiverHeapKind);
+        Assert.False(result.FieldAccessFailure.FieldOwnerAdmitted);
+        Assert.NotNull(result.FieldAccessFailure.FieldDeclaredType);
+        Assert.InRange(result.FieldAccessFailure.PrecedingOpcodes.Count, 0, 7);
         Assert.True(result.FieldOwnerFailure.ReceiverIsThis);
         Assert.Equal(2, result.FieldOwnerFailure.AdmittedOwnerSha256s.Count);
         Assert.Equal("field-owner", result.MetadataFailure!.Stage);
         Assert.Null(result.Entry);
     }
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void Non_object_field_receiver_keeps_refusal_and_records_exact_site(string language)
+    {
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var root = Assert.Single(bodies, body => body.Observation.ObjectBody?.Name == "ReferenceCtorProduce");
+        var getter = Assert.Single(bodies, body => body.Observation.ObjectBody?.Name == "get_BaseMarker");
+        var meta = getter.Observation.ObjectBody!;
+        var changed = getter with { Observation = getter.Observation with { ObjectBody = meta with {
+            Instructions = meta.Instructions.Select(line => {
+                var parts = line.Split(':', 4);
+                return parts[2] == "ldarg.0" ? string.Join(':', parts[0], parts[1], "ldnull", "") : line;
+            }).ToArray() } } };
+        var result = IlSqlLifecycleExtractor.Extract(root, bodies.Select(body => body == getter ? changed : body).ToArray(),
+            false, new(400_000), opaqueRootInitializers: true);
+        Assert.Equal("lifecycle-object-origin:custom", Assert.Single(result.Gaps));
+        var diagnostic = Assert.IsType<IlSqlLifecycleExtractor.FieldAccessRejection>(result.FieldAccessFailure);
+        Assert.Equal("null", diagnostic.ReceiverValueKind);
+        Assert.Null(diagnostic.ReceiverAllocation);
+        Assert.Null(diagnostic.ReceiverHeapKind);
+        Assert.Null(diagnostic.FieldOwnerAdmitted);
+        Assert.Equal(getter.Observation.MetadataToken, diagnostic.MetadataToken);
+        Assert.Equal(getter.Observation.BodyIdentity, diagnostic.Site.Body);
+        Assert.Equal("field-receiver", result.MetadataFailure!.Stage);
+        Assert.Null(result.Entry);
+        Assert.Empty(result.Executions);
+    }
+
 }

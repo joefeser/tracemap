@@ -12,10 +12,32 @@ internal static partial class IlSqlLifecycleExtractor
         IReadOnlyList<string> AdmittedOwnerSha256s, bool ExecutingConstructor, bool ReceiverIsThis,
         bool FieldDeclaredOnExecutingOwner, string StoredValueKind);
 
+    internal sealed record FieldAccessRejection(Site Site, string MetadataToken, string Opcode,
+        string ReceiverValueKind, string? ReceiverAllocation, string? ReceiverHeapKind,
+        string? AllocationOwnerSha256, string ExecutingOwnerSha256, string FieldIdentitySha256,
+        string? FieldDeclaredType, bool? FieldOwnerAdmitted, bool ReceiverIsThis,
+        bool ExecutingConstructor, string StoredValueKind, IlObjectBodyAgreement? Agreement,
+        IReadOnlyList<string> PrecedingOpcodes,
+        string Limitation = "diagnostic-only;preceding-opcodes-are-not-value-provenance;field-operation-refused;no-bypass");
+
+    private static string? DiagnosticFieldType(string identity)
+    {
+        var member = identity.IndexOf("|member:", StringComparison.Ordinal);
+        if (member < 0) return null;
+        var start = member + "|member:".Length;
+        var colon = identity.IndexOf(':', start);
+        if (colon < 0 || !int.TryParse(identity.AsSpan(start, colon - start),
+            System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var length)
+            || length < 0 || length >= identity.Length - colon) return null;
+        var separator = colon + 1 + length;
+        return separator < identity.Length && identity[separator] == '|' ? identity[(separator + 1)..] : null;
+    }
+
     private sealed partial class Machine
     {
         internal readonly List<ConstructorOwnerView> OwnerViews = [];
         internal FieldOwnerRejection? OwnerFailure;
+        internal FieldAccessRejection? FieldAccessFailure;
 
         private void AdmitConstructorOwnerView(Body source, IlObjectBody meta, Body target, IlObjectBody targetMeta,
             Value receiver, Value[] args, string opcode, Site site)

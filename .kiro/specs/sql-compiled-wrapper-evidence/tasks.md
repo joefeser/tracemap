@@ -145,3 +145,9 @@
 - [x] Update the three-flag text-only work-machine prompt and implementation limitations.
 - [ ] Execute focused/full tests (explicitly deferred by Joe).
 - [ ] Confirm native private entry lineage and ArrayList blocker closure (not claimed).
+
+## Field-access refusal diagnostics — 2026-10-29
+- [x] Capture exact rejected field site/receiver/owner/type and bounded opcode context without changing refusal or heap semantics.
+- [x] Author C#/VB regression definitions and update limitations/state and isolated one-scan prompt.
+- [ ] Execute focused/full tests (explicitly deferred by Joe).
+- [ ] Establish actual native failing field operation and completed entry lineage (not claimed).

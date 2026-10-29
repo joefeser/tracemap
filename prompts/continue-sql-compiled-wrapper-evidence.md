@@ -1,49 +1,46 @@
-# Work-machine read-only field-access diagnosis
+# Work-machine field-access diagnostic — one scan only
 
 ## Active instruction — 2026-10-29
 
-This section supersedes ALL implementation, build, test and scan instructions below.
-Do not start another scan or try another patch. Do not execute application code.
-The remaining sections are historical context only.
+This section supersedes every older instruction below. Build the clean published
+extractor 0.2.18 / evidence policy explicit-il-body-evidence.v19, then perform at
+most ONE targeted native scan and return ONE short sanitized text report. STOP
+immediately after that scan succeeds or fails. No retries, implementation changes,
+additional scans, subagents, tests or application runtime execution are authorized.
+One tool build is allowed; a failed build ends the task with its diagnostic.
 
-Perform ONE bounded read-only inspection of the existing tool source and most recent
-completed local receipt, return ONE short sanitized text result, then STOP. Do not
-launch another agent or continue iterating after reporting. If evidence is missing,
-report exactly what is unavailable and stop instead of generating another scan.
+Preserve the existing dirty tool checkout, local patches, private inputs and every
+prior output. Do not reset, clean, overwrite or apply those patches to this run.
+Use an isolated clean public tool checkout of the fetched branch head; record its
+full SHA and verify extractor/evidence versions from the built tool and manifest.
+If isolation cannot be established without disturbing existing work, stop and
+report that condition. Do not build the dirty candidate or activate a field bypass.
 
-Preserve every local change and existing output. Do not reset, clean, overwrite,
-stash away, commit or push local implementation changes. Do not change selected
-roots, flags, inputs, budgets, admission rules or ACK policy. Do not fetch/pull or
-rebuild as part of this diagnosis. Read existing files only.
+Use the previously verified INNER roots, unchanged private input hashes and the
+same three flags: --il-opaque-root-initializers --il-external-trace-boundary
+--il-compiled-scalar-boundary. Write to ONE fresh private output directory. Do not
+change admission, selection or budgets to make the scan pass.
 
-Report these items, using synthetic aliases instead of private identifiers:
+The new diagnostic is lifecycle.fieldAccessFailure in the existing native gap
+fact. The field receiver refusal remains intact. Report the first such failure:
 
-1. Current base Git SHA, dirty filenames and extractor version recorded in the
-   latest completed receipt. Distinguish source version from built binary version;
-   if correspondence cannot be established from existing evidence, say unknown.
-2. Describe the current field-load/store receiver admission logic in sanitized
-   pseudocode, including any local bypass absent from the published base. Do not
-   copy private source. State whether a bypass drops a store, substitutes an unknown
-   load, preserves the actual value, or changes heap state.
-3. For the FIRST failing field operation only: opcode, module-local body token,
-   IL offset, receiver abstract value kind and heap kind, field declared type, and
-   whether field owner matches the modeled receiver owner. Use synthetic type aliases
-   where needed; do not return private field/method names or raw identity strings.
-4. Explain how that receiver reached the operand stack using a small sanitized
-   opcode/type sequence from retained evidence. Include field value versus field
-   receiver position, instance/static shape, constructor-owner view if relevant,
-   and whether independent metadata readers agree. Missing evidence stays unknown.
-5. State whether ignoring this operation could lose command, parameter, connection
-   or result-object mutations, attachment links, or allocation/execution identity.
-   Do not declare the bypass sound merely because it reaches the next instruction.
+- Clean tool SHA/build basis, extractor/evidence version and native gap kind.
+- Site body token and IL offset, opcode, receiver value kind, allocation ID and
+  heap kind. Null means unavailable, not a guessed framework type.
+- Field declared type using synthetic aliases where needed; field/owner hashes,
+  fieldOwnerAdmitted, receiverIsThis, executingConstructor and storedValueKind.
+- Agreement and metadataFailure, plus precedingOpcodes (at most seven). These
+  nearby opcodes are context, NOT proof of the receiver's full dataflow provenance.
+- Entry candidate count; whether constructor/scalar/trace phases completed.
 
-Use existing native gap/receipt metadata first, then only the implicated handler and
-bounded neighboring source/evidence. Do not reread the repository. Keep private
-code, sample programs and detailed receipts on the work machine. Return text only;
-no code samples, screenshots or new photographs are requested. This diagnosis does
-not authorize a fix or establish entry lineage, acceptance or SQL-effort completion.
+If fieldAccessFailure is absent, report the actual first gap and stop. Do not
+infer a field type or receiver kind from a list of possible framework objects.
+Do not claim stores can be dropped merely because allocation IDs survive.
+This release is diagnostic-only and does not close lineage or acceptance.
 
-STOP after the report, even if the likely fix seems obvious.
+Keep detailed receipts, private names/code and samples on the work machine.
+Return short sanitized TEXT only; no samples, screenshots or photographs requested.
+STOP after the one report, even if a likely fix appears obvious.
 
 ---
 

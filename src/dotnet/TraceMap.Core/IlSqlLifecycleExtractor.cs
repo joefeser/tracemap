@@ -83,6 +83,8 @@ internal static partial class IlSqlLifecycleExtractor
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public FieldOwnerRejection? FieldOwnerFailure { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public FieldAccessRejection? FieldAccessFailure { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public OpaqueChainRejection? OpaqueInitializerRejection { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ConstructorOwnerView>? ConstructorOwnerViews { get; init; }
@@ -136,6 +138,7 @@ internal static partial class IlSqlLifecycleExtractor
             ExternalTraces = machine.TraceBoundaries.Count > 0 ? machine.TraceBoundaries.ToArray() : null,
             TraceStringComputations = machine.StringComputations.Count > 0 ? machine.StringComputations.ToArray() : null,
             FieldOwnerFailure = machine.OwnerFailure,
+            FieldAccessFailure = machine.FieldAccessFailure,
             OpaqueInitializerRejection = machine.ReportedOpaqueRejection,
             ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
     }
@@ -393,7 +396,20 @@ internal static partial class IlSqlLifecycleExtractor
                         if (parts.Length != 4 || parts[1] != "field") throw new Refusal("lifecycle-field-invalid");
                         var identity = parts[3][(parts[3].IndexOf('|') + 1)..];
                         var value = op == "stfld" ? Pop() : Value.Unknown;
-                        var instanceValue = Pop(); var instance = Get(instanceValue, "custom");
+                        var instanceValue = Pop();
+                        heap.TryGetValue(instanceValue.Text, out var receiverState);
+                        FieldAccessFailure = new(At(body, offset, invocation), body.Observation.MetadataToken, op,
+                            instanceValue.Kind, instanceValue.Kind == "object" ? instanceValue.Text : null,
+                            receiverState?.Kind, receiverState is null ? null : Hash(receiverState.Owner),
+                            Hash(meta.OwnerType), Hash(identity),
+                            DiagnosticFieldType(identity),
+                            receiverState is null ? null : receiverState.FieldOwners.Any(owner => identity.StartsWith("type:" + owner + "|member:", StringComparison.Ordinal)),
+                            args.Length > 0 && args[0] == instanceValue, meta.Name == ".ctor",
+                            op == "stfld" ? value.Kind : "not-a-store", body.Observation.ObjectBodyAgreement,
+                            code.Skip(Math.Max(0, i - 7)).Take(Math.Min(7, i)).Select(line => line[2]).ToArray());
+                        ObjectState instance;
+                        try { instance = Get(instanceValue, "custom"); }
+                        catch (Refusal error) { throw new Refusal(error.Message, MetadataFailure(body, "field-receiver")); }
                         if (!instance.FieldOwners.Any(owner => identity.StartsWith("type:" + owner + "|member:", StringComparison.Ordinal)))
                         {
                             OwnerFailure = new(At(body, offset, invocation), op, instanceValue.Text, Hash(instance.Owner),
@@ -412,6 +428,7 @@ internal static partial class IlSqlLifecycleExtractor
                             instance.Fields[identity] = value;
                         }
                         else stack.Add(instance.Fields.GetValueOrDefault(identity, Value.Unknown));
+                        FieldAccessFailure = null;
                         continue;
                     }
                     if (op is "call" or "callvirt" or "newobj")
