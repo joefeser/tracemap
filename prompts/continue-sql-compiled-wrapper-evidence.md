@@ -1,48 +1,54 @@
-# Work-machine stack-name trace boundary — one scan only
+# Work-machine delegate diagnosis — read only
 
 ## Active instruction — 2026-10-29
 
-This section supersedes ALL older instructions below. Use the newly fetched clean
-public head, extractor 0.2.19 / evidence policy explicit-il-body-evidence.v20 /
-external trace policy explicit-external-web-trace/3. Preserve all existing dirty
-patches and outputs. Use an isolated clean public tool checkout; do not reset,
-clean, overwrite, apply or activate the dirty trace or field-access bypasses.
+This section supersedes ALL historical instructions below. Perform ONE bounded
+read-only inspection of the existing lifecycle-opcode:ldftn failure receipt and
+its retained compiled body. Return ONE short sanitized text report, then STOP.
+No scans, builds, tests, code changes, subagents, application execution, commits
+or pushes are authorized. Preserve all dirty files, private inputs and outputs.
+Do not activate any unpublished field-access or other bypass.
 
-Perform at most ONE tool build and ONE targeted native scan, then return ONE
-short sanitized text report and STOP. No retries, edits, tests, extra scans,
-subagents or application runtime execution are authorized. If build/isolation
-fails, report that failure and stop without scanning. Tests remain deferred.
+Use the existing clean-build receipt corresponding to implementation commit
+ed4f3d9beb6bd8a065a8a751963c876c86207a80 (extractor0.2.19, evidence policyv20).
+This prompt-only update does not change the tool implementation. Do not rebuild
+or rerun to obtain a newer receipt. Confirm the receipt's actual SHA/version;
+if the expected evidence is unavailable, report what is missing and stop.
 
-Use the same verified INNER roots and private input hashes, all three flags:
---il-opaque-root-initializers --il-external-trace-boundary --il-compiled-scalar-boundary.
-Write to a fresh private output directory. Do not alter selections or budgets.
+Inspect the FIRST recorded ldftn failure, using the exact body token and IL offset
+from the private receipt. Do not infer delegate behavior from ldftn alone.
+Use retained IL first; a bounded local disassembly is allowed if needed. Never
+load/execute application code. Inspect only the containing method, relevant
+signature metadata and, if present, the referenced callback's retained body.
 
-The new logging-only policy supports scalar/fresh trace-array local stores and
-exact signed mscorlib 2/4 StackTrace::.ctor() -> GetFrame(Int32) ->
-StackFrame.GetMethod() -> MemberInfo.get_Name. Frame indices must be known 0..31.
-It never executes reflection, determines the runtime stack or invents method names.
-Names remain unbound strings with partial receipts and normal-return/non-null/
-unmodeled-stack assumptions. Stack/reflection references cannot be stored in locals,
-passed to arbitrary calls or escape the chain. General reflection remains refused.
+Report:
+1. Receipt SHA/version, failing body token, IL offset and actual opcode. Confirm
+   whether both selected roots share this site/target or have distinct failures.
+2. Referenced target method as a synthetic alias; static/instance, parameter and
+   return types, generic/virtual shape and whether its body is retained/agreed.
+   Public framework type names/signatures may be reported exactly.
+3. Constructed delegate type and constructor signature, or explicitly state that
+   no delegate construction follows. Identify the target receiver: null/static,
+   root-this, closure, another object or unknown. Do not guess an unrecorded origin.
+4. Its next consumer and destination: local/field storage, event add/remove,
+   helper argument, direct Invoke or another use. Identify the exact public API
+   signature when available; use aliases for private methods/types. Trace only
+   the bounded relevant value flow, not the whole repository.
+5. Whether command, parameter, connection, DataSet or root/closure references are
+   captured or passed. Separate observed receiver/argument origins from unknown
+   transitive callback effects. Root-this capture is not proof of no SQL access.
+6. If a callback body is retained, summarize actual opcode-level field writes,
+   SQL/framework calls, branches and handlers without copying private source.
+   No direct field writes is NOT proof of purity or absence of transitive effects.
+7. Give the owner a LOCAL navigation note outside Git containing private source
+   path/method/line only where verified mapping exists, otherwise token/offset.
+   Keep those private identifiers local; return only a sanitized note location.
 
-Versioned limits: 128 instructions/trace chain, 32 stack-name calls/chain, 16 stored
-local slots/chain, existing 16 expression stack/array elements, 32 string computations
-per run, 8 trace chains/root, existing aggregate work/heap/call limits. The field
-receiver refusal and exact allocation/execution identity remain unchanged.
-
-Report clean tool SHA/build basis, versions, input-hash verification, entry count,
-constructor/scalar/trace receipts and actual parameter/attachment/Fill identity.
-If blocked, report the FIRST native gap plus lifecycle.externalTraceFailure or
-lifecycle.fieldAccessFailure when present. Trace diagnostics now include method
-token, IL offset, actual rejected opcode, call signature hash/shape and abstract
-stack kinds. Keep private names/source/values and detailed metadata on the work
-machine; map signature hashes locally and share public framework signatures or
-synthetic aliases only. Unknown metadata stays unknown. Do not infer purity or
-safe dropped stores from getting farther. Keep any owner navigation note local.
-
-Return at most 30 lines of sanitized TEXT, no code/sample transfer or new photos
-requested. STOP after that report. This is not an assertion that the ArrayList
-blocker or the SQL effort is complete.
+Return at most30 lines of sanitized TEXT. Keep source, SQL, names, values,
+binaries and sample programs on the work machine. No code/email transfer or new
+photos requested. If metadata/dataflow is missing or ambiguous, say precisely
+what remains unknown. Do not propose skipping the delegate or accepting its
+consumer merely because it has a void return. STOP after the report.
 
 ---
 
