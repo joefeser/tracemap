@@ -63,9 +63,12 @@ internal static partial class IlSqlLifecycleExtractor
         Read? Returned, IReadOnlyList<string> Gaps, IReadOnlyList<Loop>? Loops = null,
         IReadOnlyList<Failure>? Failures = null, IReadOnlyList<Site>? Bodies = null)
     {
-        public string Claim => OpaqueInitializers is { Count: > 0 }
+        public string Claim => (OpaqueInitializers is { Count: > 0 }
             ? "conditional-static-lineage;opaque-initialization-normal-return-assumed;tracked-heap-noninterference-assumed;external-effects-unmodeled;row-existence-unproven"
-            : "conditional-static-lineage;normal-completion;row-existence-unproven";
+            : "conditional-static-lineage;normal-completion;row-existence-unproven")
+            + (ExternalTraces is { Count: > 0 } ? ";external-trace-normal-return-assumed;trace-receiver-non-null-unproven;tracked-heap-noninterference-assumed;external-effects-unmodeled" : "");
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<ExternalTrace>? ExternalTraces { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<OpaqueInitializer>? OpaqueInitializers { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -112,15 +115,16 @@ internal static partial class IlSqlLifecycleExtractor
     }
 
     internal static Result Extract(Body root, IReadOnlyList<Body> bodies, bool enabled,
-        IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers = false)
+        IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers = false, bool externalTraceBoundary = false)
     {
-        var machine = new Machine(bodies, budget, opaqueRootInitializers);
+        var machine = new Machine(bodies, budget, opaqueRootInitializers, externalTraceBoundary);
         try { return machine.Run(root, enabled); }
         catch (Refusal error) { return new Result([], [], null, [error.Message]) { MetadataFailure = error.MetadataFailure,
-            OpaqueInitializers = machine.Initializers.Count > 0 ? machine.Initializers.ToArray() : null }; }
+            OpaqueInitializers = machine.Initializers.Count > 0 ? machine.Initializers.ToArray() : null,
+            ExternalTraces = machine.TraceBoundaries.Count > 0 ? machine.TraceBoundaries.ToArray() : null }; }
     }
 
-    private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers)
+    private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary)
     {
         private readonly Dictionary<string, ObjectState> heap = new(StringComparer.Ordinal);
         private readonly List<Execution> executions = [];
@@ -168,6 +172,7 @@ internal static partial class IlSqlLifecycleExtractor
                 || meta.ParameterCount is < 0 or > 16 || (!readRoot && !producer && !loader)
                 || producer && !meta.ReturnsValue || loader && meta.ReturnsValue)
                 throw new Refusal("lifecycle-root-admission-shape");
+            if (externalTraceBoundary && !readRoot) externalTraceRoot = root.Observation.BodyIdentity;
             var instance = Value.Unknown;
             if (meta.HasThis)
             {
@@ -194,7 +199,8 @@ internal static partial class IlSqlLifecycleExtractor
                 && state.Moves != Get(state.Parent, "arraylist").Slots.Count + 1))
                 throw new Refusal("lifecycle-collection-enumeration-incomplete");
             var completed = new Result(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray())
-                { OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null };
+                { OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null,
+                    ExternalTraces = TraceBoundaries.Count > 0 ? TraceBoundaries.ToArray() : null };
             if (readRoot) return completed;
             if (executions.Count == 0) throw new Refusal("lifecycle-entry-no-sql-execution");
             string? returnedSet = null;
@@ -266,6 +272,8 @@ internal static partial class IlSqlLifecycleExtractor
                     if (++work > 8192 || !budget.TryConsume(1) || stack.Count > 64 || locals.Count > 64) throw new Refusal("lifecycle-work-limit");
                     var op = code[i][2]; var operand = code[i][3]; var offset = offsets[i];
                     if (op == "nop") continue;
+                    if (stack.Count == 0 && TryExternalTrace(body, args, depth, code, offsets, calls, locals, regions, i, invocation, out var traceEnd))
+                    { i = traceEnd; continue; }
                     if (stack.Count == 0 && TryOpaqueInitializer(body, args, depth, code, offsets, calls, i, invocation, out var terminal))
                     { i = terminal; continue; }
                     if (Slot(op, operand, "ldarg", out var slot)) { stack.Add(slot < args.Length ? args[slot] : Value.Unknown); continue; }

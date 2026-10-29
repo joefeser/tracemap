@@ -102,3 +102,12 @@
 - [x] Add public C#/VB fixtures and focused/native/refusal test definitions; update rule limitations, state and work-machine text-return prompt.
 - [ ] Execute new focused controls and broader shared-core gate (explicitly deferred by Joe).
 - [ ] Establish real-input opaque-initializer/ArrayList lineage under the explicit boundary (not claimed).
+
+
+## Exact external trace boundary — 2026-10-28
+- [x] Add explicit exact signed System.Web Current/Trace/Write root-body boundary, preserving typed scalar data and existing strict refusals.
+- [x] Bound chains/instructions/work; refuse escapes, context branches, tracked-reference arguments, wrong signatures, region crossings and loop effects.
+- [x] Emit conditional trace receipts/assumptions and preserve per-execution identity; select schemas independently per guarded run.
+- [x] Author public C#/VB positive/refusal/native controls; update limitations and inner-root/dirty-tool-preserving text-only prompt.
+- [ ] Execute focused and full shared-core tests (explicitly deferred by Joe).
+- [ ] Confirm native lineage on exact inner roots and account for unintegrated work-machine tool changes (not claimed).

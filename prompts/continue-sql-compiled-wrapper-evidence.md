@@ -5,52 +5,71 @@ pattern using the published implementation; do not implement another speculative
 extractor or repeat the previous unsupported-ArrayList diagnosis without checking
 the new native evidence.
 
-## Current follow-up: resolve native gaps from existing receipts
+## Current check: inner roots plus an explicit external trace boundary
 
-The latest reported run still has no completed entry candidate and identifies
-ConfigurationManager.get_ConnectionStrings plus HttpContext.get_Current calls.
-The earlier last-blocker finding is not confirmation of this newer native path.
-Do not raise caps or add a getter allowlist entry from the summary alone.
+The latest diagnosis separates wrong-root selection from a direct root-body trace
+chain. Select only the inner DataSet-producing roots whose own constructor scalar
+boundary already completes. Derive those selections privately from the existing
+receipts; deselect the outer façades that construct/load another data-access object.
+Do not broaden the scalar policy to reference-type fields or raise initializer caps.
+Joe does not need to type tokens, transfer code or take more photographs.
 
-Use existing scan/body/call/slice/initializer receipts and local metadata inspection.
-Do not start another scan, execute application/configuration/provider code, or run
-tests for this diagnosis. Return one short sanitized text table; no sample source,
-private names/hashes/paths, code photographs or broad investigation request.
+Use IL extractor **0.2.10**, policy `explicit-il-body-evidence.v14`, and add BOTH
+`--il-opaque-root-initializers` and `--il-external-trace-boundary` with the same
+verified application DLLs and the inner selected roots. The second flag requires
+selected roots. It recognizes only exact signed neutral System.Web 4.0.0.0/token
+b03f5f7f11d50a3a HttpContext.Current -> HttpContext.Trace -> TraceContext.Write
+(String) or Write(String,String), as one bounded root-body chain. It does not add
+System.Web.dll as a compiled input or generally admit context/session APIs.
 
-1. Establish the exact PUBLIC tool revision: full 40-character `git rev-parse HEAD`,
-   ancestry from implementation 49102ea8c646304f72d71363097818fbf04d58c5, clean/dirty
-   state and public tool files changed since that implementation. Keep private
-   input/generator hashes local and verify the existing receipt matches the actual
-   built Core bytes. Do not silently repair an abbreviated or malformed SHA.
-2. For ConfigurationManager, read the exact native gap string and
-   bodyMetadataFailure stage, or report each absent. In the published source,
-   opaque cap/shape refusals use lifecycle-opaque-initializer-*; generic unknown-call
-   can indicate execution outside the selected fresh root constructor boundary.
-   Determine whether the failing body is that constructor, another object's
-   constructor, or a helper invoked during construction; report only opaque body
-   aliases, call depth category, and whether its receiver is the fresh root or a
-   different tracked allocation. Count actual opaque initialized fields, chain
-   instructions/calls and limit reasons only where established. Closure member
-   count is not initialized-field count and does not establish quota exhaustion.
-3. For HttpContext.Current, trace the returned value's complete bounded local use
-   through the inspected callee: public framework calls, local stores, null/control
-   tests, tracked-reference arguments, field/return escapes and handlers. Report a
-   short abstract opcode/use sequence and exact public framework signatures only.
-   A reference return does not itself establish an escape or external purity.
-   If it controls a branch, preserve the unknown outcome; never pick the non-null
-   or null branch, treat it as an empty context, or label a shared object fresh.
-4. State the narrowest proven missing capability separately for each case. If a
-   value-use link is unavailable, name that exact missing link instead of proposing
-   a general untracked-reference policy. No implementation change is authorized on
-   the work machine. Keep full private body identities, offsets and evidence local.
+The trace reference results cannot be stored, returned, duplicated, branched on or
+passed elsewhere. Arguments must be literal/null strings or tracked scalar string
+root arguments, locals or own private fields; arbitrary argument-building calls
+remain unsupported. Max 8 chains/root and 16 instructions/chain apply under existing
+work/heap caps. The chain cannot cross an exception region or receive a branch into
+its middle. It is disabled in read roots, constructors, compiled callees and active
+modeled enumeration loops. Keep any refusal; do not label it a pure/no-effect call.
 
-After this receipt-only diagnosis, the implementation side can select a bounded
-change and author its own public fixtures. Joe need not transfer fixture source.
-Keep baseline outputs and the test-deferred status unchanged.
+Used boundaries appear in `lifecycle.externalTraces` under the conditional
+`il-sql-lifecycle-opaque-entry/1` entry schema. Record three call-site/signature
+hashes, argument origins, mayThrow/unmodeled effects and enclosing catch where
+present. Claims explicitly assume normal return and tracked-heap noninterference;
+context non-nullness and runtime trace behavior are unproven. Catch continuations
+remain unexecuted. No runtime logging/configuration/SQL is invoked by this tool.
+
+### Preserve and identify the work-machine tool changes
+
+The previous run used uncommitted public-tool changes as well as its Git SHA, so
+that SHA alone does not identify its implementation. Preserve the three modified
+TraceMap files and all other dirty/untracked work. Do not reset, clean, overwrite,
+or silently drop those changes while updating. Save an exact local patch/inventory
+outside every application/source/baseline directory before any integration, and
+verify it remains recoverable. Keep that patch and its hashes on the work machine.
+
+Prefer a separate clean tool checkout at the newly fetched public head, leaving the
+original dirty checkout untouched. Inspect the existing public-tool deltas locally.
+If needed, carry forward only the already existing narrow integration fixes into
+that separate checkout, preserving all exact identity/compiled-callee/refusal gates;
+do not invent new policy changes or bypass refusals to obtain a positive result.
+Record source basis as clean-public-head or public-head-plus-unintegrated-local-fixes,
+with actual Core generator bytes and local delta digest bound in the private receipt.
+Never claim a mixed build is the published implementation or independently validated.
+Return a short neutral behavior summary of those tool deltas (public filenames and
+what validation changed), not their code or private content. If safe integration is
+unclear, report the precise conflict/changed policy before scanning; preserve work.
+
+After source/binary checks, perform one targeted native run into a fresh private
+output directory; test suites remain deferred. Return a SHORT SANITIZED TEXT matrix:
+public tool SHA plus clean/mixed basis, build/tests-not-run status, selected inner-root
+fit, constructor boundary status, external trace boundary count, entry schema/count,
+parameter execution isolation, and first native gap if any. Include the public-tool
+delta summary when dirty. No sample source, private identifiers/hashes or photos.
+Do not run another broad scan or execute the application/SQL. A successful mixed
+build is partial evidence for that exact local build, not release acceptance.
 
 ## Current opaque root-scalar initializer boundary
 
-Use IL extractor **0.2.9**, policy `explicit-il-body-evidence.v13`. For the already
+Use IL extractor **0.2.10**, policy `explicit-il-body-evidence.v14`. For the already
 identified external scalar initializer blocker, add `--il-opaque-root-initializers`
 to the same selected-root scan command. This flag requires `--il-lifecycle-root`;
 the default remains strict. Do not rebuild or edit the private application.
@@ -126,8 +145,8 @@ A throwing/omitted wrapper is an illustrative stub, not a complete replay.
 
 ## Current root-sliced metadata repair
 
-Use the newly fetched public head, IL extractor **0.2.9**, policy
-`explicit-il-body-evidence.v13`. This iteration is compile-only: Joe explicitly
+Use the newly fetched public head, IL extractor **0.2.10**, policy
+`explicit-il-body-evidence.v14`. This iteration is compile-only: Joe explicitly
 requested no tests. Historical pass totals do not validate this patch.
 
 The previous actual-text accounting repair could still exhaust the shared corpus
@@ -323,7 +342,7 @@ concrete failure. Use the built CLI and repeat `--compiled-input` for each neces
 assembly; do not omit the wrapper or substitute source-reader evidence.
 
 ```text
-dotnet <local-built-tracemap.dll> scan --repo <PRIVATE_SOURCE_ROOT> --out <new-private-scan-directory> --il-body-evidence --il-opaque-root-initializers --compiled-input <caller.dll> --compiled-input <wrapper.dll> --il-lifecycle-root <privately-derived-sha256>:<privately-derived-MethodDef-token>
+dotnet <local-built-tracemap.dll> scan --repo <PRIVATE_SOURCE_ROOT> --out <new-private-scan-directory> --il-body-evidence --il-opaque-root-initializers --il-external-trace-boundary --compiled-input <caller.dll> --compiled-input <wrapper.dll> --il-lifecycle-root <privately-derived-sha256>:<privately-derived-MethodDef-token>
 ```
 
 Inspect all three fact kinds under `dotnet.compiled.il-sql-lifecycle.v1`, Tier3:

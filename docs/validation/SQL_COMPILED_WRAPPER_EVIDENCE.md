@@ -1,5 +1,51 @@
 # Public compiled-wrapper SQL evidence
 
+## Exact external System.Web trace boundary — compile-only, 2026-10-28
+
+IL extractor 0.2.10 / policy `explicit-il-body-evidence.v14` adds the explicit
+`--il-external-trace-boundary` flag, requiring selected roots. It recognizes exact
+signed neutral System.Web 4.0.0.0 (token b03f5f7f11d50a3a) MemberRef signatures for
+static HttpContext.get_Current, instance HttpContext.get_Trace and instance
+TraceContext.Write(String) or Write(String,String) with Void return. The entire
+chain is recognized atomically; it is not a general getter/void-method allowlist.
+No System.Web implementation or runtime environment is loaded/executed.
+
+Only the selected producer/loader root body at depth 0 qualifies, with an empty
+interpreter stack and no active modeled enumeration loop. Reference results cannot
+be stored, duplicated, returned, branched on or passed outside the chain. Arguments
+are scalar string literal/null values, root arguments, locals or own private field
+loads with proved modeled string/opaque-string origins. No arbitrary argument-call
+computation or tracked object argument is admitted. Other overloads, signing keys,
+versions, owners or incomplete call metadata refuse. Context non-nullness is unknown.
+
+Bounds are 8 chains/root and 16 encoded instructions/chain, under existing aggregate
+work limits. No branch may enter the chain's middle, and exception-region membership
+must remain unchanged across it. Receipts retain all three sites/signature hashes,
+argument origins, possible throws/unmodeled effects and the innermost enclosing
+catch site when present. Normal return and noninterference with the tracked data
+heap are explicit assumptions, not findings that tracing is pure or effect-free.
+Catch continuations remain unexecuted. Runtime context/logging behavior is unproven.
+
+Used boundaries select `il-sql-lifecycle-opaque-entry/1` with optional externalTraces
+receipts; existing strict read/comparison contracts are unchanged. Defaults retain
+unknown-call refusals. Scalar initializer mode remains separately opt-in. Guarded
+runs select their schema independently, preventing a conditional boundary on one
+run from relabeling a different run that did not use it. SQL parameter allocation
+and execution identities remain in the existing interpreter model.
+
+Public C#/VB fixture and test definitions cover both Write overloads, scalar root/
+local/opaque-field data, separate SQL executions, forged signatures, missing call
+metadata, context branches/stores, tracked-object arguments, overload/chain limits,
+legacy read-root refusal, explicit flag validation and native conditional schema.
+Only compilation is checked; tests/native scans/provider/application/trace methods
+are not executed under the standing no-tests instruction.
+
+Work-machine reports based on dirty tool files are evidence for those exact mixed
+binaries, not just the Git commit. The handoff preserves local changes and requests
+actual generator/delta bindings privately plus a neutral public-tool delta summary.
+Wrong outer façade roots are deselected; reference-field constructor admission is
+not added. Full real-input lineage and public-release acceptance remain outstanding.
+
 ## Opt-in opaque root scalar initialization — compile-only, 2026-10-28
 
 IL extractor 0.2.9 / policy `explicit-il-body-evidence.v13` adds

@@ -841,3 +841,75 @@ Final builds succeeded with zero warnings/errors for CLI dependencies/test sourc
 and both C#/VB fixture projects. `git diff --check` passed. These are compilation
 checks only; no tests or sample methods were run. The failure-only handoff now
 explicitly keeps sample source on the work machine and requests text/status only.
+
+
+## Exact external trace continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting public head
+`e173788b481373d1e703687beddcc142756031d8`, clean before edits. Standing fix/push
+and no-tests instruction retained. A later diagnostic identifies an immediate
+public System.Web trace chain in the selected root body and wrong outer façade
+selections. The reported native build also included uncommitted public-tool changes
+that are not available in this checkout; their behavior is not assumed reproduced.
+No private names, tokens, source, patch content or receipts were copied into Git.
+
+## Exact external System.Web trace boundary — compile-only, 2026-10-28
+
+IL extractor 0.2.10 / policy `explicit-il-body-evidence.v14` adds the explicit
+`--il-external-trace-boundary` flag, requiring selected roots. It recognizes exact
+signed neutral System.Web 4.0.0.0 (token b03f5f7f11d50a3a) MemberRef signatures for
+static HttpContext.get_Current, instance HttpContext.get_Trace and instance
+TraceContext.Write(String) or Write(String,String) with Void return. The entire
+chain is recognized atomically; it is not a general getter/void-method allowlist.
+No System.Web implementation or runtime environment is loaded/executed.
+
+Only the selected producer/loader root body at depth 0 qualifies, with an empty
+interpreter stack and no active modeled enumeration loop. Reference results cannot
+be stored, duplicated, returned, branched on or passed outside the chain. Arguments
+are scalar string literal/null values, root arguments, locals or own private field
+loads with proved modeled string/opaque-string origins. No arbitrary argument-call
+computation or tracked object argument is admitted. Other overloads, signing keys,
+versions, owners or incomplete call metadata refuse. Context non-nullness is unknown.
+
+Bounds are 8 chains/root and 16 encoded instructions/chain, under existing aggregate
+work limits. No branch may enter the chain's middle, and exception-region membership
+must remain unchanged across it. Receipts retain all three sites/signature hashes,
+argument origins, possible throws/unmodeled effects and the innermost enclosing
+catch site when present. Normal return and noninterference with the tracked data
+heap are explicit assumptions, not findings that tracing is pure or effect-free.
+Catch continuations remain unexecuted. Runtime context/logging behavior is unproven.
+
+Used boundaries select `il-sql-lifecycle-opaque-entry/1` with optional externalTraces
+receipts; existing strict read/comparison contracts are unchanged. Defaults retain
+unknown-call refusals. Scalar initializer mode remains separately opt-in. Guarded
+runs select their schema independently, preventing a conditional boundary on one
+run from relabeling a different run that did not use it. SQL parameter allocation
+and execution identities remain in the existing interpreter model.
+
+Public C#/VB fixture and test definitions cover both Write overloads, scalar root/
+local/opaque-field data, separate SQL executions, forged signatures, missing call
+metadata, context branches/stores, tracked-object arguments, overload/chain limits,
+legacy read-root refusal, explicit flag validation and native conditional schema.
+Only compilation is checked; tests/native scans/provider/application/trace methods
+are not executed under the standing no-tests instruction.
+
+Work-machine reports based on dirty tool files are evidence for those exact mixed
+binaries, not just the Git commit. The handoff preserves local changes and requests
+actual generator/delta bindings privately plus a neutral public-tool delta summary.
+Wrong outer façade roots are deselected; reference-field constructor admission is
+not added. Full real-input lineage and public-release acceptance remain outstanding.
+
+Compile-only verification commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No tests/native replay were executed. No PR/merge/ACK-policy/deployment changes.
+
+Final CLI-dependency/test-source and both public fixture builds succeeded with zero
+warnings/errors. `git diff --check` passed. No test methods or native scans were
+executed. The three reported work-machine source changes remain unintegrated and
+unreviewed here; this patch does not claim to reproduce their behavior. The next
+handoff must preserve and identify them rather than equating their mixed binary
+with a clean published SHA. Whole SQL effort/acceptance remains incomplete.
