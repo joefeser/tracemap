@@ -1733,3 +1733,35 @@ exit 0. Log: /tmp/tracemap-state-full-debug3.log. This is the completed IL
 0.2.28 / policy v29 public full gate for the adjacent whole-protocol batch.
 prompts/glm-sql-lifecycle-final-validation.md precondition 2 is satisfied with
 the full SHA pinned. No private input, scan, PR, merge or ACK change.
+
+## Synthetic closure batch — 2026-10-30 (batch 4, IL 0.2.29 / policy v30)
+
+Joe authorized the ECMA-335 sufficiency determination ("take as long as needed
+... create synthetic examples because that is the only true way to test"). A
+public synthetic clone of the v12-001 19-body closure (ClosureShape.cs/.vb in
+the whole-protocol role: two inner roots + connection/adapter-build/parameter/
+exception/crypto-shaped/table-mapping/debug helpers, plus refusal probes) runs
+under all five boundary flags in IlSqlClosureShapeTests (12 tests x 2 languages).
+Sufficiency answer: NO layer-A (ECMA-335) work is needed for this lifecycle —
+every refusal in the closure is catalog admission or by-design bounded
+semantics; the full classification table is in
+docs/validation/SQL_LIFECYCLE_CAPABILITY_MAP.md.
+
+Found only by synthesis and fixed here: the 0.2.28 MethodBase.GetCurrentMethod
+catalog identity was malformed (owner type encoding; no fixture had executed
+it), String.Concat 3/4-arg is what both compilers actually emit for chained
+concatenation, Roslyn lowers State != zero-constant enum members to
+ldc.i4.0 + cgt.un (now a forking state test), and UnboundStringCount only
+propagated on failure results (the computed-string claim token could never
+appear on success). The StackTrace/GetFrame/GetMethod chain now resolves in
+non-callback lifecycle bodies under the external-trace flag, per the v12-001
+prediction. Enumerated by-design refusals pinned: mapping content reads,
+custom-exception base calls, argument-position framework exception
+construction, input-driven sizes, non-primitive root inputs, both boundary
+opt-ins absent.
+
+Focused validation 274/274 (IlSql + ScanDiagnosticProgress, Debug
+-warnaserror) including the closure suite, plus retention 11/11; the adjacent
+set_CommandTimeout probe is scoped now that two fixtures call it. Full gate on
+an immutable clone recorded separately below. No private input, no acceptance
+or whole-SQL completion claim.

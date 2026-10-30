@@ -3,8 +3,8 @@
 Public, sanitized capability map of `IlSqlLifecycleExtractor` and its opt-in
 boundaries against the bounded compiled wrapper protocol, derived from the public
 synthetic fixtures and interpreter source only. Inventory is not proof of runtime
-reachability on any private body. Version `il-body-evidence/0.2.27`, evidence
-policy `explicit-il-body-evidence.v28`, state control `explicit-sql-state-control/1`.
+reachability on any private body. Version `il-body-evidence/0.2.29`, evidence
+policy `explicit-il-body-evidence.v30`, state control `explicit-sql-state-control/1`.
 
 ## Scope
 
@@ -27,15 +27,15 @@ instructions/body, 24 depth, 8192 steps + shared work budget, 256 heap objects,
 | Execution | `SqlDataAdapter.Fill` per command/dataset pair, execution identity per Fill | second Fill/merge into used shapes refuses |
 | Results | returned `DataSet` allocation, stored dataset fields, table states, per-column origins | origin-less returned dataset refuses |
 | InfoMessage | exact delegate ctor/subscribe/unsubscribe, callback inspection (names/naming lists), post-Fill naming receipts, framework 2/4 profiles | callback execution, sender access, list escape refuse |
-| External trace | exact System.Web `TraceContext.Write` boundary incl. computed strings, stack-name chain, trace locals | arbitrary argument computation still bounded |
+| External trace | exact System.Web `TraceContext.Write` boundary incl. computed strings, stack-name chain, trace locals; the `StackTrace`/`GetFrame`/`GetMethod` name chain also resolves in non-callback lifecycle bodies under the flag (every step unbound, frame index 0-31) | arbitrary argument computation still bounded; without the flag the chain refuses |
 | Runtime State | exact signed `SqlConnection/DbConnection.get_State` reads (InfoMessage opt-in): unbound observation + receipt | wrong key/version/shape refuses |
 | Command config | `set_CommandTimeout`, `set_Transaction(null-only)`, `set_Direction` (pre-attachment), 4-arg source-column `SqlParameter` ctor, `TableMappings.Add` | tracked/mutated operands refuse |
 | Typed arrays | `ArrayList.Clear` (pre-freeze), `ToArray(Type)` snapshot, exact-count indexed loops (`ldlen`/`ldelem.ref`/`conv.i4`/`add` + backward `blt`/`clt`+`brtrue` bounded by array length, C# and VB lowerings) | non-array comparisons, mutated-after-freeze refuse |
 | VB scalar helpers | `Interaction.IIf` (concrete Boolean only), `Conversions.ToInteger` (Int32 only) | state-test conditions, non-Int32 operands refuse |
-| Strings & reflection | `String.Concat` (exact for constants, unbound otherwise), `Object.GetType`, `MethodBase.GetCurrentMethod`, `MemberInfo.get_Name`, `Exception.get_Message`/`get_InnerException` (unbound strings, no runtime claim) | other uses refuse |
+| Strings & reflection | `String.Concat` 2-4 args (compiler folds chained concatenation; exact for all-constant operands, unbound otherwise), `Object.GetType`, `MethodBase.GetCurrentMethod`, `MemberInfo.get_Name`, `Exception.get_Message`/`get_InnerException` (unbound strings, no runtime claim) | other uses refuse |
 | Event log | `EventLog.WriteEntry(String,String)` static terminal under the external-trace boundary flag, trace-scalar args only | non-trace args, callback context refuse |
 | Configuration | the `ConfigurationManager` chain in the root constructor becomes opaque field origins under `--il-opaque-root-initializers` (three-call chain receipt); no catalog entries needed | without the opt-in: unknown-call refusal |
-| State control | comparison of one unbound State against a compiled constant forks bounded path alternatives (≤8 paths, ≤6 sites, per-alternative identities); direct-throw construction + uncaught throw terminates its alternative; early leave abandons an active loop without entry evidence | state-vs-state, non-constant comparisons, caught throws, backward state branches, over-budget forks refuse |
+| State control | comparison of one unbound State against a compiled constant forks bounded path alternatives (≤8 paths, ≤6 sites, per-alternative identities), including the Roslyn zero-constant lowering `State != <0-member>` → `ldc.i4.0 + cgt.un`; direct-throw construction + uncaught throw terminates its alternative; early leave abandons an active loop without entry evidence | state-vs-state, non-constant comparisons, caught throws, backward state branches, over-budget forks refuse |
 | Control flow | forward branches; single enumerator loop with loop/collection tests; try/finally via leave/endfinally; ceq on concrete ints/null/fresh aliases; negation/identity lowering of one state comparison | unproven loops, loop-carried fields, comparison-branch family (beq/bne.un/bge/…) and relational ops refuse |
 
 ## Opcodes admitted in entry bodies
@@ -61,8 +61,10 @@ assumed outcome; constants are compiled inputs, never observed runtime values.
 
 ## Known gaps (explicit, not silent)
 
-- No comparison-branch opcodes (`beq`/`bne.un`/`bge`/…) or relational `clt`/`cgt`:
-  compilers lowered all public fixture guards to `ceq` shapes; other shapes refuse.
+- No general comparison-branch opcodes (`beq`/`bne.un`/`bge`/…) or relational
+  `clt`/`cgt`: the admitted shapes are the array-bounded loop tests, the concrete
+  int/array-length comparisons and the zero-constant `cgt.un` state test; other
+  comparison shapes refuse.
 - No LINQ interpreter, no general SQL parser, no `DataTable.Select`, no live SQL,
   no deployment or acceptance claim.
 - Catch continuations are never executed; uncaught throws do not run crossed
@@ -125,3 +127,42 @@ verified). No entry from these groups is added without that verification.
 The public synthetic blueprint in the inventory matches the whole-protocol
 fixtures committed here; the next batch extends them with the leftover signatures
 above plus their refusal controls.
+
+## Synthetic closure enumeration (2026-10-30, IL 0.2.29)
+
+A public synthetic clone of the v12-001 19-body closure (two inner roots plus
+connection/adapter-build/parameter/exception/crypto-shaped/table-mapping/debug
+helper bodies, C# and VB, `ClosureShape` fixtures) was executed through the
+interpreter with all five boundary flags. Every refusal was enumerated and
+classified. **No layer-A (ECMA-335 decoding) stop exists in the closure**: every
+instruction decodes identically in both readers and every refusal is admission
+or bounded-semantics, not decoding.
+
+Implemented by this batch (found only by synthesis):
+
+- `MethodBase.GetCurrentMethod` catalog identity was malformed in 0.2.28 (the
+  owner type encoding had never been executed by a fixture); fixed and now
+  fixture-proven in both languages.
+- `String.Concat` 3/4-arg: both compilers fold chained string concatenation
+  into the 3-argument overload even when parenthesized pairwise; added with the
+  same exact-constants/unbound semantics.
+- The `StackTrace`/`GetFrame`/`GetMethod` name chain now resolves in non-callback
+  lifecycle bodies under the external-trace flag (v12-001's predicted extension),
+  refusing without the flag.
+- Roslyn lowers `State != <zero-constant member>` (e.g. `ConnectionState.Closed`)
+  to `ldc.i4.0 + cgt.un`; that lowering is now a state test that forks bounded
+  alternatives instead of refusing.
+- `UnboundStringCount` only propagated on failure results, so completing results
+  could never carry the `computed-string-values-unbound` claim token; fixed.
+
+Enumerated refusals (kept, with fixture pins):
+
+| Stop | Classification |
+| --- | --- |
+| `DataTableMappingCollection.get_Item`/mapping content reads | layer C, out of protocol scope (only the mappings View and `Add` are admitted) |
+| custom exception base call `Exception..ctor(string, Exception)` | layer C if a private body constructs a custom exception type; the covered shape is direct-throw construction of framework exception types |
+| framework exception construction as a method argument (not throw-adjacent) | by-design: untracked construction is admitted only immediately before `throw` |
+| input-driven parameter sizes (`Number` requires compiled constants) | by-design: required scalar values refuse |
+| non-primitive root arguments (any parameter outside the primitive whitelist untypes every root input) | by-design |
+| crypto-shaped transform without the compiled-scalar boundary | by-design: the boundary is the opt-in |
+| stack-name chain without the external-trace boundary | by-design: the boundary is the opt-in |

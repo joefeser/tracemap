@@ -1,7 +1,7 @@
 # Final bounded validation — whole-protocol state control (one scan, then stop)
 
-EXPECTED_IMPLEMENTATION_COMMIT: `d7d3e168b357cd4afa0bff155aec6505638673c1`
-TOOL: `il-body-evidence/0.2.28` · policy `explicit-il-body-evidence.v29` ·
+EXPECTED_IMPLEMENTATION_COMMIT: `339e4ead61441c5768bda06474970fa424a05b56`
+TOOL: `il-body-evidence/0.2.29` · policy `explicit-il-body-evidence.v30` ·
 state control `explicit-sql-state-control/1` · InfoMessage `/4`
 
 This is the LAST planned private pass. It is pinned to the public whole-protocol
@@ -11,7 +11,7 @@ loop. Either outcome below ends the six-week back-and-forth honestly.
 ## Preconditions (all public, before any private scan)
 
 1. Public focused suite green at the commit above: IlSql + ScanDiagnosticProgress
-   237 passed, 0 failed/skipped, Debug -warnaserror.
+   274 passed, 0 failed/skipped, Debug -warnaserror.
 2. Public full shared-core Debug -warnaserror gate green on an immutable head copy
    (recorded in `.kiro/specs/sql-compiled-wrapper-evidence/implementation-state.md`).
 3. Windows guard self-test: all five `scripts/Test-BoundedScanGuard.ps1` cases pass
@@ -38,9 +38,11 @@ per-path alternatives (exceptional-termination paths included). This advances th
 lifecycle claim only — it is NOT SQL acceptance, NOT row proof, NOT a
 whole-effort-complete claim.
 
-**B. A stop at a NEW missing signature.** Batch 3 (this commit) covers every
-signature the v12-001 reconciliation listed, plus the array-loop lowerings and the
-configuration chain (now opaque via the existing opt-in, no catalog). If the scan
+**B. A stop at a NEW missing signature.** This commit (0.2.29, the synthetic
+closure batch) covers every signature the v12-001 reconciliation listed —
+including the StackTrace/GetFrame/GetMethod chain it predicted — plus the
+array-loop lowerings, the cgt.un zero-constant state lowering, 3/4-arg Concat
+and the configuration chain (opaque via the existing opt-in, no catalog). If the scan
 still stops, it stops at something NO map predicted — record the exact signature +
 site + refusal and STOP. That is a genuinely new finding for one more public batch,
 never a private fix loop. Crypto (Ph.10) remains behind the compiled-scalar boundary
