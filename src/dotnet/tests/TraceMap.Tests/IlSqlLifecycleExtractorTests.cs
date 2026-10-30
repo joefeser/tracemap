@@ -549,7 +549,7 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
         Assert.NotNull(root);
         var config = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var result = new List<IlSqlObjectPathExtractor.Body>();
-        foreach (var role in new[] { "end-to-end", "wrapper" })
+        foreach (var role in new[] { "end-to-end", "wrapper", "whole-protocol" })
         {
             var path = Path.Combine(root.FullName, "samples", "sql-compiled-wrapper-evidence", language,
                 role, "bin", config, "net48", $"PublicSql.{language}.{role}.dll");
@@ -558,8 +558,10 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
             {
                 bytes = LegacyFrameworkBytes(bytes);
             }
-            var left = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, new(), new(200_000), CancellationToken.None);
-            var right = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, new(), new(200_000), CancellationToken.None);
+            // The lifecycle fixtures retain every body; the production 1 MiB object-body
+            // budget is pinned separately by the retention-scale fixtures.
+            var left = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, new(), new(200_000), CancellationToken.None, objectBudget: new(4_000_000));
+            var right = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, new(), new(200_000), CancellationToken.None, objectBudget: new(4_000_000));
             Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(left, right));
             var agreed = IlBodyEvidenceExtractor.AgreeValueFlows(left.Bodies, right.Bodies);
             Assert.All(agreed, b => Assert.NotNull(b.ObjectBody));

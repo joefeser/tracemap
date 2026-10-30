@@ -9,22 +9,38 @@ public sealed class IlSqlInfoMessageTests
     [InlineData("vb", false)]
     [InlineData("csharp", true)]
     [InlineData("vb", true)]
-    public void Runtime_connection_state_is_unbound_and_cannot_choose_a_branch(string language, bool legacy)
+    public void Runtime_connection_state_is_unbound_and_never_selects_a_branch(string language, bool legacy)
     {
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacy);
         foreach (var name in new[] { "EventNamingRuntimeStateGuard", "EventNamingRuntimeDbStateGuard" })
         {
             var root = bodies.Single(body => body.Observation.ObjectBody?.Name == name);
             var result = IlSqlLifecycleExtractor.Extract(root, bodies, false, new(400_000), infoMessageBoundary: true);
-            Assert.Contains("connection-state-unbound", Assert.Single(result.Gaps), StringComparison.Ordinal);
-            Assert.Null(result.Entry); Assert.Equal("ceq", result.OpcodeFailure!.Opcode);
-            Assert.Equal("unbound", Assert.Single(result.ConnectionStateReads!).State);
+            Assert.Empty(result.Gaps);
+            // No unconditional entry: both outcomes of the unbound comparison survive as
+            // separate alternatives, and neither is promoted over the other.
+            Assert.Null(result.Entry); Assert.Empty(result.Executions);
+            var alternatives = result.StateAlternatives!;
+            Assert.Equal(2, alternatives.Count);
+            Assert.All(alternatives, alternative => Assert.Single(alternative.Decisions));
+            Assert.Equal(2, alternatives.Select(alternative => alternative.Decisions[0].EqualAssumed).Distinct().Count());
+            Assert.All(alternatives.SelectMany(alternative => alternative.Decisions), decision =>
+            {
+                Assert.Equal(IlSqlLifecycleExtractor.StateControlPolicy, decision.Policy);
+                Assert.Contains("no-enum-value-or-transition-observed", decision.Limitation, StringComparison.Ordinal);
+            });
+            Assert.NotNull(Assert.Single(alternatives, alternative => alternative.Outcome == "normal-completion").Completion!.Entry);
+            Assert.DoesNotContain(alternatives, alternative => alternative.Completion?.ConnectionStateReads is null);
             Assert.Contains("runtime-state-control-unproven", result.Claim, StringComparison.Ordinal);
+            Assert.Contains("state-conditional-alternatives", result.Claim, StringComparison.Ordinal);
+            foreach (var alternative in alternatives)
+                foreach (var observed in alternative.Completion!.ConnectionStateReads!)
+                    Assert.Equal("unbound", observed.State);
             Assert.NotEmpty(IlSqlLifecycleExtractor.Extract(root, bodies, false, new(400_000)).Gaps);
         }
         var unused = bodies.Single(body => body.Observation.ObjectBody?.Name == "EventNamingRuntimeStateRead");
         var positive = IlSqlLifecycleExtractor.Extract(unused, bodies, false, new(400_000), infoMessageBoundary: true);
-        Assert.Empty(positive.Gaps); Assert.NotNull(positive.Entry);
+        Assert.Empty(positive.Gaps); Assert.NotNull(positive.Entry); Assert.Null(positive.StateAlternatives);
         var read = Assert.Single(positive.ConnectionStateReads!);
         Assert.Equal("unbound", read.State);
         Assert.NotEqual(read.Connection, positive.InfoMessages![0].Connection);
@@ -35,11 +51,11 @@ public sealed class IlSqlInfoMessageTests
             identity.Replace(legacy ? "version:7:2.0.0.0" : "version:7:4.0.0.0", "version:7:3.0.0.0", StringComparison.Ordinal) })
         {
             var changed = bodies.Select(body => body with { Observation = body.Observation with
-                { Calls = body.Observation.Calls.Select(call => call.TargetIdentity == identity
-                    ? call with { TargetIdentity = invalid } : call).ToArray() } }).ToArray();
+            { Calls = body.Observation.Calls.Select(call => call.TargetIdentity == identity
+                ? call with { TargetIdentity = invalid } : call).ToArray() } }).ToArray();
             var rejected = IlSqlLifecycleExtractor.Extract(changed.Single(body => body.Observation.BodyIdentity == unused.Observation.BodyIdentity),
                 changed, false, new(400_000), infoMessageBoundary: true);
-            Assert.NotEmpty(rejected.Gaps); Assert.Null(rejected.Entry);
+            Assert.NotEmpty(rejected.Gaps); Assert.Null(rejected.Entry); Assert.Null(rejected.StateAlternatives);
         }
     }
 

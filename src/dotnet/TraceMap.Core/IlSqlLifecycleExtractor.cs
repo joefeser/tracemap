@@ -12,7 +12,11 @@ namespace TraceMap.Core;
 internal static partial class IlSqlLifecycleExtractor
 {
     internal const string Schema = "il-sql-lifecycle/1";
-    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. Entry producers/loaders retain unbound argument origins; unknown control or required scalar values refuse. Entry facts are separate from column-read comparison facts. Opt-in opaque root scalar initialization uses a separate entry schema, conditional normal-return and tracked-heap noninterference assumptions, and unmodeled external effects; it is not constructor-completion or purity proof. Opt-in inspected InfoMessage callbacks retain external-event dependence and partial post-Fill result naming under a separate schema; callback execution, names, table count and naming success remain unproven. No source, deployment, session, framework, type, nullability, value or migration proof.";
+    internal const string StateAlternativesSchema = "il-sql-lifecycle-state-alternatives/1";
+    internal const string StateControlPolicy = "explicit-sql-state-control/1";
+    /// <summary>Bound on completed state-alternative paths and distinct decision sites.</summary>
+    internal const int MaxStatePaths = 8, MaxStateSites = 6;
+    internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. Entry producers/loaders retain unbound argument origins; unknown control or required scalar values refuse. Entry facts are separate from column-read comparison facts. Opt-in opaque root scalar initialization uses a separate entry schema, conditional normal-return and tracked-heap noninterference assumptions, and unmodeled external effects; it is not constructor-completion or purity proof. Opt-in inspected InfoMessage callbacks retain external-event dependence and partial post-Fill result naming under a separate schema; callback execution, names, table count and naming success remain unproven. Runtime connection State is never replaced by an enum constant: state-dependent control produces bounded explicit path alternatives with per-alternative identities, never a silently selected path or a merge of incompatible attachments; separate State reads are separate decisions; allocation identity is shared only on the prefix before the first decision. Uncaught exceptional paths terminate their alternative without executing catch or finally continuations. No source, deployment, session, framework, type, nullability, value or migration proof.";
     internal static bool IsReadRoot(IlBodyObservation body)
         => body.ObjectBody is { HasThis: true, ParameterCount: <= 1, ReturnsValue: true, IsGeneric: false, IsVirtual: false } meta
             && (meta.ParameterCount == 0
@@ -71,6 +75,7 @@ internal static partial class IlSqlLifecycleExtractor
             + (TraceStringComputations is { Count: > 0 } ? ";computed-string-values-unbound;argument-computation-normal-return-assumed" : "")
             + (InfoMessages is { Count: > 0 } ? ";info-message-and-naming-normal-return-assumed;info-message-event-timing-unproven;callback-values-unbound;external-effects-unmodeled;result-names-unbound" : "")
             + (ConnectionStateReads is { Count: > 0 } ? ";connection-state-values-unbound;runtime-state-control-unproven" : "")
+            + (StateAlternatives is { Count: > 0 } ? ";state-conditional-alternatives;connection-state-values-unbound;runtime-state-control-unproven;no-path-selection;per-alternative-allocation-and-execution-identity;separate-reads-separate-decisions;exceptional-paths-terminate-alternative" : "")
             + (ExternalTraces is { Count: > 0 } ? ";external-trace-normal-return-assumed;trace-receiver-non-null-unproven;tracked-heap-noninterference-assumed;external-effects-unmodeled" : "");
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ExternalTrace>? ExternalTraces { get; init; }
@@ -99,6 +104,8 @@ internal static partial class IlSqlLifecycleExtractor
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ConnectionStateRead>? ConnectionStateReads { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<StateAlternative>? StateAlternatives { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ResultNamingReceipt>? ResultNaming { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public InfoMessageRejection? InfoMessageFailure { get; init; }
@@ -116,6 +123,13 @@ internal static partial class IlSqlLifecycleExtractor
             body.Observation.InstructionCount, body.Observation.ObjectBodyRetention, body.Observation.ObjectBodyAgreement,
             constructorMatches, unavailableInModule);
     internal sealed record GuardedRun(string Predicate, bool Value, Result Result);
+
+    /// <summary>One resolved unbound-state comparison. Never an observed enum value.</summary>
+    internal sealed record StateDecision(string Policy, Site Site, string Connection, string Constant,
+        string Comparison, bool EqualAssumed, int Occurrence,
+        string Limitation = "hypothetical-path-assumption;runtime-state-value-unbound;no-enum-value-or-transition-observed");
+    internal sealed record StateAlternative(string Policy, IReadOnlyList<StateDecision> Decisions, string Outcome,
+        Site? Termination = null, string? TerminationLimitation = null, Result? Completion = null);
 
     internal static IReadOnlyList<GuardedRun> ExtractGuarded(Body root, IReadOnlyList<Body> bodies,
         IlBodyEvidenceExtractor.IlWorkBudget budget)
@@ -145,13 +159,69 @@ internal static partial class IlSqlLifecycleExtractor
     {
         internal BodyMetadataFailure? MetadataFailure { get; } = metadataFailure;
     }
+    private sealed record StateDecisionKey(string Body, long Offset, int Invocation, int Occurrence);
+    /// <summary>Raised at an undecided unbound-state branch so the driver can explore both outcomes.</summary>
+    private sealed class StateForkRequired(StateDecision pending, StateDecisionKey key) : Exception("lifecycle-state-fork")
+    {
+        internal StateDecision Pending { get; } = pending;
+        internal StateDecisionKey Key { get; } = key;
+    }
+    /// <summary>An uncaught throw terminated this alternative; catch/finally continuations stay unexecuted.</summary>
+    private sealed class StateTerminated(Site site, string limitation) : Exception("lifecycle-state-terminated")
+    {
+        internal Site Site { get; } = site;
+        internal string Limitation { get; } = limitation;
+    }
 
     internal static Result Extract(Body root, IReadOnlyList<Body> bodies, bool enabled,
         IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers = false, bool externalTraceBoundary = false, bool compiledScalarBoundary = false, bool infoMessageBoundary = false)
     {
-        var machine = new Machine(bodies, budget, opaqueRootInitializers, externalTraceBoundary, compiledScalarBoundary, infoMessageBoundary);
-        try { return machine.Run(root, enabled); }
-        catch (Refusal error) { return new Result([], [], null, [error.Message]) { MetadataFailure = error.MetadataFailure,
+        // Bounded path alternatives: an unbound runtime-state comparison never picks a
+        // side. The first run uses no assumptions and behaves exactly like a state-free
+        // extraction; each undecided state branch expands the work list by both
+        // outcomes, and every completed alternative keeps its own identities.
+        var visited = new HashSet<StateDecisionKey>();
+        var queue = new Queue<Dictionary<StateDecisionKey, bool>>();
+        queue.Enqueue([]);
+        var alternatives = new List<StateAlternative>();
+        var runs = 0;
+        while (queue.Count > 0)
+        {
+            var assignment = queue.Dequeue();
+            var machine = new Machine(bodies, budget, opaqueRootInitializers, externalTraceBoundary,
+                compiledScalarBoundary, infoMessageBoundary, assignment, assignment.Count > 0);
+            runs++;
+            try
+            {
+                var result = machine.Run(root, enabled);
+                if (assignment.Count == 0) return result;
+                alternatives.Add(new(StateControlPolicy, machine.RecordedDecisions.ToArray(), machine.EntryOutcome,
+                    null, null, result));
+            }
+            catch (StateForkRequired fork)
+            {
+                if (!visited.Add(fork.Key)) return FailureResult(machine, new Refusal("lifecycle-state-path-limit"));
+                if (visited.Count > MaxStateSites || alternatives.Count + queue.Count + 2 > MaxStatePaths || runs >= MaxStatePaths * 2)
+                    return FailureResult(machine, new Refusal("lifecycle-state-path-limit"));
+                var assumeUnequal = new Dictionary<StateDecisionKey, bool>(assignment) { [fork.Key] = false };
+                var assumeEqual = new Dictionary<StateDecisionKey, bool>(assignment) { [fork.Key] = true };
+                queue.Enqueue(assumeUnequal);
+                queue.Enqueue(assumeEqual);
+            }
+            catch (StateTerminated terminated)
+            {
+                alternatives.Add(new(StateControlPolicy, machine.RecordedDecisions.ToArray(), "exceptional-termination",
+                    terminated.Site, terminated.Limitation, null));
+            }
+            catch (Refusal error) { return FailureResult(machine, error); }
+        }
+        return new Result([], [], null, []) { StateAlternatives = alternatives.ToArray() };
+    }
+
+    private static Result FailureResult(Machine machine, Refusal error)
+        => new([], [], null, [error.Message])
+        {
+            MetadataFailure = error.MetadataFailure,
             OpaqueInitializers = machine.Initializers.Count > 0 ? machine.Initializers.ToArray() : null,
             ExternalTraces = machine.TraceBoundaries.Count > 0 ? machine.TraceBoundaries.ToArray() : null,
             TraceStringComputations = machine.StringComputations.Count > 0 ? machine.StringComputations.ToArray() : null,
@@ -163,11 +233,18 @@ internal static partial class IlSqlLifecycleExtractor
             ConnectionStateReads = machine.StateReads.Count > 0 ? machine.StateReads.ToArray() : null,
             InfoMessages = machine.InfoReceipts.Count > 0 ? machine.InfoReceipts.ToArray() : null,
             ResultNaming = machine.NamingReceipts.Count > 0 ? machine.NamingReceipts.ToArray() : null, InfoMessageFailure = machine.InfoFailure,
-            ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
-    }
+            ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null
+        };
 
-    private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary, bool compiledScalarBoundary, bool infoMessageBoundary)
+    private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary, bool compiledScalarBoundary, bool infoMessageBoundary, IReadOnlyDictionary<StateDecisionKey, bool>? forcedDecisions = null, bool relaxedEntry = false)
     {
+        private readonly IReadOnlyDictionary<StateDecisionKey, bool> forcedDecisions = forcedDecisions ?? new Dictionary<StateDecisionKey, bool>();
+        internal readonly bool RelaxedEntry = relaxedEntry;
+        internal string EntryOutcome = "normal-completion";
+        private bool abandonedLoop;
+        internal readonly List<StateDecision> RecordedDecisions = [];
+        private readonly List<(StateDecision Template, StateDecisionKey Key)> stateTests = [];
+        private readonly Dictionary<(string Body, long Offset, int Invocation), int> stateOccurrences = new();
         private readonly Dictionary<string, ObjectState> heap = new(StringComparer.Ordinal);
         private readonly List<Execution> executions = [];
         private readonly List<Read> reads = [];
@@ -220,6 +297,30 @@ internal static partial class IlSqlLifecycleExtractor
         private static string Text(Value value)
             => value.Kind == "string" ? value.Text : throw new Refusal("lifecycle-string-unresolved");
         private static Value Int(int value) => new("int", value.ToString(CultureInfo.InvariantCulture));
+        private string OperandKind(Value value)
+            => value.Kind == "object" && heap.TryGetValue(value.Text, out var state) ? "object-" + state.Kind : value.Kind;
+        private Value NewStateTest(Value unbound, Value constant, Site site, bool negated)
+        {
+            var occurrence = stateOccurrences.GetValueOrDefault((site.Body, site.Offset, site.Invocation));
+            stateOccurrences[(site.Body, site.Offset, site.Invocation)] = occurrence + 1;
+            var key = new StateDecisionKey(site.Body, site.Offset, site.Invocation, occurrence);
+            stateTests.Add((new StateDecision(StateControlPolicy, site, unbound.Text, constant.Text,
+                negated ? "not-equal-constant" : "equal-constant", false, occurrence), key));
+            return new("state-test", (stateTests.Count - 1).ToString(CultureInfo.InvariantCulture), unbound.DeclaredType);
+        }
+        private Value NegateStateTest(Value test)
+        {
+            var (template, key) = stateTests[int.Parse(test.Text, CultureInfo.InvariantCulture)];
+            stateTests.Add((template with
+            { Comparison = template.Comparison == "equal-constant" ? "not-equal-constant" : "equal-constant" }, key));
+            return new("state-test", (stateTests.Count - 1).ToString(CultureInfo.InvariantCulture), test.DeclaredType);
+        }
+        private Refusal StateEqualityFailure(Body body, IlObjectBody meta, long offset, int invocation, string op, string kinds)
+        {
+            OpcodeFailure = new(selectedRootMetadata!, At(body, offset, invocation), body.Observation.MetadataToken,
+                op, meta.Instructions.Count, invocationPath.ToArray());
+            return new Refusal("lifecycle-equality-unresolved:" + kinds, MetadataFailure(body, "equality"));
+        }
         private static Site At(Body body, long offset, int invocation)
             => new(body.Observation.BodyIdentity, body.Input.RawFileSha256!, offset, invocation);
 
@@ -261,10 +362,7 @@ internal static partial class IlSqlLifecycleExtractor
             var returned = Invoke(root, meta.HasThis ? new[] { instance }.Concat(inputs).ToArray() : inputs, 0);
             var result = returned.Kind == "read" ? reads[int.Parse(returned.Text, CultureInfo.InvariantCulture)] : null;
             if (readRoot && result is null) throw new Refusal("lifecycle-return-unresolved");
-            if (loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-loop-incomplete");
-            if (heap.Values.Any(state => state.Kind == "collection-enumerator"
-                && state.Moves != Get(state.Parent, "arraylist").Slots.Count + 1))
-                throw new Refusal("lifecycle-collection-enumeration-incomplete");
+            if (!RelaxedEntry) CheckEnumerations();
             var completed = new Result(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray())
                 { OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null,
                     ExternalTraces = TraceBoundaries.Count > 0 ? TraceBoundaries.ToArray() : null,
@@ -274,6 +372,31 @@ internal static partial class IlSqlLifecycleExtractor
                     ResultNaming = NamingReceipts.Count > 0 ? NamingReceipts.ToArray() : null,
                     ConstructorOwnerViews = OwnerViews.Count > 0 ? OwnerViews.ToArray() : null };
             if (readRoot) return completed;
+            if (!RelaxedEntry) return CompleteEntry(completed, meta, producer, loader, instance, returned, guarded, inputTypes);
+            // On an assumed state path, a completion that cannot support entry evidence
+            // (no execution, no returned dataset, an abandoned enumeration) stays an
+            // alternative outcome instead of erasing every other explored path.
+            if (abandonedLoop) { EntryOutcome = "normal-completion-without-entry-evidence"; return completed; }
+            try { return CompleteEntry(completed, meta, producer, loader, instance, returned, guarded, inputTypes); }
+            catch (Refusal error) when (error.Message is "lifecycle-entry-no-sql-execution"
+                or "lifecycle-entry-returned-dataset-origin" or "lifecycle-entry-void-output-unresolved"
+                or "lifecycle-object-origin:dataset" or "lifecycle-loop-incomplete"
+                or "lifecycle-collection-enumeration-incomplete")
+            { EntryOutcome = "normal-completion-without-entry-evidence"; return completed; }
+        }
+
+        private void CheckEnumerations()
+        {
+            if (loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-loop-incomplete");
+            if (heap.Values.Any(state => state.Kind == "collection-enumerator"
+                && state.Moves != Get(state.Parent, "arraylist").Slots.Count + 1))
+                throw new Refusal("lifecycle-collection-enumeration-incomplete");
+        }
+
+        private Result CompleteEntry(Result completed, IlObjectBody meta, bool producer, bool loader,
+            Value instance, Value returned, bool guarded, string?[] inputTypes)
+        {
+            CheckEnumerations();
             if (executions.Count == 0) throw new Refusal("lifecycle-entry-no-sql-execution");
             string? returnedSet = null;
             if (producer) { _ = Get(returned, "dataset"); returnedSet = returned.Text; }
@@ -361,15 +484,33 @@ internal static partial class IlSqlLifecycleExtractor
                     { stack.Add(new("int", op == "ldc.i4.m1" ? "-1" : op is "ldc.i4" or "ldc.i4.s" ? operand[2..] : op[7..])); continue; }
                     if (op == "ceq")
                     {
-                        var right = Pop(); var left = Pop(); var equal = Equal(left, right);
-                        if (equal.Kind == "unknown")
+                        var right = Pop(); var left = Pop();
+                        if (left.Kind == "connection-state-unbound" || right.Kind == "connection-state-unbound")
                         {
-                            string Kind(Value value) => value.Kind == "object" && heap.TryGetValue(value.Text, out var state)
-                                ? "object-" + state.Kind : value.Kind;
-                            OpcodeFailure = new(selectedRootMetadata!, At(body, offset, invocation), body.Observation.MetadataToken,
-                                op, meta.Instructions.Count, invocationPath.ToArray());
-                            throw new Refusal("lifecycle-equality-unresolved:" + Kind(left) + ":" + Kind(right), MetadataFailure(body, "equality"));
+                            // An unbound runtime observation compares only against a compiled constant;
+                            // the result stays a hypothetical either-or and never becomes a value.
+                            var unbound = left.Kind == "connection-state-unbound" ? left : right;
+                            var other = left.Kind == "connection-state-unbound" ? right : left;
+                            if (other.Kind != "int")
+                                throw StateEqualityFailure(body, meta, offset, invocation, op,
+                                    OperandKind(left) + ":" + OperandKind(right));
+                            stack.Add(NewStateTest(unbound, other, At(body, offset, invocation), negated: false));
+                            continue;
                         }
+                        if (left.Kind == "state-test" || right.Kind == "state-test")
+                        {
+                            // Only the compiler's negation/identity lowerings of the SAME comparison are
+                            // recognized; every other use of a hypothetical result keeps refusing.
+                            var test = left.Kind == "state-test" ? left : right;
+                            var other = left.Kind == "state-test" ? right : left;
+                            if (other.Kind == "int" && (other.Text == "0" || other.Text == "1"))
+                            { stack.Add(other.Text == "1" ? test : NegateStateTest(test)); continue; }
+                            throw StateEqualityFailure(body, meta, offset, invocation, op, "state-test:" + OperandKind(other));
+                        }
+                        var equal = Equal(left, right);
+                        if (equal.Kind == "unknown")
+                            throw StateEqualityFailure(body, meta, offset, invocation, op,
+                                OperandKind(left) + ":" + OperandKind(right));
                         stack.Add(equal); continue;
                     }
                     if (op == "dup") { var value = Pop(); stack.Add(value); stack.Add(value); continue; }
@@ -426,6 +567,21 @@ internal static partial class IlSqlLifecycleExtractor
                     if (op is "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s")
                     {
                         var value = Pop(); var destination = Target(operand);
+                        if (value.Kind == "state-test")
+                        {
+                            // A hypothetical state comparison never selects a side here: the driver
+                            // explores both outcomes as separate alternatives with separate identities.
+                            if (destination <= i)
+                                throw new Refusal("lifecycle-loop-dependent-control", MetadataFailure(body, "state-branch"));
+                            var (template, key) = stateTests[int.Parse(value.Text, CultureInfo.InvariantCulture)];
+                            if (!forcedDecisions.TryGetValue(key, out var equalAssumed))
+                                throw new StateForkRequired(template, key);
+                            if (RecordedDecisions.Count >= 32) throw new Refusal("lifecycle-state-decision-limit");
+                            RecordedDecisions.Add(template with { EqualAssumed = equalAssumed });
+                            var truthOfTest = equalAssumed ^ template.Comparison == "not-equal-constant";
+                            if (truthOfTest == op.StartsWith("brtrue", StringComparison.Ordinal)) i = destination - 1;
+                            continue;
+                        }
                         if (value.Kind == "connection-state-unbound")
                         {
                             OpcodeFailure = new(selectedRootMetadata!, At(body, offset, invocation), body.Observation.MetadataToken,
@@ -445,6 +601,15 @@ internal static partial class IlSqlLifecycleExtractor
                     if (op is "leave" or "leave.s")
                     {
                         var destination = Target(operand);
+                        // Leaving with an active enumeration abandons it: the loop never
+                        // completes normally on this path, so the path finishes without
+                        // entry evidence instead of pretending the loop claim still holds.
+                        if (loopEnumerator.Kind != "unknown")
+                        {
+                            if (!RelaxedEntry) throw new Refusal("lifecycle-loop-dependent-control",
+                                MetadataFailure(body, "leave-with-active-loop"));
+                            abandonedLoop = true; loopEnumerator = Value.Unknown; loopRow = Value.Unknown;
+                        }
                         var handlers = regions.Where(r => r.Kind == "finally" && offset >= r.Start && offset < r.End
                             && (offsets[destination] < r.Start || offsets[destination] >= r.End))
                             .OrderBy(r => r.End - r.Start).ToArray();
@@ -565,6 +730,13 @@ internal static partial class IlSqlLifecycleExtractor
                                     + ":call-sha256:" + rejected.RejectedCall.SignatureSha256,
                                     MetadataFailure(body, "opaque-initializer-lookahead"));
                             }
+                            if (targets.Length != 1 && op == "newobj" && i + 1 < code.Length && code[i + 1][2] == "throw")
+                            {
+                                // Direct-throw construction is the only untracked construction: the
+                                // fresh object can reach nothing except the immediately following throw.
+                                stack.Add(new("external-exception", Hash(call.TargetIdentity)));
+                                continue;
+                            }
                             if (targets.Length != 1) throw new Refusal(
                                 (opaqueConstructor == body.Observation.BodyIdentity ? "lifecycle-opaque-initializer-" + opaqueRejection : "lifecycle-unknown-call")
                                     + ":" + call.TargetIdentity,
@@ -585,6 +757,30 @@ internal static partial class IlSqlLifecycleExtractor
                         finally { if (localCatch is not null) _ = catchHandlers.Pop(); }
                         if (op == "newobj" || shape.ReturnsValue) stack.Add(returned);
                         continue;
+                    }
+                    if (op is "throw" or "rethrow")
+                    {
+                        // Uncaught throws terminate their alternative; a throw a catch would
+                        // receive keeps its continuation unexecuted and refuses either way.
+                        _ = op == "throw" ? Pop() : Value.Unknown;
+                        if (op == "rethrow" || regions.Any(region => region.Kind == "catch"
+                            && offset >= region.Start && offset < region.End))
+                        {
+                            OpcodeFailure = new(selectedRootMetadata!, At(body, offset, invocation), body.Observation.MetadataToken,
+                                op, meta.Instructions.Count, invocationPath.ToArray());
+                            throw new Refusal("lifecycle-throw-catch-continuation-unmodeled", MetadataFailure(body, "throw"));
+                        }
+                        if (!RelaxedEntry)
+                        {
+                            OpcodeFailure = new(selectedRootMetadata!, At(body, offset, invocation), body.Observation.MetadataToken,
+                                op, meta.Instructions.Count, invocationPath.ToArray());
+                            throw new Refusal("lifecycle-opcode:throw", MetadataFailure(body, "opcode"));
+                        }
+                        var crossesFinally = regions.Any(region => region.Kind == "finally"
+                            && offset >= region.Start && offset < region.End);
+                        throw new StateTerminated(At(body, offset, invocation), crossesFinally
+                            ? "uncaught-exception;finally-continuation-not-executed;catch-continuation-not-executed"
+                            : "uncaught-exception;catch-continuation-not-executed");
                     }
                     if (op == "ret")
                     {

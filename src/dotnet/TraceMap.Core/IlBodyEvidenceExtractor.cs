@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v27";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v28";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -214,7 +214,8 @@ internal static class IlBodyEvidenceExtractor
                 aggregateWork = limits.MaxTotalWorkUnits },
             sqlLifecycleLimits = new { IlSqlLifecycleExtractor.Schema, maxSteps = 8192, maxFrames = 24,
                 maxObjects = 256, maxExecutions = 8, maxFailures = 256, maxIndexedBodies = 4096,
-                maxInstructions = 256, maxConstructorOwnerViews = 24, maxConstructorOwnerRecords = 256, aggregateWork = limits.MaxTotalWorkUnits },
+                maxInstructions = 256, maxConstructorOwnerViews = 24, maxConstructorOwnerRecords = 256,
+                maxStatePaths = IlSqlLifecycleExtractor.MaxStatePaths, maxStateDecisionSites = IlSqlLifecycleExtractor.MaxStateSites, aggregateWork = limits.MaxTotalWorkUnits },
             outcomes = outcomes.Select(item => new
             {
                 item.SafeLocator,
@@ -739,6 +740,7 @@ internal static class IlBodyEvidenceExtractor
                     : ScanProgressAmbient.Observe(ScanProgressStages.IlLifecycle, () => IlSqlLifecycleExtractor.Extract(root, scopedBodies, enabled, budget, evaluation.OpaqueRootInitializers, evaluation.ExternalTraceBoundary, evaluation.CompiledScalarBoundary, evaluation.InfoMessageBoundary));
                 if (result.OpaqueInitializers is { Count: > 0 } || result.ExternalTraces is { Count: > 0 } || result.TraceStringComputations is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.OpaqueEntrySchema;
                 if (result.InfoMessages is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.InfoMessageSchema;
+                if (result.StateAlternatives is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.StateAlternativesSchema;
                 var common = new Dictionary<string, string>(CommonProperties(provenance, root.Input), StringComparer.Ordinal);
                 if (evaluation.InfoMessageBoundary) common["infoMessagePolicy"] = IlSqlLifecycleExtractor.InfoMessagePolicy;
                 if (evaluation.CompiledScalarBoundary)
@@ -747,13 +749,34 @@ internal static class IlBodyEvidenceExtractor
                     common["externalTracePolicy"] = IlSqlLifecycleExtractor.ExternalTracePolicy;
                 if (evaluation.OpaqueRootInitializers)
                     common["opaqueInitializerPolicy"] = IlSqlLifecycleExtractor.OpaquePolicy;
+                if (result.StateAlternatives is { Count: > 0 })
+                    common["stateControlPolicy"] = IlSqlLifecycleExtractor.StateControlPolicy;
                 if (sliceReceipt is not null)
                 {
                     common["lifecycleSlice"] = SqlServerSchemaEvidence.Json(sliceReceipt);
                     common["lifecycleCoverage"] = "selected-root-slice-only";
                 }
                 var guard = guarded ? "argument:0=" + (enabled ? "true" : "false") : "unconditional";
-                if ((result.Returned is not null || result.Entry is not null) && result.Executions.Count > 0)
+                if (result.StateAlternatives is { Count: > 0 })
+                {
+                    // Bounded unbound-state alternatives: one candidate fact carries every
+                    // explored path; no alternative is promoted to unconditional entry evidence.
+                    var alternativeLinks = result.StateAlternatives.SelectMany(alternative => alternative.Completion?.Bodies ?? [])
+                        .Select(site => new { site.Body, site.Binary, site.Invocation,
+                            bodyFactId = bodyFacts[(site.Binary, site.Body)].FactId }).ToArray();
+                    facts.Add(FactFactory.Create(manifest, FactTypes.ManagedIlSqlLifecycleCandidate,
+                        RuleIds.DotNetIlSqlLifecycle, EvidenceTiers.Tier3SyntaxOrTextual, IlEvidence(root.Input.SafeLocator),
+                        targetSymbol: root.Observation.BodyIdentity, contractElement: "il-sql-lifecycle:" + guard,
+                        properties: CopyToSorted(common, new (string Key, string Value)[]
+                        {
+                            ("sqlLifecycleSchema", lifecycleSchema), ("guard", guard),
+                            ("rootBodyFactId", bodyFacts[(root.Input.RawFileSha256!, root.Observation.BodyIdentity)].FactId),
+                            ("lifecycle", SqlServerSchemaEvidence.Json(result)),
+                            ("bodyLinks", SqlServerSchemaEvidence.Json(alternativeLinks)),
+                            ("limitation", IlSqlLifecycleExtractor.Limitation)
+                        })));
+                }
+                else if ((result.Returned is not null || result.Entry is not null) && result.Executions.Count > 0)
                 {
                     var links = result.Bodies!.Select(site => new { site.Body, site.Binary, site.Invocation,
                         bodyFactId = bodyFacts[(site.Binary, site.Body)].FactId }).ToArray();
