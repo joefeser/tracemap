@@ -7,6 +7,35 @@ Namespace PublicSql.VisualBasic
     Public NotInheritable Class EventNamingRoot
         Public Function EventNamingProduce(connection As String) As DataSet
             Dim wrapper = New EventNamingWrapper(connection)
+            Dim aliasValue = wrapper
+            Dim first As Integer = 1, second As Integer = 1
+            Dim missing As Boolean = wrapper Is Nothing
+            Dim aliases As Boolean = aliasValue Is wrapper
+            Dim integers As Boolean = first = second
+            If missing Then Return Nothing
+            If Not aliases Then Return Nothing
+            If Not integers Then Return Nothing
+            wrapper.Open()
+            Return wrapper.Execute()
+        End Function
+        Public Function EventNamingUnknownEquality(connection As String) As DataSet
+            Dim missing As Boolean = DirectCast(connection, Object) Is Nothing
+            If missing Then Return Nothing
+            Return EventNamingProduce(connection)
+        End Function
+        Public Function EventNamingViewEquality(connection As String) As DataSet
+            Dim data As New DataSet()
+            Dim left = data.Tables
+            Dim right = data.Tables
+            Dim equal As Boolean = left Is right
+            If equal Then Return EventNamingProduce(connection)
+            Return Nothing
+        End Function
+        Public Function EventNamingDistinctEquality(connection As String) As DataSet
+            Dim wrapper = New EventNamingWrapper(connection)
+            Dim other = New EventNamingWrapper(connection)
+            Dim equal As Boolean = wrapper Is other
+            If equal Then Return Nothing
             wrapper.Open()
             Return wrapper.Execute()
         End Function

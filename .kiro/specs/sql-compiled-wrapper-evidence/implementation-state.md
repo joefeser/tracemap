@@ -1545,3 +1545,33 @@ Debug -warnaserror solution gate will run after the clean code/prompt push in
 this isolated clone; no full pass claimed. Do not remove the clone while it runs.
 Pinned external adapter smokes remain deferred (no adapter change). No claim that private entry lineage or the overall
 SQL effort is complete. Existing guarded compiled-only prompt will pin this code.
+
+
+## Completed full gate for XML catalog head — 2026-10-30
+
+At clean pushed head ede44baf201e717bf25b4e65c3a5c0f37c512ae4, the isolated clone
+completed `dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'`:
+5668 passed, 3 existing skips, 0 failures, 5671 total, 43.8867 minutes, exit 0.
+Log: /tmp/tracemap-xml-full-debug.log. This is the completed XML/compiled-only gate,
+not a pass for subsequent equality changes or private acceptance.
+
+## Bounded ceq lifecycle equality — 2026-10-30
+
+IL 0.2.25, policy v26; InfoMessage catalog policy remains /3. Concrete Int32,
+null/null, fresh/literal non-null checks, same-reference and distinct fresh
+allocation equality are modeled. Inputs, opaque/unknown values, distinct property
+views and unsupported operand types refuse, retaining exact opcode site/path and
+categorical operand kinds. No value substitution, string-content equality,
+relational branches or loop inversion. Public C#/VB fixtures use explicit Boolean
+locals to retain ceq. Compound comparison guards initially emitted unsupported
+bne.un.s; fixtures were narrowed to the requested ceq shape rather than admitting
+unrelated branch opcodes. Intermediate 22-failure run is not a pass.
+
+Focused InfoMessage controls then passed 33/33 (9 seconds), Debug -warnaserror.
+Added explicit ambiguous-view negative; final affected regression passed 211/211
+in 27 seconds, 0 failed/skipped. Command:
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgressTests'`.
+Log: /tmp/tracemap-ceq-regression.log. `git diff --check` passed.
+Log: /tmp/tracemap-ceq-focused-final.log. Full gate for this new head remains open.
+No private source/image/transcript/value copied into Git; no provider/application
+execution, PR/merge/ACK changes or whole-SQL completion claim.

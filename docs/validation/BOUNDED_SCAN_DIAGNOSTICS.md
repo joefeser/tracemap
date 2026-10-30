@@ -149,3 +149,24 @@ C#/VB fixtures now exercise both ordinal attribute access and InnerXml alongside
 the existing named attribute access, on normal and synthetic legacy profiles.
 Default SQL route contracts and receipt schema remain unchanged; explicit policy
 and extractor versions distinguish this bounded catalog expansion.
+
+
+## Bounded lifecycle equality (IL 0.2.25 / policy v26)
+
+The lifecycle interpreter models `ceq` only for concrete Int32 values, null/null,
+known non-null literal/allocation versus null, the same tracked reference, and
+different proven fresh allocations. It does not compare string contents or treat
+symbolic IDs of distinct collection/property views as proof of non-aliasing.
+Inputs, opaque values, unknowns, floating/native-pointer values and unresolved
+reference relationships refuse with `lifecycle-equality-unresolved:<kind>:<kind>`.
+The existing opcode rejection includes the body, offset and actual invocation
+path; category labels contain no operand value. No equality value is assumed.
+
+No relational-branch opcode, loop inversion, indirect pointer comparison or
+unbounded enumeration support is added. Existing control-flow/loop/heap/work
+limits remain. C#/VB compiled fixtures cover known scalar/null/alias/allocation
+comparisons, unknown input nullness and potentially aliasing property views.
+Legacy/normal profiles and native compiled-only CLI output remain covered.
+The equality operation is available to the bounded lifecycle interpreter; root
+admission, SQL route contracts and receipt schemas are unchanged. InfoMessage
+policy remains /3 because callback catalog admission is unchanged.

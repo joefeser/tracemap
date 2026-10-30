@@ -194,6 +194,25 @@ internal static partial class IlSqlLifecycleExtractor
         { var result = New(kind); heap[result.Text].Parent = parent; return result; }
         private static int Number(Value value)
             => value.Kind == "int" && int.TryParse(value.Text, out var number) ? number : throw new Refusal("lifecycle-integer-unresolved");
+        private Value Equal(Value left, Value right)
+        {
+            if (left.Kind == "int" && right.Kind == "int") return Int(Number(left) == Number(right) ? 1 : 0);
+            if (left.Kind == "null" && right.Kind == "null") return Int(1);
+            // Only concrete allocations prove non-aliasing. Views with distinct
+            // symbolic IDs may still denote the same runtime reference.
+            bool Fresh(Value value) => value.Kind == "object" && heap.TryGetValue(value.Text, out var state)
+                && state.Kind is "custom" or "command" or "parameter" or "adapter" or "dataset" or "sql-connection";
+            if (left.Kind == "object" && right.Kind == "object")
+            {
+                if (left.Text == right.Text && heap.ContainsKey(left.Text)) return Int(1);
+                if (Fresh(left) && Fresh(right)) return Int(0);
+            }
+            if (left.Kind == "null" && (Fresh(right) || right.Kind == "string")
+                || right.Kind == "null" && (Fresh(left) || left.Kind == "string")) return Int(0);
+            // No inferred value, reference identity, nullness or string-content
+            // equality for inputs, opaque values, views or unknowns.
+            return Value.Unknown;
+        }
         private static string Text(Value value)
             => value.Kind == "string" ? value.Text : throw new Refusal("lifecycle-string-unresolved");
         private static Value Int(int value) => new("int", value.ToString(CultureInfo.InvariantCulture));
@@ -335,6 +354,19 @@ internal static partial class IlSqlLifecycleExtractor
                     if (op == "ldnull") { stack.Add(new("null", "")); continue; }
                     if (op.StartsWith("ldc.i4", StringComparison.Ordinal))
                     { stack.Add(new("int", op == "ldc.i4.m1" ? "-1" : op is "ldc.i4" or "ldc.i4.s" ? operand[2..] : op[7..])); continue; }
+                    if (op == "ceq")
+                    {
+                        var right = Pop(); var left = Pop(); var equal = Equal(left, right);
+                        if (equal.Kind == "unknown")
+                        {
+                            string Kind(Value value) => value.Kind == "object" && heap.TryGetValue(value.Text, out var state)
+                                ? "object-" + state.Kind : value.Kind;
+                            OpcodeFailure = new(selectedRootMetadata!, At(body, offset, invocation), body.Observation.MetadataToken,
+                                op, meta.Instructions.Count, invocationPath.ToArray());
+                            throw new Refusal("lifecycle-equality-unresolved:" + Kind(left) + ":" + Kind(right), MetadataFailure(body, "equality"));
+                        }
+                        stack.Add(equal); continue;
+                    }
                     if (op == "dup") { var value = Pop(); stack.Add(value); stack.Add(value); continue; }
                     if (op == "pop") { _ = Pop(); continue; }
                     if (op == "box")

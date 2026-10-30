@@ -9,6 +9,34 @@ public sealed class IlSqlInfoMessageTests
     [InlineData("vb", false)]
     [InlineData("csharp", true)]
     [InlineData("vb", true)]
+    public void Equality_keeps_fresh_identity_and_unknown_input_guards_distinct(string language, bool legacy)
+    {
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacy);
+        foreach (var name in new[] { "EventNamingProduce", "EventNamingDistinctEquality" })
+        {
+            var root = bodies.Single(body => body.Observation.ObjectBody?.Name == name);
+            Assert.Contains(root.Observation.ObjectBody!.Instructions, line => line.Contains(":ceq:", StringComparison.Ordinal));
+            var result = IlSqlLifecycleExtractor.Extract(root, bodies, false, new(400_000), infoMessageBoundary: true);
+            Assert.Empty(result.Gaps); Assert.Equal(result.Entry!.ReturnedDataSet, Assert.Single(result.ResultNaming!).DataSet);
+            Assert.Single(Assert.Single(result.Entry.Commands).Parameters);
+        }
+        var unknown = bodies.Single(body => body.Observation.ObjectBody?.Name == "EventNamingUnknownEquality");
+        Assert.Contains(unknown.Observation.ObjectBody!.Instructions, line => line.Contains(":ceq:", StringComparison.Ordinal));
+        var refused = IlSqlLifecycleExtractor.Extract(unknown, bodies, false, new(400_000), infoMessageBoundary: true);
+        Assert.StartsWith("lifecycle-equality-unresolved:", Assert.Single(refused.Gaps), StringComparison.Ordinal);
+        Assert.Contains("input", refused.Gaps[0], StringComparison.Ordinal); Assert.Null(refused.Entry);
+        Assert.Equal("ceq", refused.OpcodeFailure!.Opcode);
+        var views = bodies.Single(body => body.Observation.ObjectBody?.Name == "EventNamingViewEquality");
+        var ambiguous = IlSqlLifecycleExtractor.Extract(views, bodies, false, new(400_000), infoMessageBoundary: true);
+        Assert.Equal("lifecycle-equality-unresolved:object-tables:object-tables", Assert.Single(ambiguous.Gaps));
+        Assert.Null(ambiguous.Entry); Assert.Equal("ceq", ambiguous.OpcodeFailure!.Opcode);
+    }
+
+    [Theory]
+    [InlineData("csharp", false)]
+    [InlineData("vb", false)]
+    [InlineData("csharp", true)]
+    [InlineData("vb", true)]
     public void Xml_ordinal_attribute_and_inner_xml_are_exact_bounded_external_calls(string language, bool legacy)
     {
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacy);

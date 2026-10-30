@@ -19,3 +19,10 @@ The public callbacks also exercise `XmlAttributeCollection.get_ItemOf(Int32)` an
 access remains covered. Neither tests nor extractor execute the callbacks or
 interpret the XML strings; normal/legacy native CLI controls preserve unbound
 result names and allocation/execution identity.
+
+Equality controls use explicit Boolean locals so Debug C#/VB builds retain `ceq`
+rather than fusing comparison and branch into a different opcode. Known null,
+integer, alias and fresh-allocation comparisons are positive controls. Unknown
+input nullness and distinct symbolic DataSet.Tables views refuse. This does not
+claim support for relational branches, unknown reference equality or loop-test
+inversion.

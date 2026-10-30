@@ -221,4 +221,10 @@
 - [x] Add exactly the signed XML ordinal-attribute and InnerXml callback signatures (both existing framework profiles), with C#/VB fixtures and fail-closed identity controls.
 - [x] Focused InfoMessage suite: 29 passed, no failures/skips, Debug -warnaserror.
 - [x] Record affected regression for IL 0.2.24: 207 passed, 0 failed/skipped.
-- [ ] Complete passing full shared-core Debug -warnaserror gate for IL 0.2.24.
+- [x] Complete passing full shared-core Debug -warnaserror gate for IL 0.2.24: 5668 passed, 3 skipped, 0 failed.
+
+
+- [x] Add bounded concrete ceq handling with exact-site refusal for unknown operand relationships.
+- [x] Add C#/VB scalar/null/alias/fresh-allocation controls and unknown-input/ambiguous-view refusals.
+- [x] Record final affected regression for IL 0.2.25: 211 passed, 0 failed/skipped.
+- [ ] Complete passing full shared-core Debug -warnaserror gate for IL 0.2.25.

@@ -9,7 +9,33 @@ namespace PublicSql.CSharp
     public sealed class EventNamingRoot
     {
         public DataSet EventNamingProduce(string connection)
-        { var wrapper = new EventNamingWrapper(connection); wrapper.Open(); return wrapper.Execute(); }
+        {
+            var wrapper = new EventNamingWrapper(connection); var alias = wrapper;
+            int first = 1, second = 1;
+            bool missing = (object)wrapper == null;
+            bool aliases = (object)alias == (object)wrapper;
+            bool integers = first == second;
+            if (missing) return null;
+            if (!aliases) return null;
+            if (!integers) return null;
+            wrapper.Open(); return wrapper.Execute();
+        }
+        public DataSet EventNamingUnknownEquality(string connection)
+        { bool missing = (object)connection == null; if (missing) return null; return EventNamingProduce(connection); }
+        public DataSet EventNamingViewEquality(string connection)
+        {
+            var data = new DataSet(); var left = data.Tables; var right = data.Tables;
+            bool equal = (object)left == (object)right;
+            if (equal) return EventNamingProduce(connection);
+            return null;
+        }
+        public DataSet EventNamingDistinctEquality(string connection)
+        {
+            var wrapper = new EventNamingWrapper(connection); var other = new EventNamingWrapper(connection);
+            bool equal = (object)wrapper == (object)other;
+            if (equal) return null;
+            wrapper.Open(); return wrapper.Execute();
+        }
         public DataSet EventNamingReused(string connection)
         { var wrapper = new EventNamingWrapper(connection); wrapper.Open(); wrapper.Execute(); wrapper.Open(); return wrapper.Execute(); }
         public DataSet EventNameListMutation(string connection)
