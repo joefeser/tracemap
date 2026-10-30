@@ -1696,3 +1696,26 @@ Log: /tmp/tracemap-state-full-debug2.log. This is the completed IL 0.2.27 public
 gate for the whole-protocol state-control batch, including the corrected
 retention-scale pin. prompts/glm-sql-lifecycle-final-validation.md is pinned to
 implementation commit f433e525e. No private input, scan, PR, merge or ACK change.
+
+
+## Adjacent whole-protocol families — 2026-10-30 (batch 3)
+
+Joe authorized the afternoon batch ("set a goal to build what is needed") after the
+work-machine v12-001 map was reconciled. IL 0.2.28 / policy v29. All fifteen
+reconciliation signatures plus two discoverable-only-by-synthesis shapes (VB lowers
+array bounds checks to clt+brtrue; typed-array foreach lowers to ldelem.ref indexed
+loops) are covered with C#/VB fixtures in the whole-protocol role assembly
+(AdjacentCatalogs.cs/.vb) and a dedicated test suite (IlSqlAdjacentCatalogTests,
+11 tests): command/adapter configuration (set_CommandTimeout, set_Transaction
+null-only, set_Direction pre-attachment, 4-arg source-column SqlParameter ctor,
+TableMappings.Add), ArrayList Clear/ToArray snapshots with exact-count array loops
+(ldlen/ldelem.ref/conv.i4/add + array-bounded backward blt and clt+brtrue),
+Interaction.IIf (concrete Boolean), Conversions.ToInteger (Int32), String.Concat
+(exact constants, unbound otherwise), Object.GetType, reflection-identity reads
+(unbound strings), EventLog.WriteEntry static terminal (external-trace flag,
+trace-scalar args), and the ConfigurationManager chain verified to become opaque
+field origins through the existing --il-opaque-root-initializers boundary with a
+three-call chain receipt (no catalog entries, matching the map's own guidance).
+Focused validation 250/250 with ScanDiagnosticProgressTests, Debug -warnaserror.
+Full gate on an immutable clone recorded separately below. No private input, no
+acceptance or whole-SQL completion claim.

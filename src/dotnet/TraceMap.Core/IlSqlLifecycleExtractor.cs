@@ -76,6 +76,7 @@ internal static partial class IlSqlLifecycleExtractor
             + (InfoMessages is { Count: > 0 } ? ";info-message-and-naming-normal-return-assumed;info-message-event-timing-unproven;callback-values-unbound;external-effects-unmodeled;result-names-unbound" : "")
             + (ConnectionStateReads is { Count: > 0 } ? ";connection-state-values-unbound;runtime-state-control-unproven" : "")
             + (StateAlternatives is { Count: > 0 } ? ";state-conditional-alternatives;connection-state-values-unbound;runtime-state-control-unproven;no-path-selection;per-alternative-allocation-and-execution-identity;separate-reads-separate-decisions;exceptional-paths-terminate-alternative" : "")
+            + (UnboundStringCount is > 0 ? ";computed-string-values-unbound" : "")
             + (ExternalTraces is { Count: > 0 } ? ";external-trace-normal-return-assumed;trace-receiver-non-null-unproven;tracked-heap-noninterference-assumed;external-effects-unmodeled" : "");
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ExternalTrace>? ExternalTraces { get; init; }
@@ -105,6 +106,8 @@ internal static partial class IlSqlLifecycleExtractor
         public IReadOnlyList<ConnectionStateRead>? ConnectionStateReads { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<StateAlternative>? StateAlternatives { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+        public int UnboundStringCount { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ResultNamingReceipt>? ResultNaming { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -233,7 +236,8 @@ internal static partial class IlSqlLifecycleExtractor
             ConnectionStateReads = machine.StateReads.Count > 0 ? machine.StateReads.ToArray() : null,
             InfoMessages = machine.InfoReceipts.Count > 0 ? machine.InfoReceipts.ToArray() : null,
             ResultNaming = machine.NamingReceipts.Count > 0 ? machine.NamingReceipts.ToArray() : null, InfoMessageFailure = machine.InfoFailure,
-            ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null
+            ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null,
+            UnboundStringCount = machine.UnboundStrings
         };
 
     private sealed partial class Machine(IReadOnlyList<Body> bodies, IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary, bool compiledScalarBoundary, bool infoMessageBoundary, IReadOnlyDictionary<StateDecisionKey, bool>? forcedDecisions = null, bool relaxedEntry = false)
@@ -243,6 +247,12 @@ internal static partial class IlSqlLifecycleExtractor
         internal string EntryOutcome = "normal-completion";
         private bool abandonedLoop;
         internal readonly List<StateDecision> RecordedDecisions = [];
+        internal int UnboundStrings;
+        private Value UnboundString(string origin)
+        {
+            UnboundStrings++;
+            return new("computed-string", origin);
+        }
         private readonly List<(StateDecision Template, StateDecisionKey Key)> stateTests = [];
         private readonly Dictionary<(string Body, long Offset, int Invocation), int> stateOccurrences = new();
         private readonly Dictionary<string, ObjectState> heap = new(StringComparer.Ordinal);
@@ -515,6 +525,72 @@ internal static partial class IlSqlLifecycleExtractor
                     }
                     if (op == "dup") { var value = Pop(); stack.Add(value); stack.Add(value); continue; }
                     if (op == "pop") { _ = Pop(); continue; }
+                    if (op is "conv.i4" or "conv.u4" or "conv.i")
+                    {
+                        // Only a proven Int32 or an exact array length passes through;
+                        // no truncation semantics are modeled for other values.
+                        var converted = Pop();
+                        if (converted.Kind is not ("int" or "array-length")) throw new Refusal("lifecycle-conversion-unresolved");
+                        stack.Add(converted); continue;
+                    }
+                    if (op == "ldlen")
+                    {
+                        var arrayValue = Pop(); var array = Get(arrayValue, "array");
+                        stack.Add(new("array-length", array.Slots.Count.ToString(CultureInfo.InvariantCulture), arrayValue.Text));
+                        continue;
+                    }
+                    if (op == "ldelem.ref")
+                    {
+                        var index = Number(Pop()); var array = Get(Pop(), "array");
+                        if (index < 0 || index >= array.Slots.Count) throw new Refusal("lifecycle-array-index");
+                        stack.Add(array.Slots[index]); continue;
+                    }
+                    if (op is "clt" or "clt.un" or "cgt" or "cgt.un")
+                    {
+                        // VB lowers an array bounds check to clt + backward brtrue;
+                        // the comparison stays an exact-count test against one array.
+                        var right = Pop(); var left = Pop();
+                        if (left.Kind == "int" && right.Kind == "int")
+                        { stack.Add(Int(op.StartsWith("clt", StringComparison.Ordinal) == (Number(left) < Number(right)) ? 1 : 0)); continue; }
+                        if (left.Kind == "int" && right.Kind == "array-length")
+                        {
+                            var bound = int.Parse(right.Text, CultureInfo.InvariantCulture);
+                            var less = Number(left) < bound;
+                            stack.Add(new("array-test", (op.StartsWith("clt", StringComparison.Ordinal) == less) ? "1" : "0", right.DeclaredType));
+                            continue;
+                        }
+                        throw new Refusal("lifecycle-comparison-unresolved");
+                    }
+                    if (op is "add" or "add.ovf" or "add.ovf.un")
+                    {
+                        var right = Pop(); var left = Pop();
+                        if (left.Kind == "int" && right.Kind == "int")
+                        { stack.Add(Int(Number(left) + Number(right))); continue; }
+                        throw new Refusal("lifecycle-arithmetic-unresolved");
+                    }
+                    if (op is "blt" or "blt.s" or "bgt" or "bgt.un" or "ble" or "ble.un" or "bge" or "bge.un")
+                    {
+                        // A counted loop over a tracked array lowers to a comparison
+                        // against the array's exact length; a backward instance of that
+                        // shape unrolls concretely, bounded by the array slot cap and
+                        // the work limits. Everything else still refuses.
+                        var right = Pop(); var left = Pop(); var destination = Target(operand);
+                        var backward = destination <= i;
+                        if (right.Kind != "array-length" || left.Kind != "int")
+                            throw new Refusal(backward ? "lifecycle-unproven-loop" : "lifecycle-comparison-branch-unresolved");
+                        var bound = int.Parse(right.Text, CultureInfo.InvariantCulture);
+                        var truth = op is "blt" or "blt.s" ? Number(left) < bound
+                            : op is "ble" or "ble.un" ? Number(left) <= bound
+                            : op is "bgt" or "bgt.un" ? Number(left) > bound : Number(left) >= bound;
+                        if (backward)
+                        {
+                            if (loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-loop-dependent-control");
+                            if (!loops.Any(loop => loop.Site.Body == body.Observation.BodyIdentity && loop.Table == right.DeclaredType))
+                                loops.Add(new(At(body, offset, invocation), right.DeclaredType!, "array-elements;count-exact"));
+                        }
+                        if (truth) i = destination - 1;
+                        continue;
+                    }
                     if (op == "box")
                     {
                         var value = Pop();
@@ -545,6 +621,12 @@ internal static partial class IlSqlLifecycleExtractor
                     }
                     if (op is "castclass" or "isinst")
                     {
+                        // A tracked array snapshot cast to its exact element type is the
+                        // ToArray lowering; the element identity is already in the slots.
+                        if (op == "castclass" && stack.Count > 0 && stack[^1].Kind == "object"
+                            && heap.TryGetValue(stack[^1].Text, out var arrayCast) && arrayCast.Kind == "array"
+                            && operand.EndsWith("[]", StringComparison.Ordinal))
+                            continue;
                         if (op == "castclass" && stack.Count > 0 && stack[^1].Kind == "object"
                             && heap.TryGetValue(stack[^1].Text, out var customCast) && customCast.Kind == "custom"
                             && operand == "t:" + customCast.Owner)
@@ -567,6 +649,17 @@ internal static partial class IlSqlLifecycleExtractor
                     if (op is "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s")
                     {
                         var value = Pop(); var destination = Target(operand);
+                        if (value.Kind == "array-test")
+                        {
+                            // Backward branch on an exact array bounds test: the counted
+                            // array loop, unrolled concretely within the array slot cap.
+                            if (destination > i) throw new Refusal("lifecycle-array-test-forward");
+                            if (loopEnumerator.Kind != "unknown") throw new Refusal("lifecycle-loop-dependent-control");
+                            if (!loops.Any(loop => loop.Site.Body == body.Observation.BodyIdentity && loop.Table == value.DeclaredType))
+                                loops.Add(new(At(body, offset, invocation), value.DeclaredType!, "array-elements;count-exact"));
+                            if ((value.Text == "1") == op.StartsWith("brtrue", StringComparison.Ordinal)) i = destination - 1;
+                            continue;
+                        }
                         if (value.Kind == "state-test")
                         {
                             // A hypothetical state comparison never selects a side here: the driver
@@ -705,7 +798,7 @@ internal static partial class IlSqlLifecycleExtractor
                             var before = recordFailure ? Snapshot() : [];
                             var beforeObjects = recordFailure ? ObjectsSnapshot() : [];
                             var inLoop = loopEnumerator.Kind != "unknown";
-                            returned = Framework(api, receiver, values, site);
+                            returned = Framework(api, receiver, values, site, body, depth);
                             if (recordFailure)
                             {
                                 if (failures.Count >= 256) throw new Refusal("lifecycle-failure-limit");
@@ -801,7 +894,7 @@ internal static partial class IlSqlLifecycleExtractor
             finally { if (pathAdded) invocationPath.RemoveAt(invocationPath.Count - 1); active.Remove(body.Observation.MethodIdentity); }
         }
 
-        private Value Framework(string api, Value receiver, Value[] args, Site site)
+        private Value Framework(string api, Value receiver, Value[] args, Site site, Body body, int depth)
         {
             if (loopEnumerator.Kind != "unknown" && api is not ("enumerator-next" or "enumerator-current"
                 or "rows" or "row" or "consumer" or "row-write" or "object-value" or "object-base" or "list-add"))
@@ -964,6 +1057,87 @@ internal static partial class IlSqlLifecycleExtractor
                     if (state.Execution is null && !state.Columns.Contains(column)) throw new Refusal("lifecycle-application-column-unknown");
                     reads.Add(new(site, parent.Text, column, state.SchemaExecutions.Distinct(StringComparer.Ordinal).ToArray(), origin));
                     return new("read", (reads.Count - 1).ToString(CultureInfo.InvariantCulture));
+                case "command-timeout":
+                    _ = Get(receiver, "command"); _ = Number(args[0]); return Value.Unknown;
+                case "command-transaction":
+                    _ = Get(receiver, "command");
+                    if (args[0].Kind is not ("null" or "unknown")) throw new Refusal("lifecycle-transaction-operand");
+                    return Value.Unknown;
+                case "parameter-direction":
+                    var directed = Get(receiver, "parameter"); _ = Number(args[0]);
+                    if (directed.Attached) throw new Refusal("lifecycle-parameter-mutated-after-attachment");
+                    directed.Fields["parameter-direction"] = args[0]; return Value.Unknown;
+                case "parameter-source":
+                    var sourced = New("parameter");
+                    heap[sourced.Text].Command = new("string", Text(args[0]));
+                    heap[sourced.Text].Type = Int(Number(args[1]));
+                    heap[sourced.Text].Slots.Add(Int(Number(args[2])));
+                    _ = Text(args[3]); return sourced;
+                case "table-mappings":
+                    _ = Get(Get(receiver, "adapter").Parent, "command");
+                    return View("table-mappings", receiver);
+                case "table-mapping-add":
+                    var mappings = Get(receiver, "table-mappings");
+                    if (mappings.Slots.Count >= 16) throw new Refusal("lifecycle-table-mapping-limit");
+                    _ = Text(args[0]); _ = Text(args[1]);
+                    mappings.Slots.Add(new("string", Text(args[0]) + "->" + Text(args[1])));
+                    return Value.Unknown;
+                case "arraylist-clear":
+                    var clearedCollection = Get(receiver, "arraylist");
+                    if (clearedCollection.Frozen) throw new Refusal("lifecycle-collection-mutated-or-limit");
+                    clearedCollection.Slots.Clear(); return Value.Unknown;
+                case "arraylist-toarray":
+                    var copiedCollection = Get(receiver, "arraylist");
+                    _ = args[0].Kind == "type" ? args[0] : throw new Refusal("lifecycle-toarray-type");
+                    var copiedArray = New("array");
+                    heap[copiedArray.Text].Slots.AddRange(copiedCollection.Slots);
+                    return copiedArray;
+                case "object-type":
+                    return Value.Unknown;
+                case "reflection-method":
+                    return Value.Unknown;
+                case "reflection-name":
+                    return UnboundString("reflection-method-name");
+                case "exception-message":
+                    return UnboundString("exception-message");
+                case "exception-inner":
+                    return Value.Unknown;
+                case "string-concat":
+                    if (args[0].Kind == "string" && args[1].Kind == "string")
+                        return new("string", args[0].Text + args[1].Text);
+                    return UnboundString("string-concat");
+                case "string-concat-array":
+                    var concatArray = Get(args[0], "array");
+                    if (concatArray.Slots.Count > 16) throw new Refusal("lifecycle-string-concat-limit");
+                    return concatArray.Slots.All(slot => slot.Kind == "string")
+                        ? new("string", string.Concat(concatArray.Slots.Select(slot => slot.Text)))
+                        : UnboundString("string-concat-array");
+                case "iif":
+                    if (args[0].Kind == "state-test")
+                        throw new Refusal("lifecycle-state-dependent-value");
+                    var selected = Number(args[0]) != 0 ? args[1] : args[2];
+                    return selected.Kind is ("string" or "int" or "null" or "unknown" or "input"
+                        or "opaque-initializer" or "computed-string") ? selected
+                        : throw new Refusal("lifecycle-iif-operand-untracked");
+                case "to-integer":
+                    if (args[0].Kind == "int") return args[0];
+                    if (args[0].Kind == "input" && args[0].DeclaredType == "type(namespace:6:System|names:5:Int32)") return args[0];
+                    throw new Refusal("lifecycle-conversion-unresolved");
+                case "event-log":
+                    // Root-body external logging terminal: only trace-scalar arguments,
+                    // same unbound semantics as the web-trace chain, never in callbacks.
+                    // Gated on the external-trace boundary being enabled for this extraction
+                    // (externalTraceRoot is set only then); callbacks are never interpreted.
+                    if (externalTraceRoot is null || !TraceScalarValue(args[0]) || !TraceScalarValue(args[1]))
+                        throw new Refusal("lifecycle-event-log-boundary");
+                    if (TraceBoundaries.Count >= 8) throw new Refusal("lifecycle-chain-limit");
+                    TraceBoundaries.Add(new(ExternalTracePolicy,
+                        [new(site, Hash("<event-log>")), new(site, Hash("<event-log>"))],
+                        [TraceOrigin(args[0]), TraceOrigin(args[1])], null)
+                        { ArgumentsPartial = args[0].Kind == "computed-string" || args[1].Kind == "computed-string",
+                          ArgumentEffects = args.Any(argument => argument.Kind == "computed-string")
+                              ? "partial-unbound-values;may-throw" : "scalar-values-only" });
+                    return Value.Unknown;
                 default: throw new Refusal("lifecycle-framework-pending:" + api);
             }
         }

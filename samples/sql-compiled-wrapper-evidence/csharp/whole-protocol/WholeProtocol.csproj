@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net48</TargetFramework><AssemblyName>PublicSql.csharp.whole-protocol</AssemblyName><LangVersion>latest</LangVersion><Nullable>disable</Nullable><Deterministic>true</Deterministic></PropertyGroup>
   <ItemGroup><PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" /></ItemGroup>
+  <ItemGroup><Reference Include="System.Configuration" /></ItemGroup>
+  <ItemGroup><Reference Include="System" /></ItemGroup>
 </Project>

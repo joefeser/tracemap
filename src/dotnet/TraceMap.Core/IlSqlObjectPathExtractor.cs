@@ -9,6 +9,8 @@ internal static class IlSqlObjectPathExtractor
     internal const int MaxSteps = 2048, MaxFrames = 16, MaxObjects = 64, MaxSites = 256;
     internal const string Limitation = "Tier3 encoded static object/dataflow candidate only. Exact unique admitted compiled bodies, no deployment/source equivalence, SQL contract match, rows, values, types, nullability or runtime proof. Fresh bounded objects, constructor stores/getter loads, positional nonvirtual calls, one Fill for legacy DataSet paths; at most two Fills for explicit fresh named-table destinations with first source table/row named access. Fresh root property stores require an inspected private backing field. Existing destinations, repeated merges, mutation, escapes, virtual/generic/recursive/branch/exception flow are unknown. Merge is a schema-union-from-empty candidate, never original-result identity or runtime ownership.";
     private const string DataScope = "scope(assembly:name:11:System.Data|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
+    private const string VbRuntime = "scope(assembly:name:21:Microsoft.VisualBasic|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)";
+    private const string VbCompiler = "scope(assembly:name:21:Microsoft.VisualBasic|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)";
     private const string CoreScope = "scope(assembly:name:8:mscorlib|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
     private static string Primitive(string name) => $"type(namespace:6:System|names:{name.Length}:{name})";
     private static string Data(string ns, string name) => $"{DataScope}type(namespace:{ns.Length}:{ns}|names:{name.Length}:{name})";
@@ -39,7 +41,30 @@ internal static class IlSqlObjectPathExtractor
         [Api("System.Data", "DataTable", "get_Rows", Rows)] = "rows",
         [Api("System.Data", "DataRowCollection", "get_Item", Row, Int)] = "row",
         [Api("System.Data", "DataRow", "get_Item", Object, String)] = "consumer",
-        [$"memberref|type:{CoreScope}type(namespace:6:System|names:6:Object)|member:5:.ctor|arity:0|call:default|hasThis:true|explicitThis:false|()->{Void}"] = "object-base"
+        [$"memberref|type:{CoreScope}type(namespace:6:System|names:6:Object)|member:5:.ctor|arity:0|call:default|hasThis:true|explicitThis:false|()->{Void}"] = "object-base",
+        // Adjacent whole-protocol families: command/adapter configuration, typed-array
+        // parameter flow, VB scalar helpers and reflection-identity reads. Exact signed
+        // 4.0 identities; legacy profiles resolve through LegacyInfoApis.
+        [Api("System.Data.SqlClient", "SqlCommand", "set_CommandTimeout", Void, Int)] = "command-timeout",
+        [Api("System.Data.Common", "DbCommand", "set_CommandTimeout", Void, Int)] = "command-timeout",
+        [Api("System.Data.SqlClient", "SqlCommand", "set_Transaction", Void, Data("System.Data.SqlClient", "SqlTransaction"))] = "command-transaction",
+        [Api("System.Data.SqlClient", "SqlParameter", "set_Direction", Void, Data("System.Data", "ParameterDirection"))] = "parameter-direction",
+        [Api("System.Data.Common", "DbParameter", "set_Direction", Void, Data("System.Data", "ParameterDirection"))] = "parameter-direction",
+        [Api("System.Data.SqlClient", "SqlParameter", ".ctor", Void, String, Data("System.Data", "SqlDbType"), Int, String)] = "parameter-source",
+        [Api("System.Data.Common", "DataAdapter", "get_TableMappings", Data("System.Data.Common", "DataTableMappingCollection"))] = "table-mappings",
+        [Api("System.Data.Common", "DataTableMappingCollection", "Add", Data("System.Data.Common", "DataTableMapping"), String, String)] = "table-mapping-add",
+        [$"memberref|type:{CoreScope}type(namespace:18:System.Collections|names:9:ArrayList)|member:5:Clear|arity:0|call:default|hasThis:true|explicitThis:false|()->{Void}"] = "arraylist-clear",
+        [$"memberref|type:{CoreScope}type(namespace:18:System.Collections|names:9:ArrayList)|member:7:ToArray|arity:0|call:default|hasThis:true|explicitThis:false|({CoreScope}type(namespace:6:System|names:4:Type))->{CoreScope}type(namespace:6:System|names:5:Array)"] = "arraylist-toarray",
+        [$"memberref|type:{CoreScope}type(namespace:6:System|names:6:Object)|member:7:GetType|arity:0|call:default|hasThis:true|explicitThis:false|()->{Primitive("Type")}"] = "object-type",
+        [$"memberref|type:{CoreScope}type(namespace:6:System|names:10:Reflection|names:10:MethodBase)|member:16:GetCurrentMethod|arity:0|call:default|hasThis:false|explicitThis:false|()->{CoreScope}type(namespace:17:System.Reflection|names:10:MethodBase)"] = "reflection-method",
+        [$"memberref|type:{CoreScope}type(namespace:17:System.Reflection|names:10:MemberInfo)|member:8:get_Name|arity:0|call:default|hasThis:true|explicitThis:false|()->{String}"] = "reflection-name",
+        [$"memberref|type:{CoreScope}type(namespace:6:System|names:9:Exception)|member:11:get_Message|arity:0|call:default|hasThis:true|explicitThis:false|()->{String}"] = "exception-message",
+        [$"memberref|type:{CoreScope}type(namespace:6:System|names:9:Exception)|member:18:get_InnerException|arity:0|call:default|hasThis:true|explicitThis:false|()->{CoreScope}type(namespace:6:System|names:9:Exception)"] = "exception-inner",
+        [$"memberref|type:{CoreScope}type(namespace:6:System|names:6:String)|member:6:Concat|arity:0|call:default|hasThis:false|explicitThis:false|({String},{String})->{String}"] = "string-concat",
+        [$"memberref|type:{CoreScope}type(namespace:6:System|names:6:String)|member:6:Concat|arity:0|call:default|hasThis:false|explicitThis:false|({String}[])->{String}"] = "string-concat-array",
+        [$"memberref|type:{VbRuntime}type(namespace:21:Microsoft.VisualBasic|names:11:Interaction)|member:3:IIf|arity:0|call:default|hasThis:false|explicitThis:false|({Primitive("Boolean")},{Object},{Object})->{Object}"] = "iif",
+        [$"memberref|type:{VbCompiler}type(namespace:38:Microsoft.VisualBasic.CompilerServices|names:11:Conversions)|member:9:ToInteger|arity:0|call:default|hasThis:false|explicitThis:false|({Object})->{Int}"] = "to-integer",
+        [$"memberref|type:scope(assembly:name:6:System|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:18:System.Diagnostics|names:8:EventLog)|member:10:WriteEntry|arity:0|call:default|hasThis:false|explicitThis:false|({String},{String})->{Void}"] = "event-log"
     };
 
     internal sealed record Body(IlBodyObservation Observation, IlInputOutcome Input, string? MemberReferenceAlias = null);
