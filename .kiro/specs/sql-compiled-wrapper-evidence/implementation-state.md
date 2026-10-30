@@ -1719,3 +1719,5 @@ three-call chain receipt (no catalog entries, matching the map's own guidance).
 Focused validation 250/250 with ScanDiagnosticProgressTests, Debug -warnaserror.
 Full gate on an immutable clone recorded separately below. No private input, no
 acceptance or whole-SQL completion claim.
+
+The final validation prompt now expects implementation head d7d3e168b (batch 3).

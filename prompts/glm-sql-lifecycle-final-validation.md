@@ -1,7 +1,7 @@
 # Final bounded validation — whole-protocol state control (one scan, then stop)
 
-EXPECTED_IMPLEMENTATION_COMMIT: `f433e525e777514c30cdd439de28cf217c9a2f07`
-TOOL: `il-body-evidence/0.2.27` · policy `explicit-il-body-evidence.v28` ·
+EXPECTED_IMPLEMENTATION_COMMIT: `d7d3e168b` (full sha at push)
+TOOL: `il-body-evidence/0.2.28` · policy `explicit-il-body-evidence.v29` ·
 state control `explicit-sql-state-control/1` · InfoMessage `/4`
 
 This is the LAST planned private pass. It is pinned to the public whole-protocol
@@ -38,25 +38,13 @@ per-path alternatives (exceptional-termination paths included). This advances th
 lifecycle claim only — it is NOT SQL acceptance, NOT row proof, NOT a
 whole-effort-complete claim.
 
-**B. A stop at a predicted missing signature.** Per the v12-001 reconciliation
-(first-gap order), the expected stops are, in order:
-
-1. the configuration chain in the root-side constructor
-   (`ConfigurationManager.get_ConnectionStrings` group) — verify-against
-   `--il-opaque-root-initializers`; do NOT catalog;
-2. `ArrayList.Clear()` / `ArrayList.ToArray(Type)` in the open/exec path;
-3. `set_CommandTimeout` / `set_Transaction` / `get_TableMappings` /
-   `TableMappings.Add` around command construction;
-4. the 4-arg `SqlParameter` ctor / `set_Direction` /
-   `VB.Information.GetObjectValue` / `Object.GetType` in the parameter builders;
-5. `String.Concat` overloads and `Interaction.IIf` / `Conversion.ToInteger` in the
-   exec body; the crypto helper group (verify against
-   `--il-compiled-scalar-boundary`) and the EventLog group (verify against
-   `--il-external-trace-boundary`) only if traversal reaches them.
-
-If the scan stops at any entry above, record the exact signature + site + refusal
-and STOP: that is the documented gap for the next public batch, not a new loop.
-If it stops somewhere NOT listed, record it the same way — still stop.
+**B. A stop at a NEW missing signature.** Batch 3 (this commit) covers every
+signature the v12-001 reconciliation listed, plus the array-loop lowerings and the
+configuration chain (now opaque via the existing opt-in, no catalog). If the scan
+still stops, it stops at something NO map predicted — record the exact signature +
+site + refusal and STOP. That is a genuinely new finding for one more public batch,
+never a private fix loop. Crypto (Ph.10) remains behind the compiled-scalar boundary
+verification; unmodeled shapes there still stop the run by design.
 
 ## Reporting
 
