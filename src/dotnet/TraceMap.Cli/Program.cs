@@ -582,6 +582,11 @@ public static class TraceMapCommand
             await error.WriteLineAsync("error: output-path-invalid");
             return 1;
         }
+        ScanDiagnosticProgress? diagnosticBinding;
+        try { diagnosticBinding = ScanDiagnosticProgress.Create(values.GetValueOrDefault("--diagnostic-progress"), repoPath, fullOutputPath, scanOptions); }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        { await error.WriteLineAsync("error: scan-diagnostic-progress-invalid"); return 1; }
+        using var diagnosticScope = diagnosticBinding;
         ScanResult result;
         var progress = ScanProgressAmbient.Current;
         try
@@ -3108,6 +3113,9 @@ public static class TraceMapCommand
               --compiled-max-text <count>
               --compiled-max-work <count>
                                        Positive deterministic compiled-input limits; max-text must be at least 71.
+              --diagnostic-progress <file>
+                                       Write live bounded phase checkpoints outside repo/output before analysis starts.
+                                       Requires fresh checkpoint and sidecars; operational only, not completion evidence.
               --il-body-evidence        Extract bounded operand-aware IL method-body and direct-call evidence from admitted compiled inputs. Never discovered.
               --il-compiled-scalar-boundary
                                        Opt in to bounded retained static String-to-String transforms inside root scalar initializer chains.

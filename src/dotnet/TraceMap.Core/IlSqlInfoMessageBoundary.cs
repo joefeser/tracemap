@@ -118,7 +118,7 @@ internal static partial class IlSqlLifecycleExtractor
             if (matches.Length != 1 || matches[0].Observation.ObjectBody is not { } meta || !IlSqlInfoMessageApis.Callback(meta))
                 throw new Refusal("lifecycle-info-callback-target");
             var target = matches[0];
-            var proof = InspectInfoBody(target, false);
+            var proof = ScanProgressAmbient.Observe(ScanProgressStages.IlCallbackInspection, () => InspectInfoBody(target, false));
             if (proof.Fields.Length == 0) throw new Refusal("lifecycle-info-no-name-list");
             if (infoTargets.Count >= 4 && !infoTargets.ContainsKey(call.TargetIdentity)) throw new Refusal("lifecycle-info-target-limit");
             infoTargets[call.TargetIdentity] = target; infoFields[call.TargetIdentity] = proof.Fields;
@@ -200,7 +200,7 @@ internal static partial class IlSqlLifecycleExtractor
                 || !meta.MemberReference.EndsWith("|(" + IlSqlInfoMessageApis.D("DataSet") + ")->" + IlSqlInfoMessageApis.P("Void"), StringComparison.Ordinal)) return false;
             var owner = Get(receiver, "custom");
             if (!owner.Fields.Values.Any(value => infoLists.ContainsKey(value.Text))) return false;
-            var proof = InspectInfoBody(body, true);
+            var proof = ScanProgressAmbient.Observe(ScanProgressStages.IlResultNaming, () => InspectInfoBody(body, true));
             var set = Get(args[0], "dataset");
             if (set.Slots.Count == 0 || proof.Fields.Length == 0 || !proof.DataSetName && !proof.TableNames)
                 throw new Refusal("lifecycle-info-naming-shape");

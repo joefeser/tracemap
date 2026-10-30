@@ -5,7 +5,8 @@ was reported to grow to roughly 46 GB without completing. The responsible phase
 and root cause are NOT established. Do not build, rerun, retry or enable this flag
 from this prompt. Use `diagnose-info-message-resource-regression.md` for read-only
 inspection of existing evidence only. Passing local tests are not resource-safety
-acceptance for this workload.
+acceptance for this workload. A separate gated diagnostic is described in
+run-bounded-info-message-diagnostic.md; it does not reactivate this unguarded scan.
 
 ---
 

@@ -736,7 +736,7 @@ internal static class IlBodyEvidenceExtractor
                     ? IlSqlLifecycleExtractor.Schema : IlSqlLifecycleExtractor.EntrySchema;
                 var result = slice?.Failure is { } sliceFailure
                     ? new IlSqlLifecycleExtractor.Result([], [], null, [sliceFailure])
-                    : IlSqlLifecycleExtractor.Extract(root, scopedBodies, enabled, budget, evaluation.OpaqueRootInitializers, evaluation.ExternalTraceBoundary, evaluation.CompiledScalarBoundary, evaluation.InfoMessageBoundary);
+                    : ScanProgressAmbient.Observe(ScanProgressStages.IlLifecycle, () => IlSqlLifecycleExtractor.Extract(root, scopedBodies, enabled, budget, evaluation.OpaqueRootInitializers, evaluation.ExternalTraceBoundary, evaluation.CompiledScalarBoundary, evaluation.InfoMessageBoundary));
                 if (result.OpaqueInitializers is { Count: > 0 } || result.ExternalTraces is { Count: > 0 } || result.TraceStringComputations is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.OpaqueEntrySchema;
                 if (result.InfoMessages is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.InfoMessageSchema;
                 var common = new Dictionary<string, string>(CommonProperties(provenance, root.Input), StringComparer.Ordinal);

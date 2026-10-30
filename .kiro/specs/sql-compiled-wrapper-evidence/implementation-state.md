@@ -1,5 +1,55 @@
 # Implementation state
 
+## Active containment implementation — 2026-10-29
+
+Worktree initially clean at 8185c1daf on codex/sql-compiled-wrapper-evidence.
+Added ordinary scan --diagnostic-progress with fresh external checkpoint/binding
+sidecars, two-second heartbeat and categorical source/metadata/decode/IL lifecycle/
+callback/naming stages. No lifecycle admission/refusal or facts semantics changed.
+New PowerShell guard uses an isolated worker, a Windows aggregate committed-memory
+job limit before scan launch, sampled job working sets, wall/stale-phase limits
+and kill-on-close cleanup. It does not assign the interactive shell to a job.
+Unsupported job setup fails before launch; private execution never falls back to
+parent-only or sampled-only monitoring. macOS public tests are explicitly sampled.
+
+Validation so far: 236 focused/regression tests passed with -warnaserror, exit 0,
+zero warnings (/tmp/tracemap-resource-diagnostics-regression.log). Five guard
+self-test cases passed locally (success, timeout, child memory, parent exit/orphan,
+stale phase; /tmp/tracemap-guard-selftest-frozen.log). Windows interop compiles,
+but Windows runtime job enforcement remains untested on this host. The new prompt
+requires the exact five-case public Windows self-test BEFORE a private probe.
+Final full Debug -warnaserror passed: 5656 passed, 3 existing skips, 0 failed,
+exit 0, no warnings, 40.3614 minutes (/tmp/tracemap-resource-guard-full-debug.log).
+Existing skips: opt-in exhaustive Oracle sweep, native HTTP receipt interop,
+and deep Windows ASP.NET publish. They are not claimed executed. Final supervisor
+self-test after PID/start-time cleanup checks passed all five cases locally
+(/tmp/tracemap-guard-selftest-identity.log); Windows job runtime remains a required
+public work-machine gate. The Windows interop C# source compiles on macOS.
+
+Exact validation commands:
+```
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~ScanDiagnosticProgressTests|FullyQualifiedName~ScanProgress|FullyQualifiedName~IlSql|FullyQualifiedName~LinqPipelineEvidenceTests'
+dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'
+pwsh -NoProfile -File scripts/Test-BoundedScanGuard.ps1
+```
+The public normal-CLI fixture smoke and C#/VB native IL scans are included in the
+focused/full tests. Pinned OSS adapter smokes are explicitly deferred because no
+language adapter or source semantic admission changed. git diff --check passed.
+Changed files: CLI Program.cs and ScanDiagnosticProgress.cs; Core ScanEngine.cs,
+ScanProgressDiagnostics.cs, IlBodyEvidenceExtractor.cs and IlSqlInfoMessageBoundary.cs;
+ScanDiagnosticProgressTests.cs; scripts/Invoke-BoundedScan.ps1,
+scripts/Test-BoundedScanGuard.ps1, scripts/test-workers/BoundedScanWorker.ps1;
+docs/validation/BOUNDED_SCAN_DIAGNOSTICS.md; the new guarded prompt and this spec's
+tasks/state. The suspended unguarded prompt is only cross-linked to the new gate.
+
+New protocol: prompts/run-bounded-info-message-diagnostic.md. One public build,
+one Windows synthetic guard gate, then at most one 60-second/2048-MiB guarded
+phase diagnostic. If any gate fails, stop without private execution. Old unguarded
+protocol remains suspended. The memory root cause is still UNKNOWN/unreproduced.
+No private scan, SQL execution, source editing or transfer occurred here.
+
+---
+
 
 ## Resource regression alert — 2026-10-29
 

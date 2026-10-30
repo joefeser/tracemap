@@ -104,6 +104,7 @@ public static class ScanEngine
                 ScanProgressStages.ProjectSelection,
                 "completed",
                 counts: ProjectSelectionCounts(inventory));
+            progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SourceSemanticAnalysis);
             using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -145,6 +146,8 @@ public static class ScanEngine
                     "semantic-input-snapshot-verified",
                     retryability: SemanticRetryability(semanticToolchainReducedCoverage, semanticResult.GapFacts),
                     nextAction: semanticToolchainReducedCoverage ? "review-analysis-gaps" : "continue");
+                progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SourceSemanticAnalysis,
+                    semanticToolchainReducedCoverage ? "partial" : "completed");
             }
         }
         catch (Exception ex)
@@ -231,9 +234,11 @@ public static class ScanEngine
             .Select(item => item.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
-        var compiledEvaluation = ManagedMetadataExtractor.Evaluate(repoPath, git.CommitSha, options, cancellationToken);
+        var compiledEvaluation = ScanProgressAmbient.Observe(ScanProgressStages.CompiledMetadata,
+            () => ManagedMetadataExtractor.Evaluate(repoPath, git.CommitSha, options, cancellationToken));
         var pdbEvaluation = PortablePdbExtractor.Evaluate(repoPath, options, compiledEvaluation, cancellationToken);
-        var ilEvaluation = IlBodyEvidenceExtractor.Evaluate(options, compiledEvaluation, cancellationToken);
+        var ilEvaluation = ScanProgressAmbient.Observe(ScanProgressStages.IlDecode,
+            () => IlBodyEvidenceExtractor.Evaluate(options, compiledEvaluation, cancellationToken));
         var ilRewriteEvaluation = IlRewriteEvidenceExtractor.Evaluate(options, cancellationToken);
         var ilRewritePdbEvaluation = IlRewritePdbEvidenceExtractor.Evaluate(options, ilRewriteEvaluation, cancellationToken);
         var webFormsPublishEvaluation = WebFormsPublishMapExtractor.Evaluate(repoPath, git.CommitSha, options, cancellationToken);
@@ -946,7 +951,8 @@ public static class ScanEngine
         var compiledFacts = ManagedMetadataExtractor.MaterializeFacts(manifest, compiledEvaluation);
         facts.AddRange(compiledFacts);
         facts.AddRange(PortablePdbExtractor.MaterializeFacts(repoPath, manifest, pdbEvaluation, compiledFacts, inventory, cancellationToken));
-        facts.AddRange(IlBodyEvidenceExtractor.MaterializeFacts(manifest, ilEvaluation, compiledFacts, cancellationToken));
+        facts.AddRange(ScanProgressAmbient.Observe(ScanProgressStages.IlMaterialization,
+            () => IlBodyEvidenceExtractor.MaterializeFacts(manifest, ilEvaluation, compiledFacts, cancellationToken)));
         var ilRewriteFacts = IlRewriteEvidenceExtractor.MaterializeFacts(manifest, ilRewriteEvaluation, cancellationToken);
         facts.AddRange(ilRewriteFacts);
         facts.AddRange(IlRewritePdbEvidenceExtractor.MaterializeFacts(manifest, ilRewritePdbEvaluation, ilRewriteFacts, cancellationToken));

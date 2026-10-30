@@ -194,3 +194,14 @@
 - [ ] Establish allocating/retaining phase from existing work-machine evidence.
 - [ ] Reproduce the resource failure with independently authored public inputs under external process-tree bounds.
 - [ ] Fix and validate the demonstrated cause before reauthorizing private execution.
+
+
+## Operational containment and live phase diagnostics
+- [x] Add ordinary scan live checkpoints with fresh-path protection and privacy-projected generator/input bindings.
+- [x] Identify source semantic, metadata/decode, IL materialization/lifecycle, callback and result-naming phases without changing facts.
+- [x] Add dedicated Windows job guard, sampled working sets, timeout/stale-phase stop and child cleanup; fail closed on unsupported setup.
+- [x] Validate five public supervisor controls on macOS sampled mode and compile Windows interop; do not claim Windows runtime enforcement.
+- [x] Pass 236 focused/regression tests with no warnings; verify diagnostic enablement does not alter facts.
+- [x] Complete full Debug -warnaserror gate on frozen code before publication (5656 passed, 3 existing skips, 0 failures; no warnings).
+- [ ] Pass public Windows job self-test on the work machine before any guarded private probe.
+- [ ] Identify and fix the demonstrated cause of private memory growth (not claimed by containment).
