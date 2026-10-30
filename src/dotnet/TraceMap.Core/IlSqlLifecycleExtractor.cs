@@ -70,6 +70,7 @@ internal static partial class IlSqlLifecycleExtractor
                 ? ";compiled-scalar-normal-return-assumed;compiled-scalar-internal-control-unmodeled;transitive-effects-unmodeled" : "")
             + (TraceStringComputations is { Count: > 0 } ? ";computed-string-values-unbound;argument-computation-normal-return-assumed" : "")
             + (InfoMessages is { Count: > 0 } ? ";info-message-and-naming-normal-return-assumed;info-message-event-timing-unproven;callback-values-unbound;external-effects-unmodeled;result-names-unbound" : "")
+            + (ConnectionStateReads is { Count: > 0 } ? ";connection-state-values-unbound;runtime-state-control-unproven" : "")
             + (ExternalTraces is { Count: > 0 } ? ";external-trace-normal-return-assumed;trace-receiver-non-null-unproven;tracked-heap-noninterference-assumed;external-effects-unmodeled" : "");
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ExternalTrace>? ExternalTraces { get; init; }
@@ -95,6 +96,8 @@ internal static partial class IlSqlLifecycleExtractor
         public IReadOnlyList<ConstructorOwnerView>? ConstructorOwnerViews { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<InfoMessageReceipt>? InfoMessages { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public IReadOnlyList<ConnectionStateRead>? ConnectionStateReads { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public IReadOnlyList<ResultNamingReceipt>? ResultNaming { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
@@ -157,6 +160,7 @@ internal static partial class IlSqlLifecycleExtractor
             ExternalTraceFailure = machine.TraceFailure,
             OpcodeFailure = machine.OpcodeFailure,
             OpaqueInitializerRejection = machine.ReportedOpaqueRejection,
+            ConnectionStateReads = machine.StateReads.Count > 0 ? machine.StateReads.ToArray() : null,
             InfoMessages = machine.InfoReceipts.Count > 0 ? machine.InfoReceipts.ToArray() : null,
             ResultNaming = machine.NamingReceipts.Count > 0 ? machine.NamingReceipts.ToArray() : null, InfoMessageFailure = machine.InfoFailure,
             ConstructorOwnerViews = machine.OwnerViews.Count > 0 ? machine.OwnerViews.ToArray() : null }; }
@@ -265,6 +269,7 @@ internal static partial class IlSqlLifecycleExtractor
                 { OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null,
                     ExternalTraces = TraceBoundaries.Count > 0 ? TraceBoundaries.ToArray() : null,
                     TraceStringComputations = StringComputations.Count > 0 ? StringComputations.ToArray() : null,
+                    ConnectionStateReads = StateReads.Count > 0 ? StateReads.ToArray() : null,
                     InfoMessages = InfoReceipts.Count > 0 ? InfoReceipts.ToArray() : null,
                     ResultNaming = NamingReceipts.Count > 0 ? NamingReceipts.ToArray() : null,
                     ConstructorOwnerViews = OwnerViews.Count > 0 ? OwnerViews.ToArray() : null };
@@ -421,6 +426,12 @@ internal static partial class IlSqlLifecycleExtractor
                     if (op is "brtrue" or "brtrue.s" or "brfalse" or "brfalse.s")
                     {
                         var value = Pop(); var destination = Target(operand);
+                        if (value.Kind == "connection-state-unbound")
+                        {
+                            OpcodeFailure = new(selectedRootMetadata!, At(body, offset, invocation), body.Observation.MetadataToken,
+                                op, meta.Instructions.Count, invocationPath.ToArray());
+                            throw new Refusal("lifecycle-connection-state-dependent-control", MetadataFailure(body, "connection-state"));
+                        }
                         var truth = value.Kind == "object" || value.Kind == "int" && Number(value) != 0
                             || value.Kind is "loop-test" or "collection-test" && value.Text == "1";
                         if (value.Kind is not ("object" or "int" or "null" or "loop-test" or "collection-test")) throw new Refusal("lifecycle-guard-unresolved");

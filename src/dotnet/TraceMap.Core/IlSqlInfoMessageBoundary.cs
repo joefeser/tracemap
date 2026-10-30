@@ -26,6 +26,8 @@ internal static class IlSqlInfoMessageApis
     internal static readonly string Add = M(S("SqlConnection"), "add_InfoMessage", P("Void"), true, S("SqlInfoMessageEventHandler"));
     internal static readonly string Remove = M(S("SqlConnection"), "remove_InfoMessage", P("Void"), true, S("SqlInfoMessageEventHandler"));
     internal static readonly string Connection = M(S("SqlConnection"), ".ctor", P("Void"), true, P("String"));
+    internal static readonly string State = M(S("SqlConnection"), "get_State", D("ConnectionState"), true);
+    internal static readonly string DbState = M(Data + T("System.Data.Common", "DbConnection"), "get_State", D("ConnectionState"), true);
     internal static readonly string Open = M(S("SqlConnection"), "Open", P("Void"), true);
     internal static readonly string Close = M(S("SqlConnection"), "Close", P("Void"), true);
     internal static readonly string DbOpen = M(Data + T("System.Data.Common", "DbConnection"), "Open", P("Void"), true);
@@ -103,8 +105,10 @@ internal static class IlSqlInfoMessageApis
 internal static partial class IlSqlLifecycleExtractor
 {
     internal const string InfoMessageSchema = "il-sql-lifecycle-info-message-entry/1";
-    internal const string InfoMessagePolicy = "explicit-sql-info-message/3";
+    internal const string InfoMessagePolicy = "explicit-sql-info-message/4";
     internal sealed record InfoMessageRejection(string Body, string Binary, long Offset, string MetadataToken, string Phase, string Opcode, string? CallSha256);
+    internal sealed record ConnectionStateRead(Site Site, string Connection, string TargetIdentity,
+        string State = "unbound", string Limitation = "external-runtime-observation;no-enum-value-or-transition-assumed;no-runtime-execution");
     internal sealed record InfoMessageReceipt(string Policy, Site Site, string Action, string Connection,
         string Delegate, string Receiver, string CallbackBody, string CallbackBinary,
         IReadOnlyList<string> FieldHashes,
@@ -117,6 +121,7 @@ internal static partial class IlSqlLifecycleExtractor
         internal readonly List<InfoMessageReceipt> InfoReceipts = [];
         internal InfoMessageRejection? InfoFailure;
         internal readonly List<ResultNamingReceipt> NamingReceipts = [];
+        internal readonly List<ConnectionStateRead> StateReads = [];
         private readonly Dictionary<string, string> infoProfiles = new(StringComparer.Ordinal);
         private static string InfoProfile(string identity) => identity.Contains(IlSqlInfoMessageApis.Data, StringComparison.Ordinal) ? "4" : "2";
         private void RequireInfoProfile(Value value, string identity)
@@ -150,6 +155,7 @@ internal static partial class IlSqlLifecycleExtractor
             result = Value.Unknown;
             if (new[] { IlSqlInfoMessageApis.DelegateCtor, IlSqlInfoMessageApis.Connection, IlSqlInfoMessageApis.Command,
                 IlSqlInfoMessageApis.Open, IlSqlInfoMessageApis.Close, IlSqlInfoMessageApis.DbOpen, IlSqlInfoMessageApis.DbClose,
+                IlSqlInfoMessageApis.State, IlSqlInfoMessageApis.DbState,
                 IlSqlInfoMessageApis.Add, IlSqlInfoMessageApis.Remove }.Any(identity => IlSqlInfoMessageApis.Matches(call.TargetIdentity, identity))
                 && (!IlSqlInfoMessageApis.Shape(call) || (op == "newobj") != new[] { IlSqlInfoMessageApis.DelegateCtor,
                     IlSqlInfoMessageApis.Connection, IlSqlInfoMessageApis.Command }.Any(identity => IlSqlInfoMessageApis.Matches(call.TargetIdentity, identity))))
@@ -173,6 +179,17 @@ internal static partial class IlSqlLifecycleExtractor
                     || args[0].Kind != "string" && args[0].DeclaredType != IlSqlInfoMessageApis.P("String"))
                     throw new Refusal("lifecycle-info-connection-shape");
                 result = New("sql-connection"); infoProfiles[result.Text] = InfoProfile(call.TargetIdentity); return true;
+            }
+            if (IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.State)
+                || IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.DbState))
+            {
+                _ = Get(receiver, "sql-connection"); RequireInfoProfile(receiver, call.TargetIdentity);
+                if (StateReads.Count >= 16) throw new Refusal("lifecycle-connection-state-read-limit");
+                StateReads.Add(new(site, receiver.Text, call.TargetIdentity));
+                var type = IlSqlInfoMessageApis.D("ConnectionState");
+                result = new("connection-state-unbound", receiver.Text, InfoProfile(call.TargetIdentity) == "2"
+                    ? IlSqlInfoMessageApis.Legacy(type) : type);
+                return true;
             }
             if (IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.Command))
             {

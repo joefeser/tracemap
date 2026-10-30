@@ -170,3 +170,25 @@ Legacy/normal profiles and native compiled-only CLI output remain covered.
 The equality operation is available to the bounded lifecycle interpreter; root
 admission, SQL route contracts and receipt schemas are unchanged. InfoMessage
 policy remains /3 because callback catalog admission is unchanged.
+
+
+## Runtime connection State recognition (IL 0.2.26 / policy v27)
+
+InfoMessage policy /4 recognizes only exact signed SqlConnection/DbConnection
+get_State()->ConnectionState under the existing profiles and receiver/profile
+checks. Each read is tied to its connection allocation/site, capped at 16/root,
+and returned as connection-state-unbound. Optional ConnectionStateReads receipts
+explicitly record unbound external observation; no enum value or Open/Close
+transition is inferred. The claim includes runtime-state-control-unproven.
+Unknown equality still refuses with operand categories and exact opcode path;
+direct state-dependent branches refuse. An unused state read does not prohibit
+otherwise proven static lineage. This is typed-unknown recognition, not completion
+of state-dependent lifecycle support. Default routes remain unchanged.
+
+Microsoft describes the getter as the state during the most recent network
+operation, not a static source constant:
+https://learn.microsoft.com/en-us/dotnet/api/system.data.sqlclient.sqlconnection.state
+
+The private continuation prompt is suspended pending the whole-protocol map and
+synthetic batch implementation. GLM takeover state and a bounded read-only map
+prompt are under prompts/. Do not substitute an assumed Open/Closed value.

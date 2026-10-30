@@ -20,6 +20,26 @@ namespace PublicSql.CSharp
             if (!integers) return null;
             wrapper.Open(); return wrapper.Execute();
         }
+        public DataSet EventNamingRuntimeStateGuard(string value)
+        {
+            var connection = new SqlConnection(value);
+            bool open = connection.State == ConnectionState.Open;
+            if (open) return EventNamingProduce(value);
+            return null;
+        }
+        public DataSet EventNamingRuntimeDbStateGuard(string value)
+        {
+            System.Data.Common.DbConnection connection = new SqlConnection(value);
+            bool open = connection.State == ConnectionState.Open;
+            if (open) return EventNamingProduce(value);
+            return null;
+        }
+        public DataSet EventNamingRuntimeStateRead(string value)
+        {
+            var connection = new SqlConnection(value);
+            var ignored = connection.State;
+            return EventNamingProduce(value);
+        }
         public DataSet EventNamingUnknownEquality(string connection)
         { bool missing = (object)connection == null; if (missing) return null; return EventNamingProduce(connection); }
         public DataSet EventNamingViewEquality(string connection)

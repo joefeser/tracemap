@@ -228,3 +228,8 @@
 - [x] Add C#/VB scalar/null/alias/fresh-allocation controls and unknown-input/ambiguous-view refusals.
 - [x] Record final affected regression for IL 0.2.25: 211 passed, 0 failed/skipped.
 - [ ] Complete passing full shared-core Debug -warnaserror gate for IL 0.2.25.
+
+
+- [x] Recognize exact connection State reads as bound-to-allocation typed unknowns with explicit unbound receipts; preserve state-control refusals.
+- [x] Publish whole-closure inventory prompt and complete GLM takeover state; suspend first-error private scan loop.
+- [ ] Complete whole-protocol capability map, representative C#/VB batch fixtures and sound state-dependent control before private validation.

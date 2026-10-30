@@ -1575,3 +1575,36 @@ Log: /tmp/tracemap-ceq-regression.log. `git diff --check` passed.
 Log: /tmp/tracemap-ceq-focused-final.log. Full gate for this new head remains open.
 No private source/image/transcript/value copied into Git; no provider/application
 execution, PR/merge/ACK changes or whole-SQL completion claim.
+
+
+## GLM takeover and runtime-state unknowns — 2026-10-30
+
+User authorized either a one-shot fix/protocol or a complete state for GLM.
+Selected the honest takeover boundary: runtime State cannot be replaced with
+assumed Open/Closed values. IL 0.2.26 / evidence v27 / InfoMessage /4 recognizes
+exact SqlConnection/DbConnection State reads as connection-state-unbound with
+optional bounded per-read site/allocation receipts. Unknown equality/direct
+state-dependent control refuses; unused reads can retain static entry evidence.
+This does not close the runtime-state blocker or prove private lineage.
+
+The old private scan prompt is suspended. Companion prompts:
+- prompts/inspect-sql-lifecycle-whole-protocol.md (one bounded read-only map, no scan)
+- prompts/glm-sql-lifecycle-takeover.md (full state, code pointers, tests, constraints,
+  whole-protocol implementation assignment and honest remaining gaps).
+
+Do not launch another per-getter private scan. Whole-closure contextual capability
+fit must precede one representative public C#/VB batch implementation. No private
+source/report/photo/hash is copied into these public files.
+
+The 0.2.25 full run had a recorded cancelled-relocation test failure and was
+canceled when implementation continued in the same copy; it is NOT a passing gate.
+Preserve /tmp/tracemap-ceq-full-debug.log. Avoid editing/rebuilding an active full
+test copy. Clean XML head's 5668-pass full result remains historical evidence only.
+Latest state-focused iteration: 35 passed, 2 failed due to negative control assuming
+C# getter dispatch owner; corrected to mutate actual observed signed identity.
+Final affected validation: 215 passed, 0 failed/skipped, 28 seconds, Debug
+-warnaserror. Command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgressTests'`.
+Log: /tmp/tracemap-state-regression.log. `git diff --check` passed. Full Debug gate
+for 0.2.26 is deferred to the GLM takeover, not silently passing or running in the
+same mutable implementation copy. The user explicitly offered the state/takeover
+alternative; unresolved implementation and gate are handed off, not called complete.

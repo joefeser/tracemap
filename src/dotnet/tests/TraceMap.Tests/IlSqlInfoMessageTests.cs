@@ -9,6 +9,45 @@ public sealed class IlSqlInfoMessageTests
     [InlineData("vb", false)]
     [InlineData("csharp", true)]
     [InlineData("vb", true)]
+    public void Runtime_connection_state_is_unbound_and_cannot_choose_a_branch(string language, bool legacy)
+    {
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacy);
+        foreach (var name in new[] { "EventNamingRuntimeStateGuard", "EventNamingRuntimeDbStateGuard" })
+        {
+            var root = bodies.Single(body => body.Observation.ObjectBody?.Name == name);
+            var result = IlSqlLifecycleExtractor.Extract(root, bodies, false, new(400_000), infoMessageBoundary: true);
+            Assert.Contains("connection-state-unbound", Assert.Single(result.Gaps), StringComparison.Ordinal);
+            Assert.Null(result.Entry); Assert.Equal("ceq", result.OpcodeFailure!.Opcode);
+            Assert.Equal("unbound", Assert.Single(result.ConnectionStateReads!).State);
+            Assert.Contains("runtime-state-control-unproven", result.Claim, StringComparison.Ordinal);
+            Assert.NotEmpty(IlSqlLifecycleExtractor.Extract(root, bodies, false, new(400_000)).Gaps);
+        }
+        var unused = bodies.Single(body => body.Observation.ObjectBody?.Name == "EventNamingRuntimeStateRead");
+        var positive = IlSqlLifecycleExtractor.Extract(unused, bodies, false, new(400_000), infoMessageBoundary: true);
+        Assert.Empty(positive.Gaps); Assert.NotNull(positive.Entry);
+        var read = Assert.Single(positive.ConnectionStateReads!);
+        Assert.Equal("unbound", read.State);
+        Assert.NotEqual(read.Connection, positive.InfoMessages![0].Connection);
+        var identity = read.TargetIdentity;
+        Assert.True(IlSqlInfoMessageApis.Matches(identity, IlSqlInfoMessageApis.State)
+            || IlSqlInfoMessageApis.Matches(identity, IlSqlInfoMessageApis.DbState));
+        foreach (var invalid in new[] { identity.Replace("b77a5c561934e089", "0000000000000000", StringComparison.Ordinal),
+            identity.Replace(legacy ? "version:7:2.0.0.0" : "version:7:4.0.0.0", "version:7:3.0.0.0", StringComparison.Ordinal) })
+        {
+            var changed = bodies.Select(body => body with { Observation = body.Observation with
+                { Calls = body.Observation.Calls.Select(call => call.TargetIdentity == identity
+                    ? call with { TargetIdentity = invalid } : call).ToArray() } }).ToArray();
+            var rejected = IlSqlLifecycleExtractor.Extract(changed.Single(body => body.Observation.BodyIdentity == unused.Observation.BodyIdentity),
+                changed, false, new(400_000), infoMessageBoundary: true);
+            Assert.NotEmpty(rejected.Gaps); Assert.Null(rejected.Entry);
+        }
+    }
+
+    [Theory]
+    [InlineData("csharp", false)]
+    [InlineData("vb", false)]
+    [InlineData("csharp", true)]
+    [InlineData("vb", true)]
     public void Equality_keeps_fresh_identity_and_unknown_input_guards_distinct(string language, bool legacy)
     {
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacy);

@@ -18,6 +18,23 @@ Namespace PublicSql.VisualBasic
             wrapper.Open()
             Return wrapper.Execute()
         End Function
+        Public Function EventNamingRuntimeStateGuard(value As String) As DataSet
+            Dim connection As New SqlConnection(value)
+            Dim open As Boolean = connection.State = ConnectionState.Open
+            If open Then Return EventNamingProduce(value)
+            Return Nothing
+        End Function
+        Public Function EventNamingRuntimeDbStateGuard(value As String) As DataSet
+            Dim connection As System.Data.Common.DbConnection = New SqlConnection(value)
+            Dim open As Boolean = connection.State = ConnectionState.Open
+            If open Then Return EventNamingProduce(value)
+            Return Nothing
+        End Function
+        Public Function EventNamingRuntimeStateRead(value As String) As DataSet
+            Dim connection As New SqlConnection(value)
+            Dim ignored = connection.State
+            Return EventNamingProduce(value)
+        End Function
         Public Function EventNamingUnknownEquality(connection As String) As DataSet
             Dim missing As Boolean = DirectCast(connection, Object) Is Nothing
             If missing Then Return Nothing
