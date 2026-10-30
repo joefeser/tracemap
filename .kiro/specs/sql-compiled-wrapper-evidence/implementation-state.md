@@ -3,6 +3,8 @@
 ## Active containment implementation — 2026-10-29
 
 Worktree initially clean at 8185c1daf on codex/sql-compiled-wrapper-evidence.
+Implementation b05fa2272e63631187e3ffb71388b7f3ebd83b11 committed and pushed.
+The following docs-only receipt pins that exact implementation in the new prompt.
 Added ordinary scan --diagnostic-progress with fresh external checkpoint/binding
 sidecars, two-second heartbeat and categorical source/metadata/decode/IL lifecycle/
 callback/naming stages. No lifecycle admission/refusal or facts semantics changed.

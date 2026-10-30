@@ -4,8 +4,13 @@ This authorizes a resource-contained diagnostic, not an unguarded retry or an
 acceptance scan. The original memory cause remains unknown. All old unguarded
 InfoMessage run instructions remain suspended.
 
-Use the clean public implementation that introduced this prompt, or a verified
-docs-only descendant. Record the actual 40-character tool SHA. Preserve dirty
+EXPECTED_IMPLEMENTATION_COMMIT: `b05fa2272e63631187e3ffb71388b7f3ebd83b11`
+
+Use that clean public implementation, or a verified docs-only descendant with
+no scanner, test-worker or guard-script changes. Verify the built CLI source
+commit/state, not merely the checked-out branch. Record the actual 40-character
+tool SHA. IL admission remains 0.2.22 / policy v23; this adds operational diagnostics,
+not a new lifecycle admission policy. Preserve dirty
 patches, private sources, binaries, receipts and outputs. Use isolated clean tool
 sources. Read AGENTS.md and docs/validation/BOUNDED_SCAN_DIAGNOSTICS.md.
 
