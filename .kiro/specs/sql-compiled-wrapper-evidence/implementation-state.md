@@ -1765,3 +1765,16 @@ Focused validation 274/274 (IlSql + ScanDiagnosticProgress, Debug
 set_CommandTimeout probe is scoped now that two fixtures call it. Full gate on
 an immutable clone recorded separately below. No private input, no acceptance
 or whole-SQL completion claim.
+
+## Full-gate round 4 PASSED — 2026-10-30 (batch 4)
+
+At code commit 339e4ead6 / docs tip 83b671a25, the immutable clone
+/tmp/tracemap-state-full-gate4 completed the full Debug -warnaserror suite:
+5738 total, 5735 passed, 3 existing skips (same opt-in set), 0 failed,
+exit 0. Log: /tmp/tracemap-state-full-debug4.log. The follow-up test-only
+commit 76421bc22 (legacy-profile closure completion, +2 tests) is covered by
+the focused IlSql + ScanDiagnosticProgress lane at the final head: 276/276,
+Debug -warnaserror. This is the completed IL 0.2.29 / policy v30 public gate
+for the synthetic closure batch; prompts/glm-sql-lifecycle-final-validation.md
+is pinned to implementation commit 339e4ead61441c5768bda06474970fa424a05b56
+with precondition 276. No private input, scan, PR, merge or ACK change.
