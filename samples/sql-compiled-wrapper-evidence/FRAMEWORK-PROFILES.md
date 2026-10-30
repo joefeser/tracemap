@@ -13,3 +13,9 @@ real parameter attachment, Fill, event subscription/removal and result naming
 allocation identities. Wrong signing key, unsupported version, wrong constructor
 parameter, mixed event profiles, sender access, list escape and reuse refuse.
 This tests encoded static evidence only, not legacy runtime compatibility.
+
+The public callbacks also exercise `XmlAttributeCollection.get_ItemOf(Int32)` and
+`XmlNode.get_InnerXml()` through a statically typed XmlNode local. Named-attribute
+access remains covered. Neither tests nor extractor execute the callbacks or
+interpret the XML strings; normal/legacy native CLI controls preserve unbound
+result names and allocation/execution identity.

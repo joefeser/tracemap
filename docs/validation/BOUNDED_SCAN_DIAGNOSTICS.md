@@ -128,3 +128,24 @@ in temporary storage, then decode them with both readers. These are synthetic
 encoded-metadata controls, not .NET 2 runtime compatibility or private acceptance.
 Native CLI controls hash/admit the copied inputs, trace parameter attachment and
 Fill/naming identity, and retain ordinary required outputs in compiled-only mode.
+
+
+## Bounded callback XML catalog additions (IL 0.2.24 / policy v25)
+
+InfoMessage policy `explicit-sql-info-message/3` adds exactly two signatures:
+`System.Xml.XmlAttributeCollection.get_ItemOf(Int32) -> XmlAttribute` and
+`System.Xml.XmlNode.get_InnerXml() -> String`, with the existing signed
+System.Xml 4.0.0.0 and 2.0.0.0 profiles. These are external, unmodeled XML
+operations inside the existing opt-in inspected callback. The reference result
+stays external; the declared string result stays symbolic text, never a parsed
+or assumed name. No XML is evaluated. Index validity, exceptions, callback
+execution, output contents and naming success remain unproved.
+
+No method-name matching, new overload family, public API invocation, collection
+mutation admission or tracked-reference escape is added. Existing receiver and
+argument origin checks, instruction/work/heap limits and framework-profile
+attachment checks apply. Wrong signing key/version/call shape refuses. Public
+C#/VB fixtures now exercise both ordinal attribute access and InnerXml alongside
+the existing named attribute access, on normal and synthetic legacy profiles.
+Default SQL route contracts and receipt schema remain unchanged; explicit policy
+and extractor versions distinguish this bounded catalog expansion.

@@ -81,11 +81,13 @@ internal static class IlSqlInfoMessageApis
         A("external", X("XmlNode"), "SelectNodes", X("XmlNodeList"), text);
         A("external", X("XmlNode"), "get_Attributes", X("XmlAttributeCollection"));
         A("external", X("XmlNode"), "get_InnerText", text);
+        A("external", X("XmlNode"), "get_InnerXml", text);
         A("external", X("XmlNode"), "get_Value", text);
         A("external", X("XmlAttribute"), "get_Value", text);
         A("external", X("XmlDocument"), "get_DocumentElement", X("XmlElement"));
         A("external", X("XmlNode"), "get_ChildNodes", X("XmlNodeList"));
         A("external", X("XmlAttributeCollection"), "get_ItemOf", X("XmlAttribute"), text);
+        A("external", X("XmlAttributeCollection"), "get_ItemOf", X("XmlAttribute"), integer);
         A("external", X("XmlNodeList"), "GetEnumerator", Core + T("System.Collections", "IEnumerator"));
         var vb = "scope(assembly:name:21:Microsoft.VisualBasic|version:8:10.0.0.0|culture:7:neutral|publicKeyToken:16:b03f5f7f11d50a3a)";
         rules.Add(M(vb + T("Microsoft.VisualBasic.CompilerServices", "Operators"), "CompareString", integer, false, text, text, P("Boolean")), "external");
@@ -101,7 +103,7 @@ internal static class IlSqlInfoMessageApis
 internal static partial class IlSqlLifecycleExtractor
 {
     internal const string InfoMessageSchema = "il-sql-lifecycle-info-message-entry/1";
-    internal const string InfoMessagePolicy = "explicit-sql-info-message/2";
+    internal const string InfoMessagePolicy = "explicit-sql-info-message/3";
     internal sealed record InfoMessageRejection(string Body, string Binary, long Offset, string MetadataToken, string Phase, string Opcode, string? CallSha256);
     internal sealed record InfoMessageReceipt(string Policy, Site Site, string Action, string Connection,
         string Delegate, string Receiver, string CallbackBody, string CallbackBinary,

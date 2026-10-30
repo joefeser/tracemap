@@ -216,3 +216,9 @@
 - [x] Add C#/VB dual-reader retargeted-metadata and native compiled-only CLI controls with version/key/signature/profile mismatch refusals.
 - [x] Record final affected regression for IL 0.2.23: 203 passed, 0 failed/skipped; first native test-host crash retained separately.
 - [ ] Complete passing full shared-core Debug -warnaserror gate for IL 0.2.23.
+
+
+- [x] Add exactly the signed XML ordinal-attribute and InnerXml callback signatures (both existing framework profiles), with C#/VB fixtures and fail-closed identity controls.
+- [x] Focused InfoMessage suite: 29 passed, no failures/skips, Debug -warnaserror.
+- [x] Record affected regression for IL 0.2.24: 207 passed, 0 failed/skipped.
+- [ ] Complete passing full shared-core Debug -warnaserror gate for IL 0.2.24.

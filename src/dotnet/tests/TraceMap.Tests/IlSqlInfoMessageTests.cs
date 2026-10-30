@@ -5,6 +5,43 @@ namespace TraceMap.Tests;
 public sealed class IlSqlInfoMessageTests
 {
     [Theory]
+    [InlineData("csharp", false)]
+    [InlineData("vb", false)]
+    [InlineData("csharp", true)]
+    [InlineData("vb", true)]
+    public void Xml_ordinal_attribute_and_inner_xml_are_exact_bounded_external_calls(string language, bool legacy)
+    {
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacy);
+        var callback = Assert.Single(bodies, body => body.Observation.ObjectBody?.Name == "OnMessage");
+        var xml = "scope(assembly:name:10:System.Xml|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
+        string X(string name) => xml + IlSqlInfoMessageApis.T("System.Xml", name);
+        var identities = new[] {
+            IlSqlInfoMessageApis.M(X("XmlAttributeCollection"), "get_ItemOf", X("XmlAttribute"), true, IlSqlInfoMessageApis.P("Int32")),
+            IlSqlInfoMessageApis.M(X("XmlNode"), "get_InnerXml", IlSqlInfoMessageApis.P("String"), true) };
+        var root = bodies.Single(body => body.Observation.ObjectBody?.Name == "EventNamingProduce");
+        foreach (var identity in identities.Select(identity => legacy ? IlSqlInfoMessageApis.Legacy(identity) : identity))
+        {
+            Assert.Contains(callback.Observation.Calls, call => call.TargetIdentity == identity);
+            Assert.Equal("external", IlSqlInfoMessageApis.Rule(identity));
+            foreach (var invalid in new[] { identity.Replace("b77a5c561934e089", "0000000000000000", StringComparison.Ordinal),
+                identity.Replace(legacy ? "version:7:2.0.0.0" : "version:7:4.0.0.0", "version:7:3.0.0.0", StringComparison.Ordinal),
+                identity.Replace("|hasThis:true|", "|hasThis:false|", StringComparison.Ordinal) })
+            {
+                Assert.Null(IlSqlInfoMessageApis.Rule(invalid));
+                var changed = bodies.Select(body => body with { Observation = body.Observation with
+                    { Calls = body.Observation.Calls.Select(call => call.TargetIdentity == identity
+                        ? call with { TargetIdentity = invalid } : call).ToArray() } }).ToArray();
+                var rejected = IlSqlLifecycleExtractor.Extract(changed.Single(body => body.Observation.BodyIdentity == root.Observation.BodyIdentity),
+                    changed, false, new(400_000), infoMessageBoundary: true);
+                Assert.NotEmpty(rejected.Gaps); Assert.Null(rejected.Entry);
+            }
+        }
+        var result = IlSqlLifecycleExtractor.Extract(root, bodies, false, new(400_000), infoMessageBoundary: true);
+        Assert.Empty(result.Gaps); Assert.Equal(result.Entry!.ReturnedDataSet, Assert.Single(result.ResultNaming!).DataSet);
+        Assert.Contains("unbound", result.Claim, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("csharp")]
     [InlineData("vb")]
     public void Exact_framework_two_profile_keeps_lifecycle_identity_and_refusals(string language)

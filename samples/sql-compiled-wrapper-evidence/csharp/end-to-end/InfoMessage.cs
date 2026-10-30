@@ -37,7 +37,12 @@ namespace PublicSql.CSharp
                     var document = new XmlDocument();
                     document.LoadXml(args.Message.Substring(12));
                     var primary = document.SelectSingleNode("/public/name");
-                    if (primary != null) names.Add(primary.Attributes["label"].Value);
+                    if (primary != null)
+                    {
+                        names.Add(primary.Attributes["label"].Value);
+                        XmlNode ordinalAttribute = primary.Attributes[0];
+                        names.Add(ordinalAttribute.InnerXml);
+                    }
                     else
                     {
                         foreach (XmlNode node in document.SelectNodes("/public/names/name"))

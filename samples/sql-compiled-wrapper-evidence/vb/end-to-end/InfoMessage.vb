@@ -53,6 +53,8 @@ Namespace PublicSql.VisualBasic
                     Dim primary = document.SelectSingleNode("/public/name")
                     If primary IsNot Nothing Then
                         names.Add(primary.Attributes("label").Value)
+                        Dim ordinalAttribute As XmlNode = primary.Attributes(0)
+                        names.Add(ordinalAttribute.InnerXml)
                     Else
                         For Each node As XmlNode In document.SelectNodes("/public/names/name")
                             names.Add(node.Attributes("label").Value)

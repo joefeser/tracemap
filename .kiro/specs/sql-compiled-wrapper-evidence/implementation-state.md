@@ -1519,3 +1519,29 @@ affected result remains separate. Preserve other checkouts and their dirty files
 Added a read-only prompt to inventory all unlisted calls from the single failing
 callback using existing evidence. No further admission change is justified by a
 call hash alone. No private report or identifier is copied into this state note.
+
+
+## Bounded XML callback signatures — 2026-10-30
+
+Implemented in isolated temporary clone /tmp/tracemap-xml-catalog-20261030 from
+codex/sql-compiled-wrapper-evidence after the old worktree disappeared. Primary
+checkout branch and untracked docs/reports remain untouched. No original worktree
+reset, cleanup or recreation. No private/photo-derived artifacts in Git.
+
+IL 0.2.24 / evidence policy v25 / InfoMessage policy explicit-sql-info-message/3
+adds only XmlAttributeCollection.get_ItemOf(Int32)->XmlAttribute and
+XmlNode.get_InnerXml()->String to the existing signed System.Xml 2/4 catalogs.
+External XML results stay unmodeled; names stay symbolic/unbound. No XML runtime,
+general API recognition, profile/escape relaxation, provider call or SQL execution.
+C#/VB fixtures retain named attribute coverage and add ordinal/InnerXml usage;
+normal/legacy native CLI controls and exact signature negatives cover the change.
+
+Restore succeeded in the isolated public clone. Focused InfoMessage suite passed
+29/29 in 9 seconds, Debug -warnaserror, no skips/failures. Log:
+/tmp/tracemap-xml-focused.log. Broader affected regression passed 207/207 in 27 seconds, no failures/skips.
+Command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgressTests'`.
+Log: /tmp/tracemap-xml-regression.log. `git diff --check` passed. Full shared-core
+Debug -warnaserror solution gate will run after the clean code/prompt push in
+this isolated clone; no full pass claimed. Do not remove the clone while it runs.
+Pinned external adapter smokes remain deferred (no adapter change). No claim that private entry lineage or the overall
+SQL effort is complete. Existing guarded compiled-only prompt will pin this code.
