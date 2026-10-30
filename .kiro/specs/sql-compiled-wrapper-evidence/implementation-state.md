@@ -1672,3 +1672,15 @@ that unlocks can reveal more) and the three verify-against-boundary groups are
 recorded in docs/validation/SQL_LIFECYCLE_CAPABILITY_MAP.md as the next bounded
 batch; nothing from the verify groups is cataloged without boundary-flag
 verification. No private identifier, hash or token was copied into public files.
+
+
+## Full-gate round 2 — 2026-10-30
+
+The first full gate on 4aebbf71b failed exactly two tests
+(IlObjectBodyRetentionTests.Scale_fixture..., both languages): the lifecycle
+harness's raised object-body budget broke the production 1 MiB retention pin —
+the scale fixture working as designed. Fix f433e525e: Bodies() takes an explicit
+objectBudgetChars (default 4M for lifecycle fixtures); the retention tests pass
+1_048_576 explicitly. Focused recheck 250/250 green. Full gate restarted on a
+fresh immutable clone of f433e525e (/tmp/tracemap-state-full-gate2,
+/tmp/tracemap-state-full-debug2.log).

@@ -1,6 +1,6 @@
 # Final bounded validation — whole-protocol state control (one scan, then stop)
 
-EXPECTED_IMPLEMENTATION_COMMIT: `PENDING-HEAD`
+EXPECTED_IMPLEMENTATION_COMMIT: `f433e525e777514c30cdd439de28cf217c9a2f07`
 TOOL: `il-body-evidence/0.2.27` · policy `explicit-il-body-evidence.v28` ·
 state control `explicit-sql-state-control/1` · InfoMessage `/4`
 
