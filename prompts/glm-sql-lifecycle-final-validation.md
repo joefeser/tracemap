@@ -11,7 +11,7 @@ loop. Either outcome below ends the six-week back-and-forth honestly.
 ## Preconditions (all public, before any private scan)
 
 1. Public focused suite green at the commit above: IlSql + ScanDiagnosticProgress
-   274 passed, 0 failed/skipped, Debug -warnaserror.
+   276 passed, 0 failed/skipped, Debug -warnaserror.
 2. Public full shared-core Debug -warnaserror gate green on an immutable head copy
    (recorded in `.kiro/specs/sql-compiled-wrapper-evidence/implementation-state.md`).
 3. Windows guard self-test: all five `scripts/Test-BoundedScanGuard.ps1` cases pass

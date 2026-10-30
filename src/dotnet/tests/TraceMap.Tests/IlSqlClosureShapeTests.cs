@@ -195,6 +195,18 @@ public sealed class IlSqlClosureShapeTests
     [Theory]
     [InlineData("csharp")]
     [InlineData("vb")]
+    public void Closure_completes_on_the_legacy_framework_profile(string language)
+    {
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacyFramework: true);
+        var completing = Completing(bodies, "ClosureProduce");
+        Assert.Contains(completing, complete => complete.Loops?.Count is 1);
+        var traced = Completing(bodies, "ClosureTraceProduce");
+        Assert.All(traced, complete => Assert.Single(complete.ExternalTraces!));
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
     public void Closure_extractions_replay_deterministically(string language)
     {
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
