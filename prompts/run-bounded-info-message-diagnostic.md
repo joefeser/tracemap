@@ -1,16 +1,16 @@
-# One guarded InfoMessage phase diagnostic — Windows self-test first
+# One guarded compiled-only InfoMessage diagnostic — Windows self-test first
 
 This authorizes a resource-contained diagnostic, not an unguarded retry or an
 acceptance scan. The original memory cause remains unknown. All old unguarded
 InfoMessage run instructions remain suspended.
 
-EXPECTED_IMPLEMENTATION_COMMIT: `b05fa2272e63631187e3ffb71388b7f3ebd83b11`
+EXPECTED_IMPLEMENTATION_COMMIT: `2a3e641c538e3be7f91ce1309a83d6475956fa99`
 
 Use that clean public implementation, or a verified docs-only descendant with
 no scanner, test-worker or guard-script changes. Verify the built CLI source
 commit/state, not merely the checked-out branch. Record the actual 40-character
 tool SHA. IL admission remains 0.2.22 / policy v23; this adds operational diagnostics,
-not a new lifecycle admission policy. Preserve dirty
+not a new lifecycle admission policy. The compiled-only mode explicitly excludes all source inventory, MSBuild, semantic and syntax analysis. Source coverage is reduced; the empty source snapshot does not bind private source files. Preserve dirty
 patches, private sources, binaries, receipts and outputs. Use isolated clean tool
 sources. Read AGENTS.md and docs/validation/BOUNDED_SCAN_DIAGNOSTICS.md.
 
@@ -30,10 +30,14 @@ sources. Read AGENTS.md and docs/validation/BOUNDED_SCAN_DIAGNOSTICS.md.
 5. Choose ONE fresh output directory and an existing diagnostics parent directory
    outside ALL repositories and the scan output. Choose fresh, distinct phase and
    guard checkpoint names; no existing sidecars or temporary files may collide.
-6. Construct the SAME scan argument array, retaining --repo, the two compiled
+6. Construct the scan argument array, retaining --repo, the two compiled
    inputs, two selected inner roots and all four existing boundary flags. Add:
+   --compiled-only
    --diagnostic-progress <fresh-phase-checkpoint>
-   Do not omit --repo as an alleged IL-only mode. Do not invoke the scan directly.
+   Remove source-only switches (restore, project/solution selectors, source include/exclude,
+   target framework, binlog, VB compilation/import contexts, CI/deps indexing); do not
+   change any compiled-input/root/boundary values. The mode rejects conflicting source
+   switches. Do not omit --repo. Do not invoke the scan directly.
 7. Run exactly ONCE in PowerShell 7, using structured variables populated from
    the verified private receipts, not invented paths or command strings:
 
@@ -54,7 +58,9 @@ sources. Read AGENTS.md and docs/validation/BOUNDED_SCAN_DIAGNOSTICS.md.
    - scanner child PID status, guard state/reason/exit, elapsed WALL milliseconds,
      peak committed bytes and peak sampled job working-set bytes (keep distinct);
    - last phase checkpoint stage/state, last completed stage and relevant history:
-     source/compilation, metadata/decode, materialization, lifecycle, callback/naming;
+     metadata/decode, materialization, lifecycle, callback/naming;
+   - confirm zero source files/projects/solutions, SourceAnalysisExcludedByCompiledOnly
+     gap and build NotRun; solution-load/compilation/MSBuild stages must be absent;
    - prior binary hash comparison and effective scope verification status;
    - output complete/incomplete; entry count only if actual valid facts exist.
      No output directory or exit zero alone establishes completion or phase.
