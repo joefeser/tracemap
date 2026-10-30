@@ -7,6 +7,15 @@ internal static class IlSqlInfoMessageApis
 {
     internal const string Core = "scope(assembly:name:8:mscorlib|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
     internal const string Data = "scope(assembly:name:11:System.Data|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)";
+    // Finite signed framework-2 profile. Transform catalog entries, never input identities.
+    internal static string Legacy(string identity) => identity
+        .Replace(Data, Data.Replace("4.0.0.0", "2.0.0.0", StringComparison.Ordinal), StringComparison.Ordinal)
+        .Replace(Core, Core.Replace("4.0.0.0", "2.0.0.0", StringComparison.Ordinal), StringComparison.Ordinal)
+        .Replace("assembly:name:10:System.Xml|version:7:4.0.0.0|", "assembly:name:10:System.Xml|version:7:2.0.0.0|", StringComparison.Ordinal)
+        .Replace("assembly:name:21:Microsoft.VisualBasic|version:8:10.0.0.0|", "assembly:name:21:Microsoft.VisualBasic|version:7:8.0.0.0|", StringComparison.Ordinal);
+    internal static bool Matches(string actual, string catalog) => actual == catalog || actual == Legacy(catalog);
+    internal static bool EndsWith(string actual, string catalog) => actual.EndsWith(catalog, StringComparison.Ordinal)
+        || actual.EndsWith(Legacy(catalog), StringComparison.Ordinal);
     internal static string T(string ns, string name) => $"type(namespace:{ns.Length}:{ns}|names:{name.Length}:{name})";
     internal static string P(string name) => T("System", name);
     internal static string D(string name) => Data + T("System.Data", name);
@@ -24,7 +33,7 @@ internal static class IlSqlInfoMessageApis
     internal static readonly string Command = M(S("SqlCommand"), ".ctor", P("Void"), true, P("String"), S("SqlConnection"));
     internal static bool Callback(IlObjectBody meta) => meta.HasThis && !meta.IsVirtual && !meta.IsGeneric
         && meta.ParameterCount == 2 && !meta.ReturnsValue
-        && meta.MemberReference.EndsWith("|(" + P("Object") + "," + S("SqlInfoMessageEventArgs") + ")->" + P("Void"), StringComparison.Ordinal);
+        && EndsWith(meta.MemberReference, "|(" + P("Object") + "," + S("SqlInfoMessageEventArgs") + ")->" + P("Void"));
     internal static bool Shape(IlCallObservation call)
     {
         var signature = call.TargetIdentity;
@@ -83,6 +92,8 @@ internal static class IlSqlInfoMessageApis
         foreach (var name in new[] { "SetProjectError", "ClearProjectError" })
             rules.Add(M(vb + T("Microsoft.VisualBasic.CompilerServices", "ProjectData"), name, nothing, false,
                 name == "SetProjectError" ? [Core + P("Exception")] : []), "external");
+        foreach (var pair in rules.ToArray())
+            rules.TryAdd(Legacy(pair.Key), pair.Value);
         return rules;
     }
 }
@@ -90,7 +101,7 @@ internal static class IlSqlInfoMessageApis
 internal static partial class IlSqlLifecycleExtractor
 {
     internal const string InfoMessageSchema = "il-sql-lifecycle-info-message-entry/1";
-    internal const string InfoMessagePolicy = "explicit-sql-info-message/1";
+    internal const string InfoMessagePolicy = "explicit-sql-info-message/2";
     internal sealed record InfoMessageRejection(string Body, string Binary, long Offset, string MetadataToken, string Phase, string Opcode, string? CallSha256);
     internal sealed record InfoMessageReceipt(string Policy, Site Site, string Action, string Connection,
         string Delegate, string Receiver, string CallbackBody, string CallbackBinary,
@@ -104,6 +115,13 @@ internal static partial class IlSqlLifecycleExtractor
         internal readonly List<InfoMessageReceipt> InfoReceipts = [];
         internal InfoMessageRejection? InfoFailure;
         internal readonly List<ResultNamingReceipt> NamingReceipts = [];
+        private readonly Dictionary<string, string> infoProfiles = new(StringComparer.Ordinal);
+        private static string InfoProfile(string identity) => identity.Contains(IlSqlInfoMessageApis.Data, StringComparison.Ordinal) ? "4" : "2";
+        private void RequireInfoProfile(Value value, string identity)
+        {
+            if (!infoProfiles.TryGetValue(value.Text, out var profile) || profile != InfoProfile(identity))
+                throw new Refusal("lifecycle-info-framework-profile-mismatch");
+        }
         private readonly HashSet<string> infoCapturedFields = new(StringComparer.Ordinal);
         private readonly Dictionary<string, Body> infoTargets = new(StringComparer.Ordinal);
         private readonly Dictionary<string, string[]> infoFields = new(StringComparer.Ordinal);
@@ -130,40 +148,46 @@ internal static partial class IlSqlLifecycleExtractor
             result = Value.Unknown;
             if (new[] { IlSqlInfoMessageApis.DelegateCtor, IlSqlInfoMessageApis.Connection, IlSqlInfoMessageApis.Command,
                 IlSqlInfoMessageApis.Open, IlSqlInfoMessageApis.Close, IlSqlInfoMessageApis.DbOpen, IlSqlInfoMessageApis.DbClose,
-                IlSqlInfoMessageApis.Add, IlSqlInfoMessageApis.Remove }.Contains(call.TargetIdentity, StringComparer.Ordinal)
+                IlSqlInfoMessageApis.Add, IlSqlInfoMessageApis.Remove }.Any(identity => IlSqlInfoMessageApis.Matches(call.TargetIdentity, identity))
                 && (!IlSqlInfoMessageApis.Shape(call) || (op == "newobj") != new[] { IlSqlInfoMessageApis.DelegateCtor,
-                    IlSqlInfoMessageApis.Connection, IlSqlInfoMessageApis.Command }.Contains(call.TargetIdentity, StringComparer.Ordinal)))
+                    IlSqlInfoMessageApis.Connection, IlSqlInfoMessageApis.Command }.Any(identity => IlSqlInfoMessageApis.Matches(call.TargetIdentity, identity))))
                 throw new Refusal("lifecycle-info-call-shape");
-            if (call.TargetIdentity == IlSqlInfoMessageApis.DelegateCtor)
+            if (IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.DelegateCtor))
             {
                 if (op != "newobj" || args.Length != 2 || args[1].Kind != "info-function"
                     || !infoTargets.TryGetValue(args[1].Text, out var delegateTarget)
                     || Get(args[0], "custom").Owner != delegateTarget.Observation.ObjectBody!.OwnerType)
                     throw new Refusal("lifecycle-info-delegate-shape");
-                result = View("info-delegate", args[0]); heap[result.Text].Command = args[1]; return true;
+                var callbackSignature = "|(" + IlSqlInfoMessageApis.P("Object") + "," + IlSqlInfoMessageApis.S("SqlInfoMessageEventArgs") + ")->" + IlSqlInfoMessageApis.P("Void");
+                if (!delegateTarget.Observation.ObjectBody!.MemberReference.EndsWith(InfoProfile(call.TargetIdentity) == "2"
+                    ? IlSqlInfoMessageApis.Legacy(callbackSignature) : callbackSignature, StringComparison.Ordinal))
+                    throw new Refusal("lifecycle-info-framework-profile-mismatch");
+                result = View("info-delegate", args[0]); heap[result.Text].Command = args[1];
+                infoProfiles[result.Text] = InfoProfile(call.TargetIdentity); return true;
             }
-            if (call.TargetIdentity == IlSqlInfoMessageApis.Connection)
+            if (IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.Connection))
             {
                 if (op != "newobj" || args.Length != 1 || args[0].Kind is not ("string" or "input" or "opaque-initializer")
                     || args[0].Kind != "string" && args[0].DeclaredType != IlSqlInfoMessageApis.P("String"))
                     throw new Refusal("lifecycle-info-connection-shape");
-                result = New("sql-connection"); return true;
+                result = New("sql-connection"); infoProfiles[result.Text] = InfoProfile(call.TargetIdentity); return true;
             }
-            if (call.TargetIdentity == IlSqlInfoMessageApis.Command)
+            if (IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.Command))
             {
-                _ = Get(args[1], "sql-connection");
+                _ = Get(args[1], "sql-connection"); RequireInfoProfile(args[1], call.TargetIdentity);
                 result = New("command"); heap[result.Text].Command = new("string", Text(args[0])); heap[result.Text].Parent = args[1]; return true;
             }
-            if (call.TargetIdentity == IlSqlInfoMessageApis.Open || call.TargetIdentity == IlSqlInfoMessageApis.Close
-                || call.TargetIdentity == IlSqlInfoMessageApis.DbOpen || call.TargetIdentity == IlSqlInfoMessageApis.DbClose)
-            { _ = Get(receiver, "sql-connection"); return true; }
-            if (call.TargetIdentity != IlSqlInfoMessageApis.Add && call.TargetIdentity != IlSqlInfoMessageApis.Remove) return false;
+            if (IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.Open) || IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.Close)
+                || IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.DbOpen) || IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.DbClose))
+            { _ = Get(receiver, "sql-connection"); RequireInfoProfile(receiver, call.TargetIdentity); return true; }
+            if (!IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.Add) && !IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.Remove)) return false;
             _ = Get(receiver, "sql-connection");
+            RequireInfoProfile(receiver, call.TargetIdentity); RequireInfoProfile(args[0], call.TargetIdentity);
             var state = Get(args[0], "info-delegate"); var owner = Get(state.Parent, "custom");
             var fields = infoFields[state.Command.Text];
             var subscriptions = infoSubscriptions.GetValueOrDefault(receiver.Text);
             if (subscriptions is null) { subscriptions = []; infoSubscriptions.Add(receiver.Text, subscriptions); }
-            if (call.TargetIdentity == IlSqlInfoMessageApis.Add)
+            if (IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.Add))
             {
                 if (subscriptions.Count >= 4 || subscriptions.Contains(args[0])) throw new Refusal("lifecycle-info-subscription-reused-or-limit");
                 foreach (var field in fields)
@@ -178,7 +202,7 @@ internal static partial class IlSqlLifecycleExtractor
             else if (!subscriptions.Remove(args[0])) throw new Refusal("lifecycle-info-unmatched-unsubscribe");
             if (InfoReceipts.Count >= 16) throw new Refusal("lifecycle-info-receipt-limit");
             var target = infoTargets[state.Command.Text];
-            InfoReceipts.Add(new(InfoMessagePolicy, site, call.TargetIdentity == IlSqlInfoMessageApis.Add ? "subscribe" : "unsubscribe",
+            InfoReceipts.Add(new(InfoMessagePolicy, site, IlSqlInfoMessageApis.Matches(call.TargetIdentity, IlSqlInfoMessageApis.Add) ? "subscribe" : "unsubscribe",
                 receiver.Text, args[0].Text, state.Parent.Text, target.Observation.BodyIdentity, target.Input.RawFileSha256!, fields.Select(Hash).ToArray()));
             return true;
         }
@@ -197,7 +221,7 @@ internal static partial class IlSqlLifecycleExtractor
         {
             var meta = body.Observation.ObjectBody!;
             if (!meta.HasThis || meta.ParameterCount != 1 || meta.ReturnsValue
-                || !meta.MemberReference.EndsWith("|(" + IlSqlInfoMessageApis.D("DataSet") + ")->" + IlSqlInfoMessageApis.P("Void"), StringComparison.Ordinal)) return false;
+                || !IlSqlInfoMessageApis.EndsWith(meta.MemberReference, "|(" + IlSqlInfoMessageApis.D("DataSet") + ")->" + IlSqlInfoMessageApis.P("Void"))) return false;
             var owner = Get(receiver, "custom");
             if (!owner.Fields.Values.Any(value => infoLists.ContainsKey(value.Text))) return false;
             var proof = ScanProgressAmbient.Observe(ScanProgressStages.IlResultNaming, () => InspectInfoBody(body, true));

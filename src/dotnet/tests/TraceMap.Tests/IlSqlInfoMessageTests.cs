@@ -7,6 +7,49 @@ public sealed class IlSqlInfoMessageTests
     [Theory]
     [InlineData("csharp")]
     [InlineData("vb")]
+    public void Exact_framework_two_profile_keeps_lifecycle_identity_and_refusals(string language)
+    {
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacyFramework: true);
+        var root = Assert.Single(bodies, b => b.Observation.ObjectBody?.Name == "EventNamingProduce");
+        Assert.Contains(bodies.SelectMany(b => b.Observation.Calls), call =>
+            call.TargetIdentity == IlSqlInfoMessageApis.Legacy(IlSqlInfoMessageApis.DelegateCtor));
+        var result = IlSqlLifecycleExtractor.Extract(root, bodies, false, new(400_000), infoMessageBoundary: true);
+        Assert.True(result.Gaps.Count == 0, string.Join("\n", result.Gaps));
+        Assert.Equal(result.Entry!.ReturnedDataSet, Assert.Single(result.ResultNaming!).DataSet);
+        Assert.Single(Assert.Single(result.Entry.Commands).Parameters);
+        Assert.Equal(new[] { "subscribe", "unsubscribe" }, result.InfoMessages!.Select(receipt => receipt.Action));
+        Assert.Null(IlSqlLifecycleExtractor.Extract(root, bodies, false, new(400_000)).Entry);
+        foreach (var (name, gap) in new[] { ("EventNameListEscape", "lifecycle-info-parameter-reference-escape"),
+            ("EventSenderRefusal", "lifecycle-info-sender-access"), ("EventNamingReused", "lifecycle-info-list-reused") })
+        {
+            var negative = bodies.Single(b => b.Observation.ObjectBody?.Name == name);
+            var refused = IlSqlLifecycleExtractor.Extract(negative, bodies, false, new(400_000), infoMessageBoundary: true);
+            Assert.Equal(gap, Assert.Single(refused.Gaps)); Assert.Null(refused.Entry);
+        }
+        var mixed = bodies.Select(body => body with { Observation = body.Observation with
+            { Calls = body.Observation.Calls.Select(call => call.TargetIdentity == IlSqlInfoMessageApis.Legacy(IlSqlInfoMessageApis.Add)
+                ? call with { TargetIdentity = IlSqlInfoMessageApis.Add } : call).ToArray() } }).ToArray();
+        var mixedResult = IlSqlLifecycleExtractor.Extract(mixed.Single(body => body.Observation.BodyIdentity == root.Observation.BodyIdentity),
+            mixed, false, new(400_000), infoMessageBoundary: true);
+        Assert.Equal("lifecycle-info-framework-profile-mismatch", Assert.Single(mixedResult.Gaps)); Assert.Null(mixedResult.Entry);
+        var expected = IlSqlInfoMessageApis.Legacy(IlSqlInfoMessageApis.DelegateCtor);
+        foreach (var invalid in new[] { expected.Replace("version:7:2.0.0.0", "version:7:3.0.0.0", StringComparison.Ordinal),
+            expected.Replace("b77a5c561934e089", "0000000000000000", StringComparison.Ordinal),
+            expected.Replace("names:6:IntPtr", "names:5:Int32", StringComparison.Ordinal) })
+        {
+            Assert.False(IlSqlInfoMessageApis.Matches(invalid, IlSqlInfoMessageApis.DelegateCtor));
+            var altered = bodies.Select(body => body with { Observation = body.Observation with
+                { Calls = body.Observation.Calls.Select(call => call.TargetIdentity == expected
+                    ? call with { TargetIdentity = invalid } : call).ToArray() } }).ToArray();
+            var refused = IlSqlLifecycleExtractor.Extract(altered.Single(body => body.Observation.BodyIdentity == root.Observation.BodyIdentity),
+                altered, false, new(400_000), infoMessageBoundary: true);
+            Assert.Equal("lifecycle-info-function-escape", Assert.Single(refused.Gaps)); Assert.Null(refused.Entry);
+        }
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
     public void Event_names_remain_unbound_on_the_filled_returned_allocation(string language)
     {
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
@@ -112,24 +155,35 @@ public sealed class IlSqlInfoMessageTests
     }
 
     [Theory]
-    [InlineData("csharp", false)]
-    [InlineData("vb", false)]
-    [InlineData("csharp", true)]
-    [InlineData("vb", true)]
-    public async Task Native_entry_has_separate_partial_naming_schema_and_bound_provenance(string language, bool compiledOnly)
+    [InlineData("csharp", false, false)]
+    [InlineData("vb", false, false)]
+    [InlineData("csharp", true, false)]
+    [InlineData("vb", true, false)]
+    [InlineData("csharp", true, true)]
+    [InlineData("vb", true, true)]
+    public async Task Native_entry_has_separate_partial_naming_schema_and_bound_provenance(string language, bool compiledOnly, bool legacyFramework)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "AGENTS.md"))) directory = directory.Parent;
         Assert.NotNull(directory);
         var config = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
         var sample = Path.Combine(directory.FullName, "samples", "sql-compiled-wrapper-evidence", language);
-        var root = Assert.Single(IlSqlLifecycleExtractorTests.Bodies(language), b => b.Observation.ObjectBody?.Name == "EventNamingProduce");
+        var root = Assert.Single(IlSqlLifecycleExtractorTests.Bodies(language, legacyFramework), b => b.Observation.ObjectBody?.Name == "EventNamingProduce");
         var output = IlBodyEvidenceExtractorShared.TempOutput();
+        var inputDirectory = IlBodyEvidenceExtractorShared.TempOutput(); Directory.CreateDirectory(inputDirectory);
+        var inputs = new[] { "end-to-end", "wrapper" }.Select(role =>
+        {
+            var path = Path.Combine(sample, role, "bin", config, "net48", $"PublicSql.{language}.{role}.dll");
+            if (!legacyFramework) return path;
+            var copy = Path.Combine(inputDirectory, Path.GetFileName(path));
+            File.WriteAllBytes(copy, IlSqlLifecycleExtractorTests.LegacyFrameworkBytes(File.ReadAllBytes(path)));
+            return copy;
+        }).ToArray();
+        var rootSha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(inputs[0])));
         var args = new List<string> { "scan", "--repo", Path.Combine(sample, "end-to-end"), "--out", output,
-            "--il-body-evidence", "--il-info-message-boundary", "--il-lifecycle-root", root.Input.RawFileSha256 + ":" + root.Observation.MetadataToken };
+            "--il-body-evidence", "--il-info-message-boundary", "--il-lifecycle-root", rootSha + ":" + root.Observation.MetadataToken };
         if (compiledOnly) args.Add("--compiled-only");
-        foreach (var role in new[] { "end-to-end", "wrapper" })
-            args.AddRange(["--compiled-input", Path.Combine(sample, role, "bin", config, "net48", $"PublicSql.{language}.{role}.dll")]);
+        foreach (var input in inputs) args.AddRange(["--compiled-input", input]);
         using var stdout = new StringWriter(); using var stderr = new StringWriter();
         Assert.True(await TraceMapCommand.RunAsync(args.ToArray(), stdout, stderr) == 0, stderr.ToString());
         var facts = File.ReadLines(Path.Combine(output, "facts.ndjson")).Select(SqlServerSchemaEvidence.Read<CodeFact>).ToArray();

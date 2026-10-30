@@ -209,7 +209,8 @@ internal static partial class IlSqlLifecycleExtractor
             var meta = root.Observation.ObjectBody ?? throw new Refusal("lifecycle-body-unavailable", MetadataFailure(root, "root-metadata"));
             var readRoot = IsReadRoot(root.Observation);
             if (infoMessageBoundary && readRoot) throw new Refusal("lifecycle-info-entry-roots-only");
-            var producer = IlSqlLifecycleApis.ReturnsDataSet(meta.MemberReference);
+            var producer = IlSqlLifecycleApis.ReturnsDataSet(meta.MemberReference)
+                || infoMessageBoundary && IlSqlInfoMessageApis.EndsWith(meta.MemberReference, "->" + IlSqlInfoMessageApis.D("DataSet"));
             var loader = IlSqlLifecycleApis.ReturnsVoid(meta.MemberReference);
             if (meta.IsVirtual || meta.IsGeneric || meta.Name is ".ctor" or ".cctor"
                 || meta.ParameterCount is < 0 or > 16 || (!readRoot && !producer && !loader)
@@ -423,7 +424,7 @@ internal static partial class IlSqlLifecycleExtractor
                     {
                         if (!calls.TryGetValue(offset, out var function)) throw new Refusal("lifecycle-info-target-missing");
                         if (i + 1 >= code.Length || code[i + 1][2] != "newobj" || !calls.TryGetValue(offsets[i + 1], out var delegateCall)
-                            || delegateCall.TargetIdentity != IlSqlInfoMessageApis.DelegateCtor) throw new Refusal("lifecycle-info-function-escape");
+                            || !IlSqlInfoMessageApis.Matches(delegateCall.TargetIdentity, IlSqlInfoMessageApis.DelegateCtor)) throw new Refusal("lifecycle-info-function-escape");
                         stack.Add(InfoFunction(function)); continue;
                     }
                     if (op is "ldfld" or "stfld")
@@ -485,8 +486,8 @@ internal static partial class IlSqlLifecycleExtractor
                         if (localCatch is not null) catchHandlers.Push(At(body, localCatch.Handler, invocation));
                         try
                         {
-                        var api = IlSqlObjectPathExtractor.KnownFrameworkApi(call.TargetIdentity)
-                            ?? IlSqlLifecycleApis.Resolve(call.TargetIdentity, bodies.Select(b => b.Observation.ObjectBody?.OwnerType));
+                        var api = IlSqlObjectPathExtractor.KnownFrameworkApi(call.TargetIdentity, infoMessageBoundary)
+                            ?? IlSqlLifecycleApis.Resolve(call.TargetIdentity, bodies.Select(b => b.Observation.ObjectBody?.OwnerType), infoMessageBoundary);
                         if (body.Observation.BodyIdentity == externalTraceRoot && depth == 0 && IlSqlTraceStringApis.Resolve(call.TargetIdentity) is { } stringRule)
                             returned = BuildTraceString(call, stringRule, receiver, values, site);
                         else if (infoMessageBoundary && TryInfoCall(call, op, receiver, values, site, out var infoReturned)) returned = infoReturned;

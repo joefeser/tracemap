@@ -41,6 +41,14 @@ internal static class IlSqlLifecycleApis
         => $"memberref|type:{owner}|member:{name.Length}:{name}|arity:0|call:default|hasThis:{(instance ? "true" : "false")}|explicitThis:false|({string.Join(",", args)})->{result}";
     private static readonly IReadOnlyDictionary<string, string> Fixed = Build();
 
+    private static readonly IReadOnlyDictionary<string, string> LegacyInfoFixed = BuildLegacyInfo();
+    private static Dictionary<string, string> BuildLegacyInfo()
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var pair in Fixed) result.TryAdd(IlSqlInfoMessageApis.Legacy(pair.Key), pair.Value);
+        return result;
+    }
+
     private static Dictionary<string, string> Build()
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -77,9 +85,10 @@ internal static class IlSqlLifecycleApis
         return result;
     }
 
-    internal static string? Resolve(string identity, IEnumerable<string?> admittedOwners)
+    internal static string? Resolve(string identity, IEnumerable<string?> admittedOwners, bool legacyInfoMessageProfile = false)
     {
         if (Fixed.TryGetValue(identity, out var known)) return known;
+        if (legacyInfoMessageProfile && LegacyInfoFixed.TryGetValue(identity, out var legacy)) return legacy;
         foreach (var owner in admittedOwners.Where(o => o is not null).Distinct(StringComparer.Ordinal))
         {
             var list = Core + Type("System.Collections.Generic", "List`1") + "<" + owner + ">";

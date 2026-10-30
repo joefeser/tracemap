@@ -532,7 +532,17 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
         }
     }
 
-    internal static IReadOnlyList<IlSqlObjectPathExtractor.Body> Bodies(string language)
+    internal static byte[] LegacyFrameworkBytes(byte[] bytes)
+    {
+        // Public synthetic metadata profile only; never load or execute it.
+        using var assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(new MemoryStream(bytes));
+        foreach (var reference in assembly.MainModule.AssemblyReferences)
+            if (reference.Name is "mscorlib" or "System.Data" or "System.Xml") reference.Version = new Version(2, 0, 0, 0);
+            else if (reference.Name == "Microsoft.VisualBasic") reference.Version = new Version(8, 0, 0, 0);
+        using var output = new MemoryStream(); assembly.Write(output); return output.ToArray();
+    }
+
+    internal static IReadOnlyList<IlSqlObjectPathExtractor.Body> Bodies(string language, bool legacyFramework = false)
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
@@ -544,6 +554,10 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
             var path = Path.Combine(root.FullName, "samples", "sql-compiled-wrapper-evidence", language,
                 role, "bin", config, "net48", $"PublicSql.{language}.{role}.dll");
             var bytes = File.ReadAllBytes(path);
+            if (legacyFramework)
+            {
+                bytes = LegacyFrameworkBytes(bytes);
+            }
             var left = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, new(), new(200_000), CancellationToken.None);
             var right = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, new(), new(200_000), CancellationToken.None);
             Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(left, right));

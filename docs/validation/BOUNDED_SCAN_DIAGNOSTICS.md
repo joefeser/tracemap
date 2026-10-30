@@ -100,3 +100,31 @@ not allowed on the immutable-parent compiled attachment route.
 
 Use the same external Windows job guard and limits for the private diagnostic.
 No lifecycle admission or unknown-value policy changes accompany this mode.
+
+
+## InfoMessage framework profiles (IL 0.2.23 / policy v24)
+
+The explicit InfoMessage boundary policy is now `explicit-sql-info-message/2`.
+Its finite method catalog admits the existing signed framework-4 identities and
+an explicit framework-2 profile: System.Data/mscorlib/System.Xml 2.0.0.0 with
+public key token b77a5c561934e089, and the existing VB callback helper signatures
+under Microsoft.VisualBasic 8.0.0.0, b03f5f7f11d50a3a. Only predeclared complete
+catalog signatures are expanded. Actual input identities are never normalized;
+arbitrary versions, tokens, cultures, methods and parameter signatures refuse.
+
+Legacy SQL command/parameter/adapter/Fill catalog resolution is enabled only
+inside the explicit InfoMessage boundary. Default object-path and SQL lifecycle
+routes retain their previous profile admission. Delegate construction requires
+an inspected callback of the same framework profile; connection creation,
+command connection use, Open/Close, subscription and removal retain the profile
+alongside allocation identity and reject mismatches. Callback bounds, tracked
+reference escape refusals, event dependence and unknown naming effects remain.
+Receipt schema is unchanged; the policy and extractor versions identify this
+intentional admission expansion. No framework runtime or application execution
+is performed or proven.
+
+Tests retarget only independently authored public C#/VB compiled fixture copies
+in temporary storage, then decode them with both readers. These are synthetic
+encoded-metadata controls, not .NET 2 runtime compatibility or private acceptance.
+Native CLI controls hash/admit the copied inputs, trace parameter attachment and
+Fill/naming identity, and retain ordinary required outputs in compiled-only mode.

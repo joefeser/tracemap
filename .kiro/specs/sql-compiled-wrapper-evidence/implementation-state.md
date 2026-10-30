@@ -1480,3 +1480,29 @@ Logs: /tmp/tracemap-compiled-only-focused.log,
 Full-suite stable-head gate remains open; not merge-ready evidence.
 No private lineage claim.
 Operator prompt updated to use compiled-only with the existing Windows guard.
+
+
+## Exact legacy InfoMessage profile — 2026-10-30
+
+The next public-safe capability is exact signed framework-2 InfoMessage support.
+IL extractor 0.2.23, evidence policy v24, event policy explicit-sql-info-message/2.
+Expand only finite catalog entries to System.Data/mscorlib/System.Xml 2.0.0.0 and
+VB 8.0.0.0 with their original exact signing keys. Never normalize observed
+identities. Legacy command/parameter/Fill lookup is confined to InfoMessage opt-in;
+default object-path and lifecycle admission is preserved. Callback/delegate and
+connection/event call profiles must match alongside existing allocation checks.
+
+Public C#/VB fixture copies are retargeted in memory/temporary storage, dual-reader
+compared, and passed through native compiled-only CLI admission. No private
+identifiers, source, receipts or photo-derived artifacts are copied into Git.
+No runtime/provider execution or private lineage claim. Native profile controls
+passed 25/25 before additional profile-mismatch verification. The first broader
+run aborted after 73 passes due to a native dotnet SIGSEGV (macOS report points to
+GetThreadLocalStaticBase); it is not a passing gate. The bounded retry passed 203/203 in 27 seconds. After the final constant-time
+catalog lookup adjustment, the rebuilt final affected set passed 203/203 in
+26 seconds with Debug -warnaserror, including native C#/VB legacy-profile CLI
+controls and version/key/signature/profile mismatch controls. Log:
+/tmp/tracemap-info-legacy-final-focused.log. Command:
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgressTests'`.
+`git diff --check` passed. Full stable-head gate remains open; no full pass claimed.
+No adapter change; pinned external adapter smokes remain deferred.

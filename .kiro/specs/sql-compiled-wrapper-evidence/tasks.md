@@ -210,3 +210,9 @@
 - [x] Add explicit compiled-only normal-scan scope excluding source inventory and MSBuild while preserving Git and compiled evidence bindings; mark source coverage excluded.
 - [x] Validate compiled-only source exclusion and native C#/VB InfoMessage entries (27 focused; 202 stable-head regression tests passed).
 - [ ] Complete a passing stable-head full Debug -warnaserror shared-core gate; initial broad run canceled after three snapshot/determinism failures, all three passed stable-head recheck.
+
+
+- [x] Implement exact signed framework-2 InfoMessage catalog profile behind the existing opt-in, preserving default SQL route admission.
+- [x] Add C#/VB dual-reader retargeted-metadata and native compiled-only CLI controls with version/key/signature/profile mismatch refusals.
+- [x] Record final affected regression for IL 0.2.23: 203 passed, 0 failed/skipped; first native test-host crash retained separately.
+- [ ] Complete passing full shared-core Debug -warnaserror gate for IL 0.2.23.

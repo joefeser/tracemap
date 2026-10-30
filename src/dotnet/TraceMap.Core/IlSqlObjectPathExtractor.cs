@@ -67,7 +67,11 @@ internal static class IlSqlObjectPathExtractor
     }
     private sealed class Refusal(string gap) : Exception(gap);
 
-    internal static string? KnownFrameworkApi(string identity) => Apis.GetValueOrDefault(identity);
+    private static readonly IReadOnlyDictionary<string, string> LegacyInfoApis = Apis
+        .ToDictionary(pair => IlSqlInfoMessageApis.Legacy(pair.Key), pair => pair.Value, StringComparer.Ordinal);
+    internal static string? KnownFrameworkApi(string identity, bool legacyInfoMessageProfile = false)
+        => Apis.GetValueOrDefault(identity)
+            ?? (legacyInfoMessageProfile ? LegacyInfoApis.GetValueOrDefault(identity) : null);
 
     internal static bool IsRoot(IlBodyObservation body) => body.Calls.Any(call => Apis.GetValueOrDefault(call.TargetIdentity) == "consumer");
 
