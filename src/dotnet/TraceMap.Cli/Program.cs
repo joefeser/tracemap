@@ -562,6 +562,7 @@ public static class TraceMapCommand
             IlExternalTraceBoundary = values.HasFlag("--il-external-trace-boundary"),
             IlCompiledScalarBoundary = values.HasFlag("--il-compiled-scalar-boundary"),
             IlInfoMessageBoundary = values.HasFlag("--il-info-message-boundary"),
+            CompiledOnly = values.HasFlag("--compiled-only"),
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
             CiHintWorkflows = ReadCiHintsOption(values),
@@ -2583,7 +2584,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--index-deps-json" or "--index-ci-producers" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-opaque-root-initializers" or "--il-external-trace-boundary" or "--il-compiled-scalar-boundary" or "--il-info-message-boundary" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
+            if (arg is "--compiled-only" or "--restore" or "--index-deps-json" or "--index-ci-producers" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-opaque-root-initializers" or "--il-external-trace-boundary" or "--il-compiled-scalar-boundary" or "--il-info-message-boundary" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
@@ -3116,6 +3117,8 @@ public static class TraceMapCommand
               --diagnostic-progress <file>
                                        Write live bounded phase checkpoints outside repo/output before analysis starts.
                                        Requires fresh checkpoint and sidecars; operational only, not completion evidence.
+              --compiled-only          Exclude source inventory, MSBuild, semantic and syntax analysis. Requires explicit compiled inputs.
+                                       Keeps repository identity and compiled validation; source coverage is explicitly reduced.
               --il-body-evidence        Extract bounded operand-aware IL method-body and direct-call evidence from admitted compiled inputs. Never discovered.
               --il-compiled-scalar-boundary
                                        Opt in to bounded retained static String-to-String transforms inside root scalar initializer chains.

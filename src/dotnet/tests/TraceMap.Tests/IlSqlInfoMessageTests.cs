@@ -112,9 +112,11 @@ public sealed class IlSqlInfoMessageTests
     }
 
     [Theory]
-    [InlineData("csharp")]
-    [InlineData("vb")]
-    public async Task Native_entry_has_separate_partial_naming_schema_and_bound_provenance(string language)
+    [InlineData("csharp", false)]
+    [InlineData("vb", false)]
+    [InlineData("csharp", true)]
+    [InlineData("vb", true)]
+    public async Task Native_entry_has_separate_partial_naming_schema_and_bound_provenance(string language, bool compiledOnly)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "AGENTS.md"))) directory = directory.Parent;
@@ -125,11 +127,18 @@ public sealed class IlSqlInfoMessageTests
         var output = IlBodyEvidenceExtractorShared.TempOutput();
         var args = new List<string> { "scan", "--repo", Path.Combine(sample, "end-to-end"), "--out", output,
             "--il-body-evidence", "--il-info-message-boundary", "--il-lifecycle-root", root.Input.RawFileSha256 + ":" + root.Observation.MetadataToken };
+        if (compiledOnly) args.Add("--compiled-only");
         foreach (var role in new[] { "end-to-end", "wrapper" })
             args.AddRange(["--compiled-input", Path.Combine(sample, role, "bin", config, "net48", $"PublicSql.{language}.{role}.dll")]);
         using var stdout = new StringWriter(); using var stderr = new StringWriter();
         Assert.True(await TraceMapCommand.RunAsync(args.ToArray(), stdout, stderr) == 0, stderr.ToString());
         var facts = File.ReadLines(Path.Combine(output, "facts.ndjson")).Select(SqlServerSchemaEvidence.Read<CodeFact>).ToArray();
+        if (compiledOnly)
+        {
+            Assert.DoesNotContain(facts, f => f.FactType == FactTypes.FileInventoried);
+            Assert.Contains(facts, f => f.FactType == FactTypes.AnalysisGap
+                && f.Properties.Values.Any(v => v.Contains("SourceAnalysisExcludedByCompiledOnly", StringComparison.Ordinal)));
+        }
         var candidate = Assert.Single(facts, f => f.TargetSymbol == root.Observation.BodyIdentity && f.FactType == FactTypes.ManagedIlSqlLifecycleEntryCandidate);
         Assert.Equal(IlSqlLifecycleExtractor.InfoMessageSchema, candidate.Properties["sqlLifecycleSchema"]);
         Assert.Equal(IlSqlLifecycleExtractor.InfoMessagePolicy, candidate.Properties["infoMessagePolicy"]);

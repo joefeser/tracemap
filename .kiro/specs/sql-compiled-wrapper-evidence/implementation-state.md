@@ -1442,3 +1442,30 @@ Windows/platform skips are retained; this is not private Windows acceptance.
 Compiled delegate/LINQ interpretation, dynamic DataTable.Select, private root
 attribution/lineage and owner-schema acceptance remain outside the proven result.
 No field bypass, SQL route weakening, application deployment, PR or ACK change.
+
+
+## Compiled-only source exclusion — 2026-10-29
+
+Branch: codex/sql-compiled-wrapper-evidence. Work-machine v9-003 confirmed the
+Windows guard self-tests and stopped at sampled working-set cap during source
+solution loading (278 projects, 113 solutions); no IL stage was reached. This
+identifies that run's bottleneck, not the original 43.5 GiB allocation cause.
+
+Added explicit --compiled-only for the normal scan: no source inventory,
+MSBuild/semantic/syntax extraction; Git identity and existing compiled input and
+lifecycle validation remain. All source snapshots have zero files, explicitly
+reported by SourceAnalysisExcludedByCompiledOnly under the repository manifest
+rule, reduced coverage and NotRun build. Empty source hashes never establish
+source correspondence. Default scan schemas/identities stay unchanged; compiled
+mode gets a distinct scan identity. Conflicting source options and immutable
+parent attachment use refuse. No runtime execution, private source, lifecycle
+admission weakening, ACK change, PR or merge.
+
+Focused/native validation: 27 passed, 0 failed/skipped (8 seconds), using
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter FullyQualifiedName~ScanDiagnosticProgressTests|FullyQualifiedName~IlSqlInfoMessageTests`.
+This includes C#/VB native lifecycle output in both modes, source-exclusion and
+conflicting-options controls. Initial focused run exposed a third final source
+inventory capture; fixed to use the same excluded scope before the passing run.
+Full Debug -warnaserror solution regression is running; result not yet claimed.
+No private lineage claim.
+Operator prompt updated to use compiled-only with the existing Windows guard.

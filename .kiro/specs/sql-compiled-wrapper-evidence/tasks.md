@@ -205,3 +205,7 @@
 - [x] Complete full Debug -warnaserror gate on frozen code before publication (5656 passed, 3 existing skips, 0 failures; no warnings).
 - [ ] Pass public Windows job self-test on the work machine before any guarded private probe.
 - [ ] Identify and fix the demonstrated cause of private memory growth (not claimed by containment).
+
+
+- [x] Add explicit compiled-only normal-scan scope excluding source inventory and MSBuild while preserving Git and compiled evidence bindings; mark source coverage excluded.
+- [ ] Validate compiled-only source exclusion and native C#/VB InfoMessage entries, then run required shared-core Debug gate.

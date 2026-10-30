@@ -77,3 +77,26 @@ private diagnostic run. Never use `-PublicTestMode` for private inputs.
 
 The old `Invoke-BoundedReportProcess.ps1` samples only its parent process and is
 not a substitute for this job-backed diagnostic protocol.
+
+
+## Explicit compiled-only source exclusion
+
+`scan --repo <repo> --compiled-only --compiled-input <dll> ...` retains Git
+identity and the normal explicit compiled-input admission, hashes, limits, root
+selectors and lifecycle refusals. It excludes source enumeration, MSBuild,
+C#/VB semantic extraction and syntax extraction. Source inventory and selected
+projects/solutions are empty. All three source inventory captures use the same
+excluded scope; the source snapshot digest hashes the empty inventory and MUST
+NOT be interpreted as binding the private source tree. Compiled artifacts retain
+their separate content bindings. Scan identity distinguishes this mode.
+
+The existing repository-manifest rule emits a Tier4Unknown AnalysisGap containing
+`SourceAnalysisExcludedByCompiledOnly`; coverage is reduced and build is NotRun.
+This is neither source/assembly correspondence nor whole-repository acceptance.
+It does not fix general Roslyn memory growth. Default scans remain unchanged.
+The mode requires explicit compiled inputs and refuses restore, source scope,
+framework/binlog, VB context and source CI/dependency indexing switches. It is
+not allowed on the immutable-parent compiled attachment route.
+
+Use the same external Windows job guard and limits for the private diagnostic.
+No lifecycle admission or unknown-value policy changes accompany this mode.

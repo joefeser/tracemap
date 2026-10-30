@@ -30,7 +30,7 @@ internal sealed class ScanDiagnosticProgress : IDisposable
         {
             compiledInputs = options.CompiledInputPaths?.Count ?? 0,
             lifecycleRoots = options.IlLifecycleRoots?.Count ?? 0,
-            options.Restore, options.ExactSourceScope, options.IlBodyEvidence,
+            options.CompiledOnly, options.Restore, options.ExactSourceScope, options.IlBodyEvidence,
             options.IlOpaqueRootInitializers, options.IlExternalTraceBoundary,
             options.IlCompiledScalarBoundary, options.IlInfoMessageBoundary,
             projects = options.ProjectPaths?.Count ?? 0, solutions = options.SolutionPaths?.Count ?? 0,

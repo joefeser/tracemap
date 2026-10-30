@@ -185,6 +185,7 @@ public sealed record ScanOptions(
     public bool IlExternalTraceBoundary { get; init; }
     public bool IlCompiledScalarBoundary { get; init; }
     public bool IlInfoMessageBoundary { get; init; }
+    public bool CompiledOnly { get; init; }
     public bool IndexDepsJson { get; init; }
     public DepsJsonLimits? DepsJsonLimits { get; init; }
     public string? WebFormsVbImportContextPath { get; init; }

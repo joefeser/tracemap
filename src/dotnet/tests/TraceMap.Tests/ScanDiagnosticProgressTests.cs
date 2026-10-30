@@ -65,6 +65,41 @@ public sealed class ScanDiagnosticProgressTests
         }
     }
 
+    [Fact]
+    public void Compiled_only_refuses_missing_inputs_and_conflicting_source_scope()
+    {
+        var root = IlBodyEvidenceExtractorShared.TempOutput(); Directory.CreateDirectory(root);
+        var options = new ScanOptions(root, Path.Combine(root, "out")) { CompiledOnly = true };
+        Assert.Throws<ArgumentException>(() => ScanEngine.Scan(options));
+        options = options with { CompiledInputPaths = ["missing.dll"], Restore = true };
+        Assert.Throws<ArgumentException>(() => ScanEngine.Scan(options));
+        options = options with { Restore = false, ProjectPaths = ["Public.csproj"] };
+        Assert.Throws<ArgumentException>(() => ScanEngine.Scan(options));
+    }
+
+    [Fact]
+    public void Compiled_only_never_loads_even_malformed_source_projects()
+    {
+        var root = IlBodyEvidenceExtractorShared.TempOutput(); Directory.CreateDirectory(root);
+        File.WriteAllText(Path.Combine(root, "NeverLoad.csproj"), "<INVALID");
+        File.WriteAllText(Path.Combine(root, "NeverLoad.sln"), "INVALID");
+        File.WriteAllText(Path.Combine(root, "NeverParse.vb"), "INVALID");
+        var checkpoint = Path.Combine(Path.GetDirectoryName(root)!, Guid.NewGuid() + ".json");
+        var options = new ScanOptions(root, Path.Combine(root, "out"), CompiledInputPaths: ["missing.dll"])
+            { CompiledOnly = true };
+        using (ScanDiagnosticProgress.Create(checkpoint, root, options.OutputPath, options))
+        {
+            var result = ScanEngine.Scan(options, null, default, ScanProgressAmbient.Current);
+            Assert.Empty(result.Inventory);
+            Assert.Empty(result.Manifest.Projects); Assert.Empty(result.Manifest.Solutions);
+            Assert.Equal("NotRun", result.Manifest.BuildStatus);
+            Assert.Contains(result.Manifest.KnownGaps, gap => gap.StartsWith("SourceAnalysisExcludedByCompiledOnly", StringComparison.Ordinal));
+        }
+        var progress = ReadCheckpoint(File.ReadAllText(checkpoint));
+        Assert.DoesNotContain(progress.History, item => item.Stage is "solution-load" or "compilation" or "msbuild-registration");
+        Assert.Contains(progress.History, item => item.Stage == ScanProgressStages.CompiledMetadata);
+    }
+
     [Theory]
     [InlineData("csharp")]
     [InlineData("vb")]
