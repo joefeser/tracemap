@@ -233,3 +233,8 @@
 - [x] Recognize exact connection State reads as bound-to-allocation typed unknowns with explicit unbound receipts; preserve state-control refusals.
 - [x] Publish whole-closure inventory prompt and complete GLM takeover state; suspend first-error private scan loop.
 - [ ] Complete whole-protocol capability map, representative C#/VB batch fixtures and sound state-dependent control before private validation.
+  - [x] Public capability map recorded (docs/validation/SQL_LIFECYCLE_CAPABILITY_MAP.md) from fixtures/interpreter source; private reconciliation prompt remains the single bounded ask.
+  - [x] Whole-protocol C#/VB fixtures in a third role assembly (whole-protocol) covering configuration, state/null guards, open/fill/close finally, parameters, attachment, Fill, returned allocation, plus caught-throw/state-vs-state/path-budget negative controls.
+  - [x] IL 0.2.27 state-dependent control: bounded path alternatives (max 8 paths / 6 sites), per-alternative identities, direct-throw construction + uncaught-throw termination, loop abandonment on early leave; no enum substitution, no silent path selection, no attachment merging.
+  - [x] Focused validation 237 passed, 0 failed/skipped, Debug -warnaserror, incl. native CLI candidate emission and deterministic replay.
+  - [ ] Complete passing full shared-core Debug -warnaserror gate for IL 0.2.27 on an immutable head copy.

@@ -542,7 +542,8 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
         using var output = new MemoryStream(); assembly.Write(output); return output.ToArray();
     }
 
-    internal static IReadOnlyList<IlSqlObjectPathExtractor.Body> Bodies(string language, bool legacyFramework = false)
+    internal static IReadOnlyList<IlSqlObjectPathExtractor.Body> Bodies(string language, bool legacyFramework = false,
+        long objectBudgetChars = 4_000_000)
     {
         var root = new DirectoryInfo(AppContext.BaseDirectory);
         while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
@@ -559,9 +560,9 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
                 bytes = LegacyFrameworkBytes(bytes);
             }
             // The lifecycle fixtures retain every body; the production 1 MiB object-body
-            // budget is pinned separately by the retention-scale fixtures.
-            var left = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, new(), new(200_000), CancellationToken.None, objectBudget: new(4_000_000));
-            var right = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, new(), new(200_000), CancellationToken.None, objectBudget: new(4_000_000));
+            // budget is pinned separately by the retention-scale tests, which pass it explicitly.
+            var left = IlBodyEvidenceExtractor.ReadCecilBodies(bytes, new(), new(200_000), CancellationToken.None, objectBudget: new(objectBudgetChars));
+            var right = IlBodyEvidenceExtractor.ReadSystemReflectionMetadataBodies(bytes, new(), new(200_000), CancellationToken.None, objectBudget: new(objectBudgetChars));
             Assert.Empty(IlBodyEvidenceExtractor.CompareBodies(left, right));
             var agreed = IlBodyEvidenceExtractor.AgreeValueFlows(left.Bodies, right.Bodies);
             Assert.All(agreed, b => Assert.NotNull(b.ObjectBody));

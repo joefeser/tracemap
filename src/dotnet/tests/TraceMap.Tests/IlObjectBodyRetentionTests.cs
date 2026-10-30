@@ -46,7 +46,9 @@ public sealed class IlObjectBodyRetentionTests
     [InlineData("vb")]
     public void Scale_fixture_keeps_target_after_many_unrelated_field_owning_methods(string language)
     {
-        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        // This fixture pins the PRODUCTION 1 MiB object-body budget: the noise bodies
+        // consume it, the target stays retained, and the harness must not inflate it.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language, objectBudgetChars: 1_048_576);
         Assert.True(bodies.Count(body => body.Observation.ObjectBody?.Name.StartsWith("Noise", StringComparison.Ordinal) == true) >= 160);
         var target = Assert.Single(bodies, body => body.Observation.ObjectBody?.Name == "RetainedScaleProducer");
         Assert.Equal("retained", target.Observation.ObjectBodyRetention!.State);

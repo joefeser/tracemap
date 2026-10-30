@@ -1608,3 +1608,67 @@ Log: /tmp/tracemap-state-regression.log. `git diff --check` passed. Full Debug g
 for 0.2.26 is deferred to the GLM takeover, not silently passing or running in the
 same mutable implementation copy. The user explicitly offered the state/takeover
 alternative; unresolved implementation and gate are handed off, not called complete.
+
+
+## GLM whole-protocol state control — 2026-10-30
+
+Implementation head (final, see below) on
+codex/sql-compiled-wrapper-evidence (docs-only additions may follow this commit).
+IL 0.2.27 / explicit-il-body-evidence.v28 / explicit-sql-state-control/1.
+
+Design: a runtime State comparison against a compiled constant produces an explicit
+state-test value carrying site, connection allocation, constant, declared enum type
+and comparison polarity. Branching on it explores BOTH outcomes as bounded path
+alternatives by re-executing from the selected root with an explicit decision
+assignment (max 8 completed paths, 6 distinct decision sites, 32 recorded
+decisions, shared aggregate work budget). Separate read sites and separate
+occurrences of one site are separate decisions. Each alternative keeps its own
+allocation/execution identities; equal allocation IDs across alternatives denote
+the shared prefix, never a merged object. Incompatible attachments stay per-path
+(one candidate fact carries all alternatives; sqlLifecycleSchema
+il-sql-lifecycle-state-alternatives/1, property stateControlPolicy). Compiler
+negation/identity lowerings (ceq against 0/1) of the same comparison are
+recognized; state-vs-state and non-constant comparisons refuse with exact sites.
+No enum value is assumed observed at any point.
+
+New admission surfaces, all bounded and fail-closed: direct-throw construction
+(newobj immediately followed by throw) is the only untracked construction; an
+uncaught throw terminates its alternative (finally continuations not executed,
+recorded in the termination limitation); a throw a catch would receive refuses
+(lifecycle-throw-catch-continuation-unmodeled); early leave from an active
+enumeration abandons the loop and that path completes without entry evidence
+(strict no-fork runs keep the previous refusals; behavior for state-free bodies is
+unchanged).
+
+Fixture placement note: samples/sql-compiled-wrapper-evidence/{csharp,vb}/end-to-end
+was at the production object-body retention budget edge (1047k/1048k characters);
+adding bodies there silently dropped retention for late methods (e.g. Score) in
+native scans. The whole-protocol fixtures live in a third role assembly
+(whole-protocol), referenced like the others from the test project; the lifecycle
+test harness now passes an explicit 4M-char object budget (production budget
+policy unchanged and still pinned by the retention-scale fixtures).
+
+Validation: focused IlSql + ScanDiagnosticProgress suite 237 passed, 0
+failed/skipped (31 s, Debug -warnaserror), including native CLI compiled-only scan
+emitting the alternatives candidate with the new schema/policy and byte-identical
+deterministic replay. Full shared-core Debug -warnaserror gate running on an
+immutable clone of 4aebbf71b (/tmp/tracemap-state-full-gate,
+/tmp/tracemap-state-full-debug.log); result recorded separately below when
+complete. Public capability map: docs/validation/SQL_LIFECYCLE_CAPABILITY_MAP.md.
+No private source, image, transcript or value was used; no PR, merge, ACK change,
+private scan or whole-SQL completion claim.
+
+
+## Work-machine map reconciliation — 2026-10-30 (second entry)
+
+The v12-001 capability map from the work machine (measured with an 0.2.25 tool,
+policy v26, InfoMessage /3) was reconciled against 4aebbf71b: the reported
+first-gap blocker (three get_State sites) and most of its phase list are covered
+by 0.2.26/0.2.27 (state recognition + path alternatives; delegate pair; the
+core command/parameter/adapter/fill catalog; set_Value; arraylist-new;
+GetTypeFromHandle). All six of its context-sensitive refusals are already
+enforced. Genuinely missing adjacent signatures (~15, with the first-gap caveat
+that unlocks can reveal more) and the three verify-against-boundary groups are
+recorded in docs/validation/SQL_LIFECYCLE_CAPABILITY_MAP.md as the next bounded
+batch; nothing from the verify groups is cataloged without boundary-flag
+verification. No private identifier, hash or token was copied into public files.
