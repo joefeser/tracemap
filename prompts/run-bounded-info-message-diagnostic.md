@@ -4,13 +4,13 @@ This authorizes a resource-contained diagnostic, not an unguarded retry or an
 acceptance scan. The original memory cause remains unknown. All old unguarded
 InfoMessage run instructions remain suspended.
 
-EXPECTED_IMPLEMENTATION_COMMIT: `2a3e641c538e3be7f91ce1309a83d6475956fa99`
+EXPECTED_IMPLEMENTATION_COMMIT: `731ffea94240c320ae75ce78e59592ec8137999e`
 
 Use that clean public implementation, or a verified docs-only descendant with
 no scanner, test-worker or guard-script changes. Verify the built CLI source
 commit/state, not merely the checked-out branch. Record the actual 40-character
-tool SHA. IL admission remains 0.2.22 / policy v23; this adds operational diagnostics,
-not a new lifecycle admission policy. The compiled-only mode explicitly excludes all source inventory, MSBuild, semantic and syntax analysis. Source coverage is reduced; the empty source snapshot does not bind private source files. Preserve dirty
+tool SHA. IL extractor is 0.2.23 / evidence policy v24; InfoMessage policy is
+explicit-sql-info-message/2 with exact signed framework-2 and framework-4 profiles. The compiled-only mode explicitly excludes all source inventory, MSBuild, semantic and syntax analysis. Source coverage is reduced; the empty source snapshot does not bind private source files. Preserve dirty
 patches, private sources, binaries, receipts and outputs. Use isolated clean tool
 sources. Read AGENTS.md and docs/validation/BOUNDED_SCAN_DIAGNOSTICS.md.
 
