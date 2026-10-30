@@ -1,6 +1,36 @@
 # Implementation state
 
 
+## Resource regression alert — 2026-10-29
+
+The work-machine 0.2.22 InfoMessage run was reported to consume roughly 46 GB and
+continue growing without completed outputs, after hours of operator work. The
+responsible phase and cause are UNKNOWN. The screenshots speculate about Roslyn,
+but provide no stack/phase evidence. Do not treat that hypothesis as a diagnosis.
+The old one-scan prompt is SUSPENDED. Active instruction is the read-only existing
+evidence request in prompts/diagnose-info-message-resource-regression.md. No
+further private scan is authorized by that prompt.
+
+Local read-only code inspection confirms normal ScanEngine performs source
+semantic extraction before IL lifecycle materialization, and normal scan writes
+final output artifacts after ScanEngine returns. Thus no output directory alone
+cannot distinguish Roslyn from IL. The new callback inspector has bounded states
+and steps, but these are not an end-to-end process-memory guarantee. No code fix
+or causal attribution has been established for the reported regression.
+
+A local public-only check ran the existing IlSqlInfoMessageTests with --no-build
+and --no-restore, in a separate process group with a 60-second watchdog, sampled
+2-GiB aggregate process-tree RSS cutoff and inherited existing 2-GiB managed-heap
+settings. Result: 19 passed, exit 0, 7.18 seconds wall, peak sampled tree RSS
+772.7 MiB; no cutoff triggered. Log /tmp/tracemap-info-resource-probe.log and local
+supervisor /tmp/tracemap-info-resource-probe.py remain outside Git. This DOES NOT
+reproduce or clear the private workload and is not a whole-workload memory proof.
+No full suite rerun or scanner implementation changes were made for this alert.
+The previously passing full suite below remains functional evidence only.
+
+---
+
+
 ## Current continuation — 2026-10-29 InfoMessage boundary
 
 Branch `codex/sql-compiled-wrapper-evidence`; baseline 97e2a2ab4, initially clean.

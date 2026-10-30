@@ -1,3 +1,14 @@
+# SUSPENDED — reported scan resource regression
+
+The instructions below are inactive. A work-machine 0.2.22 run with the new flag
+was reported to grow to roughly 46 GB without completing. The responsible phase
+and root cause are NOT established. Do not build, rerun, retry or enable this flag
+from this prompt. Use `diagnose-info-message-resource-regression.md` for read-only
+inspection of existing evidence only. Passing local tests are not resource-safety
+acceptance for this workload.
+
+---
+
 # Work-machine InfoMessage entry check — one build, one scan, then stop
 
 This supersedes the prior inspection-only prompts for this next run. The public

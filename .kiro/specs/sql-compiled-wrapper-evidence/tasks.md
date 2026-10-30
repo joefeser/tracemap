@@ -186,3 +186,11 @@
 - [x] Complete focused and full Debug -warnaserror gates on the final code (198 focused; 5652 full passed, 3 existing skips, 0 failures; no warnings).
 - [x] Publish implementation 850042739468b57bf3b261bcabaaad344874221e plus one-scan work-machine prompt after local gates pass.
 - [ ] Establish private entry lineage and consumer schema comparison (not claimed).
+
+
+## Reported InfoMessage resource regression — open
+- [x] Read work-machine report locally; suspend previous uncontained run prompt.
+- [x] Inspect phase ordering and run a time/memory-contained public functional check (19 passed; no reproduction).
+- [ ] Establish allocating/retaining phase from existing work-machine evidence.
+- [ ] Reproduce the resource failure with independently authored public inputs under external process-tree bounds.
+- [ ] Fix and validate the demonstrated cause before reauthorizing private execution.
