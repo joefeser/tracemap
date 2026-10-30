@@ -1466,6 +1466,17 @@ Focused/native validation: 27 passed, 0 failed/skipped (8 seconds), using
 This includes C#/VB native lifecycle output in both modes, source-exclusion and
 conflicting-options controls. Initial focused run exposed a third final source
 inventory capture; fixed to use the same excluded scope before the passing run.
-Full Debug -warnaserror solution regression is running; result not yet claimed.
+Full Debug -warnaserror solution regression was attempted, then canceled after
+three snapshot/determinism failures while Git state was being changed by this
+turn's commits. Do not count it as a pass or assert causality from that overlap.
+Stable-head recheck (no build/restore, Debug -warnaserror) passed 202/202 in 29s:
+all IlSql classes, ScanDiagnosticProgressTests, and the three failing tests
+(VisualBasicValidationMatrixTests.Repeated_cli_scans_produce_byte_identical_facts,
+IlRewriteControlFlowEvidenceExtractorTests.Stack_neutral_dup_pop_insertion_classifies_instruction_stream_change,
+IlRewriteEvidenceExtractorTests.Unchanged_method_emits_unchanged_edge).
+Logs: /tmp/tracemap-compiled-only-focused.log,
+/tmp/tracemap-compiled-only-full-debug.log (canceled, not green),
+/tmp/tracemap-compiled-only-stable-head.log (202 passed).
+Full-suite stable-head gate remains open; not merge-ready evidence.
 No private lineage claim.
 Operator prompt updated to use compiled-only with the existing Windows guard.

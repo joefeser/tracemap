@@ -208,4 +208,5 @@
 
 
 - [x] Add explicit compiled-only normal-scan scope excluding source inventory and MSBuild while preserving Git and compiled evidence bindings; mark source coverage excluded.
-- [ ] Validate compiled-only source exclusion and native C#/VB InfoMessage entries, then run required shared-core Debug gate.
+- [x] Validate compiled-only source exclusion and native C#/VB InfoMessage entries (27 focused; 202 stable-head regression tests passed).
+- [ ] Complete a passing stable-head full Debug -warnaserror shared-core gate; initial broad run canceled after three snapshot/determinism failures, all three passed stable-head recheck.
