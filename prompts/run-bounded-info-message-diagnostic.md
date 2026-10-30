@@ -4,12 +4,12 @@ This authorizes a resource-contained diagnostic, not an unguarded retry or an
 acceptance scan. The original memory cause remains unknown. All old unguarded
 InfoMessage run instructions remain suspended.
 
-EXPECTED_IMPLEMENTATION_COMMIT: `8fd944aaf4cda4ff21d373fb8bea72be219f57ae`
+EXPECTED_IMPLEMENTATION_COMMIT: `b387bd2498c56c80a6091229a753bb64e1d16881`
 
 Use that clean public implementation, or a verified docs-only descendant with
 no scanner, test-worker or guard-script changes. Verify the built CLI source
 commit/state, not merely the checked-out branch. Record the actual 40-character
-tool SHA. IL extractor is 0.2.24 / evidence policy v25; InfoMessage policy is
+tool SHA. IL extractor is 0.2.25 / evidence policy v26; InfoMessage policy is
 explicit-sql-info-message/3, adding exact signed ordinal XML attribute and InnerXml
 callback signatures under the existing framework-2 and framework-4 profiles. The compiled-only mode explicitly excludes all source inventory, MSBuild, semantic and syntax analysis. Source coverage is reduced; the empty source snapshot does not bind private source files. Preserve dirty
 patches, private sources, binaries, receipts and outputs. Use isolated clean tool
@@ -66,6 +66,9 @@ sources. Read AGENTS.md and docs/validation/BOUNDED_SCAN_DIAGNOSTICS.md.
    - output complete/incomplete; entry count only if actual valid facts exist.
      No output directory or exit zero alone establishes completion or phase.
    - next gap/phase as observed, not a claim about root cause or private acceptance.
+     If equality remains unresolved, include categorical operand kinds from gapKind,
+     opcodeFailure site offset and aliased invocation path. Keep private identities
+     local. Do not assume a comparison value or launch another scan.
 
 Keep command values, source, SQL, private identifiers, complete receipts and logs
 local. Use aliases and categorical summaries; no email, uploads or new photos.
