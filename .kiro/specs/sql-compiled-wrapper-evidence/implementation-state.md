@@ -1506,3 +1506,16 @@ controls and version/key/signature/profile mismatch controls. Log:
 `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgressTests'`.
 `git diff --check` passed. Full stable-head gate remains open; no full pass claimed.
 No adapter change; pinned external adapter smokes remain deferred.
+
+## Full Debug follow-up — 2026-10-30
+
+The previously launched full Debug gate finished failed: 5667 total, 3932 passed,
+1732 failed, 3 skipped, 7.7852 minutes. The first recorded failures report that
+the active test checkout and compiled fixtures disappeared during execution.
+The old worktree is absent from Git worktree inventory. This is not a passing
+gate and does not establish clean broad regression behavior. The prior 203-test
+affected result remains separate. Preserve other checkouts and their dirty files.
+
+Added a read-only prompt to inventory all unlisted calls from the single failing
+callback using existing evidence. No further admission change is justified by a
+call hash alone. No private report or identifier is copied into this state note.
