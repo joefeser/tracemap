@@ -374,7 +374,8 @@ internal static partial class IlSqlLifecycleExtractor
             if (readRoot && result is null) throw new Refusal("lifecycle-return-unresolved");
             if (!RelaxedEntry) CheckEnumerations();
             var completed = new Result(executions.ToArray(), reads.ToArray(), result, [], loops.ToArray(), failures.ToArray(), invokedBodies.ToArray())
-                { OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null,
+                { UnboundStringCount = UnboundStrings,
+                    OpaqueInitializers = Initializers.Count > 0 ? Initializers.ToArray() : null,
                     ExternalTraces = TraceBoundaries.Count > 0 ? TraceBoundaries.ToArray() : null,
                     TraceStringComputations = StringComputations.Count > 0 ? StringComputations.ToArray() : null,
                     ConnectionStateReads = StateReads.Count > 0 ? StateReads.ToArray() : null,
@@ -547,9 +548,16 @@ internal static partial class IlSqlLifecycleExtractor
                     }
                     if (op is "clt" or "clt.un" or "cgt" or "cgt.un")
                     {
+                        var right = Pop(); var left = Pop();
+                        // Roslyn lowers an enum comparison against the zero constant to a
+                        // cgt.un nonzero test (e.g. State != ConnectionState.Closed, Closed
+                        // being 0); the unbound runtime observation stays a hypothetical
+                        // either-or, never a value.
+                        if (op == "cgt.un" && left.Kind == "connection-state-unbound"
+                            && right.Kind == "int" && right.Text == "0")
+                        { stack.Add(NewStateTest(left, right, At(body, offset, invocation), negated: true)); continue; }
                         // VB lowers an array bounds check to clt + backward brtrue;
                         // the comparison stays an exact-count test against one array.
-                        var right = Pop(); var left = Pop();
                         if (left.Kind == "int" && right.Kind == "int")
                         { stack.Add(Int(op.StartsWith("clt", StringComparison.Ordinal) == (Number(left) < Number(right)) ? 1 : 0)); continue; }
                         if (left.Kind == "int" && right.Kind == "array-length")
@@ -1096,15 +1104,32 @@ internal static partial class IlSqlLifecycleExtractor
                     return Value.Unknown;
                 case "reflection-method":
                     return Value.Unknown;
+                case "stack-ctor":
+                    // Logging-only stack-name chain (the same exact signed identities the
+                    // trace boundary admits) extended to non-callback lifecycle bodies
+                    // under the external-trace flag; every step stays unbound.
+                    if (externalTraceRoot is null) throw new Refusal("lifecycle-stack-chain-boundary");
+                    return new("stack-trace", "");
+                case "stack-frame":
+                    if (externalTraceRoot is null || receiver.Kind != "stack-trace"
+                        || args[0].Kind != "int" || Number(args[0]) is < 0 or > 31)
+                        throw new Refusal("lifecycle-stack-chain-boundary");
+                    return new("stack-frame", "");
+                case "stack-method":
+                    if (externalTraceRoot is null || receiver.Kind != "stack-frame")
+                        throw new Refusal("lifecycle-stack-chain-boundary");
+                    return new("stack-method", "");
                 case "reflection-name":
-                    return UnboundString("reflection-method-name");
+                    return UnboundString(receiver.Kind == "stack-method" ? "stack-frame-method-name" : "reflection-method-name");
                 case "exception-message":
                     return UnboundString("exception-message");
                 case "exception-inner":
                     return Value.Unknown;
                 case "string-concat":
-                    if (args[0].Kind == "string" && args[1].Kind == "string")
-                        return new("string", args[0].Text + args[1].Text);
+                    // Exact for all-constant operands at any compiler-lowered arity (2-4);
+                    // any unbound operand keeps the whole result unbound.
+                    if (args.All(argument => argument.Kind == "string"))
+                        return new("string", string.Concat(args.Select(argument => argument.Text)));
                     return UnboundString("string-concat");
                 case "string-concat-array":
                     var concatArray = Get(args[0], "array");

@@ -111,7 +111,8 @@ public sealed class IlSqlAdjacentCatalogTests
         var result = Completed(bodies, "AdjacentTypedArray");
         Assert.Equal(2, Assert.Single(result.Entry!.Commands).Parameters.Count);
         var modern = IlSqlLifecycleExtractorTests.Bodies(language);
-        var identity = modern.SelectMany(body => body.Observation.Calls)
+        var identity = modern.Where(body => body.Observation.ObjectBody?.Name == "Execute")
+            .SelectMany(body => body.Observation.Calls)
             .Single(call => call.TargetIdentity.Contains("set_CommandTimeout", StringComparison.Ordinal)).TargetIdentity;
         var changed = modern.Select(body => body with { Observation = body.Observation with
         { Calls = body.Observation.Calls.Select(call => call.TargetIdentity == identity
