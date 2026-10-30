@@ -1,6 +1,6 @@
 # Final bounded validation — whole-protocol state control (one scan, then stop)
 
-EXPECTED_IMPLEMENTATION_COMMIT: `d7d3e168b` (full sha at push)
+EXPECTED_IMPLEMENTATION_COMMIT: `d7d3e168b357cd4afa0bff155aec6505638673c1`
 TOOL: `il-body-evidence/0.2.28` · policy `explicit-il-body-evidence.v29` ·
 state control `explicit-sql-state-control/1` · InfoMessage `/4`
 

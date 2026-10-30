@@ -1721,3 +1721,15 @@ Full gate on an immutable clone recorded separately below. No private input, no
 acceptance or whole-SQL completion claim.
 
 The final validation prompt now expects implementation head d7d3e168b (batch 3).
+
+## Full-gate round 3 PASSED — 2026-10-30 (batch 3)
+
+At implementation commit d7d3e168b357cd4afa0bff155aec6505638673c1 (docs tip
+0eeab4463), the immutable clone /tmp/tracemap-state-full-gate3 completed
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build
+-c Debug -warnaserror --logger 'console;verbosity=normal'`: 5714 total,
+5711 passed, 3 existing skips (same opt-in set as round 2), 0 failed, 41m04s,
+exit 0. Log: /tmp/tracemap-state-full-debug3.log. This is the completed IL
+0.2.28 / policy v29 public full gate for the adjacent whole-protocol batch.
+prompts/glm-sql-lifecycle-final-validation.md precondition 2 is satisfied with
+the full SHA pinned. No private input, scan, PR, merge or ACK change.
