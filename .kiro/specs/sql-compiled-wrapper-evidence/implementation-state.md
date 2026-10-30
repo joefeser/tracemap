@@ -1684,3 +1684,15 @@ objectBudgetChars (default 4M for lifecycle fixtures); the retention tests pass
 1_048_576 explicitly. Focused recheck 250/250 green. Full gate restarted on a
 fresh immutable clone of f433e525e (/tmp/tracemap-state-full-gate2,
 /tmp/tracemap-state-full-debug2.log).
+
+## Full-gate round 2 PASSED — 2026-10-30
+
+At pushed tip 38eabd416 (implementation f433e525e), the immutable clone
+/tmp/tracemap-state-full-gate2 completed
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --logger 'console;verbosity=normal'`:
+5700 passed, 3 existing skips (opt-in exhaustive Oracle sweep, native HTTP receipt
+interop, deep Windows ASP.NET publish — not claimed executed), 0 failed, exit 0.
+Log: /tmp/tracemap-state-full-debug2.log. This is the completed IL 0.2.27 public
+gate for the whole-protocol state-control batch, including the corrected
+retention-scale pin. prompts/glm-sql-lifecycle-final-validation.md is pinned to
+implementation commit f433e525e. No private input, scan, PR, merge or ACK change.
