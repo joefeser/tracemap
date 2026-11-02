@@ -827,3 +827,24 @@ assemblies remain at their budget-pinned size):
   continuation is an impossible normal-completion path, never a
   successful lifecycle. The non-overflowing checked path keeps walking
   (pinned).
+
+## Review-fix batch 4 (2026-11-02, IL 0.2.66 / v67)
+
+Round four findings, fixed and pinned (C#-only pins; VB sample
+assemblies remain budget-frozen):
+- **Unbound-integer comparison polarity** (Codex P2, deferred from round
+  1's notes): `cgt(x, 0)` pushed the raw equal-assumption — every strict
+  relation against a 0/1 constant implies non-equality, so the
+  expression's truth is always the negation; the zero-assumed
+  alternative now completes and the rows-assumed alternative terminates
+  exceptionally (pinned with observable sides).
+- **Unequal literal comparisons keep equality-only semantics** (Codex
+  P2): a digest mismatch establishes inequality, never an ordering. The
+  result is the equality-only `int-nonzero` marker: equality consumers,
+  the nonzero test and beq/bne.un resolve; ordering consumers refuse by
+  name (pinned).
+- **Array casts validate the element type** (Codex P2): newarr and
+  ToArray snapshots carry their element type; a castclass to any other
+  array type — which throws at runtime even empty — refuses as
+  `lifecycle-cast-array-type`. The ldtoken (`tok:type:0x…:`) and cast
+  (`t:`) encodings compare bare scoped-type tails (pinned).

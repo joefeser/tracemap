@@ -392,6 +392,12 @@ internal static partial class IlSqlLifecycleExtractor
         private Value Equal(Value left, Value right)
         {
             if (left.Kind == "int" && right.Kind == "int") return Int(Number(left) == Number(right) ? 1 : 0);
+            // The equality-only nonzero marker (a digest-mismatched string
+            // comparison): nonzero differs from zero and one, and two nonzero
+            // markers are equal — ordering stays unrepresented by design.
+            if (left.Kind == "int-nonzero" && right.Kind == "int") return Int(right.Text == "0" || right.Text == "1" ? 0 : 1);
+            if (left.Kind == "int" && right.Kind == "int-nonzero") return Int(left.Text == "0" || left.Text == "1" ? 0 : 1);
+            if (left.Kind == "int-nonzero" && right.Kind == "int-nonzero") return Int(1);
             if (left.Kind == "null" && right.Kind == "null") return Int(1);
             // Only concrete allocations prove non-aliasing. Views with distinct
             // symbolic IDs may still denote the same runtime reference.
@@ -837,6 +843,9 @@ internal static partial class IlSqlLifecycleExtractor
                                 && state.Kind is ("custom" or "command" or "parameter" or "adapter" or "dataset" or "sql-connection"
                                     or "array" or "arraylist" or "list");
                             if (NonNull(other) || other.Kind is ("string" or "computed-int" or "boxed-bool")) { stack.Add(Int(1)); continue; }
+                            // The equality-only nonzero marker against ldnull/zero:
+                            // the unsigned nonzero test is provably true.
+                            if (other.Kind == "int-nonzero") { stack.Add(Int(1)); continue; }
                             if (other.Kind is ("input" or "computed-string"))
                             { stack.Add(NegateStateTest(NewInputNullTest(other, At(body, offset, invocation)))); continue; }
                             // Both operands proven null: the non-null test is the
@@ -883,10 +892,21 @@ internal static partial class IlSqlLifecycleExtractor
                             var test = NewUnboundIntCompareTest(left.Kind == "computed-int" ? left : right,
                                 (left.Kind == "int" ? left.Text : right.Text) == "0" ? "equal-zero" : "equal-one",
                                 At(body, offset, invocation));
-                            stack.Add(op.StartsWith("clt", StringComparison.Ordinal) || op.EndsWith(".un", StringComparison.Ordinal) && op.StartsWith("cgt", StringComparison.Ordinal)
-                                ? NegateStateTest(test) : test);
+                            // Every strict relation against a 0/1 constant implies
+                            // non-equality (x<0, x>0, x<1, x>1 all mean x != c),
+                            // so the expression's truth is always the NEGATION of
+                            // the equal-assumption — never the raw test, which
+                            // would pair each assumption with the wrong branch.
+                            stack.Add(NegateStateTest(test));
                             continue;
                         }
+                        // The equality-only nonzero marker under the unsigned
+                        // nonzero test against a compiled zero: provably true
+                        // (the VB string <> lowering on a known-unequal pair).
+                        if ((op == "cgt.un" || op == "clt.un")
+                            && (left.Kind == "int-nonzero" && right.Kind == "int" && right.Text == "0"
+                                || right.Kind == "int-nonzero" && left.Kind == "int" && left.Text == "0"))
+                        { stack.Add(Int(1)); continue; }
                         PendingNumberFailure = new(OperandKind(left) + ":" + OperandKind(right), inFlightCall?.Identity, inFlightCall?.Body, inFlightCall?.Offset ?? -1);
                         throw new Refusal("lifecycle-comparison-unresolved");
                     }
@@ -934,6 +954,11 @@ internal static partial class IlSqlLifecycleExtractor
                         bool branchIfEqual = op is "beq" or "beq.s";
                         if (left.Kind == "int" && right.Kind == "int")
                         { if ((Number(left) == Number(right)) == branchIfEqual) i = destination - 1; continue; }
+                        // The equality-only nonzero marker against zero: nonzero
+                        // != 0 — beq falls through, bne.un branches.
+                        if (left.Kind == "int-nonzero" && right.Kind == "int" && right.Text == "0"
+                            || right.Kind == "int-nonzero" && left.Kind == "int" && left.Text == "0")
+                        { if (!branchIfEqual) i = destination - 1; continue; }
                         var test = left.Kind is ("string-compare" or "string-compare-bool" or "state-test") ? left
                             : right.Kind is ("string-compare" or "string-compare-bool" or "state-test") ? right : null;
                         if (test is not null && test.Kind == "string-compare")
@@ -1032,7 +1057,12 @@ internal static partial class IlSqlLifecycleExtractor
                         if (!operand.Contains("type(namespace:", StringComparison.Ordinal))
                             throw new Refusal("lifecycle-array-type");
                         var count = Number(Pop()); if (count is < 0 or > 16) throw new Refusal("lifecycle-array-limit");
-                        var array = New("array"); heap[array.Text].Slots.AddRange(Enumerable.Repeat(Value.Unknown, count)); stack.Add(array); continue;
+                        var array = New("array");
+                        // The allocated element type rides the state: a later
+                        // castclass to a DIFFERENT array type would throw at
+                        // runtime and must refuse, not pass as the ToArray shape.
+                        heap[array.Text].Type = new("type", operand);
+                        heap[array.Text].Slots.AddRange(Enumerable.Repeat(Value.Unknown, count)); stack.Add(array); continue;
                     }
                     if (op == "unbox.any")
                     {
@@ -1090,7 +1120,28 @@ internal static partial class IlSqlLifecycleExtractor
                         if (op == "castclass" && stack.Count > 0 && stack[^1].Kind == "object"
                             && heap.TryGetValue(stack[^1].Text, out var arrayCast) && arrayCast.Kind == "array"
                             && operand.EndsWith("[]", StringComparison.Ordinal))
+                        {
+                            // The ToArray lowering casts to the array's OWN element
+                            // type; a cast to any other array type throws at
+                            // runtime (even empty) and refuses by name. The cast
+                            // operand may carry a scope(...) qualifier the ldtoken
+                            // encoding lacks — compare bare.
+                            // Both encodings may carry prefixes around the same
+                            // scoped type (ldtoken's tok:type:0x…: token, the cast's
+                            // t: tag) — compare the bare scoped-type tails.
+                            static string Bare(string encoded)
+                            {
+                                var scope = encoded.IndexOf("scope(", StringComparison.Ordinal);
+                                if (scope >= 0) return encoded.Substring(scope);
+                                var type = encoded.IndexOf("type(", StringComparison.Ordinal);
+                                return type >= 0 ? encoded.Substring(type) : encoded;
+                            }
+                            var castElement = Bare(operand.Substring(0, operand.Length - 2));
+                            var allocatedElement = arrayCast.Type is { Kind: "type" } allocatedType ? Bare(allocatedType.Text) : "";
+                            if (allocatedElement != castElement)
+                                throw new Refusal("lifecycle-cast-array-type");
                             continue;
+                        }
                         if (op == "castclass" && stack.Count > 0 && stack[^1].Kind == "object"
                             && heap.TryGetValue(stack[^1].Text, out var customCast) && customCast.Kind == "custom"
                             && operand == "t:" + customCast.Owner)
@@ -1163,8 +1214,9 @@ internal static partial class IlSqlLifecycleExtractor
                         }
                         var truth = value.Kind == "object" || value.Kind == "int" && Number(value) != 0
                             || value.Kind == "boxed-bool" && value.Text == "1"
+                            || value.Kind == "int-nonzero"
                             || value.Kind is "loop-test" or "collection-test" && value.Text == "1";
-                        if (value.Kind is not ("object" or "int" or "null" or "boxed-bool" or "loop-test" or "collection-test")) throw new Refusal("lifecycle-guard-unresolved");
+                        if (value.Kind is not ("object" or "int" or "null" or "boxed-bool" or "int-nonzero" or "loop-test" or "collection-test")) throw new Refusal("lifecycle-guard-unresolved");
                         if ((destination <= i || loopEnumerator.Kind != "unknown") && value.Kind is not ("loop-test" or "collection-test"))
                             throw new Refusal("lifecycle-loop-dependent-control");
                         if (value.Kind is "loop-test" or "collection-test" && (!op.StartsWith("brtrue", StringComparison.Ordinal) || destination >= i))
@@ -1660,6 +1712,9 @@ internal static partial class IlSqlLifecycleExtractor
                     var copiedCollection = Get(receiver, "arraylist");
                     _ = args[0].Kind == "type" ? args[0] : throw new Refusal("lifecycle-toarray-type");
                     var copiedArray = New("array");
+                    // The snapshot's element type is the requested type: a later
+                    // cast to a different array type refuses.
+                    heap[copiedArray.Text].Type = args[0];
                     heap[copiedArray.Text].Slots.AddRange(copiedCollection.Slots);
                     return copiedArray;
                 case "object-type":
@@ -1734,10 +1789,12 @@ internal static partial class IlSqlLifecycleExtractor
                         // A derived exact string against an ldstr LITERAL (stored as
                         // a digest by body evidence) compares by reconstructing the
                         // digest: equality is decidable without the literal's text.
-                        // The result's SIGN stays unknown (the digest hides order);
-                        // no admitted consumer reads the sign, only equality.
+                        // A digest MISMATCH establishes inequality only — never an
+                        // ordering (the digest hides order). The unequal result is
+                        // the equality-only nonzero marker: equality consumers and
+                        // the nonzero test resolve; ordering consumers refuse.
                         var literal = LiteralEquality(args[0], args[1]);
-                        if (literal is { } equal) return Int(equal ? 0 : 1);
+                        if (literal is { } equal) return equal ? Int(0) : new("int-nonzero", "");
                         // The ordinal shortcut is sound only under BINARY compare and
                         // within ONE form (both plain texts); it never runs across
                         // the plain and digest forms or between two unknown-order
