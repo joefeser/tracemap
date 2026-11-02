@@ -370,7 +370,10 @@ internal static partial class IlSqlLifecycleExtractor
         private static bool CompareBranch(string op, int left, int right)
         {
             var name = op.Split('.')[0];
-            var unsigned = op.EndsWith(".un", StringComparison.Ordinal);
+            // The unsigned marker can precede the short-form suffix (.un.s)
+            // or end the opcode (.un) — EndsWith alone misreads bgt.un.s as
+            // signed. ".un" appears only as that marker.
+            var unsigned = op.Contains(".un", StringComparison.Ordinal);
             return (name, unsigned) switch
             {
                 ("blt", false) => left < right, ("blt", true) => (uint)left < (uint)right,
@@ -475,7 +478,10 @@ internal static partial class IlSqlLifecycleExtractor
                 && state.Kind is ("custom" or "command" or "parameter" or "adapter" or "dataset" or "sql-connection"
                     or "array" or "arraylist" or "list");
             if (NonNull(value) || value.Kind is ("string" or "computed-int" or "dbnull" or "boxed-bool")) return Int(0);
-            if (value.Kind is ("input" or "computed-string")) return NegateStateTest(NewInputNullTest(value, site));
+            // IsNothing(value) IS the null-equality hypothetical: the raw test,
+            // never negated (negation would make IsNothing behave as IsNot
+            // Nothing and swap every nullness assumption's side).
+            if (value.Kind is ("input" or "computed-string")) return NewInputNullTest(value, site);
             throw new Refusal("lifecycle-guard-unresolved");
         }
         private Value NewInputNullTest(Value input, Site site)
@@ -888,14 +894,30 @@ internal static partial class IlSqlLifecycleExtractor
                     {
                         var right = Pop(); var left = Pop();
                         if (left.Kind == "int" && right.Kind == "int")
-                        { stack.Add(Int(Number(left) + Number(right))); continue; }
+                        {
+                            var first = Number(left); var second = Number(right);
+                            // Checked arithmetic never wraps: a concrete overflow
+                            // throws at runtime, so the wrapped continuation is
+                            // an impossible normal-completion path — refuse by
+                            // name instead of walking it.
+                            if (op == "add.ovf" && (first > 0 && second > int.MaxValue - first || first < 0 && second < int.MinValue - first)
+                                || op == "add.ovf.un" && (uint)first + (uint)second < (uint)second)
+                                throw new Refusal("lifecycle-arithmetic-overflow");
+                            stack.Add(Int(first + second)); continue;
+                        }
                         throw new Refusal("lifecycle-arithmetic-unresolved");
                     }
                     if (op is "sub" or "sub.ovf" or "sub.ovf.un")
                     {
                         var right = Pop(); var left = Pop();
                         if (left.Kind == "int" && right.Kind == "int")
-                        { stack.Add(Int(Number(left) - Number(right))); continue; }
+                        {
+                            var first = Number(left); var second = Number(right);
+                            if (op == "sub.ovf" && (second > 0 && first < int.MinValue + second || second < 0 && first > int.MaxValue + second)
+                                || op == "sub.ovf.un" && ((uint)first < (uint)second))
+                                throw new Refusal("lifecycle-arithmetic-overflow");
+                            stack.Add(Int(first - second)); continue;
+                        }
                         // length - k: the counted-loop bound (For i = 0 To arr.Length - 1)
                         if (left.Kind == "array-length" && right.Kind == "int")
                         { stack.Add(new("array-length-minus", (int.Parse(left.Text, CultureInfo.InvariantCulture) - Number(right)).ToString(CultureInfo.InvariantCulture), left.DeclaredType)); continue; }
@@ -1692,7 +1714,11 @@ internal static partial class IlSqlLifecycleExtractor
                     {
                         var literal = LiteralEquality(args[0], args[1]);
                         if (literal is { } equal) return Int(equal ? 1 : 0);
-                        if (!IsLiteralDigest(args[0].Text) && !IsLiteralDigest(args[1].Text)) return Int(0);
+                        // Same form (both plain, or both literal digests): textual
+                        // comparison decides — identical texts, including identical
+                        // digests of the same literal, are equal.
+                        if (!IsLiteralDigest(args[0].Text) && !IsLiteralDigest(args[1].Text))
+                            return Int(args[0].Text == args[1].Text ? 1 : 0);
                     }
                     return new("string-compare-bool", ProvenanceOf(args[0]) + "|" + (args[1].Kind == "string" ? args[1].Text : "?"));
                 case "vb-compare-string":

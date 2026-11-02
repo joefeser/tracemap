@@ -662,5 +662,34 @@ namespace PublicSql.CSharp
             if (returned == "public-sentinel") return result;
             return result;
         }
+        public DataSet ClosureRound3Produce(string connection)
+        {
+            // Review round 3 pins: unsigned short-branch ordering, same-form
+            // plain-string equality, checked arithmetic that cannot overflow.
+            var parameters = new ArrayList();
+            parameters.Add(new ClosureStructNullGuardParameter("@public", SqlDbType.VarChar, 12, connection));
+            // (1) bgt.un.s on the MaxValue bit pattern: unsigned ordering takes
+            // this branch (a signed misread folds -1 < 1 and skips the entry).
+            uint unsignedMax = uint.MaxValue;
+            if (unsignedMax <= 1u) return new DataSet();
+            // (2) Two derived plain strings with identical text: equal — the
+            // same-form comparison compares texts, never an unconditional false.
+            var leftName = connection.GetType().ToString();
+            var rightName = connection.GetType().ToString();
+            var sameType = leftName == rightName;
+            if (!sameType) return new DataSet();
+            // (3) Checked subtraction that cannot overflow keeps walking.
+            int small = 12;
+            if (checked(small - 5) != 7) return new DataSet();
+            return ClosureStructNullGuardExec.Execute("public.round3", ref parameters);
+        }
+        public DataSet ClosureOverflowProduce(string connection)
+        {
+            // Negative control: a concrete checked overflow refuses by name —
+            // the wrapped continuation is an impossible normal-completion path.
+            int big = int.MaxValue;
+            int wrapped = checked(big + 1);
+            return new DataSet(wrapped.ToString());
+        }
     }
 }
