@@ -11,7 +11,7 @@ public static class SqlServerCompiledLifecycleReportWriter
             .Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal)
             .Replace("<", "&lt;", StringComparison.Ordinal).Replace(">", "&gt;", StringComparison.Ordinal);
         var text = new StringBuilder("# Compiled SQL lifecycle comparison\n\nCoverage: partial. Schema matches are not proof of runtime values or successful execution.\n\n");
-        text.AppendLine($"Repo: {Cell(report.Repo)}; revision: {Cell(report.Revision)}; rule: {Cell(report.RuleId)}; tier: {Cell(report.EvidenceTier)}; evidence version: {Cell(report.Version)}.\n");
+        text.AppendLine($"Repo: {Cell(report.Repo)}; revision: {Cell(report.Revision)}; rule: {Cell(report.RuleId)}; tier: {Cell(report.EvidenceTier)}; report format: {Cell(report.Version)}; IL extractor: {Cell(report.ExtractorVersion)}.\n");
         text.AppendLine($"Generator SHA-256: {Cell(report.GeneratorSha256)}\n\nBounded input SHA-256: {Cell(report.BoundedInputSha256)}\n");
         if (report.SchemaOrigin is not null)
             text.AppendLine($"Schema origin: {Cell(report.SchemaOrigin)}. Comparisons are conditional on this declaration, not independently verified database metadata. Private local report; do not publish.\n");

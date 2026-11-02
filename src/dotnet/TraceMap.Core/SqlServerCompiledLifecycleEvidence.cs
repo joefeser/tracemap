@@ -31,6 +31,7 @@ public sealed record SqlServerLifecycleReport(string Version, string GeneratorSh
 {
     public string RuleId => SqlServerCompiledLifecycleEvidence.RuleId;
     public string EvidenceTier => EvidenceTiers.Tier3SyntaxOrTextual;
+    public string ExtractorVersion => ScannerVersions.IlBodyEvidenceExtractor;
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
     public string? SchemaOrigin { get; init; }
 }

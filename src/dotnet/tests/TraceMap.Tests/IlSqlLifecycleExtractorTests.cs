@@ -202,6 +202,16 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
             Assert.Contains(scan.Facts, f => f.TargetSymbol == methodBody && f.FactType == FactTypes.AnalysisGap
                 && f.RuleId == RuleIds.DotNetIlSqlLifecycle);
         }
+        // Codex review fix: merging a source carrying application-written
+        // columns refuses by name — the merged table must not report SQL
+        // origins for application-written data. (C#-only fixture: the shared
+        // native body budget is at its pinned edge for the VB assemblies.)
+        if (language == "csharp")
+        {
+            var mergeWrittenBody = Assert.Single(bodyInputs, b => b.Input.Role == "end-to-end" && b.Observation.ObjectBody?.Name == "MergeWritten").Observation.BodyIdentity;
+            Assert.Contains(scan.Facts, f => f.TargetSymbol == mergeWrittenBody && f.FactType == FactTypes.AnalysisGap
+                && f.Properties.Values.Any(value => value.Contains("lifecycle-merge-writes-unmodeled", StringComparison.Ordinal)));
+        }
         File.WriteAllText(Path.Combine(directory, "bindings.json"), SqlServerSchemaEvidence.Json(bindings with { Candidates = allBindings }));
         Assert.True(await TraceMapCommand.RunAsync(Command("matrix"), stdout, stderr) == 0, stderr.ToString());
         var actual = SqlServerSchemaEvidence.Read<SqlServerLifecycleReport>(File.ReadAllText(Path.Combine(directory, "matrix", "compiled-lifecycle-comparison.json")));

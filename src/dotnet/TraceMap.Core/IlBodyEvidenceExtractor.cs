@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v64";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v65";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -2069,7 +2069,7 @@ internal static class IlBodyEvidenceExtractor
             throw new IlEvidenceException("MalformedIlBody");
     }
 
-    private static string UserStringDigest(string value)
+    internal static string UserStringDigest(string value)
     {
         // User strings contain UTF-16 code units, including unpaired
         // surrogates. Encoding.Unicode replaces those with U+FFFD and would
