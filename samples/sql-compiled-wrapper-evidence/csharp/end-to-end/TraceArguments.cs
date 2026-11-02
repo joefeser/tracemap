@@ -1,0 +1,62 @@
+using System.Data;
+using System.Web;
+namespace PublicSql.CSharp
+{
+    public sealed class TraceArgumentRoot
+    {
+        public DataSet ScalarCopyProduce(string message)
+        {
+            System.Runtime.CompilerServices.RuntimeHelpers.GetObjectValue(message);
+            return EntryProtocol.ProduceInputs(1, 2, message, true);
+        }
+        public DataSet UntypedCopyRefusal(System.Exception value)
+        {
+            System.Runtime.CompilerServices.RuntimeHelpers.GetObjectValue(value);
+            return EntryProtocol.ProduceInputs(1, 2, "public", true);
+        }
+        public DataSet TrackedCopyRefusal()
+        {
+            System.Runtime.CompilerServices.RuntimeHelpers.GetObjectValue(new System.Data.SqlClient.SqlCommand("public"));
+            return EntryProtocol.ProduceInputs(1, 2, "public", true);
+        }
+        public DataSet TraceComputedProduce(string message, int count)
+        {
+            HttpContext.Current.Trace.Write(string.Concat("public-", message, count.ToString()));
+            return EntryProtocol.ProduceInputs(1, 2, message, true);
+        }
+        public DataSet TraceBuiltLocalProduce(string message, int count)
+        {
+            var local = string.Format("public-{0}", count);
+            HttpContext.Current.Trace.Write(local);
+            return EntryProtocol.ProduceInputs(1, 2, local, true);
+        }
+        public DataSet TraceArrayProduce(string message, int count)
+        {
+            HttpContext.Current.Trace.Write(string.Concat(new object[] { "public-", message, count }));
+            return EntryProtocol.ProduceInputs(1, 2, message, true);
+        }
+        public DataSet TraceObjectConcatRefusal(object value)
+        {
+            HttpContext.Current.Trace.Write(string.Concat("public-", value));
+            return EntryProtocol.ProduceInputs(1, 2, "value", true);
+        }
+        public DataSet TraceUnknownBuilderRefusal(string message)
+        {
+            HttpContext.Current.Trace.Write(UnknownBuilder(message));
+            return EntryProtocol.ProduceInputs(1, 2, message, true);
+        }
+        private static string UnknownBuilder(string message) { return message; }
+        public DataSet TraceDelegateOpcodeRefusal(string message)
+        {
+            var callback = new System.Func<string, string>(PublicIdentity);
+            System.GC.KeepAlive(callback);
+            return EntryProtocol.ProduceInputs(1, 2, message, true);
+        }
+        private static string PublicIdentity(string value) { return value; }
+        public DataSet TraceComputedCommandRefusal(string message)
+        {
+            var command = string.Concat("public-", message);
+            return Wrapper.ArrayInputs(command, new System.Collections.ArrayList());
+        }
+    }
+}

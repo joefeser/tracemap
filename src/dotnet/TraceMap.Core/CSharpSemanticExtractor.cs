@@ -823,6 +823,7 @@ public static class CSharpSemanticExtractor
         var protectedFactStart = facts.Count;
         RazorSemanticModelBindingExtractor.Extract(projectPath, filePath, root, model, facts, gaps);
         PropertyMappingExtractor.Extract(projectPath, filePath, root, model, facts, gaps);
+        LinqPipelineEvidenceExtractor.Extract(projectPath, filePath, root, model, facts, gaps);
         AddSymbolRelationshipFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);
         AddParameterDeclarationFacts(projectPath, filePath, root, model, facts);
