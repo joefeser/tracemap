@@ -40,7 +40,7 @@ public static class CompiledAttachmentProducer
             || original.CommitSha.Length != 40 || !original.CommitSha.All(Hex)
             || original.ScanRootPathHash != FactFactory.Hash(root, 32))
             throw Fail("PARENT_CONTEXT_INVALID");
-        if (options.Restore || options.SolutionPaths is { Count: > 0 } || options.ProjectPaths is { Count: > 0 }
+        if (options.CompiledOnly || options.Restore || options.SolutionPaths is { Count: > 0 } || options.ProjectPaths is { Count: > 0 }
             || options.IncludeGlobs is { Count: > 0 } || options.ExcludeGlobs is { Count: > 0 }
             || options.TargetFramework is not null || options.BinlogPaths is { Count: > 0 }
             || options.BinlogCommitSha is not null || options.ExactSourceScope || options.IlRewriteEvidence

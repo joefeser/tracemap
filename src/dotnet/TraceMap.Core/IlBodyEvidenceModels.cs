@@ -109,7 +109,20 @@ internal sealed record IlBodyObservation(
     string BodySha256,
     IReadOnlyList<IlCallObservation> Calls,
     IReadOnlyList<string>? DiagnosticInstructions = null,
-    IlValueFlowObservation? ValueFlow = null);
+    IlValueFlowObservation? ValueFlow = null,
+    IlObjectBody? ObjectBody = null,
+    IlObjectBodyRetention? ObjectBodyRetention = null,
+    IlObjectBodyAgreement? ObjectBodyAgreement = null);
+
+internal sealed record IlObjectBodyRetention(string State, string Reason, int DeclaringFieldCount,
+    long RequestedCharacters, long BudgetUsedBefore, long BudgetMaximum);
+internal sealed record IlObjectBodyAgreement(bool RawBody, bool CallShapes, bool ValueFlow, bool ObjectBody,
+    IlObjectBodyRetention? Cecil, IlObjectBodyRetention? Srm);
+
+internal sealed record IlObjectBody(IReadOnlyList<string> Instructions, string MemberReference,
+    string OwnerType, string Name, int ParameterCount, bool HasThis, bool ReturnsValue,
+    bool IsVirtual, bool IsGeneric, IReadOnlyList<string> PrivateInstanceFields,
+    IReadOnlyList<string>? ExceptionRegions = null, string? BaseType = null);
 
 internal sealed record EvaluatedIlInput(
     IlInputOutcome Outcome,
@@ -121,5 +134,12 @@ internal sealed record IlBodyEvaluation(
     IReadOnlyList<string> KnownGaps,
     IReadOnlyList<CompiledInputBindingArtifact> BindingArtifacts)
 {
+    internal IReadOnlyList<IlLifecycleRootSelection> LifecycleRoots { get; init; } = [];
+    internal bool OpaqueRootInitializers { get; init; }
+    internal bool ExternalTraceBoundary { get; init; }
+    internal bool CompiledScalarBoundary { get; init; }
+    internal bool InfoMessageBoundary { get; init; }
+    internal long CompiledMaximumBytes { get; init; } = new CompiledInputLimits().MaxFileSizeBytes;
+    internal CancellationToken SliceCancellationToken { get; init; }
     public static readonly IlBodyEvaluation Disabled = new(null, [], [], []);
 }
