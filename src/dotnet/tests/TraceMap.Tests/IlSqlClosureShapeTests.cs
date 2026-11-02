@@ -628,6 +628,56 @@ public sealed class IlSqlClosureShapeTests
     }
 
     [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void Strict_comparisons_evaluate_each_opcode_independently(string language)
+    {
+        // Codex review fix: the value form of cgt computed !(x<y), so EQUAL
+        // count-derived ints folded to true and the walk took the empty early
+        // return (no entry). Per-opcode strict evaluation folds equal to false
+        // and the entry with its parameter completes.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureStrictCompareProduce");
+        Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
+        Assert.NotEmpty(result.StateAlternatives!);
+        // Pre-fix the equal-int cgt folded TRUE and the walk took the empty
+        // early return, leaving zero entry completions.
+        var completing = result.StateAlternatives!.Where(a => a.Completion?.Entry is not null).ToArray();
+        Assert.NotEmpty(completing);
+        foreach (var alternative in completing)
+            Assert.Single(Assert.Single(alternative.Completion!.Entry!.Commands).Parameters);
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void Fill_returns_an_unbound_count_that_forks(string language)
+    {
+        // Codex review fix: Fill fabricated Int(0). The count is an unbound
+        // integer: a stored > 0 flag forks the rows/no-rows hypothetical, and
+        // every completing alternative carries the execution.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureFillCountProduce");
+        Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
+        Assert.NotNull(result.StateAlternatives);
+        Assert.Contains(result.StateAlternatives!, a => a.Completion?.Entry is not null
+            && a.Decisions.Any(d => d.Connection.Contains("computed") || d.Connection.Contains("fill")));
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    [InlineData("vb")]
+    public void Equality_on_the_fill_count_refuses_by_name(string language)
+    {
+        // Negative control: no inferred row count. An equality test on the
+        // unbound Fill count refuses with the operand kinds named.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureFillZeroProduce");
+        Assert.NotEmpty(result.Gaps);
+        Assert.Contains(result.Gaps, gap => gap.Contains("lifecycle-equality-unresolved:computed-int:int", StringComparison.Ordinal));
+    }
+
+    [Theory]
     [InlineData("vb")]
     public void Field_addresses_deref_store_and_never_escape(string language)
     {

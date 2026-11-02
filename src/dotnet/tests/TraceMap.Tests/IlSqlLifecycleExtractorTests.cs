@@ -206,6 +206,13 @@ public sealed class IlSqlLifecycleExtractorTests(ITestOutputHelper output)
         Assert.True(await TraceMapCommand.RunAsync(Command("matrix"), stdout, stderr) == 0, stderr.ToString());
         var actual = SqlServerSchemaEvidence.Read<SqlServerLifecycleReport>(File.ReadAllText(Path.Combine(directory, "matrix", "compiled-lifecycle-comparison.json")));
         Assert.Equal(12, actual.Comparisons.Count);
+        // The markdown report carries per-report and per-row provenance (review
+        // fix): rule, tier, repo and revision in the header; rule/tier per row.
+        var markdown = File.ReadAllText(Path.Combine(directory, "matrix", "report.md"));
+        Assert.Contains($"rule: {SqlServerCompiledLifecycleEvidence.RuleId}", markdown, StringComparison.Ordinal);
+        Assert.Contains($"revision: {scan.Manifest.CommitSha}", markdown, StringComparison.Ordinal);
+        Assert.Contains("| Rule / tier |", markdown, StringComparison.Ordinal);
+        Assert.Contains(actual.Comparisons[0].SourceRule + " / " + actual.Comparisons[0].SourceTier, markdown, StringComparison.Ordinal);
         foreach (var row in actual.Comparisons)
         {
             var e = expected[row.FactId];
