@@ -191,18 +191,23 @@ def main():
                       for role in ("caller", "wrapper")}
         hashes = {role: digest(path) for role, path in assemblies.items()}
         scan = output / language
-        command = ["dotnet", str(cli), "scan", "--repo", str(sample), "--out", str(scan), "--il-body-evidence"]
+        command = ["dotnet", str(cli), "scan", "--repo", str(sample), "--out", str(scan), "--il-body-evidence", "--compiled-only"]
         for assembly in assemblies.values():
             command += ["--compiled-input", str(assembly)]
         subprocess.run(command, check=True, timeout=300)
         facts_path = scan / "facts.ndjson"
         facts = [json.loads(line) for line in facts_path.read_text(encoding="utf-8-sig").splitlines()]
+        # Compile-only discipline: the bounded input must exclude source analysis,
+        # and the exclusion must be RECORDED — otherwise source-only edits shift
+        # the hashed inputs the compile-only report depends on.
+        if not any("SourceAnalysisExcludedByCompiledOnly" in json.dumps(fact) for fact in facts):
+            raise SystemExit(f"{language}: SourceAnalysisExcludedByCompiledOnly not recorded under --compiled-only")
         original, tables = inspect(facts, language, hashes)
         rows.extend(original)
         table_rows.extend(tables)
         inputs[language] = {"assemblies": hashes, "factsSha256": digest(facts_path),
                             "manifestSha256": digest(scan / "scan-manifest.json")}
-    report = {"schema": "public-compiled-wrapper-matrix/3", "artifactVisibility": "local-only",
+    report = {"schema": "public-compiled-wrapper-matrix/4", "artifactVisibility": "local-only",
               "generatorSha256": digest(pathlib.Path(__file__)), "cliSha256": digest(cli),
               "boundedInputSha256": hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
               "inputs": inputs, "rows": rows, "tableRows": table_rows, "coverage": "Partial",

@@ -743,3 +743,29 @@ were a cosmetic concatenation-operator rendering and signature
 formatting. Sufficiency verdict: the walk's evidence was sufficient for
 what it labels, with the remaining TODOs documented as the proof's
 limits — two attempts, one contract paragraph, measured.
+
+## Review-fix batch (2026-11-02, IL 0.2.63 / v64)
+
+PR review findings, fixed and pinned:
+- **Strict integer comparisons** (Codex P2): the value form of `cgt`
+  computed `!(x<y)`, so EQUAL operands folded true — a branch consuming
+  it could select the wrong path with gap-free evidence. Each opcode now
+  evaluates its own strict relation (`cgt` is `x>y`; the `.un` forms
+  compare the unsigned reinterpretation), in both the int-int and
+  int/array-length cases. Pinned by the stored-flag fixture: equal
+  count-derived ints fold false and the entry completes (the pre-fix
+  walk took the empty early return).
+- **The Fill count stays unbound** (Codex P2): `Fill` fabricated `Int(0)`
+  as its return. It now returns an unbound integer carrying the
+  execution provenance (the CInt design): discarding is fine, a stored
+  `> 0` flag forks the rows/no-rows hypothetical (pinned), and an
+  equality test refuses by name
+  (`lifecycle-equality-unresolved:computed-int:int`, negative pin).
+- **Compile-only smoke** (baz): the bounded-input replay now passes
+  `--compiled-only` and verifies `SourceAnalysisExcludedByCompiledOnly`
+  is recorded, so source-only edits can no longer shift the hashed
+  inputs; matrix schema moves to /4.
+- **Lifecycle markdown provenance** (baz): the comparison report header
+  carries repo, revision, rule, tier and evidence version; each row
+  carries its source rule and tier (pinned through the matrix command's
+  report.md).

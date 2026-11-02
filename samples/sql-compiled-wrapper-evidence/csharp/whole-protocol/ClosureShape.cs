@@ -590,5 +590,51 @@ namespace PublicSql.CSharp
             parameters.Add(new ClosureStructNullGuardParameter("@public", SqlDbType.VarChar, 12, connection));
             return ClosureNullFoldExec.Forward("public.null_fold", convert, ref parameters, ref names);
         }
+        public DataSet ClosureStrictCompareProduce(string connection)
+        {
+            // Codex review fix: cgt evaluated as !(clt) — equal operands produced
+            // true. Two count-derived ints compared through a STORED flag lower to
+            // the cgt value form; equal operands must fold to false.
+            var parameters = new ArrayList();
+            parameters.Add(new ClosureStructNullGuardParameter("@public", SqlDbType.VarChar, 12, connection));
+            var first = parameters.Count;
+            var second = parameters.Count;
+            var larger = first > second;
+            if (larger) return new DataSet();
+            return ClosureStructNullGuardExec.Execute("public.strict_compare", ref parameters);
+        }
+        public DataSet ClosureFillCountProduce(string connection)
+        {
+            // Codex review fix: Fill fabricated a zero count. The returned count
+            // is an unbound integer; a stored > 0 flag forks the rows/no-rows
+            // hypothetical instead of selecting a path.
+            var stored = new SqlConnection("public-fill-count");
+            var command = new SqlCommand("public.fill_count", stored);
+            command.CommandType = CommandType.StoredProcedure;
+            command.Parameters.Add(new SqlParameter("@public", SqlDbType.VarChar, 64));
+            var result = new DataSet();
+            int filled;
+            try { var adapter = new SqlDataAdapter(command); filled = adapter.Fill(result); }
+            finally { stored.Close(); }
+            var anyRows = filled > 0;
+            if (anyRows) return result;
+            return result;
+        }
+        public DataSet ClosureFillZeroProduce(string connection)
+        {
+            // Negative control: an EQUALITY test on the unbound Fill count
+            // refuses by name — no inferred row count, ever.
+            var stored = new SqlConnection("public-fill-zero");
+            var command = new SqlCommand("public.fill_zero", stored);
+            command.CommandType = CommandType.StoredProcedure;
+            command.Parameters.Add(new SqlParameter("@public", SqlDbType.VarChar, 64));
+            var result = new DataSet();
+            int filled;
+            try { var adapter = new SqlDataAdapter(command); filled = adapter.Fill(result); }
+            finally { stored.Close(); }
+            var noRows = filled == 0;
+            if (noRows) return result;
+            return result;
+        }
     }
 }

@@ -630,6 +630,57 @@ Namespace PublicSql.VisualBasic
             parameters.Add(New ClosureStructNullGuardParameter("@public", SqlDbType.VarChar, 12, connection))
             Return ClosureNullFoldExec.Forward("public.null_fold", convert, parameters, names)
         End Function
+        Public Function ClosureStrictCompareProduce(connection As String) As DataSet
+            ' Codex review fix: cgt evaluated as !(clt) — equal operands produced
+            ' true. Two count-derived ints compared through a STORED flag lower to
+            ' the cgt value form; equal operands must fold to false.
+            Dim parameters As New ArrayList()
+            parameters.Add(New ClosureStructNullGuardParameter("@public", SqlDbType.VarChar, 12, connection))
+            Dim first As Integer = parameters.Count
+            Dim second As Integer = parameters.Count
+            Dim larger As Boolean = first > second
+            If larger Then Return New DataSet()
+            Return ClosureStructNullGuardExec.Execute("public.strict_compare", parameters)
+        End Function
+        Public Function ClosureFillCountProduce(connection As String) As DataSet
+            ' Codex review fix: Fill fabricated a zero count. The returned count
+            ' is an unbound integer; a stored > 0 flag forks the rows/no-rows
+            ' hypothetical instead of selecting a path.
+            Dim stored = New SqlConnection("public-fill-count")
+            Dim command As New SqlCommand("public.fill_count", stored)
+            command.CommandType = CommandType.StoredProcedure
+            command.Parameters.Add(New SqlParameter("@public", SqlDbType.VarChar, 64))
+            Dim result As New DataSet()
+            Dim filled As Integer
+            Try
+                Dim adapter = New SqlDataAdapter(command)
+                filled = adapter.Fill(result)
+            Finally
+                stored.Close()
+            End Try
+            Dim anyRows As Boolean = filled > 0
+            If anyRows Then Return result
+            Return result
+        End Function
+        Public Function ClosureFillZeroProduce(connection As String) As DataSet
+            ' Negative control: an EQUALITY test on the unbound Fill count
+            ' refuses by name — no inferred row count, ever.
+            Dim stored = New SqlConnection("public-fill-zero")
+            Dim command As New SqlCommand("public.fill_zero", stored)
+            command.CommandType = CommandType.StoredProcedure
+            command.Parameters.Add(New SqlParameter("@public", SqlDbType.VarChar, 64))
+            Dim result As New DataSet()
+            Dim filled As Integer
+            Try
+                Dim adapter = New SqlDataAdapter(command)
+                filled = adapter.Fill(result)
+            Finally
+                stored.Close()
+            End Try
+            Dim noRows As Boolean = filled = 0
+            If noRows Then Return result
+            Return result
+        End Function
         Public Function ClosureProduce() As DataSet
             Dim opened = New ClosureBase(shaped)
             opened.Open()

@@ -821,15 +821,32 @@ internal static partial class IlSqlLifecycleExtractor
                             // consumes it concretely, never as a fork.
                             if (other.Kind == "null") { stack.Add(Int(0)); continue; }
                         }
-                        // VB lowers an array bounds check to clt + backward brtrue;
-                        // the comparison stays an exact-count test against one array.
+                        // Integer comparisons evaluate each opcode's own STRICT
+                        // relation: cgt(x,y) is x>y — never !(x<y), which would
+                        // make equal operands true — and the .un forms compare
+                        // the unsigned reinterpretation. The array-length case
+                        // keeps its exact-count test semantics, per opcode.
                         if (left.Kind == "int" && right.Kind == "int")
-                        { stack.Add(Int(op.StartsWith("clt", StringComparison.Ordinal) == (Number(left) < Number(right)) ? 1 : 0)); continue; }
+                        {
+                            var first = Number(left); var second = Number(right);
+                            var result = op switch
+                            {
+                                "clt" => first < second, "clt.un" => (uint)first < (uint)second,
+                                "cgt" => first > second, "cgt.un" => (uint)first > (uint)second,
+                                _ => throw new Refusal("lifecycle-comparison-unresolved"),
+                            };
+                            stack.Add(Int(result ? 1 : 0)); continue;
+                        }
                         if (left.Kind == "int" && right.Kind == "array-length")
                         {
-                            var bound = int.Parse(right.Text, CultureInfo.InvariantCulture);
-                            var less = Number(left) < bound;
-                            stack.Add(new("array-test", (op.StartsWith("clt", StringComparison.Ordinal) == less) ? "1" : "0", right.DeclaredType));
+                            var first = Number(left); var bound = int.Parse(right.Text, CultureInfo.InvariantCulture);
+                            var result = op switch
+                            {
+                                "clt" => first < bound, "clt.un" => (uint)first < (uint)bound,
+                                "cgt" => first > bound, "cgt.un" => (uint)first > (uint)bound,
+                                _ => throw new Refusal("lifecycle-comparison-unresolved"),
+                            };
+                            stack.Add(new("array-test", result ? "1" : "0", right.DeclaredType));
                             continue;
                         }
                         // An unbound integer compared against a compiled constant is a
@@ -1513,7 +1530,13 @@ internal static partial class IlSqlLifecycleExtractor
                     executions.Add(new(execution, Text(cmd.Command), site));
                     var table = New("table"); var state = heap[table.Text];
                     state.Parent = args[0]; state.Execution = execution; state.SchemaExecutions.Add(execution); state.Empty = false;
-                    set.Slots.Add(table); RecordInfoFill(cmd.Parent, args[0], execution); return Int(0);
+                    set.Slots.Add(table); RecordInfoFill(cmd.Parent, args[0], execution);
+                    // The row count a Fill returns is a runtime fact the walk never
+                    // observes: it stays an UNBOUND integer carrying the execution
+                    // provenance (the CInt(month) design). Discarding the count is
+                    // fine; comparing it against a compiled 0/1 constant forks the
+                    // bounded hypothetical; every other use refuses by name.
+                    return new("computed-int", "fill:" + execution);
                 case "tables": _ = Get(receiver, "dataset"); return View("tables", receiver);
                 case "table-add":
                     set = Get(Get(receiver, "tables").Parent, "dataset");
