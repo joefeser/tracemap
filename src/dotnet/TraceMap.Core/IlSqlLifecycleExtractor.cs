@@ -400,8 +400,8 @@ internal static partial class IlSqlLifecycleExtractor
                 if (left.Text == right.Text && heap.ContainsKey(left.Text)) return Int(1);
                 if (Fresh(left) && Fresh(right)) return Int(0);
             }
-            if (left.Kind == "null" && (Fresh(right) || right.Kind is ("string" or "computed-int" or "dbnull"))
-                || right.Kind == "null" && (Fresh(left) || left.Kind is ("string" or "computed-int" or "dbnull"))) return Int(0); // a boxed value type or the DBNull constant is never null
+            if (left.Kind == "null" && (Fresh(right) || right.Kind is ("string" or "computed-int" or "dbnull" or "boxed-bool"))
+                || right.Kind == "null" && (Fresh(left) || left.Kind is ("string" or "computed-int" or "dbnull" or "boxed-bool"))) return Int(0); // a boxed value type or the DBNull constant is never null
             // No inferred value, reference identity, nullness or string-content
             // equality for inputs, opaque values, views or unknowns.
             return Value.Unknown;
@@ -418,6 +418,24 @@ internal static partial class IlSqlLifecycleExtractor
              : value.Kind == "object" ? value.Text
              : value.Kind is ("computed-string" or "computed-int") ? "computed:" + value.Text
              : "site";
+        // ldstr literals arrive from body evidence as digests ("str:len:sha256"):
+        // the literal's text is deliberately not in evidence. A derived exact
+        // string still compares soundly against one by reconstructing its own
+        // digest — equality (and only equality) is decidable without the text,
+        // and the ordinal shortcut never runs across the two forms.
+        private static bool IsLiteralDigest(string text)
+            => text.Length > 4 && text.StartsWith("str:", StringComparison.Ordinal)
+            && text.AsSpan(4).Contains(':');
+        private static bool? LiteralEquality(Value left, Value right)
+        {
+            var leftDigest = IsLiteralDigest(left.Text);
+            var rightDigest = IsLiteralDigest(right.Text);
+            if (leftDigest == rightDigest) return null; // same form: not a mixed comparison
+            var plain = leftDigest ? right : left;
+            var literal = leftDigest ? left : right;
+            return literal.Text == "str:" + plain.Text.Length.ToString(CultureInfo.InvariantCulture)
+                + ":" + IlBodyEvidenceExtractor.UserStringDigest(plain.Text);
+        }
         private Value NewUnboundIntCompareTest(Value unbound, string comparison, Site site)
         {
             // One unbound integer's relation to a compiled zero/one constant is one
@@ -456,7 +474,7 @@ internal static partial class IlSqlLifecycleExtractor
             bool NonNull(Value v) => v.Kind == "object" && heap.TryGetValue(v.Text, out var state)
                 && state.Kind is ("custom" or "command" or "parameter" or "adapter" or "dataset" or "sql-connection"
                     or "array" or "arraylist" or "list");
-            if (NonNull(value) || value.Kind is ("string" or "computed-int" or "dbnull")) return Int(0);
+            if (NonNull(value) || value.Kind is ("string" or "computed-int" or "dbnull" or "boxed-bool")) return Int(0);
             if (value.Kind is ("input" or "computed-string")) return NegateStateTest(NewInputNullTest(value, site));
             throw new Refusal("lifecycle-guard-unresolved");
         }
@@ -812,7 +830,7 @@ internal static partial class IlSqlLifecycleExtractor
                             bool NonNull(Value value) => value.Kind == "object" && heap.TryGetValue(value.Text, out var state)
                                 && state.Kind is ("custom" or "command" or "parameter" or "adapter" or "dataset" or "sql-connection"
                                     or "array" or "arraylist" or "list");
-                            if (NonNull(other) || other.Kind is ("string" or "computed-int")) { stack.Add(Int(1)); continue; }
+                            if (NonNull(other) || other.Kind is ("string" or "computed-int" or "boxed-bool")) { stack.Add(Int(1)); continue; }
                             if (other.Kind is ("input" or "computed-string"))
                             { stack.Add(NegateStateTest(NewInputNullTest(other, At(body, offset, invocation)))); continue; }
                             // Both operands proven null: the non-null test is the
@@ -966,6 +984,10 @@ internal static partial class IlSqlLifecycleExtractor
                         if (IlSqlLifecycleApis.TypeOperand(operand, "Boolean"))
                         {
                             if (Number(value) is not (0 or 1)) throw new Refusal("lifecycle-box-type");
+                            // Retain the boxing type: the boxed value's runtime
+                            // type is Boolean, and GetType/ToString must render
+                            // System.Boolean rather than the int it validated from.
+                            stack.Add(new("boxed-bool", value.Text)); continue;
                         }
                         else if (IlSqlLifecycleApis.TypeOperand(operand, "Int32"))
                         {
@@ -1118,8 +1140,9 @@ internal static partial class IlSqlLifecycleExtractor
                             throw new Refusal("lifecycle-connection-state-dependent-control", MetadataFailure(body, "connection-state"));
                         }
                         var truth = value.Kind == "object" || value.Kind == "int" && Number(value) != 0
+                            || value.Kind == "boxed-bool" && value.Text == "1"
                             || value.Kind is "loop-test" or "collection-test" && value.Text == "1";
-                        if (value.Kind is not ("object" or "int" or "null" or "loop-test" or "collection-test")) throw new Refusal("lifecycle-guard-unresolved");
+                        if (value.Kind is not ("object" or "int" or "null" or "boxed-bool" or "loop-test" or "collection-test")) throw new Refusal("lifecycle-guard-unresolved");
                         if ((destination <= i || loopEnumerator.Kind != "unknown") && value.Kind is not ("loop-test" or "collection-test"))
                             throw new Refusal("lifecycle-loop-dependent-control");
                         if (value.Kind is "loop-test" or "collection-test" && (!op.StartsWith("brtrue", StringComparison.Ordinal) || destination >= i))
@@ -1458,7 +1481,7 @@ internal static partial class IlSqlLifecycleExtractor
                 case "object-value":
                     // GetObjectValue is an identity copy for references: any input,
                     // unbound integer or proven scalar passes through with origin.
-                    if (args[0].Kind is not ("read" or "int" or "computed-int" or "string" or "null" or "opaque-initializer" or "computed-string" or "dbnull")
+                    if (args[0].Kind is not ("read" or "int" or "computed-int" or "string" or "null" or "opaque-initializer" or "computed-string" or "dbnull" or "boxed-bool")
                         && !(args[0].Kind == "input" && args[0].DeclaredType != null)) throw new Refusal("lifecycle-object-copy-unresolved");
                     return args[0];
                 case "type-handle":
@@ -1507,8 +1530,16 @@ internal static partial class IlSqlLifecycleExtractor
                     return new("string", Text(Get(receiver, "parameter").Command));
                 case "parameter-get-value":
                     // Output copy-back: the stored value origin (input, opaque,
-                    // computed, dbnull) with no runtime-value claim.
-                    return Get(receiver, "parameter").Fields.GetValueOrDefault("parameter-value", Value.Unknown);
+                    // computed, dbnull) with no runtime-value claim. An Output or
+                    // InputOutput parameter whose command has EXECUTED holds a
+                    // database result now — the pre-execution origin is stale,
+                    // so the read is unknown and dependent control refuses.
+                    var readParameter = Get(receiver, "parameter");
+                    if (readParameter.Attached && readParameter.Fields.TryGetValue("parameter-direction", out var direction)
+                        && direction.Text is "2" or "3"
+                        && Get(readParameter.Parent, "command").Execution is not null)
+                        return Value.Unknown;
+                    return readParameter.Fields.GetValueOrDefault("parameter-value", Value.Unknown);
                 case "parameter-value":
                     if (args[0].Kind == "info-function" || args[0].Kind == "object" && (infoMessageBoundary || heap[args[0].Text].Kind == "info-delegate")) throw new Refusal("lifecycle-info-parameter-reference-escape");
                     var valuedParameter = Get(receiver, "parameter");
@@ -1519,7 +1550,8 @@ internal static partial class IlSqlLifecycleExtractor
                     var attachedParameter = Get(args[0], "parameter");
                     if (attachedCommand.Attached || attachedParameter.Attached || attachedCommand.Slots.Count >= 16)
                         throw new Refusal("lifecycle-parameter-reused-or-limit");
-                    attachedParameter.Attached = true; attachedCommand.Slots.Add(args[0]); return args[0];
+                    attachedParameter.Attached = true; attachedCommand.Slots.Add(args[0]);
+                    attachedParameter.Parent = Get(receiver, "parameters").Parent; return args[0];
                 case "adapter": _ = Get(args[0], "command"); return View("adapter", args[0]);
                 case "fill":
                     var cmd = Get(Get(receiver, "adapter").Parent, "command"); var set = Get(args[0], "dataset");
@@ -1551,6 +1583,11 @@ internal static partial class IlSqlLifecycleExtractor
                 case "table-merge":
                     var target = Get(receiver, "table"); var source = Get(args[0], "table");
                     if (!target.Empty || source.Execution is null) throw new Refusal("lifecycle-merge-existing-or-unknown");
+                    // A source carrying application-written columns holds current
+                    // value origins a merge must not silently drop — the merged
+                    // table would report SQL origins for application-written
+                    // data. Carrying origins across a merge is unmodeled: refuse.
+                    if (source.Writes.Count != 0) throw new Refusal("lifecycle-merge-writes-unmodeled");
                     target.Execution = source.Execution; target.SchemaExecutions.AddRange(source.SchemaExecutions);
                     target.Empty = false; target.Writes.Clear(); return Value.Unknown;
                 case "rows": _ = Get(receiver, "table"); return View("rows", receiver);
@@ -1608,6 +1645,7 @@ internal static partial class IlSqlLifecycleExtractor
                     // constants and typed inputs resolve concretely (collapsing the
                     // .NET 1 type-name checks); genuinely polymorphic values stay unknown.
                     if (receiver.Kind == "string") return new("runtime-type", "System.String");
+                    if (receiver.Kind == "boxed-bool") return new("runtime-type", "System.Boolean"); // the boxing instruction retained the type
                     if (receiver.Kind is ("int" or "computed-int")) return new("runtime-type", "System.Int32"); // a boxed Integer is always Int32
                     if (receiver.Kind == "dbnull") return new("runtime-type", "System.DBNull");
                     if (receiver.Kind == "input" && receiver.DeclaredType is not null
@@ -1651,7 +1689,11 @@ internal static partial class IlSqlLifecycleExtractor
                     // runtime hypothetical that only a bounded fork may resolve.
                     if (args.Length != 2) throw new Refusal("lifecycle-vb-compare-shape");
                     if (args[0].Kind == "string" && args[1].Kind == "string")
-                        return Int(args[0].Text == args[1].Text ? 1 : 0);
+                    {
+                        var literal = LiteralEquality(args[0], args[1]);
+                        if (literal is { } equal) return Int(equal ? 1 : 0);
+                        if (!IsLiteralDigest(args[0].Text) && !IsLiteralDigest(args[1].Text)) return Int(0);
+                    }
                     return new("string-compare-bool", ProvenanceOf(args[0]) + "|" + (args[1].Kind == "string" ? args[1].Text : "?"));
                 case "vb-compare-string":
                     // VB lowers string comparisons to Operators.CompareString; with an
@@ -1663,10 +1705,19 @@ internal static partial class IlSqlLifecycleExtractor
                     {
                         // Identical texts are equal under any culture or compare mode.
                         if (args[0].Text == args[1].Text) return Int(0);
-                        // The ordinal shortcut is sound only under BINARY compare:
-                        // Option Compare Text is culture- and case-sensitive-aware,
-                        // so text mode stays a hypothetical.
-                        if (args[2].Text == "0" && args[0].Text.All(char.IsAscii) && args[1].Text.All(char.IsAscii))
+                        // A derived exact string against an ldstr LITERAL (stored as
+                        // a digest by body evidence) compares by reconstructing the
+                        // digest: equality is decidable without the literal's text.
+                        // The result's SIGN stays unknown (the digest hides order);
+                        // no admitted consumer reads the sign, only equality.
+                        var literal = LiteralEquality(args[0], args[1]);
+                        if (literal is { } equal) return Int(equal ? 0 : 1);
+                        // The ordinal shortcut is sound only under BINARY compare and
+                        // within ONE form (both plain texts); it never runs across
+                        // the plain and digest forms or between two unknown-order
+                        // literals.
+                        if (args[2].Text == "0" && !IsLiteralDigest(args[0].Text) && !IsLiteralDigest(args[1].Text)
+                            && args[0].Text.All(char.IsAscii) && args[1].Text.All(char.IsAscii))
                             return Int(string.CompareOrdinal(args[0].Text, args[1].Text));
                     }
                     // The marker carries the compared constant: "x equals A" and

@@ -415,7 +415,7 @@ public sealed class IlSqlClosureShapeTests
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
         var result = Extract(bodies, "ClosureStructNullGuardProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        var expected = language == "vb" ? 6 : 2; // VB forks null x type-name x nested <> (shared keys; concrete collapses)
+        var expected = language == "vb" ? 12 : 2; // VB forks null x type-name x nested <> x emptiness (shared keys; the digest fix activated the skipped emptiness dimension)
         Assert.Equal(expected, result.StateAlternatives!.Count);
         var entries = result.StateAlternatives.Where(a => a.Completion?.Entry is not null).ToArray();
         Assert.Equal(expected, entries.Length); // every alternative carries entry evidence
@@ -432,7 +432,7 @@ public sealed class IlSqlClosureShapeTests
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacyFramework: true);
         var result = Extract(bodies, "ClosureStructNullGuardProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        Assert.Equal(language == "vb" ? 6 : 2, result.StateAlternatives!.Count);
+        Assert.Equal(language == "vb" ? 12 : 2, result.StateAlternatives!.Count); // the digest fix doubles VB (the activated emptiness dimension)
     }
 
     [Theory]
@@ -446,7 +446,7 @@ public sealed class IlSqlClosureShapeTests
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
         var result = Extract(bodies, "ClosurePathBudgetProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        var expectedAlts = language == "vb" ? 13 : 5; // VB adds the shared-key CompareString and <> forks
+        var expectedAlts = language == "vb" ? 25 : 9; // VB adds the shared-key CompareString and <> forks; the digest fix doubles both (the emptiness dimension the mixed-form ordinal shortcut mis-folded away)
         Assert.Equal(expectedAlts, result.StateAlternatives!.Count); // completing + the open-guard throw termination
         Assert.Equal(expectedAlts - 1, result.StateAlternatives.Count(alternative => alternative.Completion is not null));
         Assert.All(result.StateAlternatives.Where(a => a.Completion is not null),
@@ -477,7 +477,7 @@ public sealed class IlSqlClosureShapeTests
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
         var result = Extract(bodies, "ClosureStructNullGuardProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        Assert.Equal(language == "vb" ? 6 : 2, result.StateAlternatives!.Count);
+        Assert.Equal(language == "vb" ? 12 : 2, result.StateAlternatives!.Count); // the digest fix doubles VB (the activated emptiness dimension)
     }
 
     [Theory]
@@ -488,7 +488,7 @@ public sealed class IlSqlClosureShapeTests
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacyFramework: true);
         var result = Extract(bodies, "ClosureStructNullGuardProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        Assert.Equal(language == "vb" ? 6 : 2, result.StateAlternatives!.Count);
+        Assert.Equal(language == "vb" ? 12 : 2, result.StateAlternatives!.Count); // the digest fix doubles VB (the activated emptiness dimension)
     }
 
     [Theory]
@@ -502,7 +502,7 @@ public sealed class IlSqlClosureShapeTests
         var result = Extract(bodies, "ClosureStructNullGuardProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
         // VB: null x type-eq x the nested <> fork on the assumed-string side; C#: bne.un on ints is concrete.
-        Assert.Equal(language == "vb" ? 6 : 2, result.StateAlternatives!.Count);
+        Assert.Equal(language == "vb" ? 12 : 2, result.StateAlternatives!.Count); // the digest fix doubles VB (the activated emptiness dimension)
     }
 
     [Theory]
@@ -517,23 +517,18 @@ public sealed class IlSqlClosureShapeTests
             bodies.Single(body => body.Observation.ObjectBody?.Name == "ClosureFullRootProduce"), bodies, false,
             new(4_000_000), opaqueRootInitializers: true, externalTraceBoundary: true,
             compiledScalarBoundary: true, infoMessageBoundary: true);
-        Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        // Four nullable inputs x empty-checks x open/close state: the v30 census shape
-        // (2^6 leaves + termination) completes inside the 128-path budget at the
-        // production work limit (2M units).
-        Assert.NotNull(result.StateAlternatives);
-        Assert.Equal(64, result.StateAlternatives!.Count(a => a.Completion is not null));
-        Assert.Equal(65, result.StateAlternatives.Count); // + the open-guard termination
-        foreach (var alternative in result.StateAlternatives.Where(a => a.Completion?.Entry is not null))
-        {
-            var parameters = Assert.Single(alternative.Completion!.Entry!.Commands).Parameters;
-            Assert.Equal(6, parameters.Count);
-            Assert.Single(parameters, parameter => parameter.Size == -1); // VarChar max
-            Assert.Single(parameters, parameter => parameter.Size == 15);
-        }
-        // On the null-assumed alternative the string parameter's value is the DBNull substitution.
-        Assert.Contains(result.StateAlternatives.SelectMany(a => a.Completion?.Entry?.Commands.SelectMany(c => c.Parameters) ?? []),
-            parameter => parameter.ValueOrigin == "dbnull");
+        // Four nullable inputs x nullness x emptiness x open/close state. The
+        // digest-correct literal comparison (review round 2) activated the
+        // per-string-input emptiness fork the old mixed-form ordinal shortcut
+        // silently mis-folded away: the mirror's four-input shape now exceeds
+        // the 128-path capacity and refuses with the census naming the genuine
+        // runtime families. The two-string production root shape still fits;
+        // a census-driven capacity decision is the owner's, as at v30.
+        Assert.NotEmpty(result.Gaps);
+        Assert.Contains(result.Gaps, gap => gap.Contains("lifecycle-state-path-limit", StringComparison.Ordinal));
+        Assert.Null(result.StateAlternatives);
+        Assert.NotNull(result.PathLimitFailure);
+        Assert.Contains(result.PathLimitFailure!.ForkCensus, fact => fact.Contains("/null", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -678,6 +673,39 @@ public sealed class IlSqlClosureShapeTests
     }
 
     [Theory]
+    [InlineData("csharp")]
+    public void Boxed_booleans_render_their_runtime_type(string language)
+    {
+        // Codex review fix: boxing a Boolean left the int representation, so
+        // GetType().ToString() rendered System.Int32 and the .NET 1 type-name
+        // dispatch took the wrong branch concretely. The boxing instruction's
+        // type is retained: the dispatch renders System.Boolean and the entry
+        // completes (pre-fix the walk returned the empty dataset with no entry).
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureBoxedTypeProduce");
+        Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
+        Assert.Contains(result.StateAlternatives!, a => a.Completion?.Entry is not null);
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    public void Executed_output_parameters_read_back_unknown(string language)
+    {
+        // Codex review fix: an Output parameter's post-execution value is a
+        // database result. The pre-execution origin is stale, so the read is
+        // unknown and the dependent string comparison refuses — never a
+        // concrete comparison against the initial value.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureOutputValueProduce");
+        // The sentinel comparison must never resolve concretely: C# refuses on
+        // the unknown's ToString demand; VB's Conversions.ToString keeps it an
+        // unbound string and the comparison forks instead.
+        Assert.True(result.Gaps.Count > 0
+            || result.StateAlternatives!.Any(a => a.Decisions.Any(d => d.Connection.Contains("string-compare", StringComparison.Ordinal))),
+            "the pre-execution sentinel must not compare concretely");
+    }
+
+    [Theory]
     [InlineData("vb")]
     public void Field_addresses_deref_store_and_never_escape(string language)
     {
@@ -752,7 +780,7 @@ public sealed class IlSqlClosureShapeTests
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
         var result = Extract(bodies, "ClosureStructNullGuardProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        Assert.Equal(6, result.StateAlternatives!.Count);
+        Assert.Equal(12, result.StateAlternatives!.Count);
         foreach (var alternative in result.StateAlternatives.Where(a => a.Completion?.Entry is not null))
         {
             var parameters = Assert.Single(alternative.Completion!.Entry!.Commands).Parameters;
@@ -768,7 +796,7 @@ public sealed class IlSqlClosureShapeTests
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacyFramework: true);
         var result = Extract(bodies, "ClosureStructNullGuardProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        Assert.Equal(6, result.StateAlternatives!.Count);
+        Assert.Equal(12, result.StateAlternatives!.Count);
     }
 
     [Theory]
@@ -782,7 +810,7 @@ public sealed class IlSqlClosureShapeTests
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
         var result = Extract(bodies, "ClosureStructNullGuardProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        Assert.Equal(6, result.StateAlternatives!.Count); // null x type-eq x nested <>
+        Assert.Equal(12, result.StateAlternatives!.Count); // null x type-eq x nested <> x emptiness (the digest fix activated the skipped dimension)
         Assert.All(result.StateAlternatives, alternative => Assert.NotNull(alternative.Completion));
         Assert.Contains(result.StateAlternatives.SelectMany(a => a.Decisions),
             decision => decision.Connection.Contains("string-compare", StringComparison.Ordinal));
@@ -795,7 +823,7 @@ public sealed class IlSqlClosureShapeTests
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language, legacyFramework: true);
         var result = Extract(bodies, "ClosureStructNullGuardProduce");
         Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
-        Assert.Equal(6, result.StateAlternatives!.Count);
+        Assert.Equal(12, result.StateAlternatives!.Count);
     }
 
     [Theory]

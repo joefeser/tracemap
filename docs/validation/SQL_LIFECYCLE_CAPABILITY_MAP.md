@@ -769,3 +769,36 @@ PR review findings, fixed and pinned:
   carries repo, revision, rule, tier and evidence version; each row
   carries its source rule and tier (pinned through the matrix command's
   report.md).
+
+## Review-fix batch 2 (2026-11-02, IL 0.2.64 / v65)
+
+Round two findings, fixed and pinned:
+- **Merges of written sources refuse** (Codex P2): merging a table that
+  carries application-written columns discarded those origins — the
+  merged table would report SQL origins for application-written data.
+  `lifecycle-merge-writes-unmodeled` refuses by name (C#-only fixture:
+  the shared native body budget sits at its pinned edge for the VB
+  assemblies — VB fixture trees are unchanged this round).
+- **Executed output parameters read back unknown** (Codex P2): an Output
+  or InputOutput parameter's value after execution is a database result;
+  the pre-execution origin is stale. C#'s ToString demand on the unknown
+  refuses; VB's Conversions.ToString keeps it unbound and the comparison
+  forks — never a concrete comparison against the initial value.
+- **Boxed booleans retain their runtime type** (Codex P2): boxing a
+  concrete Boolean kept the int representation, so `GetType().ToString()`
+  rendered System.Int32 and the .NET 1 type-name dispatch took the wrong
+  branch concretely. The boxing instruction's type is retained.
+- **Literal comparisons compare by digest** (found while pinning the
+  above): body evidence stores every ldstr literal as a digest; the
+  static-type collapse derives type names as plain text; the ordinal
+  shortcut ran ACROSS the two forms and could never match — the ctor's
+  type-name dispatch has been silently folding not-equal since the
+  collapse batch. A derived exact string now compares against a literal
+  by reconstructing its own digest (equality decidable without the
+  literal's text; the shortcut never crosses forms). This activated the
+  per-string-input emptiness fork that mis-fold had skipped: fork counts
+  double where that dimension is genuine, and the four-input full-root
+  mirror now exceeds the 128-path capacity — it pins the path-limit
+  refusal with the census naming the genuine families (the two-string
+  production root shape still fits; a capacity raise is the owner's
+  census decision, as at v30). Round-2 pins are C#-only by budget.

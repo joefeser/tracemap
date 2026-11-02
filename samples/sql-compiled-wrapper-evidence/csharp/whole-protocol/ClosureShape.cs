@@ -613,9 +613,7 @@ namespace PublicSql.CSharp
             command.CommandType = CommandType.StoredProcedure;
             command.Parameters.Add(new SqlParameter("@public", SqlDbType.VarChar, 64));
             var result = new DataSet();
-            int filled;
-            try { var adapter = new SqlDataAdapter(command); filled = adapter.Fill(result); }
-            finally { stored.Close(); }
+            int filled = new SqlDataAdapter(command).Fill(result);
             var anyRows = filled > 0;
             if (anyRows) return result;
             return result;
@@ -629,11 +627,39 @@ namespace PublicSql.CSharp
             command.CommandType = CommandType.StoredProcedure;
             command.Parameters.Add(new SqlParameter("@public", SqlDbType.VarChar, 64));
             var result = new DataSet();
-            int filled;
-            try { var adapter = new SqlDataAdapter(command); filled = adapter.Fill(result); }
-            finally { stored.Close(); }
+            int filled = new SqlDataAdapter(command).Fill(result);
             var noRows = filled == 0;
             if (noRows) return result;
+            return result;
+        }
+        public DataSet ClosureBoxedTypeProduce(string connection)
+        {
+            // Codex review fix: a boxed Boolean kept its int representation, so
+            // GetType().ToString() rendered System.Int32 and the .NET 1 dispatch
+            // took the wrong branch concretely.
+            object boxed = true;
+            var parameters = new ArrayList();
+            parameters.Add(new ClosureStructNullGuardParameter("@public", SqlDbType.VarChar, 12, connection));
+            if (boxed.GetType().ToString() == "System.Boolean")
+                return ClosureStructNullGuardExec.Execute("public.boxed_type", ref parameters);
+            return new DataSet();
+        }
+        public DataSet ClosureOutputValueProduce(string connection)
+        {
+            // Codex review fix: an Output parameter's post-execution value is a
+            // database result — the pre-execution origin is stale, reads stay
+            // unknown, and dependent control refuses by name.
+            var stored = new SqlConnection("public-output-value");
+            var command = new SqlCommand("public.output_value", stored);
+            command.CommandType = CommandType.StoredProcedure;
+            var parameter = new SqlParameter("@public", SqlDbType.VarChar, 64);
+            parameter.Direction = ParameterDirection.Output;
+            parameter.Value = "public-sentinel";
+            command.Parameters.Add(parameter);
+            var result = new DataSet();
+            new SqlDataAdapter(command).Fill(result);
+            var returned = parameter.Value.ToString();
+            if (returned == "public-sentinel") return result;
             return result;
         }
     }

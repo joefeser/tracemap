@@ -174,6 +174,16 @@ namespace PublicSql.CSharp
         public object Score(bool enabled) { Load(enabled); return State.Tables[0].Rows[0]["Score"]; }
         public object Typed(bool enabled) { Load(enabled); return Items[0].Name; }
         public object Missing() { Load(false); return State.Tables[0].Rows[0]["Absent"]; }
+        // Codex review fix: merging a source that carries application-written
+        // columns (Overlay's Score write) must refuse — the merged table must
+        // not report SQL origins for application-written data.
+        public object MergeWritten()
+        {
+            Load(true);
+            State.Tables[1].Clear();
+            State.Tables[1].Merge(State.Tables[0]);
+            return null;
+        }
         public object Refresh()
         {
             Load(true);
