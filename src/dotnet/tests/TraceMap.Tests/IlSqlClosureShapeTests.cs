@@ -685,6 +685,38 @@ public sealed class IlSqlClosureShapeTests
         Assert.NotNull(result.StateAlternatives);
         Assert.Contains(result.StateAlternatives!, a => a.Completion?.Entry is not null
             && a.Decisions.Any(d => d.Connection.Contains("computed") || d.Connection.Contains("fill")));
+        // Review round 4 (C# shape): the > 0 expression's truth is the NEGATION
+        // of the equal-assumption — the zero-assumed alternative completes; the
+        // rows-assumed alternative terminates exceptionally.
+        if (language == "csharp")
+        {
+            var completing = Assert.Single(result.StateAlternatives!, a => a.Completion?.Entry is not null);
+            Assert.Contains(completing.Decisions, d => d.Connection.Contains("fill") && d.EqualAssumed);
+            Assert.Contains(result.StateAlternatives!, a => a.Outcome == "exceptional-termination" && a.Decisions.Any(d => d.Connection.Contains("fill") && !d.EqualAssumed));
+        }
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    public void Unequal_literal_comparisons_refuse_ordering_consumers(string language)
+    {
+        // Review round 4: a digest mismatch establishes inequality only; the
+        // ordering consumer refuses by name instead of reading a fabricated sign.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureUnequalOrderProduce");
+        Assert.NotEmpty(result.Gaps);
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    public void Array_casts_to_a_different_element_type_refuse(string language)
+    {
+        // Review round 4: the ToArray lowering casts to the array's OWN element
+        // type; any other array cast throws at runtime and refuses by name.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureBadCastProduce");
+        Assert.NotEmpty(result.Gaps);
+        Assert.Contains(result.Gaps, gap => gap.Contains("lifecycle-cast-array-type", StringComparison.Ordinal));
     }
 
     [Theory]

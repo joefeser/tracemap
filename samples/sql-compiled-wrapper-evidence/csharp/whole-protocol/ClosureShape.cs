@@ -614,9 +614,29 @@ namespace PublicSql.CSharp
             command.Parameters.Add(new SqlParameter("@public", SqlDbType.VarChar, 64));
             var result = new DataSet();
             int filled = new SqlDataAdapter(command).Fill(result);
+            // Review round 4: the > 0 hypothetical's sides are observable —
+            // the rows-assumed alternative terminates exceptionally, the
+            // zero-assumed alternative completes with the entry.
             var anyRows = filled > 0;
-            if (anyRows) return result;
+            if (anyRows) throw new InvalidOperationException("public-rows");
             return result;
+        }
+        public DataSet ClosureUnequalOrderProduce(string connection)
+        {
+            // Negative control: a digest mismatch establishes inequality only —
+            // an ORDERING consumer on it refuses by name, never a fabricated sign.
+            var derived = connection.GetType().ToString();
+            var before = derived.CompareTo("Z");
+            if (before < 0) return new DataSet();
+            return new DataSet();
+        }
+        public DataSet ClosureBadCastProduce(string connection)
+        {
+            // Negative control: casting a tracked array to a different array
+            // type throws at runtime (even empty) — refuse, never pass through.
+            object carrier = new object[0];
+            var wrong = (string[])carrier;
+            return new DataSet(wrong.Length.ToString());
         }
         public DataSet ClosureFillZeroProduce(string connection)
         {
