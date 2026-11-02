@@ -802,3 +802,28 @@ Round two findings, fixed and pinned:
   refusal with the census naming the genuine families (the two-string
   production root shape still fits; a capacity raise is the owner's
   census decision, as at v30). Round-2 pins are C#-only by budget.
+
+## Review-fix batch 3 (2026-11-02, IL 0.2.65 / v66)
+
+Round three findings, fixed and pinned (C#-only pins; the VB sample
+assemblies remain at their budget-pinned size):
+- **Short unsigned branches honor unsigned ordering** (Codex P2): the
+  `.un` marker was detected with an end-check that misses the `.s`
+  suffix (`bgt.un.s` evaluated signed — the MaxValue bit pattern folded
+  through the wrong side). The pin walks a `uint.MaxValue > 1u` branch
+  that a signed misread skips.
+- **`IsNothing` keeps its polarity** (Codex P2): the null-equality
+  hypothetical was negated inside the shared helper, making `IsNothing`
+  behave as `IsNot Nothing` for unbound inputs — every nullness
+  assumption's side was swapped. The raw test is returned; no existing
+  pin had ever asserted the (swapped) sides, which is why it survived.
+- **Same-form plain strings compare by text** (Codex P2, introduced in
+  batch 2 and caught one round later): two derived plain strings with
+  identical text folded unequal. The same-form branch now compares
+  texts (identical literal digests included).
+- **Checked arithmetic refuses on concrete overflow** (Codex P2):
+  `add.ovf`/`sub.ovf`/`.un` variants wrapped silently; a concrete
+  overflow now refuses as `lifecycle-arithmetic-overflow` — the wrapped
+  continuation is an impossible normal-completion path, never a
+  successful lifecycle. The non-overflowing checked path keeps walking
+  (pinned).

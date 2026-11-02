@@ -533,6 +533,34 @@ public sealed class IlSqlClosureShapeTests
 
     [Theory]
     [InlineData("csharp")]
+    public void Round3_unsigned_branches_plain_equality_and_checked_arithmetic(string language)
+    {
+        // Review round 3: bgt.un.s evaluates unsigned (the MaxValue bit pattern
+        // takes the branch — a signed misread skips the entry); two derived
+        // plain strings with identical text are equal (the same-form comparison
+        // compares texts, never an unconditional false); checked subtraction
+        // that cannot overflow keeps walking to the entry.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureRound3Produce");
+        Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
+        Assert.Contains(result.StateAlternatives!, a => a.Completion?.Entry is not null);
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    public void Concrete_checked_overflow_refuses_by_name(string language)
+    {
+        // Review round 3: a concrete checked overflow throws at runtime — the
+        // wrapped continuation is an impossible normal-completion path and
+        // refuses by name instead of emitting a successful lifecycle.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureOverflowProduce");
+        Assert.NotEmpty(result.Gaps);
+        Assert.Contains(result.Gaps, gap => gap.Contains("lifecycle-arithmetic-overflow", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("csharp")]
     [InlineData("vb")]
     public void Guard_exceptions_throw_terminated_alternatives(string language)
     {
