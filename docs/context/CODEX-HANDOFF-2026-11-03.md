@@ -2,10 +2,10 @@
 
 ## Purpose and editing rules
 
-The owner is away roughly a week (focus: the 88-mile-per-hour lane,
-upgrade-authority, and a Flash/Chopin proof of concept). This document is
-the current-state layer ON TOP OF `AGENTS.md` — read AGENTS.md first; it
-remains the primary contract. The owner may edit this file at any time;
+The owner is between reviews for a period; agents operate within the
+autonomy boundaries below. This document is the current-state layer ON
+TOP OF `AGENTS.md` — read AGENTS.md first; it remains the primary
+contract. The owner may edit this file at any time;
 treat the latest `dev` version as the truth. Everything an arriving
 agent needs to work safely is either here or pointed to from here.
 
@@ -43,17 +43,17 @@ owner's work machine." Never private names, SQL, binaries, or paths.
 | `codex/sql-postmerge-verify` | carried the v44 verification prompt (consumed — report received) |
 | `pending-docs-to-verify` | the origin-purge manifest (tip SHAs of deleted branches) |
 | `fix/test-temp-sweep` | PR #930 |
-| the three preserved base44 branches | #923/#924/#925; DO NOT touch without the owner's 88-mile-per-hour answer |
+| the preserved base44 stash branch | #925 only — #923/#924's branches are deleted (the issues carry the evidence) |
 
 ### Issue queue
 
 - **#923 / #924 — SUPERSEDED** (branches deleted; evidence in the
   issue comments). Close when convenient.
-- **#925 — salvage pending** the 88-mile-per-hour answer. The salvage
-  is specified as an executable doc:
-  `docs/context/BASE44-PRESERVED-BRANCH-RESOLUTION-2026-11-02.md`
-  (port three behaviors + tests; do NOT cherry-pick the one superseded
-  hunk; delete-branch/close-issue tail step).
+- **#925 — salvage AUTHORIZED** (the owner's decision is recorded in
+  the resolution doc): port three behaviors + tests per
+  `docs/context/BASE44-PRESERVED-BRANCH-RESOLUTION-2026-11-02.md`;
+  do NOT cherry-pick the one superseded hunk; delete-branch/close-issue
+  tail step. Safe to execute autonomously.
 - **#926 / #927 / #928 — dispositioned corners**, each with its bounded
   fix written in the issue: covariant array stores; `brtrue` on a boxed
   Boolean tests the reference; digest-mismatch folding under
@@ -95,6 +95,7 @@ owner's work machine." Never private names, SQL, binaries, or paths.
 - #926/#927/#928 bounded fixes (as written in the issues): C#-only
   fixtures, pin-first, focused lane + full remote gate, PR to `dev`
   (leave merging to the owner).
+- #925 salvage exactly as its resolution doc specifies.
 - The diagnostic half of #931 (census on work-limit).
 - upgrade-authority work per its own queue (`ua` = PRs #903 + #905;
   its bug reports arrive from downstream consumers).
@@ -106,7 +107,6 @@ owner's work machine." Never private names, SQL, binaries, or paths.
 - Private scans (work machine) — only via owner-dispatched prompts.
 - Budget raises of any kind (paths, sites, work, memory caps) — census
   decisions per the v30 precedent.
-- Anything touching the base44 trio before the 88-mile-per-hour answer.
 
 ## Hard invariants (each one enforced, or learned the hard way)
 
@@ -153,19 +153,26 @@ bundle over the top; an unpushed branch is exit 128.
 ```
 git bundle create /tmp/gate.bundle HEAD
 scp /tmp/gate.bundle amd-5950x:gate.bundle
-scp gate.sh amd-5950x:gate.sh     # script below, staged into the Windows home
-ssh amd-5950x "wsl -d Ubuntu-24.04 -- bash /mnt/c/Users/<winuser>/gate.sh"
+scp gate.sh amd-5950x:gate.sh
+ssh amd-5950x "wsl -d Ubuntu-24.04 -- bash <windows-home-wsl-path>/gate.sh"
 ```
 
-`gate.sh` (recreate if missing; set BRANCH to the branch under test):
+`scp` targets the runner's Windows profile home (its OpenSSH default),
+which WSL sees under its `/mnt/c` mount — substitute the runner's
+WSL-visible home path for `<windows-home-wsl-path>`; never spell the
+real path in tracked files (the Private Path Guard matches the path
+substring even inside placeholders — this doc's first push failed it).
+
+`gate.sh` (recreate if missing; set BRANCH to the branch under test;
+requires a CLEAN working tree — the bundle carries committed work only):
 
 ```bash
 set -e
 cd "$HOME"
 rm -rf tracemap-gate
-git clone -q --branch <BRANCH> --single-branch https://github.com/joefeser/tracemap tracemap-gate
+git clone -q --branch "$BRANCH" --single-branch https://github.com/joefeser/tracemap tracemap-gate
 cd tracemap-gate
-git fetch -q /mnt/c/Users/<winuser>/gate.bundle HEAD
+git fetch -q <windows-home-wsl-path>/gate.bundle HEAD
 git checkout -q FETCH_HEAD
 echo "HEAD: $(git rev-parse --short HEAD)"
 ~/.dotnet/dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --nologo > $HOME/gate.log 2>&1
@@ -175,8 +182,10 @@ echo "exit=$?" >> $HOME/gate.log
 
 Then read the tail of `$HOME/gate.log` for counts — **exit zero alone
 proves nothing** (count the passes). Log to `$HOME`, not `/tmp`: WSL's
-/tmp is ext4-on-vdisk, not tmpfs. PR #930's test sweep keeps the
-runner's temp clean once merged.
+/tmp is ext4-on-vdisk, not tmpfs. The runner is single-user: serialize
+gates — concurrent runs clobber the shared checkout and log. Until PR
+#930 merges, sweep the runner's temp after each gate; after #930 the
+test suite sweeps itself.
 
 ### Compile-only smoke (~2 min)
 
