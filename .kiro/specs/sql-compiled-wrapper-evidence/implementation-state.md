@@ -2540,6 +2540,24 @@ Compile-only public smoke passed: original 20 cases (10 paths/10 unknown),
 table 26 (4 paths/22 unknown), 2 local IL shapes; no SQL execution.
 Command `python3 scripts/validation/sql-compiled-wrapper-smoke.py --cli src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll --out /tmp/tracemap-production-budget-smoke-20261103`.
 Log: /tmp/tracemap-production-budget-smoke.log.
-`git diff --check` passes. Remote exact-head full gate and PR handoff pending.
+`git diff --check` passes. Remote exact-code full Debug -warnaserror gate passed at
+fcd36a34f5a50610ba79519312ee706fcc4296d0: 5825 passed, 3 existing skips, 0 failed,
+5828 total, 18.6482 minutes; build/test exit 0. The runner used a fresh isolated
+checkout and exact-HEAD bundle. Log summary: /tmp/tracemap-production-budget-remote.log;
+full runner log is named tracemap-budget-<code-sha>.log under its home (no private
+runner path in tracked files). Docs-only final validation recording follows this
+code head; source/project tree is unchanged.
+
+Draft PR: https://github.com/joefeser/tracemap/pull/933 (base dev).
+The integration branch disappeared mid-run and was restored by the owner to the
+same starting SHA; no main-targeted PR was opened. The primary checkout remains
+on dev with its unrelated untracked docs/reports/ preserved. Final notes are edited
+in an attached sql-budget-finalize worktree, not the owner's primary checkout.
+
+No private validation was dispatched and the stopped lifecycle root is not claimed
+to complete. Budget ceilings and origin semantics remain unchanged. #931 remains
+open for its owner-controlled work-budget/isolation decision. ACK status-only
+readback was PR_IS_DRAFT / owner_decision_required at the code head; no merge-ready
+claim or review requests/merges are made. This bounded diagnostic batch is complete.
 See docs/validation/SQL_LIFECYCLE_BUDGET_DIAGNOSTICS.md for the complete contract
 and a non-dispatched one-run owner validation template.
