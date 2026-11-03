@@ -117,6 +117,7 @@ namespace PublicSql.CSharp
             if (connection.State == ConnectionState.Open) size = 10; else size = 18;
             if (connection.State == ConnectionState.Open) size = 11; else size = 20;
             if (connection.State == ConnectionState.Open) size = 12; else size = 22;
+            if (connection.State == ConnectionState.Open) size = 13; else size = 24; // 512 > 256: the census-driven capacity keeps this beyond-budget
             var command = new SqlCommand("public.many_guards", connection); command.CommandType = CommandType.StoredProcedure;
             var parameters = new ArrayList(); parameters.Add(new WholeProtocolParameter("@public", SqlDbType.Int, size));
             foreach (WholeProtocolParameter item in parameters)

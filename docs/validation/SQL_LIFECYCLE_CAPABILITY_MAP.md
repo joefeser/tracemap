@@ -868,3 +868,26 @@ PR ends and any further findings become follow-up issues:
   a digest mismatch establishes one fact — the result differs from zero.
   Comparisons against one, other integers, or other markers are
   unresolved and refuse.
+
+## Census-driven keying dedup and capacity (2026-11-03, IL 0.2.68 / v69)
+
+The v43-001 post-merge verification stopped at the path fence with a
+census naming `string-compare:site/0 x45` — one fork family keyed by
+position. Two corrections:
+- **Markers key by their carried provenance** (text = "provenance|constant"):
+  the marker kind itself falls to "site" in the provenance table, which
+  UNDER-keyed — independent values' comparisons shared one fork, making
+  some true combinations unrepresentable. When the literal digest sits on
+  the LEFT, the key names the other operand (a digest has no provenance);
+  two different literals fold concrete (their digests differ, so
+  inequality is compile-time knowledge).
+- **Capacity 128→256 paths / 12→16 sites**: the two-string root shape
+  carries ~8 genuine runtime binaries. The keying dedup (one fact, one
+  key) halved the fork-count ripples the digest fix had doubled, and the
+  four-input full-root mirror COMPLETES again — 217 alternatives (216
+  entries + the open-guard termination), three per-input emptiness keys,
+  zero site-keyed families. The private-shape fixture (two strings, two
+  Int32s through the direction overload) completes with entry candidates
+  and >=2 distinct emptiness keys. The nine-guard C# ManyGuards keeps the
+  beyond-budget census pin (512 > 256); VB's eight guards sit exactly at
+  capacity and complete (256 alternatives, pinned).
