@@ -59,20 +59,30 @@ owner's work machine." Never private names, SQL, binaries, or paths.
   fix written in the issue: covariant array stores; `brtrue` on a boxed
   Boolean tests the reference; digest-mismatch folding under
   `Option Compare Text`. Assigned to Sol per the owner.
-- **#931 — ROOT-B `lifecycle-work-limit`** (from v44-001): an owner
-  census decision. The DIAGNOSTIC half (attach the fork census to
-  work-limit stops, like path-limit already carries) is safe to do
-  autonomously; the production work-budget raise (2M → 4M, with a
-  memory check first — v44 peaked ~991 MiB of the 2048 MiB cap at 2M)
-  is the owner's.
+- **#931 — ROOT-B `lifecycle-work-limit`** (from v44-001): the
+  DIAGNOSTIC half is DONE — PR #933 shipped the work-stop census,
+  per-root budget ledgers, and canonical root ordering; see
+  `docs/validation/SQL_LIFECYCLE_BUDGET_DIAGNOSTICS.md`. What remains
+  is the owner's decision: the production work-budget raise itself
+  (2M → 4M, with a memory check first — v44 peaked ~991 MiB of the
+  2048 MiB cap at 2M) and any runner-isolation change. #931 stays open
+  for that decision.
 
 ## Verification state (v44-001, the latest private scan)
 
-- One lifecycle root **completed: 216 alternatives with entry
-  candidates** — this is the conversion's input. The other root hit the
-  work fence (#931). The candidates are MORE honest than the earlier
-  generation's (96 alternatives missing the per-string-input emptiness
-  dimension; the old comparison bug silently skipped it).
+- **ROOT-A completed: 216 alternatives with entry candidates — this is
+  the conversion's input.** ROOT-B hit the work fence (#931). The
+  candidates are MORE honest than the earlier generation's (v42: 96
+  alternatives missing the per-string-input emptiness dimension; the
+  old comparison bug silently skipped it).
+- **Sanitized-file vintage note:** the sanitized conversion POC on the
+  owner's work machine is labeled ROOT-B and cites the v42 scan — its
+  fork inventory (6 decisions, no emptiness forks) predates the
+  comparison fixes. The structure and origin-kind vocabulary remain
+  valid; for CURRENT fork counts regenerate the annotated input from
+  ROOT-A's v44-001 output (216 alternatives, emptiness decisions keyed
+  per input). Expected delta when regenerating: more decisions per
+  root, never new origin kinds.
 - No further private scans without an owner-dispatched prompt. B2
   findings (surprises) go to the issue list, never a private fix loop.
 
