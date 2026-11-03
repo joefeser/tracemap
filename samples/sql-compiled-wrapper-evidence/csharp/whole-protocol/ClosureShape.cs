@@ -638,6 +638,28 @@ namespace PublicSql.CSharp
             var wrong = (string[])carrier;
             return new DataSet(wrong.Length.ToString());
         }
+        public DataSet ClosureConcatDigestProduce(string connection)
+        {
+            // Review round 5: a concatenation containing an ldstr literal keeps
+            // the whole result unbound — the digest's text is an encoding, and
+            // folding it fabricates a text no runtime value ever had. The
+            // equality consumer forks instead of resolving concretely.
+            var parameters = new ArrayList();
+            parameters.Add(new ClosureStructNullGuardParameter("@public", SqlDbType.VarChar, 12, connection));
+            var derived = connection.GetType().ToString();
+            var decorated = derived + "!";
+            if (decorated == "placeholder") return new DataSet();
+            return ClosureStructNullGuardExec.Execute("public.concat_digest", ref parameters);
+        }
+        public DataSet ClosureToarrayElementProduce(string connection)
+        {
+            // Negative control: ToArray(typeof(int)) over a collection holding a
+            // string throws while copying — the snapshot is not creatable.
+            var mixed = new ArrayList();
+            mixed.Add("public-text");
+            var copied = (int[])mixed.ToArray(typeof(int));
+            return new DataSet(copied.Length.ToString());
+        }
         public DataSet ClosureFillZeroProduce(string connection)
         {
             // Negative control: an EQUALITY test on the unbound Fill count

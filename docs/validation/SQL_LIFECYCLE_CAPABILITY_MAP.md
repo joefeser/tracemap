@@ -848,3 +848,23 @@ assemblies remain budget-frozen):
   array type — which throws at runtime even empty — refuses as
   `lifecycle-cast-array-type`. The ldtoken (`tok:type:0x…:`) and cast
   (`t:`) encodings compare bare scoped-type tails (pinned).
+
+## Review-fix batch 5 (2026-11-03, IL 0.2.67 / v68) — the review loop closes
+
+Round five findings, fixed and pinned; after this batch the loop on this
+PR ends and any further findings become follow-up issues:
+- **Digest-only operands keep concatenations unbound** (Codex P2): a
+  literal's digest Text is an encoding — folding it into an exact string
+  fabricates a text no runtime value ever had. All-constant concatenation
+  remains exact only when every operand is a plain-derived string (the
+  array overload the same); anything else stays unbound (pinned: the
+  equality consumer forks).
+- **ToArray validates its elements** (Codex P2): Array.Copy throws while
+  copying an incompatible element, so the snapshot is only creatable when
+  every slot is provably the requested type — a tracked custom of that
+  exact type, an exact string for String, an int for Int32. Anything
+  else refuses as `lifecycle-toarray-element` (pinned).
+- **The equality-only marker resolves solely against zero** (Codex P2):
+  a digest mismatch establishes one fact — the result differs from zero.
+  Comparisons against one, other integers, or other markers are
+  unresolved and refuse.

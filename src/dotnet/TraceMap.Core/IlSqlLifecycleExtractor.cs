@@ -392,12 +392,11 @@ internal static partial class IlSqlLifecycleExtractor
         private Value Equal(Value left, Value right)
         {
             if (left.Kind == "int" && right.Kind == "int") return Int(Number(left) == Number(right) ? 1 : 0);
-            // The equality-only nonzero marker (a digest-mismatched string
-            // comparison): nonzero differs from zero and one, and two nonzero
-            // markers are equal — ordering stays unrepresented by design.
-            if (left.Kind == "int-nonzero" && right.Kind == "int") return Int(right.Text == "0" || right.Text == "1" ? 0 : 1);
-            if (left.Kind == "int" && right.Kind == "int-nonzero") return Int(left.Text == "0" || left.Text == "1" ? 0 : 1);
-            if (left.Kind == "int-nonzero" && right.Kind == "int-nonzero") return Int(1);
+            // The equality-only nonzero marker establishes ONE fact: it differs
+            // from zero. Every other comparison — against one, another integer,
+            // or another marker — is unresolved and refuses.
+            if (left.Kind == "int-nonzero" && right.Kind == "int" && right.Text == "0") return Int(0);
+            if (left.Kind == "int" && right.Kind == "int-nonzero" && left.Text == "0") return Int(0);
             if (left.Kind == "null" && right.Kind == "null") return Int(1);
             // Only concrete allocations prove non-aliasing. Views with distinct
             // symbolic IDs may still denote the same runtime reference.
@@ -432,6 +431,13 @@ internal static partial class IlSqlLifecycleExtractor
         // string still compares soundly against one by reconstructing its own
         // digest — equality (and only equality) is decidable without the text,
         // and the ordinal shortcut never runs across the two forms.
+        internal static string BareTypeText(string encoded)
+        {
+            var scope = encoded.IndexOf("scope(", StringComparison.Ordinal);
+            if (scope >= 0) return encoded.Substring(scope);
+            var type = encoded.IndexOf("type(", StringComparison.Ordinal);
+            return type >= 0 ? encoded.Substring(type) : encoded;
+        }
         private static bool IsLiteralDigest(string text)
             => text.Length > 4 && text.StartsWith("str:", StringComparison.Ordinal)
             && text.AsSpan(4).Contains(':');
@@ -1711,6 +1717,20 @@ internal static partial class IlSqlLifecycleExtractor
                 case "arraylist-toarray":
                     var copiedCollection = Get(receiver, "arraylist");
                     _ = args[0].Kind == "type" ? args[0] : throw new Refusal("lifecycle-toarray-type");
+                    // Array.Copy throws while copying an incompatible element: the
+                    // snapshot is only creatable when EVERY slot is provably the
+                    // requested type (a tracked custom of that type, an exact
+                    // string, or an int).
+                    var requested = args[0].Text;
+                    foreach (var slot in copiedCollection.Slots)
+                    {
+                        var compatible = slot.Kind == "object" && heap.TryGetValue(slot.Text, out var slotState)
+                            && slotState.Kind == "custom" && slotState.Owner is not null
+                            && BareTypeText(slotState.Owner) == BareTypeText(requested);
+                        if (!compatible && !(slot.Kind == "string" && requested.Contains("names:6:String)", StringComparison.Ordinal))
+                            && !(slot.Kind == "int" && requested.Contains("names:5:Int32)", StringComparison.Ordinal)))
+                            throw new Refusal("lifecycle-toarray-element");
+                    }
                     var copiedArray = New("array");
                     // The snapshot's element type is the requested type: a later
                     // cast to a different array type refuses.
@@ -1858,14 +1878,16 @@ internal static partial class IlSqlLifecycleExtractor
                     return Value.Unknown;
                 case "string-concat":
                     // Exact for all-constant operands at any compiler-lowered arity (2-4);
-                    // any unbound operand keeps the whole result unbound.
-                    if (args.All(argument => argument.Kind == "string"))
+                    // any unbound — or DIGEST-ONLY literal — operand keeps the whole
+                    // result unbound: a digest's Text is an encoding, and concatenating
+                    // it fabricates a text no runtime value ever had.
+                    if (args.All(argument => argument.Kind == "string" && !IsLiteralDigest(argument.Text)))
                         return new("string", string.Concat(args.Select(argument => argument.Text)));
                     return UnboundString("string-concat");
                 case "string-concat-array":
                     var concatArray = Get(args[0], "array");
                     if (concatArray.Slots.Count > 16) throw new Refusal("lifecycle-string-concat-limit");
-                    return concatArray.Slots.All(slot => slot.Kind == "string")
+                    return concatArray.Slots.All(slot => slot.Kind == "string" && !IsLiteralDigest(slot.Text))
                         ? new("string", string.Concat(concatArray.Slots.Select(slot => slot.Text)))
                         : UnboundString("string-concat-array");
                 case "iif":

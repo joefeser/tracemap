@@ -548,6 +548,33 @@ public sealed class IlSqlClosureShapeTests
 
     [Theory]
     [InlineData("csharp")]
+    public void Concatenations_with_literal_operands_stay_unbound(string language)
+    {
+        // Review round 5: concatenating a digest-only literal operand keeps the
+        // result unbound — the equality consumer forks on a hypothetical, never
+        // a concrete comparison against fabricated text.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureConcatDigestProduce");
+        Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
+        Assert.Contains(result.StateAlternatives!, a => a.Completion?.Entry is not null);
+        Assert.Contains(result.StateAlternatives!.SelectMany(a => a.Decisions),
+            decision => decision.Connection.Contains("string-compare", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("csharp")]
+    public void ToArray_with_incompatible_elements_refuses(string language)
+    {
+        // Review round 5: Array.Copy throws while copying an incompatible
+        // element — the snapshot is not creatable and refuses by name.
+        var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
+        var result = Extract(bodies, "ClosureToarrayElementProduce");
+        Assert.NotEmpty(result.Gaps);
+        Assert.Contains(result.Gaps, gap => gap.Contains("lifecycle-toarray-element", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("csharp")]
     public void Concrete_checked_overflow_refuses_by_name(string language)
     {
         // Review round 3: a concrete checked overflow throws at runtime — the
