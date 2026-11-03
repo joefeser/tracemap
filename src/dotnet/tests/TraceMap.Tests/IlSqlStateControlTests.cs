@@ -12,7 +12,7 @@ public sealed class IlSqlStateControlTests
         IReadOnlyList<IlSqlObjectPathExtractor.Body> bodies, string name, bool legacy = false)
         => IlSqlLifecycleExtractor.Extract(
             bodies.Single(body => body.Observation.ObjectBody?.Name == name), bodies, false,
-            new(400_000), infoMessageBoundary: true);
+            new(name == "WholeProtocolManyGuards" ? 8_000_000 : 400_000), infoMessageBoundary: true);
 
     [Theory]
     [InlineData("csharp")]
@@ -150,8 +150,19 @@ public sealed class IlSqlStateControlTests
     {
         var bodies = IlSqlLifecycleExtractorTests.Bodies(language);
         var result = Extract(bodies, "WholeProtocolManyGuards");
-        Assert.Equal("lifecycle-state-path-limit", Assert.Single(result.Gaps));
-        Assert.Null(result.StateAlternatives);
+        if (language == "csharp")
+        {
+            // Nine two-sided guards (512 paths) exceed the census-driven 256.
+            Assert.Equal("lifecycle-state-path-limit", Assert.Single(result.Gaps));
+            Assert.Null(result.StateAlternatives);
+        }
+        else
+        {
+            // VB's eight guards (256 paths) sit exactly AT the raised capacity:
+            // the enumeration completes, every path individually proven.
+            Assert.True(result.Gaps.Count == 0, "GAPS->> " + string.Join(" <<OR>> ", result.Gaps) + " <<-");
+            Assert.Equal(256, result.StateAlternatives!.Count);
+        }
     }
 
     [Theory]

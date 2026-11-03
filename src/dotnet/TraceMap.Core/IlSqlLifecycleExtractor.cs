@@ -15,7 +15,7 @@ internal static partial class IlSqlLifecycleExtractor
     internal const string StateAlternativesSchema = "il-sql-lifecycle-state-alternatives/1";
     internal const string StateControlPolicy = "explicit-sql-state-control/1";
     /// <summary>Bound on completed state-alternative paths and distinct decision sites.</summary>
-    internal const int MaxStatePaths = 128, MaxStateSites = 12;
+    internal const int MaxStatePaths = 256, MaxStateSites = 16;
     internal const string Limitation = "Tier3 conditional encoded static lineage candidate. Successful normal-completion paths only; symbolic existing-row summaries do not prove rows or execution. SQL schema ancestry is separate from current application-written value origin. Catch continuations are not executed; failure boundaries permit partial updates and make no rollback claim. ArrayList support is exact signed net48, single complete enumeration of at most 16 inspected custom objects frozen on Add; unsupported mutation or escape is unknown. Entry producers/loaders retain unbound argument origins; unknown control or required scalar values refuse. Entry facts are separate from column-read comparison facts. Opt-in opaque root scalar initialization uses a separate entry schema, conditional normal-return and tracked-heap noninterference assumptions, and unmodeled external effects; it is not constructor-completion or purity proof. Opt-in inspected InfoMessage callbacks retain external-event dependence and partial post-Fill result naming under a separate schema; callback execution, names, table count and naming success remain unproven. Runtime connection State is never replaced by an enum constant: state-dependent control produces bounded explicit path alternatives with per-alternative identities, never a silently selected path or a merge of incompatible attachments; separate State reads are separate decisions; allocation identity is shared only on the prefix before the first decision. Uncaught exceptional paths terminate their alternative without executing catch or finally continuations. No source, deployment, session, framework, type, nullability, value or migration proof.";
     internal static bool IsReadRoot(IlBodyObservation body)
         => body.ObjectBody is { HasThis: true, ParameterCount: <= 1, ReturnsValue: true, IsGeneric: false, IsVirtual: false } meta
@@ -467,7 +467,11 @@ internal static partial class IlSqlLifecycleExtractor
         {
             // Keyed by the LEFT operand's provenance: one runtime value's string
             // equality is one fact, shared wherever the same value is compared.
-            var provenance = ProvenanceOf(left);
+            // A string-compare MARKER carries that provenance (plus the compared
+            // constant) in its text — key by it: the marker's own kind would fall
+            // to "site", collapsing INDEPENDENT values' comparisons into one fork
+            // (under-keying: some true combinations become unrepresentable).
+            var provenance = left.Kind is ("string-compare" or "string-compare-bool") ? left.Text : ProvenanceOf(left);
             var occurrence = stringCompareOccurrences.GetValueOrDefault(provenance);
             stringCompareOccurrences[provenance] = occurrence + 1;
             var key = new StateDecisionKey("string-compare:" + provenance, 0, 0, occurrence);
@@ -1794,8 +1798,18 @@ internal static partial class IlSqlLifecycleExtractor
                         // digests of the same literal, are equal.
                         if (!IsLiteralDigest(args[0].Text) && !IsLiteralDigest(args[1].Text))
                             return Int(args[0].Text == args[1].Text ? 1 : 0);
+                        // Two literals compare by digest: identical digests are
+                        // the same interned literal (equal — never fold unequal);
+                        // different digests prove inequality only under ordinal
+                        // comparison (op_Equality IS ordinal).
+                        if (IsLiteralDigest(args[0].Text) && IsLiteralDigest(args[1].Text))
+                            return Int(args[0].Text == args[1].Text ? 1 : 0);
                     }
-                    return new("string-compare-bool", ProvenanceOf(args[0]) + "|" + (args[1].Kind == "string" ? args[1].Text : "?"));
+                    // The key names the VALUE the fact is about: when the literal
+                    // digest sits on the left, the runtime fact belongs to the
+                    // other operand (a digest itself has no provenance).
+                    var boolKeyOperand = IsLiteralDigest(args[0].Text) && !IsLiteralDigest(args[1].Text) ? args[1] : args[0];
+                    return new("string-compare-bool", ProvenanceOf(boolKeyOperand) + "|" + (args[1].Kind == "string" ? args[1].Text : "?"));
                 case "vb-compare-string":
                     // VB lowers string comparisons to Operators.CompareString; with an
                     // unbound operand the result is a runtime fact carried as a
@@ -1815,6 +1829,14 @@ internal static partial class IlSqlLifecycleExtractor
                         // the nonzero test resolve; ordering consumers refuse.
                         var literal = LiteralEquality(args[0], args[1]);
                         if (literal is { } equal) return equal ? Int(0) : new("int-nonzero", "");
+                        // Two literals: identical digests are the same interned
+                        // literal (equal under any mode). DIFFERENT digests prove
+                        // inequality only under BINARY compare — Option Compare
+                        // Text may fold case-equivalent literals equal, so text
+                        // mode keeps the hypothetical marker (#928's class).
+                        if (IsLiteralDigest(args[0].Text) && IsLiteralDigest(args[1].Text)
+                            && (args[0].Text == args[1].Text || args[2].Text == "0"))
+                            return args[0].Text == args[1].Text ? Int(0) : new("int-nonzero", "");
                         // The ordinal shortcut is sound only under BINARY compare and
                         // within ONE form (both plain texts); it never runs across
                         // the plain and digest forms or between two unknown-order
@@ -1825,7 +1847,8 @@ internal static partial class IlSqlLifecycleExtractor
                     }
                     // The marker carries the compared constant: "x equals A" and
                     // "x equals B" are distinct runtime facts with distinct keys.
-                    return new("string-compare", ProvenanceOf(args[0]) + "|" + (args[1].Kind == "string" ? args[1].Text : "?"));
+                    var keyOperand = IsLiteralDigest(args[0].Text) && !IsLiteralDigest(args[1].Text) ? args[1] : args[0];
+                    return new("string-compare", ProvenanceOf(keyOperand) + "|" + (args[1].Kind == "string" ? args[1].Text : "?"));
                 case "type-tostring":
                     // The runtime type's name is unprovable: an unbound string with
                     // no type-name claim (the .NET 1 GetType().ToString() pattern) —
