@@ -228,7 +228,35 @@ internal static class IlBodyEvidenceExtractorShared
 
     internal static ScanResult Scan(ScanOptions options) => ScanEngine.Scan(options);
 
-    internal static string TempOutput() => Path.Combine(Directory.CreateTempSubdirectory("tracemap-il-output-").FullName, "out");
+    internal static string TempOutput()
+    {
+        SweepStaleTempDirectories();
+        return Path.Combine(Directory.CreateTempSubdirectory("tracemap-il-output-").FullName, "out");
+    }
+
+    /// <summary>Best-effort removal of test-created temp directories older than an hour.
+    /// Scan tests create temp directories nothing ever removed — on one machine this
+    /// accumulated 37,431 directories (196 GiB of index.sqlite files) across every
+    /// tracemap-* creator in the suite. The age gate never touches a live parallel
+    /// test's directory; failures are swallowed and never fail the caller.</summary>
+    internal static void SweepStaleTempDirectories()
+    {
+        try
+        {
+            var stale = DateTime.UtcNow.AddHours(-1);
+            foreach (var directory in Directory.EnumerateDirectories(Path.GetTempPath(), "tracemap*"))
+            {
+                try
+                {
+                    if (Directory.GetLastWriteTimeUtc(directory) < stale) Directory.Delete(directory, recursive: true);
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
 
     internal static (string Source, string Assembly) Fixture(string language, string assemblyName)
     {
@@ -350,5 +378,31 @@ internal static class IlBodyEvidenceExtractorShared
         Assert.Equal(il ? "managed-il-v1" : ManagedMetadataExtractor.MetadataLocationKind, fact.Properties["evidenceLocationKind"]);
         Assert.Equal(il ? provenance.BoundedInputSha256 : compiled.BoundedInputSha256, fact.Properties[il ? "ilBoundedInputSha256" : "boundedInputSha256"]);
         Assert.Equal(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(typeof(IlBodyEvidenceExtractor).Assembly.Location))).ToLowerInvariant(), fact.Properties[il ? "ilGeneratorSha256" : "generatorSha256"]);
+    }
+}
+
+// The sweep pin: a stale (older than the age gate) tracemap temp directory is
+// removed by the next TempOutput() call; a fresh one survives.
+public sealed class TempSweepPin
+{
+    [Xunit.Fact]
+    public void Stale_temp_directories_are_swept_and_fresh_ones_survive()
+    {
+        var stale = Directory.CreateTempSubdirectory("tracemap-sweep-pin-stale-");
+        Directory.CreateDirectory(Path.Combine(stale.FullName, "out"));
+        File.WriteAllText(Path.Combine(stale.FullName, "out", "marker"), "stale");
+        Directory.SetLastWriteTimeUtc(stale.FullName, DateTime.UtcNow.AddHours(-2));
+        var fresh = Directory.CreateTempSubdirectory("tracemap-sweep-pin-fresh-");
+        try
+        {
+            IlBodyEvidenceExtractorShared.TempOutput();
+            Assert.False(Directory.Exists(stale.FullName), "the stale directory must be swept");
+            Assert.True(Directory.Exists(fresh.FullName), "the fresh directory must survive the sweep");
+        }
+        finally
+        {
+            try { Directory.Delete(stale.FullName, true); } catch (IOException) { }
+            try { Directory.Delete(fresh.FullName, true); } catch (IOException) { }
+        }
     }
 }
