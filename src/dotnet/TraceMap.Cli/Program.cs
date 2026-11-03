@@ -129,6 +129,7 @@ public static class TraceMapCommand
                 "sqlserver-dataset-result" => SqlServerDataSetCommand.Help,
                 "sqlserver-helper-result" => SqlServerHelperResultCommand.Help,
                 "sqlserver-internal-helper-result" => SqlServerInternalHelperResultCommand.Help,
+                "sqlserver-compiled-lifecycle" => SqlServerCompiledLifecycleCommand.Help,
                 "sqlserver-field-read" => SqlServerFieldReadCommand.Help,
                 "scan" => ScanHelp(),
                 "version" => VersionHelp(),
@@ -166,7 +167,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "sqlserver-field-read" or "sqlserver-internal-helper-result" or "sqlserver-helper-result" or "sqlserver-dataset-result" or "sqlserver-datatable-result" or "sqlserver-ddl-table-result" or "sqlserver-ddl-result" or "sqlserver-result-schema" or "sqlserver-ddl" or "sqlserver-schema" or "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "sqlserver-compiled-lifecycle" or "sqlserver-field-read" or "sqlserver-internal-helper-result" or "sqlserver-helper-result" or "sqlserver-dataset-result" or "sqlserver-datatable-result" or "sqlserver-ddl-table-result" or "sqlserver-ddl-result" or "sqlserver-result-schema" or "sqlserver-ddl" or "sqlserver-schema" or "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -183,6 +184,7 @@ public static class TraceMapCommand
                 "sqlserver-dataset-result" => SqlServerDataSetCommand.Run(rest, output),
                 "sqlserver-helper-result" => SqlServerHelperResultCommand.Run(rest, output),
                 "sqlserver-internal-helper-result" => SqlServerInternalHelperResultCommand.Run(rest, output),
+                "sqlserver-compiled-lifecycle" => SqlServerCompiledLifecycleCommand.Run(rest, output),
                 "sqlserver-field-read" => SqlServerFieldReadCommand.Run(rest, output),
                 "scan" => await RunScanAsync(rest, output, error, cancellationToken),
                 "versions" => rest.Length == 0
@@ -555,6 +557,12 @@ public static class TraceMapCommand
             WebFormsPublishedRootPath: values.GetValueOrDefault("--webforms-published-root"),
             WebFormsPublishSourceRelativeBase: values.GetValueOrDefault("--webforms-publish-source-base"))
         {
+            IlLifecycleRoots = values.GetMany("--il-lifecycle-root"),
+            IlOpaqueRootInitializers = values.HasFlag("--il-opaque-root-initializers"),
+            IlExternalTraceBoundary = values.HasFlag("--il-external-trace-boundary"),
+            IlCompiledScalarBoundary = values.HasFlag("--il-compiled-scalar-boundary"),
+            IlInfoMessageBoundary = values.HasFlag("--il-info-message-boundary"),
+            CompiledOnly = values.HasFlag("--compiled-only"),
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
             CiHintWorkflows = ReadCiHintsOption(values),
@@ -575,6 +583,11 @@ public static class TraceMapCommand
             await error.WriteLineAsync("error: output-path-invalid");
             return 1;
         }
+        ScanDiagnosticProgress? diagnosticBinding;
+        try { diagnosticBinding = ScanDiagnosticProgress.Create(values.GetValueOrDefault("--diagnostic-progress"), repoPath, fullOutputPath, scanOptions); }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        { await error.WriteLineAsync("error: scan-diagnostic-progress-invalid"); return 1; }
+        using var diagnosticScope = diagnosticBinding;
         ScanResult result;
         var progress = ScanProgressAmbient.Current;
         try
@@ -2571,7 +2584,7 @@ public static class TraceMapCommand
                 throw new ArgumentException($"Unexpected argument: {arg}");
             }
 
-            if (arg is "--restore" or "--index-deps-json" or "--index-ci-producers" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
+            if (arg is "--compiled-only" or "--restore" or "--index-deps-json" or "--index-ci-producers" or "--include-paths" or "--include-reverse" or "--include-impact" or "--allow-identity-mismatch" or "--exit-code" or "--allow-mixed-inputs" or "--release-review" or "--il-body-evidence" or "--il-opaque-root-initializers" or "--il-external-trace-boundary" or "--il-compiled-scalar-boundary" or "--il-info-message-boundary" or "--il-rewrite-evidence" or "--il-rewrite-pdb-evidence" or "--exact-source-scope"
                 || additionalFlags.Contains(arg, StringComparer.Ordinal))
             {
                 flags.Add(arg);
@@ -2932,6 +2945,7 @@ public static class TraceMapCommand
               tracemap sqlserver-dataset-result compare --help
               tracemap sqlserver-helper-result compare --help
               tracemap sqlserver-internal-helper-result compare --help
+              tracemap sqlserver-compiled-lifecycle compare --help
               tracemap sqlserver-field-read compare --help
               tracemap database-design-review --index <combined.sqlite> --out <path>
               tracemap webforms-modernization --index <index.sqlite> --out <directory>
@@ -3100,7 +3114,28 @@ public static class TraceMapCommand
               --compiled-max-text <count>
               --compiled-max-work <count>
                                        Positive deterministic compiled-input limits; max-text must be at least 71.
+              --diagnostic-progress <file>
+                                       Write live bounded phase checkpoints outside repo/output before analysis starts.
+                                       Requires fresh checkpoint and sidecars; operational only, not completion evidence.
+              --compiled-only          Exclude source inventory, MSBuild, semantic and syntax analysis. Requires explicit compiled inputs.
+                                       Keeps repository identity and compiled validation; source coverage is explicitly reduced.
               --il-body-evidence        Extract bounded operand-aware IL method-body and direct-call evidence from admitted compiled inputs. Never discovered.
+              --il-compiled-scalar-boundary
+                                       Opt in to bounded retained static String-to-String transforms inside root scalar initializer chains.
+                                       Requires opaque-root-initializers and selected roots; internal control/effects remain unmodeled.
+              --il-info-message-boundary
+                                       Opt in to bounded inspected SqlConnection.InfoMessage callbacks and partial post-Fill naming.
+                                       Requires selected roots; event timing, names, external effects and normal return remain unproven.
+              --il-external-trace-boundary
+                                       Opt in to exact signed System.Web Current/Trace/Write root chains with scalar string arguments.
+                                       Requires selected roots; external effects/throws remain unmodeled and conditional.
+              --il-opaque-root-initializers
+                                       Opt in to conditional typed-unknown root scalar initializer chains; requires --il-lifecycle-root.
+                                       External effects and normal return are unproved; emits a separate opaque-entry schema when used.
+              --il-lifecycle-root <sha256:0x06token>
+                                       Repeatable (max 16). Explicit admitted assembly SHA-256 and method-definition token.
+                                       Retain only the selected lifecycle root/constructor/callee slice, up to 1 MiB per reader.
+                                       Raw IL/source lanes remain; corpus object-path/lifecycle enumeration is not performed.
               --il-max-bodies <count>
               --il-max-instructions-per-body <count>
               --il-max-locals-per-body <count>

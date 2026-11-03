@@ -36,6 +36,13 @@ public static class ScanProgressStages
     public const string SyntaxFallback = "syntax-fallback";
     public const string SpecializedExtraction = "specialized-extraction";
     public const string SourceVerification = "source-verification";
+    public const string SourceSemanticAnalysis = "source-semantic-analysis";
+    public const string CompiledMetadata = "compiled-metadata";
+    public const string IlDecode = "il-decode";
+    public const string IlMaterialization = "il-materialization";
+    public const string IlLifecycle = "il-lifecycle";
+    public const string IlCallbackInspection = "il-callback-inspection";
+    public const string IlResultNaming = "il-result-naming";
     public const string ArtifactWrite = "artifact-write";
     public const string ScanPublication = "scan-publication";
     public const string WebFormsModernization = "webforms-modernization";
@@ -600,6 +607,13 @@ public sealed class ScanProgressReporter : IDisposable
             or ScanProgressStages.SyntaxFallback
             or ScanProgressStages.SpecializedExtraction
             or ScanProgressStages.SourceVerification
+            or ScanProgressStages.SourceSemanticAnalysis
+            or ScanProgressStages.CompiledMetadata
+            or ScanProgressStages.IlDecode
+            or ScanProgressStages.IlMaterialization
+            or ScanProgressStages.IlLifecycle
+            or ScanProgressStages.IlCallbackInspection
+            or ScanProgressStages.IlResultNaming
             or ScanProgressStages.ArtifactWrite
             or ScanProgressStages.ScanPublication
             or ScanProgressStages.WebFormsModernization
@@ -654,6 +668,30 @@ public sealed class ScanProgressReporter : IDisposable
 public static class ScanProgressAmbient
 {
     private static readonly AsyncLocal<ScanProgressReporter?> CurrentReporter = new();
+
+    // Operational observations only: never change evidence, scopes or refusal gates.
+    public static T Observe<T>(string stage, Func<T> action)
+    {
+        var reporter = Current;
+        if (reporter is null) return action();
+        reporter.StartStage(ScanProgressReporter.ScanOperation, stage);
+        try
+        {
+            var result = action();
+            reporter.FinishStage(ScanProgressReporter.ScanOperation, stage, "completed");
+            return result;
+        }
+        catch (OperationCanceledException)
+        {
+            reporter.FinishStage(ScanProgressReporter.ScanOperation, stage, "cancelled");
+            throw;
+        }
+        catch
+        {
+            reporter.FinishStage(ScanProgressReporter.ScanOperation, stage, "failed");
+            throw;
+        }
+    }
 
     public static ScanProgressReporter? Current
     {

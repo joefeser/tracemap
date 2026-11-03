@@ -580,6 +580,7 @@ public static partial class VisualBasicSemanticExtractor
         List<SourceMetadataIdentityCandidate>? sourceMetadataCandidates)
     {
         AddTypeDeclarationFacts(projectPath, filePath, root, model, facts);
+        LinqPipelineEvidenceExtractor.Extract(projectPath, filePath, root, model, facts, gaps);
         AddMethodDeclarationFacts(projectPath, filePath, root, model, facts);
         AddPropertyDeclarationFacts(projectPath, filePath, root, model, facts);
         AddFieldDeclarationFacts(projectPath, filePath, root, model, facts);

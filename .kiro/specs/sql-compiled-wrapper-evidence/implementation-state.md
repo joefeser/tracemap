@@ -1,0 +1,2505 @@
+# Implementation state
+
+## Active containment implementation — 2026-10-29
+
+Worktree initially clean at 8185c1daf on codex/sql-compiled-wrapper-evidence.
+Implementation b05fa2272e63631187e3ffb71388b7f3ebd83b11 committed and pushed.
+The following docs-only receipt pins that exact implementation in the new prompt.
+Added ordinary scan --diagnostic-progress with fresh external checkpoint/binding
+sidecars, two-second heartbeat and categorical source/metadata/decode/IL lifecycle/
+callback/naming stages. No lifecycle admission/refusal or facts semantics changed.
+New PowerShell guard uses an isolated worker, a Windows aggregate committed-memory
+job limit before scan launch, sampled job working sets, wall/stale-phase limits
+and kill-on-close cleanup. It does not assign the interactive shell to a job.
+Unsupported job setup fails before launch; private execution never falls back to
+parent-only or sampled-only monitoring. macOS public tests are explicitly sampled.
+
+Validation so far: 236 focused/regression tests passed with -warnaserror, exit 0,
+zero warnings (/tmp/tracemap-resource-diagnostics-regression.log). Five guard
+self-test cases passed locally (success, timeout, child memory, parent exit/orphan,
+stale phase; /tmp/tracemap-guard-selftest-frozen.log). Windows interop compiles,
+but Windows runtime job enforcement remains untested on this host. The new prompt
+requires the exact five-case public Windows self-test BEFORE a private probe.
+Final full Debug -warnaserror passed: 5656 passed, 3 existing skips, 0 failed,
+exit 0, no warnings, 40.3614 minutes (/tmp/tracemap-resource-guard-full-debug.log).
+Existing skips: opt-in exhaustive Oracle sweep, native HTTP receipt interop,
+and deep Windows ASP.NET publish. They are not claimed executed. Final supervisor
+self-test after PID/start-time cleanup checks passed all five cases locally
+(/tmp/tracemap-guard-selftest-identity.log); Windows job runtime remains a required
+public work-machine gate. The Windows interop C# source compiles on macOS.
+
+Exact validation commands:
+```
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~ScanDiagnosticProgressTests|FullyQualifiedName~ScanProgress|FullyQualifiedName~IlSql|FullyQualifiedName~LinqPipelineEvidenceTests'
+dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'
+pwsh -NoProfile -File scripts/Test-BoundedScanGuard.ps1
+```
+The public normal-CLI fixture smoke and C#/VB native IL scans are included in the
+focused/full tests. Pinned OSS adapter smokes are explicitly deferred because no
+language adapter or source semantic admission changed. git diff --check passed.
+Changed files: CLI Program.cs and ScanDiagnosticProgress.cs; Core ScanEngine.cs,
+ScanProgressDiagnostics.cs, IlBodyEvidenceExtractor.cs and IlSqlInfoMessageBoundary.cs;
+ScanDiagnosticProgressTests.cs; scripts/Invoke-BoundedScan.ps1,
+scripts/Test-BoundedScanGuard.ps1, scripts/test-workers/BoundedScanWorker.ps1;
+docs/validation/BOUNDED_SCAN_DIAGNOSTICS.md; the new guarded prompt and this spec's
+tasks/state. The suspended unguarded prompt is only cross-linked to the new gate.
+
+New protocol: prompts/run-bounded-info-message-diagnostic.md. One public build,
+one Windows synthetic guard gate, then at most one 60-second/2048-MiB guarded
+phase diagnostic. If any gate fails, stop without private execution. Old unguarded
+protocol remains suspended. The memory root cause is still UNKNOWN/unreproduced.
+No private scan, SQL execution, source editing or transfer occurred here.
+
+---
+
+
+## Resource regression alert — 2026-10-29
+
+The work-machine 0.2.22 InfoMessage run was reported to consume roughly 46 GB and
+continue growing without completed outputs, after hours of operator work. The
+responsible phase and cause are UNKNOWN. The screenshots speculate about Roslyn,
+but provide no stack/phase evidence. Do not treat that hypothesis as a diagnosis.
+The old one-scan prompt is SUSPENDED. Active instruction is the read-only existing
+evidence request in prompts/diagnose-info-message-resource-regression.md. No
+further private scan is authorized by that prompt.
+
+Local read-only code inspection confirms normal ScanEngine performs source
+semantic extraction before IL lifecycle materialization, and normal scan writes
+final output artifacts after ScanEngine returns. Thus no output directory alone
+cannot distinguish Roslyn from IL. The new callback inspector has bounded states
+and steps, but these are not an end-to-end process-memory guarantee. No code fix
+or causal attribution has been established for the reported regression.
+
+A local public-only check ran the existing IlSqlInfoMessageTests with --no-build
+and --no-restore, in a separate process group with a 60-second watchdog, sampled
+2-GiB aggregate process-tree RSS cutoff and inherited existing 2-GiB managed-heap
+settings. Result: 19 passed, exit 0, 7.18 seconds wall, peak sampled tree RSS
+772.7 MiB; no cutoff triggered. Log /tmp/tracemap-info-resource-probe.log and local
+supervisor /tmp/tracemap-info-resource-probe.py remain outside Git. This DOES NOT
+reproduce or clear the private workload and is not a whole-workload memory proof.
+No full suite rerun or scanner implementation changes were made for this alert.
+The previously passing full suite below remains functional evidence only.
+
+---
+
+
+## Current continuation — 2026-10-29 InfoMessage boundary
+
+Branch `codex/sql-compiled-wrapper-evidence`; baseline 97e2a2ab4, initially clean.
+Implementation `850042739468b57bf3b261bcabaaad344874221e` committed and pushed; the following
+docs-only publication receipt pins that implementation in the work-machine prompt.
+Independent public C#/VB fixture shape, not employer source or identifiers.
+Extractor 0.2.22 / policy v23, opt-in `--il-info-message-boundary`, separate
+`il-sql-lifecycle-info-message-entry/1`. No default-mode refusal was relaxed.
+
+Implemented exact signed event/delegate/connection signatures, same-instance
+private-field storage, bounded callback CFG inspection and connection-linked
+command identity. Callback is never invoked. Only string appends to own private
+ArrayLists are admitted; sender use, other captured fields, field writes,
+uninspected calls and protected-reference escapes refuse. Exact string/XML/VB
+framework calls remain unmodeled external effects. No arbitrary delegate/LINQ
+support, proprietary-name allowlist, constructor skip or field-store bypass.
+
+Post-Fill naming bodies are separately inspected for protected DataSet/table
+receivers and private-list reads. Receipts retain result allocation/execution,
+while names and ordinal association stay unbound. They assume normal return,
+not event firing or table-count/name success. No runtime list enumeration occurs.
+Reused lists and cross-connection naming refuse. Legacy SQL comparisons are not
+broadened to the new schema; private lineage/consumer comparison remains open.
+
+Final local validation on frozen code:
+- Affected IL SQL + source LINQ lane: **198 passed, 0 failed, 0 skipped**, exit 0,
+  no warnings (`/tmp/tracemap-info-final-mutation-regression.log`).
+- Full Debug `-warnaserror`: **5652 passed, 3 skipped, 0 failed**, exit 0,
+  40.3804 minutes (`/tmp/tracemap-info-full-debug-frozen.log`). Existing skips:
+  opt-in exhaustive Oracle golden sweep, native HTTP receipt interop, and deep
+  Windows ASP.NET publish. These paths are not claimed executed.
+- Native C#/VB selected-root CLI scans are in the focused/full gates: both emit
+  the separate schema, generator/bounded-input hashes and all five outputs.
+- `git diff --check` passed. Pinned OSS/adapter smoke reruns explicitly deferred:
+  no language adapter or source semantic rule changed. No private execution.
+
+Exact commands:
+```
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~LinqPipelineEvidenceTests'
+dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'
+```
+
+The final fixtures include fixed prefix checks, XML attributes/iteration,
+fallback strings and swallowed catch paths. The expanded fixtures caught cgt.un
+null checks; support is confined to the inspector. Generic value-flow summary
+disagreement does not replace independent raw/call/object agreement. Negative
+controls reject captured command/sender access, exception-local receiver escape,
+name-list escape into parameter values, captured list-field replacement, list
+reuse, cross-connection naming, wrong identities and incomplete/oversize metadata.
+The original negative field warning was fixed by explicit initialization, without
+suppression. Three preliminary full runs were cancelled for fixture/safety
+improvements; none is counted as passing. Only the final frozen run above passed.
+
+Changed files in this continuation:
+- Core: IlSqlInfoMessageBoundary.cs, IlSqlLifecycleExtractor.cs,
+  IlBodyEvidenceExtractor.cs, IlBodyEvidenceModels.cs, Models.cs.
+- CLI: Program.cs (new flag parsing/help).
+- Tests: IlSqlInfoMessageTests.cs (19 C#/VB cases including native scans).
+- Samples: csharp/end-to-end/InfoMessage.cs and vb/end-to-end/InfoMessage.vb
+  under samples/sql-compiled-wrapper-evidence/.
+- Documentation: this state, spec tasks.md, rules/rule-catalog.yml,
+  docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md and the new follow-up prompt.
+
+Active follow-up prompt: `prompts/continue-sql-info-message-entry.md`, one clean
+build + one scan + one sanitized report and stop, using the same selected inner
+roots and prior three flags plus the new flag. This is not overall SQL completion.
+
+---
+
+Base `d6186b1dc91e988e0b69d79bbc7915025fe8097a`; branch
+`codex/sql-compiled-wrapper-evidence`. Whole-path matrix authored before extractor
+changes. No private input, SQL or container execution authorized in this package.
+
+Existing IL command candidate deliberately excludes parameter propagation; field
+loads are unknown. Existing source DataSet routes refuse Merge and field-held
+results. These are architectural boundaries, not missing input paths.
+Current semantic versions C# 0.22.23 / VB 0.10.26; IL body changes from 0.2.0 to 0.2.1. GLM class-split
+and hosted shard infrastructure already exists and will not be changed here.
+Initial scope sent to coordinator: bounded proven compiled observations plus exact
+blocker outcomes, not a claim that custom heap/property forwarding or merged-schema
+comparison is completed.
+
+Corpus/spec commit: `8273d10cb`. Both net48 compile-only fixture pairs built cleanly.
+Prototype now emits a separate Tier3 local constructor/attachment/Fill-return fact,
+with native exact call/body provenance and an independent bounded derivation budget.
+Legacy command gaps and source comparison contracts are unchanged.
+
+Development gates: initial four prototype tests failed on the generic call-effects
+gap, then four passed after retaining that gap while recognizing only exact API
+shapes. Existing IL lane passed 172 tests with one Windows-only skip. Native test
+build then failed xUnit2031 under -warnaserror (ten tests passed but gate failed);
+the assertion was fixed and twelve tests passed. Native public replay passed its
+20 entry / two local shape / 20 whole-path unknown denominator. Four Python guards
+pass. Expanded bound/refusal regression lane is running; final frozen gates pending.
+
+Coordinator scope checkpoint requested before expensive final validation: this is
+a partial foundation, not resolution of constructor-field/property forwarding,
+interprocedural parameter/DataSet object substitution or Merge/field schema
+consumers. Do not ask the work machine to retry those unimplemented capabilities.
+
+## Frozen final validation
+
+Implementation head `fa347703efa4b535b2617feec5b9dadc443da4dc` remained frozen for
+full Debug `-warnaserror`: 5,433 passed, zero failed, three existing skips, 36m11s,
+exit 0/no warnings. Expanded IL lane: 178 passed/one Windows-only skip; final narrow
+shape/Razor lane: 26 passed. No full-suite failure or retry.
+
+New actual native C#/VB replay ran twice with byte-identical facts and expected
+20 entry / two local shape / 20 whole-path unknown denominator. All nine retained
+SQL smokes passed their unchanged counts/refusals, including Field's 52 refusals.
+Pinned public OSS C#/VB scans passed artifact checks with 12,949/114,806 facts,
+reduced analysis and failed/partial application build status; neither has SQL calls.
+Four Python guards and private-path/whitespace checks passed. CLI/Core/Reporting
+hashes stayed unchanged (full hashes in the validation document).
+
+Local receipts: `/tmp/sql-compiled-fa347703e-full.log`,
+`/tmp/tracemap-compiled-fa347703e-a/`, `/tmp/tracemap-compiled-fa347703e-b/`,
+the nine `/tmp/tracemap-cw-fa347703e-*` SQL outputs, and
+`/tmp/tracemap-cw-fa347703e-oss.log`. No private or runtime acceptance is implied.
+The larger 96-output framework CLI sweep and non-.NET lanes were deferred; this
+package changes an opt-in IL derivation, covered by the full/IL/native gates.
+
+Results-only documentation follows the frozen implementation. The required
+whole-path heap/substitution/Merge legs remain unimplemented; this package is a
+validated foundation, not resolution of the application fit gap.
+
+Branch pushed to origin after validation. A fresh post-push fetch confirmed
+`origin/dev` still equals the recorded base (zero divergence). No PR or merge.
+
+## Authorized object-path continuation
+
+The foundation statements above are historical. Owner authorized a bounded closed
+object protocol for the existing finite corpus, not a general heap/ORM engine.
+New sibling rule `dotnet.compiled.il-sql-object-path.v1`, IL version 0.2.2, retains
+dual-reader-agreed bounded instructions/private fields and exact unique compiled
+call frames. Constructor scalar stores/getter loads, incoming parameter objects,
+returned DataSet and fresh-empty private-field Merge now connect to first-table/
+row named consumers. Merge keeps distinct filled/destination identities; all
+evidence stays Tier3 and legacy SQL/source routes remain unchanged.
+
+Independently authored expected denominator before interpreter execution:
+Direct/Forwarded/FieldObject/PropertyObject/MergeFresh positive in each language;
+Mutated/Escaped/Branch/MergeExisting/MergeMutated unknown in each language. Native
+CLI replay confirms 10 static paths, 10 unknowns and two unchanged local shapes.
+No SQL contract is admitted or compared. Complex DDL with locals/joins/computed
+projections/ordering and four-part server identity remain separate blockers;
+manual/private declarations must never be relabeled synthetic-independent.
+
+Development failures preserved: first matrix had C# Direct fail on the inherited
+DbCommand.set_CommandType encoded signature (VB passed); diagnostic rerun repeated
+the same failure. Added that exact framework signature, then both passed. No
+expectation changed. Native tests plus shape tests passed 20; expanded IL/command/
+SQL/Razor lane now passes 193 with one existing Windows-only skip. Four Python
+guards, private-path and whitespace checks pass. Final frozen full/retained/pinned
+gates still pending. No SQL, private input or container execution occurred.
+
+### Final continuation gates
+
+Frozen implementation `48ae738fb75062eb55af3b87eae3e9b5921cb871`: full Debug
+`-warnaserror` 5,443 passed/0 failed/3 existing skips, 33m34s, exit 0/no warnings.
+No full retry. Native replay twice produced byte-identical facts and the exact
+20-root/two-local-shape/10-static-path/10-unknown matrix. All nine retained SQL
+smokes passed unchanged, including Field's 52 refusals. Pinned public C#/VB scans
+and artifact validators passed (12,949/114,806 facts, reduced, FailedOrPartial
+application builds, zero SQL calls). CLI/Core/Reporting hashes stayed unchanged;
+full hashes are recorded in the validation document. Python/private-path/whitespace
+guards passed. Local receipts use `/tmp/tracemap-object-48ae738fb-*`.
+
+New sanitized application-shape evidence arrived during the frozen gate. It is
+NOT covered by single-fetch MergeFresh: property-held DataSet, two named tables,
+two different function executions, DataTable.Merge, index one, Select predicates,
+intervening helper effects, ArrayList parameters and exceptional cleanup/fallback.
+Application-authored auxiliary schema/derived values and class-state refresh must
+remain distinct from SQL result contracts. One observed save caller is not
+exclusive initialization; commented code is not evidence. Follow-up tasks and
+the consolidated prompt record these without private names/code or widening the
+validated denominator. Complex DDL admission/identity/comparison remain separate.
+
+This results-only update follows the frozen implementation; no source changes
+occurred during final gates. Ready to publish the branch, not a PR/merge or private
+application acceptance. No SQL/container/private-input execution occurred.
+
+### Lifecycle behavior regression controls
+
+Added `DataSetLifecycleBoundaryTests`: 12 public synthetic in-memory cases,
+focused Debug `-warnaserror` passed with no failures or skips. This is a test-only
+addition after the earlier freeze, not another full-suite validation. It verifies
+conditional replacement, column import versus value origin, Clear/re-Merge and
+seven injected failure boundaries plus enclosing-catch control flow. Failures
+are injected between operations, not within Merge. No SQL/provider/private input
+was executed. Full application-shape extraction, VB parity and session/skip-flag
+analysis remain pending; no support denominator or production rule was widened.
+
+### Bounded named-table implementation freeze
+
+Implemented the separate two-execution named-table continuation with IL extractor
+0.2.3. The original 20-root denominator remains 10 paths/10 unknowns; the new
+26-root C#/VB denominator is four paths/22 unknowns. Source and destination
+DataSet/table identities and selected execution are retained separately. Unknown
+helpers, row writes, conditional/exception paths, existing state, repeated Merge,
+Clear/re-Merge, duplicate names, dynamic/out-of-range slots and a third table refuse.
+No general session, predicate, derived-schema or wrapper parameter admission is
+claimed. Twelve in-memory lifecycle controls remain separate from extraction.
+
+Focused extraction/lifecycle gate: 28 passed. Broader IL gate: 206 passed,
+one skip, zero failures. Five Python smoke guards passed. Development native
+smoke matches both denominators. Initial assertion failures reflected the new
+native paths and were repaired by separating original/new owner identities;
+expectations were not weakened. A smoke invocation with an incorrect CLI filename
+failed before scanning; the corrected tracemap.dll invocation passed.
+
+Final validation at frozen implementation `7b06f08e6920adf0f2a4d5e5138f79e62bbd06a3`:
+full Debug `-warnaserror` passed 5,461 tests with three existing skips, zero
+failures and no warnings (43m16s), without a full-suite retry. Two native smoke
+runs matched both independent matrices, and C#/VB facts were byte-identical.
+All nine retained SQL smokes passed with unchanged denominators. Pinned public
+C#/VB scans and artifact validation passed, both with reduced coverage and
+FailedOrPartial application builds; neither contains SQL calls. CLI/Core/Reporting
+hashes remained unchanged through all smokes. Five compiled-wrapper Python guards
+and 59 SQL Server guards passed.
+
+An overly broad Python discovery invocation produced 32 setup errors in the
+argument-driven SQL command-text harness because its required CLI configuration
+was absent. This was an invalid harness invocation, not a passing gate; the
+correctly scoped guard commands above passed. No expectation was weakened.
+
+Exact results and hashes are in the validation document. Publication uses a
+docs-only results commit after the frozen implementation. The consolidated
+continuation prompt is current; broader unchecked tasks remain separate scope,
+not claimed implementation. No private acceptance, SQL execution or PR/merge.
+
+### Active end-to-end goal: failing integration baseline
+
+The previous goal completed only a bounded candidate slice. The current goal
+requires actual linked SQL comparison for the representative lifecycle; the old
+completion is not evidence of this outcome. See `end-to-end-acceptance.md` for the
+independently authored matrix. Successful cases may not be replaced by unknowns.
+
+Added isolated `csharp/end-to-end` and `vb/end-to-end` projects, referencing the
+existing separate wrapper projects. Both build with `-warnaserror`, zero warnings
+and errors. They include two property-held destination tables, independent wrapper
+executions, an application-authored auxiliary table, guarded helper row writes,
+raw and typed-projection reads, Clear/re-Merge, reload and swallowed-exception
+paths. They are compile-only; no method or provider was executed.
+
+Actual CLI baseline using existing frozen binaries and both exact compiled inputs:
+each language emits nine `IlSqlObjectBodyUnsupported` gaps and zero object paths.
+The initial scan used relative compiled inputs and failed admission; the corrected
+absolute-input scans admitted both assemblies and exposed the actual body gaps.
+The source-reader result comparison also explicitly refuses Tier3 IL candidates;
+there is no compiled-lineage comparison bridge. These are confirmed implementation
+gaps, not a work-machine input problem.
+
+Next implementation must preserve existing closed object-path contracts and add a
+separate bounded lifecycle representation: multiple consumers, guarded value
+origins distinct from schema identity, inspected helper effects, collection-loop
+summary and exception alternatives. Then add dedicated binding validation and
+comparison, with independent shape declarations. No provenance downgrade or manual
+lineage annotation may substitute for extracted evidence. Existing smoke projects
+and expected denominators remain unchanged. No PR or private retry yet.
+
+### Lifecycle state implementation checkpoint
+
+Added an internal schema/value lineage state model with execution-specific origins,
+guard-correlated alternatives, empty-destination Merge, Clear/re-Merge, explicit
+unknown helper effects, bounded histories and partial-operation failure snapshots.
+Writes preserve schema ancestry and cannot manufacture a missing SQL column.
+This is not yet wired into extraction or a comparison route, and does not satisfy
+the end-to-end matrix.
+
+Both IL readers now retain their canonical exception-region boundaries in the
+bounded internal object-body metadata. The retained text is charged to the existing
+object budget and covered by dual-reader equality; disagreement withholds the
+object interpretation. Existing serialized body hashes and contracts are unchanged.
+This makes catch/partial-failure interpretation possible without guessing handler
+boundaries from an exception count.
+
+Development gate: 25 focused lineage, object-path regression and exception-boundary
+tests passed with Debug `-warnaserror`, no failures or skips. The earlier eight
+lineage-only tests also passed. Full frozen and CLI end-to-end gates remain pending;
+the baseline lifecycle still has no positive comparison evidence. No goal completion,
+public acceptance, PR or work-machine retry is claimed.
+
+### Internal lifecycle interpreter checkpoint (goal remains active)
+
+Added a separate internal prototype, not yet emitted as facts or admitted by a
+comparison route. It follows the two compiled-wrapper executions through the
+property-held named tables, an application-created auxiliary table, guarded
+per-row overwrite, typed projection, Clear/re-Merge and fresh reload. Schema
+execution ancestry remains separate from value origin; overwrites retain an
+assignment site. Boolean alternatives remain separate correlated runs.
+
+Exact signed framework signatures admit only the narrow fixture operations.
+Loop summaries describe existing-row normal completion, not row existence or
+runtime execution. Cross-row dependence, loop-carried field effects and escapes
+discard positive claims. Invalid offsets, substituted type operands and mismatched
+callee shapes are refused. Both fixture projects build through the test project;
+the provider methods are not executed.
+
+Potential failure records retain before and normal-completion table/object states
+and partial-loop flags. They explicitly do not execute catch continuations or
+claim atomicity, rollback, observed failures or a final post-catch state. This
+remaining distinction must be preserved in the comparison contract.
+
+Focused Debug `-warnaserror` gate: 44 passed, zero failures/skips. This includes
+20 lifecycle tests plus retained object-path and lineage model tests. Development
+repairs included an uninitialized-field warning, an xUnit predicate assertion,
+ambiguous fixture method selection and nullable-flow warning; no expected matrix
+cell was weakened. The preceding 42-test checkpoint also passed.
+
+Still required: complete provenance/soundness review, extracted CLI evidence and
+dedicated bindings/comparison route, actual CLI end-to-end acceptance matrix,
+retained smoke denominators and frozen full validation. No complete implementation,
+private readiness, PR or work-machine retry is claimed at this checkpoint.
+
+## Native comparison checkpoint — 2026-10-28
+
+Native scanning now emits separate Tier3 lifecycle candidates with guard alternatives,
+exact invoked-body fact links, and provenance-bound interpretation limits. The new
+`sqlserver-compiled-lifecycle compare` route requires independent public result
+declarations plus execution-specific and consumer-specific bindings. It preserves
+SQL schema ancestry separately from application-derived current values.
+
+Focused Debug `-warnaserror`: 46 passed, zero failures/skips, including C# and VB
+native scan emission and CLI comparison publication. Independent complete shapes
+produce matches, missing columns produce mismatches, and incomplete shapes produce
+unknowns. Wrong execution, table, binary and stale candidate bindings are rejected.
+Repeated CLI reports are byte-identical; existing output destinations are refused.
+An intermediate test compile failed because the test used `Manifest.Repo` rather
+than `Manifest.RepoName`; this was corrected without changing expectations.
+
+This is not final acceptance. The complete independent end-to-end CLI scan matrix,
+failure-boundary report presentation, additional soundness/negative controls,
+retained smoke denominators and frozen full suite remain required. The goal stays
+active; no PR, private-app acceptance or work-machine retry is claimed.
+
+## CLI matrix and value-origin correction — 2026-10-28
+
+The integration test now enters through the actual scan command, reads persisted
+facts, and enters the comparison command with independently authored schemas and
+execution/column expectations. Each language exercises 12 selected alternatives:
+11 schema matches and one mismatch. Two current-value origins remain explicitly
+unknown (absent column and Clear followed by a different result schema), while the
+representative successful SQL and application-overlay origins remain linked.
+Four unsupported controls withhold positive evidence, including reading after a
+definite Clear. Repeated reports remain deterministic.
+
+Failure boundaries are now carried into the public JSON and Markdown report, with
+before/normal-completion table snapshots and partial/earlier-row flags. They do not
+claim executed catch continuations, rollback or observed post-catch state.
+
+Soundness review found that retained schema ancestry could falsely attribute an
+old column to the latest merged SQL execution. The comparator now independently
+checks the originating column against that execution's shape, emits unknown when
+unproven, and retains its source-column hash separately from the destination hash.
+Both C# and VB fixtures pin this case; definite cleared-table reads are refused.
+
+Development gate: 24 lifecycle tests passed, no failures/skips, Debug -warnaserror.
+The subsequent lifecycle/object-path checkpoint passed 32 tests, zero failures/skips.
+An earlier matrix run failed due to an ambiguous same-name fixture selector; the
+selector now includes the exact end-to-end input role, without relaxing outcomes.
+Final soundness review, frozen full/regression gates, retained smoke denominators,
+publication and consolidated prompt remain pending. The goal remains active.
+
+## Implementation freeze preparation — 2026-10-28
+
+The focused lifecycle/object-path/lineage gate passes 52 tests with zero failures
+or skips under Debug -warnaserror. Actual CLI scans are repeated and their persisted
+facts compared byte-for-byte, in addition to repeated comparison reports. Six
+negative roots per language now include duplicate named-table creation and
+enumeration over a definitely emptied table. Neither admits positive lineage.
+
+Public failure records now retain before/normal-completion object snapshots as
+well as table snapshots, including the empty-to-one-item projection-list boundary.
+The preceding lifecycle-only checkpoints passed 24 and then 28 tests. No runtime
+provider calls or private inputs were used. Implementation and independent CLI
+matrix tasks are complete; retained denominator checks, frozen full validation,
+publication and goal completion remain pending.
+
+## Final public lifecycle acceptance — 2026-10-28
+
+Frozen implementation head `7715833f9db6c6e4fd326dbec3013e3c5be8c0c5` passed the
+full Debug solution gate with `-warnaserror`: 5,498 passed, zero failed, three
+expected skips, 30m 56s. No rerun of this full gate was needed. The preceding
+focused gate passed 52 tests, including actual CLI scan/comparison in both languages.
+
+Sequential post-suite gates passed: repeated original/named compiled matrices,
+JSON/DDL parameter, result-column, table-result, DataTable, DataSet, private-helper,
+internal-helper and Field-read smokes. All retained denominators remained unchanged.
+Persisted compiled facts were byte-identical across replays. Pinned C#/VB scans
+passed artifact validation at 12,949/114,806 facts with reduced coverage; neither
+public repository has SQL calls. CLI/Core/Reporting hashes remained byte-identical
+through every gate. Exact hashes and matrix counts are in the validation document.
+
+Completion evidence maps to the outcome contract: separate caller/wrapper bodies;
+two exact execution identities and named destinations; property state; auxiliary
+application table and guarded helper overlay; distinct raw/projection reads;
+retained destination versus fresh reload identity; before/normal table and list
+snapshots with partial/earlier-row flags; schema/value separation; mismatch and
+incomplete-shape controls; six unsupported roots per language and provenance rejection.
+The 12 selected alternatives per language include 11 schema matches and one mismatch,
+with two deliberately unknown value origins. Successful paths are not all-unknown.
+
+This closeout changes docs/tasks/the consolidated later work-machine prompt only.
+The old mixed historical instructions were removed from that prompt. The next work
+machine action is retained-input fit checking, not automatic rescanning: current
+synthetic JSON admission cannot be repurposed as production DDL/catalog admission.
+Select predicates, custom ArrayList protocols, actual catch execution, session and
+framework behavior, private acceptance and migration remain separate capabilities.
+No private input, provider execution, SQL/container execution, PR or merge occurred.
+
+
+## Bounded ArrayList continuation — 2026-10-28 (bounded lifecycle scope verified)
+
+Starting branch `codex/sql-compiled-wrapper-evidence`, HEAD
+`e24387ffb7a8adc7b0bf65798956680e6321cd75`. Twelve dirty files included inherited
+owner-declared result admission (two untracked source/test files) and partial
+ArrayList implementation/fixtures/tests. All were preserved. The user archived
+the checkout during a build, then explicitly authorized recovery. All 12 files
+were restored byte-for-byte from snapshot `a1ea5d236c573af16a59d57e947425abedcca58d`
+into the same branch/path. The agent made no commit, push, PR, merge or ACK change.
+
+The lifecycle route accepts exact signed net48 ArrayList parameterless construction,
+Add(Object), GetEnumerator and IEnumerator Current/MoveNext. It concretely enumerates
+at most 16 inspected custom objects once and requires completion. Elements freeze
+when added. Inspected constructor stores and field/property loads must resolve the
+actual SqlParameter name, SqlDbType and size; unknowns never become defaults. Each
+parameter allocation attaches once; each command fills once with at most 16 parameters.
+Fresh collections preserve separate execution/table origins. Existing 4096-body,
+256-instruction/body, 8192-step, 24-depth, 256-object, eight-execution and 64-stack/local
+bounds remain. IDisposable tests return null only for the exact ArrayList enumerator
+protocol; arbitrary collection enumerators are not admitted. Lifecycle schema `/1`
+and other SQL route contracts are unchanged. Parameter-to-SQL-contract comparison
+is not added by this lineage feature.
+
+Public C#/VB fixtures cover fields, properties, two fresh executions, wrong
+primitive/custom element types, repeated enumeration, Queue refusal, RemoveAt,
+custom-element mutation, unknown escape, 17-element overflow, early exit, and an
+actual SqlParameter reused across two commands. Missing/duplicate/incomplete and
+forged framework metadata plus unresolved constructor values discard all positive
+lineage. Separate ArrayLifecycle fixture classes avoid charging unrelated lifecycle
+fields against the bounded compiled-object retention budget at every ArrayList root.
+No retention cap was increased or admission refusal bypassed.
+
+Checkpoint gates before archive: 36, 50 and 52 focused tests passed. A later 57-test
+gate had 56 passes and one SourceSnapshotChangedDuringScan failure because the agent
+edited a fixture during scanning. Its restart lost the checkout during archive.
+After recovery, 56 passed and one native VB integration test failed: no lifecycle
+candidates, with unknown List<Projection> constructor gaps. Added roots on the
+field-heavy Lifecycle class exhausted retained-object metadata; the ArrayLifecycle
+fixture isolation addresses this without widening the scanner. Stable rerun passed 57/57. A broader 87-test checkpoint then had 83 passes and
+four legacy object-path failures: making the shared PropertyParameter.Size writable
+for a mutation control changed its admitted field contract. Restored the original
+read-only property and isolated mutation in a new MutableParameter fixture class;
+legacy expectations remain unchanged. Corrected focused/regression gate passed 87/87, including explicit native CLI
+ArrayList positives and gaps, lifecycle, owner declarations, object paths and shapes.
+
+No fixture method, SQL provider, private/employer input or application runtime was
+executed. Select predicates, general collection protocols, catch/fallback execution,
+complex DDL, deployment and private acceptance remain separate and unresolved.
+
+
+### Continuation validation commands (current working tree)
+
+The focused regression command passed **87 tests**, zero failures/skips:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore --filter 'FullyQualifiedName~IlSqlLifecycleExtractorTests|FullyQualifiedName~SqlServerOwnerResultEvidenceTests|FullyQualifiedName~IlSqlObjectPathExtractorTests|FullyQualifiedName~IlSqlShapeExtractorTests|FullyQualifiedName~CompiledSql' -warnaserror
+```
+
+The original/named compiled native matrix passed unchanged (20 roots: 10 positive /
+10 unknown, two local shapes; named table: 26 roots, four positive / 22 unknown):
+
+```sh
+python3 scripts/validation/sql-compiled-wrapper-smoke.py --cli src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll --out /tmp/tracemap-arraylist-compiled-smoke-20261028
+python3 -m unittest discover -s scripts/validation -p test_sql_compiled_wrapper_smoke.py
+```
+
+All five Python guards passed. Actual C#/VB CLI scan and comparison, all three
+ArrayList positives and ten negative roots per language, body links and deterministic
+fact replay are exercised by the focused tests, not inferred from the separate
+20/26-root smoke.
+
+Full Debug shared-core gate passed **5,527 tests**, zero failures, three existing
+skips (5,530 total), exit 0, **46.0551 minutes**:
+
+```sh
+dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'
+```
+
+Logs: `/tmp/tracemap-arraylist-focused-regression.log`,
+`/tmp/tracemap-arraylist-compiled-smoke.log`,
+`/tmp/tracemap-arraylist-python-guards.log`, `/tmp/tracemap-arraylist-full-debug.log`.
+Pinned C#/VB source OSS smoke reruns are explicitly deferred: this slice changes the
+compiled lifecycle interpreter, not source adapters; the two pinned repositories
+contain no SQL calls and would not exercise this protocol. Non-.NET lanes and the
+Windows/private/runtime acceptance lanes are also deferred and unclaimed.
+
+### Changed-file handoff
+
+ArrayList implementation and independently authored compile-only controls:
+- `src/dotnet/TraceMap.Core/IlSqlLifecycleExtractor.cs`
+- `src/dotnet/TraceMap.Core/IlSqlLifecycleApis.cs`
+- `src/dotnet/tests/TraceMap.Tests/IlSqlLifecycleExtractorTests.cs`
+- `samples/sql-compiled-wrapper-evidence/csharp/end-to-end/Lifecycle.cs`
+- `samples/sql-compiled-wrapper-evidence/csharp/wrapper/Wrapper.cs`
+- `samples/sql-compiled-wrapper-evidence/vb/end-to-end/Lifecycle.vb`
+- `samples/sql-compiled-wrapper-evidence/vb/wrapper/Wrapper.vb`
+
+Associated limitations, tasks and state:
+- `rules/rule-catalog.yml`
+- `docs/validation/SQL_COMPILED_WRAPPER_EVIDENCE.md`
+- `.kiro/specs/sql-compiled-wrapper-evidence/tasks.md`
+- `.kiro/specs/sql-compiled-wrapper-evidence/implementation-state.md`
+
+Inherited owner-declaration changes retained intact (not newly implemented here):
+- `src/dotnet/TraceMap.Core/SqlServerOwnerResultEvidence.cs` (untracked)
+- `src/dotnet/tests/TraceMap.Tests/SqlServerOwnerResultEvidenceTests.cs` (untracked)
+- `src/dotnet/TraceMap.Core/SqlServerCompiledLifecycleEvidence.cs`
+- `src/dotnet/TraceMap.Cli/SqlServerCompiledLifecycleCommand.cs`
+- `src/dotnet/TraceMap.Reporting/SqlServerCompiledLifecycleReportWriter.cs`
+
+
+### Final closeout for this continuation
+
+The three full-suite skips are `OracleGoldenLaneTests.Full_generated_golden_sweep`,
+`HttpReportProvenanceInteropTests.Native_http_receipt_verifies_without_claiming_path_presence`,
+and the gated `IlCommandBindingExtractorTests.Deep_projectless_Windows_ASPNET_publish_preserves_exact_chain_and_command_binding`.
+No new skip was introduced. `git diff --check` passed. The five inherited owner
+files listed above remain byte-identical to the recovered archive snapshot.
+
+All results apply to the uncommitted working tree on `codex/sql-compiled-wrapper-evidence`
+based at `e24387ffb7a8adc7b0bf65798956680e6321cd75`, not a new committed head.
+CLI/Core/Reporting hashes stayed identical from the passing compiled native smoke
+through the full Debug gate:
+
+```text
+Core      ebf4d125644bac2c40ae8912d2fd7102a06eb1abd090832420b429ba3ad83cb7
+CLI       32aed8af88ff0a257fdf605f6ab5df9668865f22970cc559f6d14a21c73cbb13
+Reporting 121d1eaaede3dd9f323cce43f81c311ca0e9e29405bf5be3938d3333f5164242
+```
+
+This closes the ArrayList blocker for the tested bounded C#/VB compiled lifecycle
+pattern: inspected custom constructor fields/properties, actual SqlParameter
+construction and attachment, Fill(DataSet), and returned column-read lineage.
+It does not close the overall SQL effort. Other collection protocols, repeated
+or partial enumeration, unknown mutation/escape, parameter-to-contract comparison
+for ArrayList inputs, Select predicates, catch/fallback execution, general SQL/DDL,
+deployment and private acceptance remain unsupported or outside this task.
+
+No agent commit, push, PR, merge or ACK-policy change occurred. The restored checkout
+is the isolated worktree clone.
+The app rejected attachment to this chat with “Cannot verify that this ownerless
+worktree belongs to this task”; the branch/worktree exists in Git, but UI attachment
+was not established. All commands used the explicit restored directory.
+
+
+## Publication authorization — 2026-10-28
+
+After the bounded validation closeout, Joe explicitly requested pushing this branch
+with a work-machine test prompt. This supersedes the earlier no-commit/no-push
+instruction for this publication only. The consolidated prompt now tests current
+native ArrayList lineage, separates optional conditional owner-schema comparison,
+and preserves offline/private/no-application-or-SQL-execution boundaries. It no
+longer incorrectly lists bounded ArrayList support or all owner declarations as
+unavailable. Only prompt/validation/state prose changed after the passing full gate;
+implementation, test sources and binaries remain unchanged. No additional full
+suite rerun is warranted for this prose-only publication preparation. No PR, merge,
+ACK-policy change, deployment or private evidence publication is authorized.
+
+
+## Entry protocol patch — 2026-10-28, explicitly not test-validated
+
+Joe requested implementing/pushing the entry fix and explicitly said not to run
+tests. That instruction overrides the normal local test gate for this publication;
+no unit tests, full suite or native scan was run for this patch. CLI compilation
+with `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug
+-warnaserror` passed with zero warnings/errors. The earlier 87/5,527 pass receipts
+apply only to the prior implementation, not this entry patch.
+
+The original `ManagedIlSqlLifecycleCandidate` / `il-sql-lifecycle/1` column-read
+contract stays separate. New `ManagedIlSqlLifecycleEntryCandidate` facts use
+`il-sql-lifecycle-entry/1` under the same lifecycle rule, with generator/input hashes
+and invoked-body links. Exact signed DataSet returns and SQL-related Void methods
+are selected even with multiple arguments. Rejected related roots emit explicit
+admission gaps rather than disappearing at the initial Object-return filter.
+
+Nonvirtual/nongeneric entries accept at most 16 arguments. Root inputs are opaque
+unbound origins indexed against the exact root signature hash and body; there is
+no invented zero/null/string input. Closed scalar type identities are retained from
+the exact root signature; only a matching primitive box can preserve an opaque
+argument into a parameter Value. Unknown/custom signature shapes retain unknown
+type information and do not gain boxing assumptions. A single Boolean argument still has explicit
+false/true alternatives. Unknown branches and required scalar arguments fail closed.
+Exact SqlParameter/DbParameter Value setters before attachment preserve unknown
+argument origins without claiming runtime values. Existing size/depth/heap/work,
+mutation/escape, call/body identity and allocation/attachment guards remain.
+
+Static entry methods are supported without a fabricated instance. Instance entries
+still require a uniquely inspected parameterless constructor and fresh state; session
+state, ambient initialization and arbitrary object arguments are not conjured.
+Producer completion requires an actual tracked SQL-derived returned DataSet. Void
+completion requires a directly stored tracked SQL dataset or observed read; merely
+executing/discarding a SQL result is insufficient. Entry output includes stored field
+hashes, dataset/table identities, schema ancestry, read sites and command-specific
+parameter allocations/origins. Entry facts are not column/schema comparison inputs.
+DataSet subclasses, unknown control/command values and actual catch/fallback execution
+remain gaps. This patch does not prove the actual application's remaining wrapper
+or transformation legs, and does not add predicate support.
+
+Independent public fixtures now contain a four-argument static producer (two Int32,
+a String and a Boolean),
+custom parameter objects forwarded through ArrayList into actual parameter Value
+assignment/construction/attachment/Fill, a Void loader storing the result, and a
+legacy column-read consumer. New `IlSqlLifecycleEntryTests` definitions cover these
+and unknown guards/commands, empty/discarded outputs and admission refusals, plus
+native CLI fact separation. They were authored, not run. No private names, code,
+report text, photos or work-screen derivatives were added to the repository.
+
+Publication includes a revised work-machine prompt that identifies the new fact
+contract and explicitly skips test suites under the user's instruction. No PR,
+merge, ACK-policy, deployment or SQL/application execution is included.
+
+Both compile-only fixture projects also built with `--no-restore -c Debug -warnaserror`:
+`samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj` and
+`samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj`, zero warnings/errors.
+No fixture methods were invoked. The new test source was not executed or compiled
+as a test-project gate. `git diff --check` passed.
+
+
+## Metadata handoff repair — 2026-10-28 (compile-only publication)
+
+Starting head `b56a4d4e9452be5fad8f7049419a1532eb93b506`, clean worktree on
+`codex/sql-compiled-wrapper-evidence`. Joe authorized this fix/push and retained the
+no-tests instruction. No tests, native scan or provider/application execution was
+run locally. The CLI and public C#/VB end-to-end fixture projects compile under
+Debug `--no-restore -warnaserror`, zero warnings/errors. This is not behavioral proof.
+
+Object-body metadata now has an independent agreement decision. Generic value-flow
+summary disagreement still invalidates that summary; it no longer erases matching
+object-body instructions/metadata. Raw method/body identities, instruction/opcode,
+locals/region hashes, call references and call stack shapes must agree, and both
+object metadata records must be present/equal. Missing/disagreeing peers still refuse.
+There is no one-reader or guessed-body fallback.
+
+The retention cap is still at most 1,048,576 character credits per reader, shared
+across inputs. The body/instruction/field/text and overall work caps remain. Accounting
+now charges actual retained instruction/handler/private-field/signature/owner/name
+characters, including repeated retained strings, rather than reserving MaxTextLength
+for every declared field on every method. Public/static fields that are not stored
+in IlObjectBody are not charged as retained strings. This is bounded character
+accounting, not a measurement of all allocations or a cap increase. It can still
+exhaust on sufficiently large inputs; no root-sliced decoding/CLI selector was added
+in this bounded first repair. Such a follow-up would require explicit diagnostics,
+not another arbitrary cap increase.
+
+IL extractor identity is now `il-body-evidence/0.2.5+srm-10.0.0+cecil-0.11.6`, policy
+`explicit-il-body-evidence.v9`. ManagedIlBodyDeclared includes schema
+`il-object-body-retention/1`, objectBodyState, objectBodyRetention and
+objectBodyAgreement properties. Receipts expose declared-field count, requested
+characters, credits used before admission, cap, per-reader reason and raw/call/value/
+object agreement flags. Raw il-complete/admitted coverage remains a separate claim.
+
+Lifecycle metadata failures retain the existing gap kind plus bodyMetadataFailure:
+root-metadata or callee-metadata, exact failed body/binary/token/instruction count and
+its metadata receipts. Constructor-selection failures record admitted parameterless
+matches and unavailable bodies in that module; multiple constructor overloads alone
+are not treated as proof of ambiguity. No instruction is claimed executed merely
+because a root was selected or a metadata receipt was emitted.
+
+Independent `A_RetentionScale.cs/.vb` fixtures have twelve public fields and 160
+unrelated methods before a forwarding DataSet producer. The old maximum-width
+reservation would exceed the 1 MiB cap on the noise; the new accounting charges the
+actual retained metadata. Test definitions cover value/object-lane separation, raw/
+call/object disagreement refusals, scale retention, tiny-budget drop receipts and
+unchanged shape caps, plus native entry fact metadata. These tests were authored,
+not executed. No result is inferred from the fixture source or successful build.
+
+The work-machine prompt includes one failure-only Claude request: from the existing
+new output, produce one opaque-alias diagnostic matrix and an independently authored
+synthetic reproducer, with private evidence retained locally. No new screenshots,
+private code/binaries/hashes, speculative root/callee/control-flow explanations or
+repeated whole-app scans are requested. If a failure remains, use that capsule to
+make the next change reproducible locally. Do not claim this patch closes private
+acceptance, constructor/session initialization, predicates or overall SQL work.
+
+The verified-callee invocation path now explicitly handles a resolved method whose
+ObjectBody is absent, emitting the callee metadata receipt instead of dereferencing
+null before invocation. A regression definition covers that path; it was not run.
+
+
+## Root-sliced metadata continuation — 2026-10-28 (compile-only)
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting head
+`7fc54b81edd36aaa2782a60e1e570dddac2412c7`, initially clean. Joe authorized fix/push
+and explicitly deferred tests. The received report establishes corpus quota
+starvation before selected roots; it does not establish successful interpretation
+of the remaining wrapper path. An illustrative incomplete reproducer is not replay
+proof. No private code, names, identifiers or report text was copied into this tree.
+
+## Root-sliced retention — compile-only, 2026-10-28
+
+IL extractor 0.2.6 / policy `explicit-il-body-evidence.v10` adds repeatable
+`--il-lifecycle-root <binary-sha256>:<MethodDef-token>` (max 16; requires explicit
+`--il-body-evidence`). The root must uniquely match an admitted raw body. Default
+corpus mode is retained. Selected mode defers corpus object metadata and skips
+corpus-wide object-path/lifecycle interpretation; it reports partial coverage.
+`ManagedIlBodyDeclared.objectBodyScope: deferred-to-root-slice` is not a selected
+metadata failure. Selected lifecycle candidates/gaps carry `lifecycleSlice`, schema
+`il-sql-lifecycle-slice/1`, with generator/bounded-input hashes and member receipts.
+
+Each sequential root lease retains only the root, its inspected parameterless
+constructor when needed, and exact resolved call closure. Bounds are 128 bodies/root,
+4,096 admitted raw bodies indexed, 4,096 reference lookups/root, 64 MiB verified
+compiled input bytes/root, and at most 1 MiB characters per reader/root. The decoder
+has one aggregate configured work budget across selections, separate from the
+existing interpreter budget. The lease is disposed before advancing to another root.
+The previous default corpus quota remains shared across inputs per reader.
+
+Selected bytes are SHA-verified again. Both independent decoders must agree and
+match the admitted raw body. Cecil metadata lookup locates candidate definitions;
+it cannot establish a positive body without SRM agreement. Exact framed assembly
+and member identities select cross-assembly candidates. Missing, changed, ambiguous,
+over-limit or unagreed bodies remain explicit gaps. Existing instruction/field,
+interpreter depth, heap, collection and execution-identity refusal gates remain.
+Read/entry JSON contracts and compare routes are unchanged; this is an additive
+opt-in analysis scope and receipt, not a new result-schema acceptance route.
+
+The C#/VB CLI test definitions now cover selected roots, excluded unrelated noise,
+retained member receipts and existing positive/negative entry controls. Selector
+format, MethodDef identity, root-count and explicit-admission controls are authored.
+Tests/native scans were not run at Joe's request. Compilation does not establish
+private-input success or close the ArrayList blocker. The earlier scale fixture
+was not a complete reproduction of actual-cost corpus starvation; no successful
+large-corpus behavioral replay is claimed here.
+
+Validation: CLI Debug build with `--no-restore -warnaserror` passed, zero warnings
+and errors. No unit/full tests, native scans, SQL or application execution were run.
+The work-machine prompt derives exact selectors from retained local facts and asks
+for one targeted run. Failure uses one sanitized hint plus a complete independent
+public sample; no new photos or repeated whole-app diagnosis. No PR/merge/ACK changes.
+
+Compile-only verification also included the authored test source (no test execution):
+`dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+passed with zero warnings/errors. `git diff --check` passed. Existing public fixture
+sources were unchanged in this iteration. The ArrayList blocker is not declared
+closed until selected real-input lineage is emitted and inspected.
+
+
+## Exact legacy base-call continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting head
+`53cfd08c4b836b7cfcf92f411d4d16aacc3ca29e`, clean worktree. Standing user authority:
+fix/push without running tests. Source inspection confirms the lifecycle delegated
+base-call catalog previously admitted only mscorlib 4.0.0.0. No employer photograph,
+transcript or private implementation was copied into this repository.
+
+## Exact legacy Object base constructor — compile-only, 2026-10-28
+
+IL extractor 0.2.7 / policy `explicit-il-body-evidence.v11` adds one identity to
+the lifecycle framework catalog: signed neutral mscorlib 2.0.0.0 (token
+b77a5c561934e089), System.Object, instance/non-generic/default-call/parameterless
+.ctor returning Void. It invokes the existing neutral base-call action only on a
+tracked custom object, then continues inspecting subsequent field stores. There
+is no global assembly-version normalization or arbitrary constructor skipping.
+The existing 4.0.0.0 base call, exact ArrayList/System.Data identities, object-path
+route and SQL compare contracts remain unchanged. Legacy ArrayList identities
+still refuse. Missing fields, unknown values and unsupported calls remain gaps.
+
+New test definitions rewrite only the encoded base-constructor reference in the
+independently authored public C#/VB InputParameter fixture, in memory, then require
+Cecil/SRM agreement before checking end-to-end field/parameter/execution lineage.
+Negative catalog definitions vary version, token, assembly, culture, type, instance
+shape, arity and parameters. These tests were authored and compile-checked, not
+executed. No application or SQL execution, private input publication, native replay
+or ArrayList acceptance claim is included.
+
+Compile-only command:
+`dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`.
+No tests/scans were run. A fresh work-machine selected-root check remains required;
+this does not close the ArrayList blocker or the overall SQL effort.
+
+Result: test-project build (including CLI dependencies) succeeded with zero warnings
+and zero errors; this compiles tests without executing them. `git diff --check`
+passed. No native lifecycle candidate success is claimed from these checks.
+
+
+## Closed legacy core protocol continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting head
+`844eb1bb0330a04f0d345855eec172377a9de8e6`, clean before edits. Standing fix/push
+and no-tests instruction retained. The next reported gap is the exact legacy
+ArrayList construction identity. This patch covers the closed collection protocol
+and needed core value operands together instead of another constructor-only patch.
+No private report/source/identifiers or supplied stub were copied into this tree.
+
+## Closed legacy core ArrayList profile — compile-only, 2026-10-28
+
+IL extractor 0.2.8 / policy `explicit-il-body-evidence.v12` deliberately extends
+lifecycle admission to exact signed neutral mscorlib 2.0.0.0 alongside 4.0.0.0 for
+ArrayList parameterless construction, Add(Object), GetEnumerator, IEnumerator
+Current/MoveNext, IDisposable.Dispose and RuntimeHelpers.GetObjectValue. Method
+signatures, signing key, culture, namespace and type must match exactly. Enumerator
+return scope matches its owner's selected core profile. Existing primitive/Object/
+IDisposable type-operand checks admit either exact core identity; typed unknown
+boxing still requires the matching declared root scalar type. The previously added
+legacy Object base constructor remains neutral only on a tracked custom receiver.
+
+No global version normalization or general legacy-framework support is added.
+System.Data 2.0.0.0, legacy generic lists, alternate collection APIs/overloads,
+mutation, escape, invalid elements, incomplete/repeated enumeration and invalid
+attachment remain refusals. All size/work/heap/depth bounds remain. SQL read/entry
+schemas and compare routes are unchanged; this is an intentional additive versioned
+admission-profile change. The object-path catalog remains separate and unchanged.
+
+C#/VB regression definitions rewrite only core AssemblyRefs of independently
+public synthetic fixture bytes in memory, then require dual-reader agreement and
+check constructor fields, boxing, enumeration, producer/consumer lineage, separate
+executions and negative collection/attachment cases. Exact-identity controls keep
+wrong versions, keys, cultures, namespaces and stack shapes outside admission.
+Definitions are compile-checked only; no behavioral success is claimed. The prior
+4.0-only refusal expectation now rejects 3.0.0.0 because 2.0.0.0 is intentionally
+admitted for this closed protocol. Existing fixture source files are unchanged.
+
+The work-machine prompt requires a bounded full framework-identity inventory for
+the selected closure before one native run, so a later failure returns all known
+remaining framework mismatches rather than one constructor at a time. A stub with
+a throwing wrapper remains inadequate as complete replay proof. Private-input
+lineage, owner comparison and closure of the ArrayList blocker remain unproven.
+
+Compile-only validation:
+`dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`.
+Tests/native scans/SQL/application methods were not executed. Historical pass counts
+do not validate this profile. No PR, merge, ACK policy or deployment changes.
+
+Result: the final test-source/CLI dependency build succeeded with zero warnings and
+zero errors. `git diff --check` passed. No test methods were executed. Work-machine
+framework inventory and native selected-root lineage remain outstanding.
+
+
+## Opaque initializer continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting head
+`2a2924f9ba6f72238a189170945b28eeb52bffea`, initially clean. Joe explicitly asked
+to build the bounded opaque-initializer policy after discussion of its uncertainty.
+Standing no-tests instruction retained. The policy is opt-in and candidate claims
+surface assumptions rather than asserting purity from signature/stack metadata.
+
+## Opt-in opaque root scalar initialization — compile-only, 2026-10-28
+
+IL extractor 0.2.9 / policy `explicit-il-body-evidence.v13` adds
+`--il-opaque-root-initializers`, requiring explicit selected roots. Default behavior
+remains strict. Only a fresh producer/loader root's unique parameterless constructor
+can abstract a linear external-call chain into its own private scalar field. Read
+roots retain the strict constructor route. Existing available/metadata-failed
+compiled callees are not blackboxed. Unknown effects are not treated as pure.
+
+Admission requires no constructor branching or exception handlers, no intermediate
+stores/escapes, no tracked reference arguments/receivers, and no void/byref/generic
+calls. Arguments are chain temporaries or literals; instance receivers must be
+chain temporaries. The terminal store must consume the root receiver and exactly
+one opaque result whose agreed encoded return type equals the private field's
+primitive String/Boolean/integer/floating/Char type. No arbitrary struct, Object or
+DataSet field is admitted. A temporary reference is not claimed fresh or local.
+Opaque fields can initialize only once and later explicit writes refuse.
+
+Bounds are 8 fields/root, 32 instructions/chain, 8 calls/chain, 4 arguments/call and 16
+chain stack values, plus existing interpreter/closure/heap/work bounds. No runtime,
+configuration, provider, decryption or environment access is performed. Only the
+already dual-reader-agreed retained instruction/call/field metadata is interpreted.
+Opaque field values carry typed unknown origins. They may flow as data through
+inspected wrappers/parameter Value assignments, but never become assumed command
+text, parameter names/types/sizes, branch outcomes or tracked object identities.
+
+Using the boundary emits a separate `il-sql-lifecycle-opaque-entry/1` entry schema,
+not the existing column-read or comparison contract. Initializer receipts identify
+store and call sites, signature/field hashes, declared types, possible throws and
+unmodeled effects. Claims explicitly assume normal return and noninterference with
+unpassed tracked heap state. They do not prove constructor completion, purity,
+external non-mutation or absence of aliases. This is conditional partial evidence
+under an opt-in abstraction, not independently established external-call behavior.
+The selection flag/policy/bounds are bound into generator/input provenance. Later
+refusals retain initializer receipts but discard executions/positive entry claims.
+
+Independent public C#/VB compile-only fixtures include opaque producer data flow,
+SQL/control/mutation refusals, root-reference arguments, non-scalar fields, handlers,
+long chains and strict read roots. Tests also define missing field metadata/byref
+refusals, explicit-opt-in validation and native separate-schema emission. Definitions
+are authored/compiled, not executed. No private code or report text was added.
+
+Compile-only verification commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No test methods, native scans, SQL, provider/application methods, or environment
+fixture calls were executed. No PR/merge/ACK policy changes. Real-input lineage and
+closure of the ArrayList blocker remain unproven. The work-machine prompt now asks
+only for a short sanitized text return; sample code stays on that machine.
+
+Initializer rejection messages distinguish constructor control/handlers, chain/call/
+stack limits, tracked-reference arguments, unsupported returns and field metadata.
+An opaque-initializer-stage body receipt identifies the rejected constructor when
+an unresolved call is reached there. These are analysis gaps, not purity judgments.
+
+Final builds succeeded with zero warnings/errors for CLI dependencies/test source
+and both C#/VB fixture projects. `git diff --check` passed. These are compilation
+checks only; no tests or sample methods were run. The failure-only handoff now
+explicitly keeps sample source on the work machine and requests text/status only.
+
+
+## Exact external trace continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting public head
+`e173788b481373d1e703687beddcc142756031d8`, clean before edits. Standing fix/push
+and no-tests instruction retained. A later diagnostic identifies an immediate
+public System.Web trace chain in the selected root body and wrong outer façade
+selections. The reported native build also included uncommitted public-tool changes
+that are not available in this checkout; their behavior is not assumed reproduced.
+No private names, tokens, source, patch content or receipts were copied into Git.
+
+## Exact external System.Web trace boundary — compile-only, 2026-10-28
+
+IL extractor 0.2.10 / policy `explicit-il-body-evidence.v14` adds the explicit
+`--il-external-trace-boundary` flag, requiring selected roots. It recognizes exact
+signed neutral System.Web 4.0.0.0 (token b03f5f7f11d50a3a) MemberRef signatures for
+static HttpContext.get_Current, instance HttpContext.get_Trace and instance
+TraceContext.Write(String) or Write(String,String) with Void return. The entire
+chain is recognized atomically; it is not a general getter/void-method allowlist.
+No System.Web implementation or runtime environment is loaded/executed.
+
+Only the selected producer/loader root body at depth 0 qualifies, with an empty
+interpreter stack and no active modeled enumeration loop. Reference results cannot
+be stored, duplicated, returned, branched on or passed outside the chain. Arguments
+are scalar string literal/null values, root arguments, locals or own private field
+loads with proved modeled string/opaque-string origins. No arbitrary argument-call
+computation or tracked object argument is admitted. Other overloads, signing keys,
+versions, owners or incomplete call metadata refuse. Context non-nullness is unknown.
+
+Bounds are 8 chains/root and 16 encoded instructions/chain, under existing aggregate
+work limits. No branch may enter the chain's middle, and exception-region membership
+must remain unchanged across it. Receipts retain all three sites/signature hashes,
+argument origins, possible throws/unmodeled effects and the innermost enclosing
+catch site when present. Normal return and noninterference with the tracked data
+heap are explicit assumptions, not findings that tracing is pure or effect-free.
+Catch continuations remain unexecuted. Runtime context/logging behavior is unproven.
+
+Used boundaries select `il-sql-lifecycle-opaque-entry/1` with optional externalTraces
+receipts; existing strict read/comparison contracts are unchanged. Defaults retain
+unknown-call refusals. Scalar initializer mode remains separately opt-in. Guarded
+runs select their schema independently, preventing a conditional boundary on one
+run from relabeling a different run that did not use it. SQL parameter allocation
+and execution identities remain in the existing interpreter model.
+
+Public C#/VB fixture and test definitions cover both Write overloads, scalar root/
+local/opaque-field data, separate SQL executions, forged signatures, missing call
+metadata, context branches/stores, tracked-object arguments, overload/chain limits,
+legacy read-root refusal, explicit flag validation and native conditional schema.
+Only compilation is checked; tests/native scans/provider/application/trace methods
+are not executed under the standing no-tests instruction.
+
+Work-machine reports based on dirty tool files are evidence for those exact mixed
+binaries, not just the Git commit. The handoff preserves local changes and requests
+actual generator/delta bindings privately plus a neutral public-tool delta summary.
+Wrong outer façade roots are deselected; reference-field constructor admission is
+not added. Full real-input lineage and public-release acceptance remain outstanding.
+
+Compile-only verification commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No tests/native replay were executed. No PR/merge/ACK-policy/deployment changes.
+
+Final CLI-dependency/test-source and both public fixture builds succeeded with zero
+warnings/errors. `git diff --check` passed. No test methods or native scans were
+executed. The three reported work-machine source changes remain unintegrated and
+unreviewed here; this patch does not claim to reproduce their behavior. The next
+handoff must preserve and identify them rather than equating their mixed binary
+with a clean published SHA. Whole SQL effort/acceptance remains incomplete.
+
+
+## Constructor field-owner continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting head
+`01f2a1d821ecc8536e882c74d49a39e47be47959`, initially clean. Standing fix/push and
+no-tests instruction retained. A later clean-head report refuses at field ownership
+before initialization/trace. No former dirty implementation diff is available in
+this checkout or the report; it was not silently recreated or claimed reviewed.
+
+## Metadata-proved constructor field owners — compile-only, 2026-10-28
+
+IL extractor 0.2.11 / policy `explicit-il-body-evidence.v15` retains each body's
+exact direct BaseType independently through Cecil/SRM. It participates in object
+metadata agreement and actual-text charging under unchanged retention/field/body
+caps. No scope or assembly-version normalization is introduced.
+
+A fresh derived allocation initially owns only its concrete type's slots. A direct
+nonvirtual inspected base-constructor call may add one field-owner view only if:
+both source and target object metadata agree independently, the caller is a
+constructor whose this is the same tracked receiver, the caller owner is already
+admitted on that allocation, and its declared direct BaseType equals the target
+constructor owner exactly. Target provenance/shape checks remain. Same-class
+constructor delegation adds no ownership. At most 24 owner views/allocation and 256
+view records/run are allowed under existing call-depth/work/heap limits.
+
+This supports a reference-field initializer constructing a derived custom object
+whose inspected base constructor stores base-owned fields. It does not make
+reference fields opaque. Concrete allocation identity is unchanged. Fully scoped
+base/derived field keys remain separate, including same-named fields. Unrelated
+constructor/field owners, missing/unagreed metadata and generic/virtual targets
+remain unknown. Unmodeled calls inside a base constructor still refuse; root-only
+opaque scalar admission and the trace boundary are not widened.
+
+Optional constructorOwnerViews receipts bind call site, receiver allocation,
+derived/base owner hashes and exact target body/binary. Residual field-owner gaps
+include fieldOwnerFailure with executing/allocation owner hashes, field identity
+hash, admitted owner hashes, receiver-is-this, constructor flag, field-declared-on-
+executing-owner and stored value KIND. No value or raw source snippet is added.
+The existing read/entry/conditional schemas and comparison routes remain separate.
+
+The old work-machine diff is not available and has not been reviewed/restored.
+This is an independently implemented, metadata-proved ownership case, not a claim
+that reference-field type alone explains the private refusal. Public C#/VB fixtures
+combine a constructed reference field, same-named base/derived fields, opaque root
+initialization, SQL execution identity and external trace. Negative definitions
+remove/change the declared base, remove reader agreement and inject unrelated
+field slots. Tests are authored and compile-checked only; private matching and
+behavior remain unproven. No arbitrary owner-check bypass is added.
+
+Compile-only commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No tests, native scans, application/provider/environment/trace methods were run.
+No private code, owner names/tokens, tool diff or receipts were copied into Git.
+No PR/merge/ACK policy/deployment change. ArrayList/private lineage remains unproven.
+
+Final CLI-dependency/test-source and both public fixture builds succeeded with zero
+warnings and zero errors. `git diff --check` passed. These are compilation checks,
+not behavioral/native acceptance. The public ownership case is covered by authored
+controls; whether it is the private failure mechanism remains to be established.
+
+
+## Opaque lookahead diagnostic continuation — 2026-10-28
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting clean head
+`209b74b711867936293bed1af1689af9f207a1e5`. Standing fix/push and no-tests authority
+retained. The reported explanation of unavailable external calls conflicts with
+the published nonempty-body-match guard. Source inspection establishes a diagnostic
+misattribution bug: lookahead can stop at a later matching compiled callee, while
+ordinary interpretation then labels the failure with the first external getter.
+The exact private matched helper remains unknown; its semantics are not invented.
+
+## Opaque lookahead rejection attribution — compile-only, 2026-10-28
+
+IL extractor 0.2.12 / policy `explicit-il-body-evidence.v16` fixes a diagnostic bug,
+without relaxing admission. Opaque lookahead already allows eligible external calls
+with NO matching admitted body. Its compiled-callee refusal is reached only when a
+body/metadata alias DOES match. Previously a later rejected compiled helper could
+be mislabeled with the earlier configuration getter where normal interpretation
+first stopped. That message did not prove System.Configuration input was required.
+
+The interpreter now preserves the actual rejected call/site/signature hash, chain
+start and normal-interpretation trigger separately. Gap opaqueInitializerRejection
+lists at most two exact matched body/binary/token bindings, input role/outcome,
+retained/unavailable metadata/retention state, scalar return kind and call shape.
+Bounded instruction/handler/call counts and opcode-level branch/field-write/throw
+flags describe available bodies only; null flags mean unavailable metadata. They
+are not purity, reachability or normal-return proofs. The gap names the actual
+rejected signature hash; metadata stage is opaque-initializer-lookahead.
+
+One retained match, one metadata-unavailable raw/alias match and multiple matches
+have distinct reasons. Missing metadata and ambiguity remain refusals. The guard
+against silently replacing available compiled behavior with an opaque assumption
+is unchanged. Normal inspection of a fully interpretable helper still proceeds
+when no earlier external unknown prevents ordinary interpretation. Pending lookahead
+state is not reported as a rejection on such a successful path. Candidate schemas,
+SQL/execution identity, all bounds and existing read/compare contracts are unchanged.
+
+Independent public C#/VB fixtures use a standard external configuration/string chain
+with no System.Configuration compiled input; another adds a small admitted scalar
+helper later in that chain. Definitions cover external-boundary eligibility, exact
+later-helper attribution, ordinary known-helper inspection, missing metadata and
+ambiguous matches. They compile only; tests/configuration/provider calls/native
+scans are not executed. No employer source or helper identity was copied into Git.
+The work-machine prompt inspects existing evidence first and returns a short text
+helper-shape capsule, not code/photos or an assumed framework-policy fix.
+
+Compile-only commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No tests, native scans, configuration/provider/application methods were executed.
+No PR/merge/ACK policy/deployment changes. This fixes diagnostic attribution only;
+private entry lineage remains incomplete and the matched helper still needs actual
+bounded inspection/metadata evidence before any admission change is justified.
+
+Final CLI-dependency/test-source and both public fixture builds passed with zero
+warnings/errors. `git diff --check` passed. No test methods or native scan were run.
+The private owner refusal is reported resolved; actual lookahead callee attribution
+and complete native entry lineage remain outstanding. No admission gate was removed.
+
+
+## Retained compiled scalar boundary — 2026-10-29
+
+Branch `codex/sql-compiled-wrapper-evidence`, starting clean head
+`80ad2e46146122ca3def4215f26451daf1d56ab2`. The precise work-machine capsule now
+identifies an available static scalar transform with internal control/handlers.
+Standing fix/push and no-tests authority retained. The implementation is an explicit
+conditional effect boundary, not an inference of purity from no direct field writes.
+No private helper name, code, algorithm, body identity or receipt was copied to Git.
+
+## Explicit retained compiled scalar transformation — compile-only, 2026-10-29
+
+IL extractor 0.2.13 / policy `explicit-il-body-evidence.v17` adds
+`--il-compiled-scalar-boundary`, requiring opaque root initialization and selected
+roots. Default compiled-callee refusals remain. Only unique admitted/provenance-
+bound, dual-reader raw/call/object-agreed static/nonvirtual/nongeneric String-to-
+String callees qualify. Caller arguments must be scalar string temporaries/literals;
+no tracked root/reference argument or unknown receiver is admitted.
+
+Bounds are 128 instructions, 4 exception regions, 32 call observations, 32 locals,
+stack 16 and 4 summaries/root, under existing aggregate work/chain/field/heap caps.
+Instruction offsets, branch/switch targets and exception ranges are checked. Catch,
+finally, filter and fault metadata are retained structurally. An over-approximate
+bounded control graph must expose a return, not prove runtime reachability. Direct
+field writes, explicit throws/rethrows, indirect calls/jumps, block/pointer stores,
+field-address/delegate construction, incomplete calls/metadata and wrong signatures
+refuse. Unknown or ambiguous body matches do not become opaque external calls.
+
+This is a conditional scalar-transform boundary, not a purity or passthrough proof.
+Internal branches, handlers and calls are NOT executed or semantically resolved.
+No direct field-write opcode does not establish absence of transitive effects or
+escapes. Normal return and noninterference with unpassed tracked heap are explicit
+assumptions; possible throws and transitive effects remain unmodeled. The declared
+String result is unbound, never assumed equal to its input or successfully decrypted.
+Root constructor linearity/private scalar terminal-store checks still apply, and
+SQL identifier/type/size/control consumption of unknown values still refuses.
+
+Only after the complete caller terminal store qualifies are compiledCallees receipts
+committed inside opaqueInitializers. They bind actual call/signature, target body/
+binary/token, handler kinds and bounds to the containing generator/input provenance.
+Policy is explicit-inspected-compiled-scalar/1; candidate schema remains the separate
+il-sql-lifecycle-opaque-entry/1 conditional entry contract. Current read/comparison
+routes and execution/allocation identities are unchanged. Ordinary compiled calls
+outside this opt-in constructor boundary remain inspected/refused as before.
+
+Independent public C#/VB fixtures combine a four-region branching string transform,
+constructed-reference ownership, opaque configuration inputs, parameter attachment/
+Fill and external trace. They use only public synthetic constants/APIs; no private
+transform/decryption source or algorithm is copied. Negative definitions cover
+writes/throws, SQL/control use, instance/generic/missing agreement and resource caps.
+Native definitions check three flags, conditional schema and summary provenance.
+All are compile-checked only: no tests, native scans, configuration/transform/provider/
+application methods are executed. Real-input lineage/whole SQL completion is unproven.
+
+Compile-only validation commands:
+- `dotnet build src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/csharp/end-to-end/EndToEnd.csproj --no-restore -c Debug -warnaserror`
+- `dotnet build samples/sql-compiled-wrapper-evidence/vb/end-to-end/EndToEnd.vbproj --no-restore -c Debug -warnaserror`
+- `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror`
+
+No tests, native scans, configuration/transform/provider/application methods were
+executed. No PR/merge/ACK policy/deployment changes. Work-machine confirmation and
+later consumer/schema comparison remain outstanding; whole SQL effort is incomplete.
+
+Final CLI-dependency/test-source and public C#/VB fixture builds succeeded with zero
+warnings/errors; `git diff --check` passed. No test/native/application/transform code
+was executed. Work-machine entry confirmation remains outstanding. The input/output
+is declared String metadata with unknown value, not an inferred passthrough result.
+
+## Computed external trace arguments — 2026-10-29
+
+Extractor 0.2.14 / evidence policy v18 / external trace policy 2 adds exact signed
+framework scalar string computations to selected producer/loader roots under the
+existing external-trace flag. Concat/Format, selected primitive conversions and
+String instance operations yield unbound String values with call/origin receipts.
+Only known scalar operands qualify; Object formatting of tracked/unproved objects,
+arbitrary argument helper calls, computed SQL names and default/read routes retain
+refusals. This does not skip arbitrary argument evaluation or prove Write pure.
+
+Partial trace receipts mark computed arguments and retain mayThrow, normal-return
+and external-effect assumptions. The versioned trace bound is64 instructions/chain
+(previously 16),16 expression stack items, 16 array elements, 32 computations/run and
+8 chains/root under existing work/heap bounds. Internal trace arrays are fresh;
+preexisting array mutation inside a trace chain refuses. Catch continuations remain
+unexecuted. Exception.Message on an unproved receiver remains unsupported.
+
+Public C#/VB positive and refusal test definitions were authored. Compile-only
+CLI, C# fixture, VB fixture and test-project builds passed with -warnaserror and
+zero warnings/errors. Tests and scans were NOT run, explicitly deferred by Joe.
+The private entry candidate and ArrayList blocker closure remain unproven.
+
+## Field-access refusal diagnostics — 2026-10-29
+
+Extractor 0.2.18 (skipping locally reported unpublished version numbers) / evidence
+policy v19 records the pending field operation before receiver/custom-owner checks.
+Optional fieldAccessFailure retains exact body/binary/invocation/offset/token,
+opcode, receiver abstract kind/allocation/heap kind, owner/field hashes, declared
+field type, nullable owner admission, this/constructor status, store-value kind,
+reader agreement and at most seven neighboring opcode names. No operand snippets
+or values are added. Opcode context is not full dataflow provenance. The receipt
+is cleared after successful field operations and retained when that operation
+refuses. Missing heap/type data stays null. Existing gap names and admission,
+loads/stores, allocation/execution identity and bounds are unchanged; no bypass.
+Existing fact generator/input provenance also binds this nested diagnostic.
+
+C#/VB regression definitions cover unknown receiver refusal and custom owner
+mismatch diagnostics. Tests/scans remain deferred by Joe. The work-machine prompt
+permits one isolated clean-head build and at most one native scan, then a hard
+stop; existing dirty patches/outputs must be preserved. Native lineage and the
+ArrayList blocker remain unproven.
+
+Validation for this diagnostic change: `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror` passed with zero warnings/errors, including CLI/Core and regression definition compilation. `git diff --check` passed. No tests or scans executed.
+
+## Logging-only stack-name expressions — 2026-10-29
+
+Extractor 0.2.19 / evidence policy v20 / external trace policy 3 adds scalar and
+fresh trace-array local stores plus a closed exact signed mscorlib 2/4 sequence:
+StackTrace parameterless constructor, GetFrame(Int32), StackFrame.GetMethod and
+MemberInfo.Name. Intermediate stack/frame/method markers remain expression-only
+and framework-version-consistent; local storage of these references, arbitrary
+calls, general reflection and dynamic/out-of-range frame indices refuse. Names
+are unbound computed strings, not actual runtime identities. All four call sites
+are retained with signature hashes and mayThrow/unmodeled receipts. Normal return,
+non-null intermediate receivers and noninterference remain conditional assumptions.
+No stack capture, reflection, application code or SQL is executed by the extractor.
+
+Intentional versioned trace-chain limit 128 (was 64), with 32 stack-name calls/chain,
+16 distinct local stores/chain and frame indices 0..31. Existing stack 16, array 16,
+string-computation 32, chains 8, heap 256, body 256 and aggregate work/call-depth bounds
+remain. Local stores preserve modeled values and fresh-array allocation identity;
+array writes still require an array allocated inside that trace expression. Field
+loads/stores have no bypass. Unsupported default and read roots remain strict.
+
+Trace refusals now optionally expose externalTraceFailure: exact body/binary/
+invocation/token/offset, opcode, reason, optional call signature hash/shape and at
+most16 abstract stack kinds. This diagnostic contains no source snippets, message
+values or runtime stack names. Existing generator/input provenance binds it.
+
+Independent public C#/VB fixtures and test definitions cover short local-array
+and eight-capture expressions, exact identity mutations, dynamic frames, general
+reflection, strict default and stack-reference local escape. CLI/test-project and
+both fixture projects compiled with --no-restore -c Debug -warnaserror, zero
+warnings/errors. Tests and native scans were NOT run, deferred by Joe. Work-machine
+prompt permits one isolated build and one scan only, then stop.
+
+Why earlier checks missed this: the selected fixture coverage did not assert a
+compiler-generated local-array spill together with stack-name reflection. Compile
+success checks types, not interpreter behavior, and authored tests were unexecuted.
+Generic trace failures omitted instruction/offset, while dirty-tool progress was
+not equivalent to clean-public-head behavior. The new trace diagnostic addresses
+that evidence omission; it does not justify accepting the unpublished field bypass.
+
+Known remaining limits are not a count of private blockers: general reflection,
+other stack constructors/dynamic frames, reference escape, arbitrary argument
+helpers, branch/handler/loop-crossing trace expressions, and non-custom field
+receivers remain unsupported. A later field-receiver failure was reported only
+from a dirty tool; its exact operation is still unproven on the clean path. Native
+entry lineage, owner-schema comparison and overall SQL completion remain unproven.
+
+## Exact opcode attribution and native gap wiring — 2026-10-29
+
+Extractor 0.2.20 / policy v21 fixes a diagnostic integration omission: interpreter
+FieldAccessFailure and ExternalTraceFailure were not serialized onto AnalysisGap
+facts. They now appear as fieldAccessFailure and externalTraceFailure properties.
+Earlier absence of these properties could not establish successful or unreached
+phases. This corrects prior handoff assumptions. No admission changes are made.
+
+Generic unsupported-opcode refusals now emit opcodeFailure with selected-root
+metadata, actual failing body/binary/token/offset, retained instruction count and
+a snapshot of the actual bounded interpreter invocation path. Each frame records
+its entry/invocation and caller site; the path uses the existing depth 24 bound
+and is captured before unwind. Constructor entry is distinguished by selected-root
+metadata even when the initial frame is the root constructor. Body-shape refusals
+also retain bodyMetadataFailure. Invocation evidence is not runtime reachability.
+
+Code inspection confirms selected-root slicing follows forward reference edges
+plus the root constructor, and interpretation invokes exact matched call targets.
+A body being present in the corpus/slice does not itself execute that body. An
+unreachable sibling's opcode gap therefore requires checking exact fact rule/root,
+module-local token AND binary, actual call resolution and receipt provenance;
+no corpus-wide interpretation cause is established by the private report.
+
+Public C#/VB delegate-refusal fixtures and regression definitions cover nested
+opcode-path attribution, emitted native trace/opcode diagnostics and separation
+of an unrelated delegate root from a selected producer. Tests/scans remain deferred
+by Joe. The prompt permits at most one isolated build and one scan, then stop.
+No LINQ support, delegate bypass, field bypass, bound increase or completion claim.
+
+Compile-only validation: C# and VB end-to-end fixture builds plus `dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror` passed with zero warnings/errors (CLI included). An initial test compilation failed for a missing CLI namespace import; corrected before the successful final build. `git diff --check` passed. No tests/scans executed.
+
+## Separate LINQ source coverage — 2026-10-29
+
+A separate bounded C#/VB semantic pipeline rule was added under
+`.kiro/specs/bounded-linq-pipeline-evidence/`. It records object grouping/captured
+count and DataTable column-to-object projection dependencies. This does NOT add
+compiled delegate/LINQ interpretation or change the active opcode-attribution
+protocol. Dynamic DataTable.Select predicates remain excluded. Do not retry a
+compiled-only acceptance scan expecting this source feature to clear ldftn.
+
+## Executed compiled controls exposed a typed-scalar copy gap
+
+The first full Debug pass (now explicitly authorized by Joe) reached two failures
+in the previously unexecuted VB stack-name positives: lifecycle-object-copy-unresolved.
+That pass was stopped after the concrete failure to repair it before restarting.
+Exact signed RuntimeHelpers.GetObjectValue now preserves the SAME unknown input
+origin only when its declared type is one of the existing immutable scalar types.
+Untyped Object inputs and tracked command/parameter/DataSet references still refuse;
+no custom mutable struct, value assumption or object-identity substitution is added.
+Public C#/VB ScalarCopyProduce, UntypedCopyRefusal and TrackedCopyRefusal controls
+verify both sides. This intentional compiled change bumps IL extractor 0.2.21 and
+policy v22; external trace policy 3 is unchanged. Source LINQ remains a separate rule.
+
+Executed focused commands after the fix:
+- LinqPipelineEvidenceTests + IlSqlTraceStackNameTests + IlSqlTraceArgumentTests:
+  24 passed, 0 failed, 0 skipped.
+- LinqPipelineEvidenceTests + all IlSql test classes:
+  179 passed, 0 failed, 0 skipped (23seconds).
+Both used `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter ...`.
+The restarted full Debug solution suite is running; its result must be recorded
+before push. Earlier full-run output is a failed/canceled iteration, not a pass.
+
+## Final local verification — 2026-10-29
+
+Current code versions: source LINQ 0.2.0, compiled IL 0.2.21 / evidence policy v22;
+external trace policy 3. Joe explicitly authorized local verification, superseding
+the earlier test deferral for this run. No private inputs or acceptance run.
+
+- Focused source LINQ:7 passed, 0 failed, 0 skipped.
+- Source LINQ plus trace argument/stack-name controls after scalar-copy fix:
+  24 passed, 0 failed, 0 skipped.
+- Affected source LINQ plus all IlSql test classes:179 passed, 0 failed, 0 skipped.
+- Full Debug solution gate:5633 passed, 3 skipped,0 failed, exit 0,45.7511minutes.
+  Command: `dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'`.
+  Local log: /tmp/tracemap-linq-full-debug-after-space.log.
+- C#/VB source CLI smokes: each 6 LINQ candidates (1 grouping,2 DataTable,3 JToken)
+  and 7 intentional rule gaps; all five required outputs present. Whole scans
+  retained Level1SemanticAnalysisReduced, not complete-project acceptance.
+- `git diff --check` passed. Builds used -warnaserror; zero compiler/analyzer warnings.
+
+The first broad attempt exposed the old VB typed-input value-copy refusal; fixed
+and pinned by positive/untyped/tracked-reference controls. A later broad attempt
+was canceled after SQLite/IO storage-exhaustion failures; Joe corrected space and
+the full gate above then completed successfully. Failed/canceled runs are not
+counted as passes. Pinned OSS smoke reruns remain explicitly deferred; local public
+C#/VB native smokes and the full suite do not get relabeled as that separate gate.
+Windows/platform skips are retained; this is not private Windows acceptance.
+
+Compiled delegate/LINQ interpretation, dynamic DataTable.Select, private root
+attribution/lineage and owner-schema acceptance remain outside the proven result.
+No field bypass, SQL route weakening, application deployment, PR or ACK change.
+
+
+## Compiled-only source exclusion — 2026-10-29
+
+Branch: codex/sql-compiled-wrapper-evidence. Work-machine v9-003 confirmed the
+Windows guard self-tests and stopped at sampled working-set cap during source
+solution loading (278 projects, 113 solutions); no IL stage was reached. This
+identifies that run's bottleneck, not the original 43.5 GiB allocation cause.
+
+Added explicit --compiled-only for the normal scan: no source inventory,
+MSBuild/semantic/syntax extraction; Git identity and existing compiled input and
+lifecycle validation remain. All source snapshots have zero files, explicitly
+reported by SourceAnalysisExcludedByCompiledOnly under the repository manifest
+rule, reduced coverage and NotRun build. Empty source hashes never establish
+source correspondence. Default scan schemas/identities stay unchanged; compiled
+mode gets a distinct scan identity. Conflicting source options and immutable
+parent attachment use refuse. No runtime execution, private source, lifecycle
+admission weakening, ACK change, PR or merge.
+
+Focused/native validation: 27 passed, 0 failed/skipped (8 seconds), using
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter FullyQualifiedName~ScanDiagnosticProgressTests|FullyQualifiedName~IlSqlInfoMessageTests`.
+This includes C#/VB native lifecycle output in both modes, source-exclusion and
+conflicting-options controls. Initial focused run exposed a third final source
+inventory capture; fixed to use the same excluded scope before the passing run.
+Full Debug -warnaserror solution regression was attempted, then canceled after
+three snapshot/determinism failures while Git state was being changed by this
+turn's commits. Do not count it as a pass or assert causality from that overlap.
+Stable-head recheck (no build/restore, Debug -warnaserror) passed 202/202 in 29s:
+all IlSql classes, ScanDiagnosticProgressTests, and the three failing tests
+(VisualBasicValidationMatrixTests.Repeated_cli_scans_produce_byte_identical_facts,
+IlRewriteControlFlowEvidenceExtractorTests.Stack_neutral_dup_pop_insertion_classifies_instruction_stream_change,
+IlRewriteEvidenceExtractorTests.Unchanged_method_emits_unchanged_edge).
+Logs: /tmp/tracemap-compiled-only-focused.log,
+/tmp/tracemap-compiled-only-full-debug.log (canceled, not green),
+/tmp/tracemap-compiled-only-stable-head.log (202 passed).
+Full-suite stable-head gate remains open; not merge-ready evidence.
+No private lineage claim.
+Operator prompt updated to use compiled-only with the existing Windows guard.
+
+
+## Exact legacy InfoMessage profile — 2026-10-30
+
+The next public-safe capability is exact signed framework-2 InfoMessage support.
+IL extractor 0.2.23, evidence policy v24, event policy explicit-sql-info-message/2.
+Expand only finite catalog entries to System.Data/mscorlib/System.Xml 2.0.0.0 and
+VB 8.0.0.0 with their original exact signing keys. Never normalize observed
+identities. Legacy command/parameter/Fill lookup is confined to InfoMessage opt-in;
+default object-path and lifecycle admission is preserved. Callback/delegate and
+connection/event call profiles must match alongside existing allocation checks.
+
+Public C#/VB fixture copies are retargeted in memory/temporary storage, dual-reader
+compared, and passed through native compiled-only CLI admission. No private
+identifiers, source, receipts or photo-derived artifacts are copied into Git.
+No runtime/provider execution or private lineage claim. Native profile controls
+passed 25/25 before additional profile-mismatch verification. The first broader
+run aborted after 73 passes due to a native dotnet SIGSEGV (macOS report points to
+GetThreadLocalStaticBase); it is not a passing gate. The bounded retry passed 203/203 in 27 seconds. After the final constant-time
+catalog lookup adjustment, the rebuilt final affected set passed 203/203 in
+26 seconds with Debug -warnaserror, including native C#/VB legacy-profile CLI
+controls and version/key/signature/profile mismatch controls. Log:
+/tmp/tracemap-info-legacy-final-focused.log. Command:
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgressTests'`.
+`git diff --check` passed. Full stable-head gate remains open; no full pass claimed.
+No adapter change; pinned external adapter smokes remain deferred.
+
+## Full Debug follow-up — 2026-10-30
+
+The previously launched full Debug gate finished failed: 5667 total, 3932 passed,
+1732 failed, 3 skipped, 7.7852 minutes. The first recorded failures report that
+the active test checkout and compiled fixtures disappeared during execution.
+The old worktree is absent from Git worktree inventory. This is not a passing
+gate and does not establish clean broad regression behavior. The prior 203-test
+affected result remains separate. Preserve other checkouts and their dirty files.
+
+Added a read-only prompt to inventory all unlisted calls from the single failing
+callback using existing evidence. No further admission change is justified by a
+call hash alone. No private report or identifier is copied into this state note.
+
+
+## Bounded XML callback signatures — 2026-10-30
+
+Implemented in isolated temporary clone /tmp/tracemap-xml-catalog-20261030 from
+codex/sql-compiled-wrapper-evidence after the old worktree disappeared. Primary
+checkout branch and untracked docs/reports remain untouched. No original worktree
+reset, cleanup or recreation. No private/photo-derived artifacts in Git.
+
+IL 0.2.24 / evidence policy v25 / InfoMessage policy explicit-sql-info-message/3
+adds only XmlAttributeCollection.get_ItemOf(Int32)->XmlAttribute and
+XmlNode.get_InnerXml()->String to the existing signed System.Xml 2/4 catalogs.
+External XML results stay unmodeled; names stay symbolic/unbound. No XML runtime,
+general API recognition, profile/escape relaxation, provider call or SQL execution.
+C#/VB fixtures retain named attribute coverage and add ordinal/InnerXml usage;
+normal/legacy native CLI controls and exact signature negatives cover the change.
+
+Restore succeeded in the isolated public clone. Focused InfoMessage suite passed
+29/29 in 9 seconds, Debug -warnaserror, no skips/failures. Log:
+/tmp/tracemap-xml-focused.log. Broader affected regression passed 207/207 in 27 seconds, no failures/skips.
+Command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgressTests'`.
+Log: /tmp/tracemap-xml-regression.log. `git diff --check` passed. Full shared-core
+Debug -warnaserror solution gate will run after the clean code/prompt push in
+this isolated clone; no full pass claimed. Do not remove the clone while it runs.
+Pinned external adapter smokes remain deferred (no adapter change). No claim that private entry lineage or the overall
+SQL effort is complete. Existing guarded compiled-only prompt will pin this code.
+
+
+## Completed full gate for XML catalog head — 2026-10-30
+
+At clean pushed head ede44baf201e717bf25b4e65c3a5c0f37c512ae4, the isolated clone
+completed `dotnet test src/dotnet/TraceMap.sln --no-restore -c Debug -warnaserror --logger 'console;verbosity=normal'`:
+5668 passed, 3 existing skips, 0 failures, 5671 total, 43.8867 minutes, exit 0.
+Log: /tmp/tracemap-xml-full-debug.log. This is the completed XML/compiled-only gate,
+not a pass for subsequent equality changes or private acceptance.
+
+## Bounded ceq lifecycle equality — 2026-10-30
+
+IL 0.2.25, policy v26; InfoMessage catalog policy remains /3. Concrete Int32,
+null/null, fresh/literal non-null checks, same-reference and distinct fresh
+allocation equality are modeled. Inputs, opaque/unknown values, distinct property
+views and unsupported operand types refuse, retaining exact opcode site/path and
+categorical operand kinds. No value substitution, string-content equality,
+relational branches or loop inversion. Public C#/VB fixtures use explicit Boolean
+locals to retain ceq. Compound comparison guards initially emitted unsupported
+bne.un.s; fixtures were narrowed to the requested ceq shape rather than admitting
+unrelated branch opcodes. Intermediate 22-failure run is not a pass.
+
+Focused InfoMessage controls then passed 33/33 (9 seconds), Debug -warnaserror.
+Added explicit ambiguous-view negative; final affected regression passed 211/211
+in 27 seconds, 0 failed/skipped. Command:
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgressTests'`.
+Log: /tmp/tracemap-ceq-regression.log. `git diff --check` passed.
+Log: /tmp/tracemap-ceq-focused-final.log. Full gate for this new head remains open.
+No private source/image/transcript/value copied into Git; no provider/application
+execution, PR/merge/ACK changes or whole-SQL completion claim.
+
+
+## GLM takeover and runtime-state unknowns — 2026-10-30
+
+User authorized either a one-shot fix/protocol or a complete state for GLM.
+Selected the honest takeover boundary: runtime State cannot be replaced with
+assumed Open/Closed values. IL 0.2.26 / evidence v27 / InfoMessage /4 recognizes
+exact SqlConnection/DbConnection State reads as connection-state-unbound with
+optional bounded per-read site/allocation receipts. Unknown equality/direct
+state-dependent control refuses; unused reads can retain static entry evidence.
+This does not close the runtime-state blocker or prove private lineage.
+
+The old private scan prompt is suspended. Companion prompts:
+- prompts/inspect-sql-lifecycle-whole-protocol.md (one bounded read-only map, no scan)
+- prompts/glm-sql-lifecycle-takeover.md (full state, code pointers, tests, constraints,
+  whole-protocol implementation assignment and honest remaining gaps).
+
+Do not launch another per-getter private scan. Whole-closure contextual capability
+fit must precede one representative public C#/VB batch implementation. No private
+source/report/photo/hash is copied into these public files.
+
+The 0.2.25 full run had a recorded cancelled-relocation test failure and was
+canceled when implementation continued in the same copy; it is NOT a passing gate.
+Preserve /tmp/tracemap-ceq-full-debug.log. Avoid editing/rebuilding an active full
+test copy. Clean XML head's 5668-pass full result remains historical evidence only.
+Latest state-focused iteration: 35 passed, 2 failed due to negative control assuming
+C# getter dispatch owner; corrected to mutate actual observed signed identity.
+Final affected validation: 215 passed, 0 failed/skipped, 28 seconds, Debug
+-warnaserror. Command: `dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-restore -c Debug -warnaserror --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgressTests'`.
+Log: /tmp/tracemap-state-regression.log. `git diff --check` passed. Full Debug gate
+for 0.2.26 is deferred to the GLM takeover, not silently passing or running in the
+same mutable implementation copy. The user explicitly offered the state/takeover
+alternative; unresolved implementation and gate are handed off, not called complete.
+
+
+## GLM whole-protocol state control — 2026-10-30
+
+Implementation head (final, see below) on
+codex/sql-compiled-wrapper-evidence (docs-only additions may follow this commit).
+IL 0.2.27 / explicit-il-body-evidence.v28 / explicit-sql-state-control/1.
+
+Design: a runtime State comparison against a compiled constant produces an explicit
+state-test value carrying site, connection allocation, constant, declared enum type
+and comparison polarity. Branching on it explores BOTH outcomes as bounded path
+alternatives by re-executing from the selected root with an explicit decision
+assignment (max 8 completed paths, 6 distinct decision sites, 32 recorded
+decisions, shared aggregate work budget). Separate read sites and separate
+occurrences of one site are separate decisions. Each alternative keeps its own
+allocation/execution identities; equal allocation IDs across alternatives denote
+the shared prefix, never a merged object. Incompatible attachments stay per-path
+(one candidate fact carries all alternatives; sqlLifecycleSchema
+il-sql-lifecycle-state-alternatives/1, property stateControlPolicy). Compiler
+negation/identity lowerings (ceq against 0/1) of the same comparison are
+recognized; state-vs-state and non-constant comparisons refuse with exact sites.
+No enum value is assumed observed at any point.
+
+New admission surfaces, all bounded and fail-closed: direct-throw construction
+(newobj immediately followed by throw) is the only untracked construction; an
+uncaught throw terminates its alternative (finally continuations not executed,
+recorded in the termination limitation); a throw a catch would receive refuses
+(lifecycle-throw-catch-continuation-unmodeled); early leave from an active
+enumeration abandons the loop and that path completes without entry evidence
+(strict no-fork runs keep the previous refusals; behavior for state-free bodies is
+unchanged).
+
+Fixture placement note: samples/sql-compiled-wrapper-evidence/{csharp,vb}/end-to-end
+was at the production object-body retention budget edge (1047k/1048k characters);
+adding bodies there silently dropped retention for late methods (e.g. Score) in
+native scans. The whole-protocol fixtures live in a third role assembly
+(whole-protocol), referenced like the others from the test project; the lifecycle
+test harness now passes an explicit 4M-char object budget (production budget
+policy unchanged and still pinned by the retention-scale fixtures).
+
+Validation: focused IlSql + ScanDiagnosticProgress suite 237 passed, 0
+failed/skipped (31 s, Debug -warnaserror), including native CLI compiled-only scan
+emitting the alternatives candidate with the new schema/policy and byte-identical
+deterministic replay. Full shared-core Debug -warnaserror gate running on an
+immutable clone of 4aebbf71b (/tmp/tracemap-state-full-gate,
+/tmp/tracemap-state-full-debug.log); result recorded separately below when
+complete. Public capability map: docs/validation/SQL_LIFECYCLE_CAPABILITY_MAP.md.
+No private source, image, transcript or value was used; no PR, merge, ACK change,
+private scan or whole-SQL completion claim.
+
+
+## Work-machine map reconciliation — 2026-10-30 (second entry)
+
+The v12-001 capability map from the work machine (measured with an 0.2.25 tool,
+policy v26, InfoMessage /3) was reconciled against 4aebbf71b: the reported
+first-gap blocker (three get_State sites) and most of its phase list are covered
+by 0.2.26/0.2.27 (state recognition + path alternatives; delegate pair; the
+core command/parameter/adapter/fill catalog; set_Value; arraylist-new;
+GetTypeFromHandle). All six of its context-sensitive refusals are already
+enforced. Genuinely missing adjacent signatures (~15, with the first-gap caveat
+that unlocks can reveal more) and the three verify-against-boundary groups are
+recorded in docs/validation/SQL_LIFECYCLE_CAPABILITY_MAP.md as the next bounded
+batch; nothing from the verify groups is cataloged without boundary-flag
+verification. No private identifier, hash or token was copied into public files.
+
+
+## Full-gate round 2 — 2026-10-30
+
+The first full gate on 4aebbf71b failed exactly two tests
+(IlObjectBodyRetentionTests.Scale_fixture..., both languages): the lifecycle
+harness's raised object-body budget broke the production 1 MiB retention pin —
+the scale fixture working as designed. Fix f433e525e: Bodies() takes an explicit
+objectBudgetChars (default 4M for lifecycle fixtures); the retention tests pass
+1_048_576 explicitly. Focused recheck 250/250 green. Full gate restarted on a
+fresh immutable clone of f433e525e (/tmp/tracemap-state-full-gate2,
+/tmp/tracemap-state-full-debug2.log).
+
+## Full-gate round 2 PASSED — 2026-10-30
+
+At pushed tip 38eabd416 (implementation f433e525e), the immutable clone
+/tmp/tracemap-state-full-gate2 completed
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --logger 'console;verbosity=normal'`:
+5700 passed, 3 existing skips (opt-in exhaustive Oracle sweep, native HTTP receipt
+interop, deep Windows ASP.NET publish — not claimed executed), 0 failed, exit 0.
+Log: /tmp/tracemap-state-full-debug2.log. This is the completed IL 0.2.27 public
+gate for the whole-protocol state-control batch, including the corrected
+retention-scale pin. prompts/glm-sql-lifecycle-final-validation.md is pinned to
+implementation commit f433e525e. No private input, scan, PR, merge or ACK change.
+
+
+## Adjacent whole-protocol families — 2026-10-30 (batch 3)
+
+Joe authorized the afternoon batch ("set a goal to build what is needed") after the
+work-machine v12-001 map was reconciled. IL 0.2.28 / policy v29. All fifteen
+reconciliation signatures plus two discoverable-only-by-synthesis shapes (VB lowers
+array bounds checks to clt+brtrue; typed-array foreach lowers to ldelem.ref indexed
+loops) are covered with C#/VB fixtures in the whole-protocol role assembly
+(AdjacentCatalogs.cs/.vb) and a dedicated test suite (IlSqlAdjacentCatalogTests,
+11 tests): command/adapter configuration (set_CommandTimeout, set_Transaction
+null-only, set_Direction pre-attachment, 4-arg source-column SqlParameter ctor,
+TableMappings.Add), ArrayList Clear/ToArray snapshots with exact-count array loops
+(ldlen/ldelem.ref/conv.i4/add + array-bounded backward blt and clt+brtrue),
+Interaction.IIf (concrete Boolean), Conversions.ToInteger (Int32), String.Concat
+(exact constants, unbound otherwise), Object.GetType, reflection-identity reads
+(unbound strings), EventLog.WriteEntry static terminal (external-trace flag,
+trace-scalar args), and the ConfigurationManager chain verified to become opaque
+field origins through the existing --il-opaque-root-initializers boundary with a
+three-call chain receipt (no catalog entries, matching the map's own guidance).
+Focused validation 250/250 with ScanDiagnosticProgressTests, Debug -warnaserror.
+Full gate on an immutable clone recorded separately below. No private input, no
+acceptance or whole-SQL completion claim.
+
+The final validation prompt now expects implementation head d7d3e168b (batch 3).
+
+## Full-gate round 3 PASSED — 2026-10-30 (batch 3)
+
+At implementation commit d7d3e168b357cd4afa0bff155aec6505638673c1 (docs tip
+0eeab4463), the immutable clone /tmp/tracemap-state-full-gate3 completed
+`dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build
+-c Debug -warnaserror --logger 'console;verbosity=normal'`: 5714 total,
+5711 passed, 3 existing skips (same opt-in set as round 2), 0 failed, 41m04s,
+exit 0. Log: /tmp/tracemap-state-full-debug3.log. This is the completed IL
+0.2.28 / policy v29 public full gate for the adjacent whole-protocol batch.
+prompts/glm-sql-lifecycle-final-validation.md precondition 2 is satisfied with
+the full SHA pinned. No private input, scan, PR, merge or ACK change.
+
+## Synthetic closure batch — 2026-10-30 (batch 4, IL 0.2.29 / policy v30)
+
+Joe authorized the ECMA-335 sufficiency determination ("take as long as needed
+... create synthetic examples because that is the only true way to test"). A
+public synthetic clone of the v12-001 19-body closure (ClosureShape.cs/.vb in
+the whole-protocol role: two inner roots + connection/adapter-build/parameter/
+exception/crypto-shaped/table-mapping/debug helpers, plus refusal probes) runs
+under all five boundary flags in IlSqlClosureShapeTests (12 tests x 2 languages).
+Sufficiency answer: NO layer-A (ECMA-335) work is needed for this lifecycle —
+every refusal in the closure is catalog admission or by-design bounded
+semantics; the full classification table is in
+docs/validation/SQL_LIFECYCLE_CAPABILITY_MAP.md.
+
+Found only by synthesis and fixed here: the 0.2.28 MethodBase.GetCurrentMethod
+catalog identity was malformed (owner type encoding; no fixture had executed
+it), String.Concat 3/4-arg is what both compilers actually emit for chained
+concatenation, Roslyn lowers State != zero-constant enum members to
+ldc.i4.0 + cgt.un (now a forking state test), and UnboundStringCount only
+propagated on failure results (the computed-string claim token could never
+appear on success). The StackTrace/GetFrame/GetMethod chain now resolves in
+non-callback lifecycle bodies under the external-trace flag, per the v12-001
+prediction. Enumerated by-design refusals pinned: mapping content reads,
+custom-exception base calls, argument-position framework exception
+construction, input-driven sizes, non-primitive root inputs, both boundary
+opt-ins absent.
+
+Focused validation 274/274 (IlSql + ScanDiagnosticProgress, Debug
+-warnaserror) including the closure suite, plus retention 11/11; the adjacent
+set_CommandTimeout probe is scoped now that two fixtures call it. Full gate on
+an immutable clone recorded separately below. No private input, no acceptance
+or whole-SQL completion claim.
+
+## Full-gate round 4 PASSED — 2026-10-30 (batch 4)
+
+At code commit 339e4ead6 / docs tip 83b671a25, the immutable clone
+/tmp/tracemap-state-full-gate4 completed the full Debug -warnaserror suite:
+5738 total, 5735 passed, 3 existing skips (same opt-in set), 0 failed,
+exit 0. Log: /tmp/tracemap-state-full-debug4.log. The follow-up test-only
+commit 76421bc22 (legacy-profile closure completion, +2 tests) is covered by
+the focused IlSql + ScanDiagnosticProgress lane at the final head: 276/276,
+Debug -warnaserror. This is the completed IL 0.2.29 / policy v30 public gate
+for the synthetic closure batch; prompts/glm-sql-lifecycle-final-validation.md
+is pinned to implementation commit 339e4ead61441c5768bda06474970fa424a05b56
+with precondition 276. No private input, scan, PR, merge or ACK change.
+
+## ByRef aliasing batch — 2026-10-30 (batch 5, IL 0.2.30 / policy v31)
+
+The v14-001 final validation (outcome B, at the pinned 339e4ead6) stopped at
+`lifecycle-opcode:ldloca.s` in both private root bodies: locals pass ByRef
+(ArrayList& and String[]&) into the execute helper. The refusal was pinned
+first with public fixtures (ClosureByRef.Execute / ClosureByRefProduce,
+C# and VB; commit 533978693) before any implementation. The batch adds:
+ldloca/ldloca.s local addresses bound to one live caller frame slot, byref
+call admission only for tracked inlined callees with address arguments in
+byref positions, implicit dereference at receiver/element-target positions,
+ldind.ref/stind.ref slot aliasing, newarr String arrays (constant length
+≤16, exact slot stores) in lifecycle bodies, and escape refusals for
+addresses reaching framework arguments, field stores, array elements,
+returns, constructors, or stale frames. Framework ByRef APIs stay unmodeled
+(pinned by ClosureByRefFrameworkProduce). Focused validation 282/282 (IlSql +
+ScanDiagnosticProgress, Debug -warnaserror). Full gate on an immutable clone
+recorded separately below. The v14 report declared the private loop ended;
+any further guarded pass needs a freshly pinned prompt and the owner's
+explicit go — none was prepared or dispatched here. No private input, no
+acceptance or whole-SQL completion claim.
+
+## Full-gate round 5 PASSED — 2026-10-30/31 (batch 5)
+
+At implementation commit 546a1463f, the immutable clone /tmp/tracemap-state-full-gate5
+completed the full Debug -warnaserror suite: 5746 total, 5743 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug5.log. This is the completed IL 0.2.30 / policy v31
+public gate for the ByRef aliasing batch. No private input, scan, PR, merge or
+ACK change; no v15 validation prompt was prepared or dispatched.
+
+## Raw-parameter collection batch — 2026-10-31 (batch 6, IL 0.2.31 / policy v32)
+
+v15-001 (at the pinned 546a1463f) resolved the v14 ByRef stop and then stopped
+at lifecycle-object-origin:custom. Root cause located in code: the lifecycle
+ArrayList item admission requires tracked custom parameter objects (bare
+Get(args[0], "custom") at Add/enumeration), not "host object provenance" as
+the report interpreted. Reproduced synthetically before any change
+(ClosureRawParameterProduce pins the exact refusal), then bounded admission:
+parameter-kind items (constructor-proven SqlParameter allocations) join the
+collection frozen on Add; typed-foreach castclass on SqlParameter/DbParameter
+passes through; enumeration attaches with exact identity. String items stay a
+pinned refusal (ClosureNameListProduce). Focused validation 288/288 (IlSql +
+ScanDiagnosticProgress, Debug -warnaserror). Full gate on an immutable clone
+recorded separately below. The residual unknown — which non-custom item shape
+the private code adds — is documented in the capability map with the exact
+sanitized disambiguating ask; no v16 prompt was prepared or dispatched.
+
+## Full-gate round 6 PASSED — 2026-10-31 (batch 6)
+
+At implementation commit f3b4818ad, the immutable clone /tmp/tracemap-state-full-gate6
+completed the full Debug -warnaserror suite: 5752 total, 5749 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug6.log. Completed IL 0.2.31 / policy v32 public
+gate for the raw-parameter collection batch. No private input, scan, PR, merge
+or ACK change; no v16 validation prompt prepared or dispatched.
+
+## String-item collection batch — 2026-10-31 (batch 7, IL 0.2.32 / policy v33)
+
+Joe relayed the sanitized disambiguation: the first ArrayList element is a
+cross-assembly memberref to the custom parameter structure four-argument
+constructor (String, SqlDbType, Int32, Object) (the framework assembly). Synthesis proved cross-assembly resolution already
+works (memberref-form body identities; end-to-end fixtures have exercised it
+all along; a dedicated cross-assembly root using the existing wrapper
+InputParameter — the exact reported signature — completes in both languages).
+Since the first element is a plain custom object, the v15 stop fired on a later
+item kind; the remaining sound shape is constant strings, now admitted
+unfrozen with exact text plus their two compiler lowerings (castclass String;
+identity Conversions.ToString staying exact instead of unbound trace-string
+interception). Null/unknown items stay refused. Regression found and fixed
+during the batch: the native scan shares ONE 1 MiB object-body budget across
+compiled inputs, so growing the wrapper assembly dropped end-to-end tail
+bodies; the cross-assembly fixture was reworked to reuse the existing wrapper
+type with a Private="false" reference (zero input growth). Focused validation
+290/290 (IlSql + ScanDiagnosticProgress, Debug -warnaserror, native tests
+included). Full gate on an immutable clone recorded separately below.
+
+## Full-gate round 7 PASSED — 2026-10-31 (batch 7)
+
+At tip f8d06391bc5031bf394d7e6768b008307c19ce7c (implementation commit d657717ee
+plus the test-only xUnit2013 pin), the immutable clone /tmp/tracemap-state-full-gate7
+completed the full Debug -warnaserror suite: 5754 total, 5751 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug7.log. Completed IL 0.2.32 / policy v33 public
+gate for the string-item collection batch (including the clean-build xUnit2013
+fix). No private input, scan, PR, merge or ACK change.
+
+## Object-origin diagnostic batch — 2026-10-31 (batch 8, IL 0.2.33 / policy v34)
+
+v16-001 reported the identical gap as v15 with a B1 classification
+("null/unknown items") that contradicts its own item table (custom
+parameter-structure items are admitted; the public cross-assembly fixture with
+the identical 4-field signature is green both languages + legacy). Joe
+approved BOTH routes: his sanitized slice lookup (Add identity, collection
+construction ~191, ctor identities at 242/281/316) and this diagnostic batch.
+Get() refusals now record the found kind, expected kinds, in-flight call
+identity, body and offset onto Result.ObjectOriginFailure, surfaced as the
+objectOriginFailure gap-fact property; the refusal message stays byte-stable
+(exact-match catch lists). Null-item probe (ClosureNullItemProduce, C#+VB)
+pins the unchanged message plus the diagnostic. Focused lane and full gate
+recorded below. No admission change of any kind in this batch.
+
+## Full-gate round 8 PASSED — 2026-10-31 (batch 8)
+
+At implementation commit 80a8fe4c5, the immutable clone /tmp/tracemap-state-full-gate8
+completed the full Debug -warnaserror suite: 5756 total, 5753 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug8.log. Completed IL 0.2.33 / policy v34 public
+gate for the object-origin diagnostic batch. No admission change; no private
+input, scan, PR, merge or ACK change.
+
+## Value-type parameter batch — 2026-10-31 (batch 9, IL 0.2.34 / policy v35)
+
+The v17-001 objectOriginFailure diagnostic (found unknown / expected custom /
+refusing call = the parameter-structure ctor dispatch at offset 210) located
+the three-mystery root cause: the private parameter type is a STRUCT —
+construction lowers to ldloca + CALL (not newobj), and
+AdmitConstructorOwnerView's bare Get(receiver, "custom") fired on the
+dereferenced uninitialized local. Pinned first: the public struct fixture
+(ClosureStructParameter + ClosureStructProduce, C# and VB) reproduced the
+diagnostic byte-for-byte, then the batch admitted the identity-preserving
+struct lifecycle: construction stores a tracked custom into the addressed
+slot, box/unbox.any of tracked allocations pass through, initobj handles both
+the local-slot zeroing and the VB ctor prologue (ldarg.0 + initobj), and the
+owner-view checks eligibility before any kind demand. The receiver Deref moved
+from blanket to the exact dispatch sites that require an object. Focused
+validation recorded below. No private input; no acceptance claim.
+
+## Full-gate round 9 PASSED — 2026-10-31 (batch 9)
+
+At the value-type implementation commit, the immutable clone
+/tmp/tracemap-state-full-gate9 completed the full Debug -warnaserror suite:
+5760 total, 5757 passed, 3 existing skips (same opt-in set), 0 failed,
+exit 0. Log: /tmp/tracemap-state-full-debug9.log. Joe then confirmed the
+private shape from the code (the parameter structure is a Structure wrapping a
+public SqlParameter property; the struct itself rides the ArrayList); the
+follow-up fixture pins (ClosureStructPropertyParameter / Produce, commit
+5468259b9) are test-and-fixture-only and complete green in both languages
+plus the legacy profile with no further interpreter changes; the focused lane
+at the final tip is 300/300. Completed IL 0.2.34 / policy v35 public gate.
+No private input, scan, PR, merge or ACK change.
+
+## Input-null fork batch — 2026-10-31 (batch 10, IL 0.2.35 / policy v36)
+
+v18-001 cleared the struct admission (no objectOriginFailure) and stopped at
+ceq offset 25 inside the parameter-structure constructor: input vs null (.NET 1
+null-guard). Pinned first (ClosureStructNullGuardParameter with the DBNull
+substitution branch reproduced the refusal), then: input nullness becomes a
+bounded hypothetical keyed by input identity (one runtime input = one
+decision; guards across invocations share the fork), DBNull.Value admitted as
+the one static-field constant (ldsfld), starg parameter reassignment handled,
+GetObjectValue passes inputs through with identity. The
+EventNamingUnknownEquality pin updated from refusal to two-alternative fork
+semantics. Fixture note: each struct consumer is typed to its own struct
+(a shared helper hit a cross-type property getter — caught by the owner
+check, fixed by mirroring the private per-struct ExecProc typing).
+
+## Full-gate round 10 PASSED — 2026-10-31 (batch 10)
+
+At implementation commit e93dba07c7dd7c5d3c6ca1ac9df1c3e3ccb49456, the immutable clone /tmp/tracemap-state-full-gate10
+completed the full Debug -warnaserror suite: 5772 total, 5769 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug10.log. Completed IL 0.2.35 / policy v36 public
+gate for the input-null fork batch. No private input, scan, PR, merge or ACK
+change.
+
+## Fork-tree driver batch — 2026-10-31 (batch 11, IL 0.2.36 / policy v37)
+
+v19-001 stopped at lifecycle-state-path-limit with no site refusal: the
+input-null forks compounded with the state guards past the 8-path bound.
+Instrumenting the refusal revealed the real defect — the driver's GLOBAL
+visited gate assumed fork throw-sides terminate; both-sides-completing
+decisions (input nullness) re-encounter forked keys in sibling subtrees and
+were misread as loops. Fixed by per-assignment forking (decision-tree
+semantics, defensive refork-invalid refusal), budgets raised to 32/8, the
+path-budget fixture (two guarded inputs x state guards) pinned green
+(9 alternatives: 8 completing + the open-guard termination), and ManyGuards
+raised to six guards to keep the beyond-budget refusal pinned. Also noted from
+the v19 report: the final-validation prompt now pins the TIP commit (docs
+included) so the gate record is always present at the pinned commit. Focused
+312/312. Full gate recorded separately below.
+
+## Full-gate round 11 PASSED — 2026-10-31 (batch 11)
+
+At implementation commit d6514df45, the immutable clone /tmp/tracemap-state-full-gate11
+completed the full Debug -warnaserror suite: 5776 total, 5773 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug11.log. Completed IL 0.2.36 / policy v37 public
+gate for the fork-tree driver batch. From this batch on, the final-validation
+prompt pins the TIP commit (docs included) so this record is always present
+at the pinned commit. No private input, scan, PR, merge or ACK change.
+
+## GetType scoped-return fix — 2026-10-31 (batch 12, IL 0.2.37 / policy v38)
+
+v20-001 stopped at lifecycle-unknown-call:System.Object.GetType() — the gapKind
+carried the full identity, showing a scoped mscorlib System.Type return where
+the batch-3 catalog entry had an unscoped encoding. Third and last of the
+never-executed-entry defects (GetCurrentMethod in batch 4, GetType now): the
+entry is corrected to the scoped return (legacy profile resolves through the
+automatic rewrite) and GetType now executes in the null-guard collection loop
+fixture with an untracked result, both languages plus legacy. Focused lane
+recorded below. No private input; no acceptance claim.
+
+## Full-gate round 12 PASSED — 2026-10-31 (batch 12)
+
+At the GetType fix commit, the immutable clone /tmp/tracemap-state-full-gate12
+completed the full Debug -warnaserror suite: 5780 total, 5777 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug12.log. Completed IL 0.2.37 / policy v38 public
+gate. No private input, scan, PR, merge or ACK change.
+
+## Type-name string batch — 2026-10-31 (batch 13, IL 0.2.38 / policy v39)
+
+v21-001 stopped at System.Type.ToString() (mscorlib 2.0.0.0) — one instruction
+past the v20 GetType stop. Admitted both binding forms with identical
+no-claims semantics: Type.ToString (the private call's form) and the
+Object.ToString virtual slot (C#'s binding of .ToString() on typed results,
+surfaced by the C# fixture twin) return unbound strings with pattern-named
+origins. The fixture executes the full GetType().ToString() chain. Focused
+316/316. Full gate recorded separately below.
+
+## Full-gate round 13 PASSED — 2026-10-31 (batch 13)
+
+At the type-name string commit, the immutable clone /tmp/tracemap-state-full-gate13
+completed the full Debug -warnaserror suite: 5780 total, 5777 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug13.log. Completed IL 0.2.38 / policy v39 public
+gate. No private input, scan, PR, merge or ACK change.
+
+## VB string-comparison batch — 2026-10-31 (batch 14, IL 0.2.39 / policy v40)
+
+v22-001 stopped at Operators.CompareString(String,String,Boolean) — VB's
+lowering of the type-name equality (the consumer predicted when Type.ToString
+landed). Admitted as a hypothetical: the call returns a string-compare value
+and the ceq-against-zero lowering forks bounded alternatives (site+occurrence
+keys, decision string-compare/0, both VB profiles). The VB fixture completes
+the full chain with compounding forks (8 alternatives on the null-guard root;
+17 on the compounded root) inside the 32/8 budget; C# twins pin the
+language divergence (String.op_Equality — no fork). Fixture discipline
+re-learned twice this batch: consumers stay typed to their own struct, and
+compounded-fixture expectations are language-aware. Focused lane below; full
+gate separately. No private input; no acceptance claim.
+
+## Full-gate round 14 PASSED — 2026-11-01 (batch 14)
+
+At the VB string-comparison commit, the immutable clone
+/tmp/tracemap-state-full-gate14 completed the full Debug -warnaserror suite:
+5782 total, 5779 passed, 3 existing skips (same opt-in set), 0 failed,
+exit 0. Log: /tmp/tracemap-state-full-debug14.log. Completed IL 0.2.39 /
+policy v40 public gate. No private input, scan, PR, merge or ACK change.
+
+## VB conversions batch — 2026-11-01 (batch 15, IL 0.2.40 / policy v41)
+
+v23-001: the fork budget held under the CompareString forks (45 s wall, deepest
+run yet) and stopped at Conversions.ToInteger(String) — an OVERLOAD gap (the
+catalog had only (Object)), not a version gap. Joe's ILSpy observation
+confirmed the mixed compile-time VB references (8.0 framework / 10.0 App_Code,
+unified at runtime) — both forms resolve through the dual-profile catalog.
+The String overload admits with culture-parse-honesty: runtime strings stay
+unproven (Unknown); downstream proof demands keep their refusals. VB fixture
+pins both profiles. Focused lane below; full gate separately. The systematic
+VB-lowering battery remains the queued fix for the per-instruction drip.
+
+## Static-type collapse batch — 2026-11-01 (batch 16, IL 0.2.41 / policy v42)
+
+Joe supplied the four-overload ctor source shape (null→DBNull; type-name
+dispatch on "System.String" — correct case, live branch; nested inline
+empty-string→DBNull; value+direction assignment; two overloads with
+ParameterDirection; one size-less using the 2-arg SqlParameter ctor — now
+catalogued). Naive forking (null × type × empty × four invocations) exceeds
+any sane budget; this batch collapses it soundly: GetType derives exact type
+names for statically typed values (constants, DBNull, String/Int32-declared
+inputs), ToString renders derived types exactly (String.ToString identity),
+identical exact operands compare equal under any culture (ASCII constants
+ordinally), unbound results carry receiver provenance, and string-compare
+forks key by LEFT-operand provenance (one value = one fact). The fixture
+mirrors the confirmed shape; the null-guard root completes with 4
+alternatives (was 8 pre-keying, thousands naive). Focused 320/320. Gates
+below. No private input; no acceptance claim.
+
+## Full-gate round 15 PASSED — 2026-11-01 (batch 15)
+
+At the VB conversions commit, the immutable clone /tmp/tracemap-state-full-gate15
+completed the full Debug -warnaserror suite: 5784 total, 5781 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug15.log. Completed IL 0.2.40 / policy v41 public
+gate. No private input, scan, PR, merge or ACK change.
+
+## Fold-in to the static-type collapse batch — 2026-11-01
+
+Joe confirmed no Option Compare is set (binary compare throughout) and shared
+a photo of the decompiled four-overload ctor (read locally with WEE; nothing
+from the work screen entered any repository artifact). Two fold-ins: the
+CompareString ordinal shortcut now applies ONLY when the text-compare
+argument is false (Option Compare Text is culture- and case-aware — text mode
+stays hypothetical; declared as a future-sample hazard in the map), and the
+direction overload (Direction passes through from the caller rather than
+defaulting to Input) is pinned in the fixtures — which surfaced and admitted
+C#'s String.op_Equality binding (ordinal when exact, fork when unbound, with
+direct brtrue/brfalse forking). Focused 320/320. Gate below.
+
+## Full-gate round 16 PASSED — 2026-11-01 (static-type collapse + fold-ins)
+
+At the fold-in commit, the immutable clone /tmp/tracemap-state-full-gate16
+completed the full Debug -warnaserror suite: 5784 total, 5781 passed, 3 existing
+skips (same opt-in set), 0 failed, exit 0. Log:
+/tmp/tracemap-state-full-debug16.log. Completed IL 0.2.41 / policy v42 public
+gate for the static-type collapse batch and its fold-ins. No private input,
+scan, PR, merge or ACK change.
+
+## Full-gate round 17 PASSED — 2026-11-01 (batch 17, REMOTE on amd-5950x)
+
+At the inverted-comparison + fixture-fix tip 25b570c28, the first REMOTE full
+gate ran on amd-5950x (WSL Ubuntu-24.04, bundle-fetched head, persistent
+~/gate.log): 5786 total, 5783 passed, 3 existing skips (same opt-in set),
+0 failed, 13.3 minutes, exit 0. This validates the fast-gate loop (was
+45-50 min on the MacBook). Remote-gate recipe: stage git bundle (ref HEAD)
++ script over scp to the Windows home, `wsl -d Ubuntu-24.04 -- bash
+gate17.sh`, dotnet at ~/.dotnet/dotnet, log to $HOME (WSL
+tmpfs wipes /tmp when the distro idles out). No private input; no scan
+change.
+
+## Unbound-integer batch — 2026-11-01 (batch 18, IL 0.2.43 / policy v44)
+
+v24/v25: bare lifecycle-integer-unresolved, no diagnostics. Reproduced
+locally (CInt(runtime string) fed as the SqlParameter size — no dispatch
+spent on diagnosis). Implemented: CInt runtime parses produce an unbound
+integer; both SqlParameter constructors accept it as unbound size evidence
+(null size in ParameterOutput, never a number); all other Number demands keep
+their refusals, now with a numberFailure gap diagnostic (found kind +
+in-flight call, batch-8 pattern). Fixture: the size-less overload now uses
+the two-argument SqlParameter directly (mirrors the confirmed private shape);
+the null-guard root's constant param rides the direction overload so both
+the unbound and concrete sizes pin. Focused 322/322 (warnaserror). Remote
+gate below. No private input; no acceptance claim.
+
+## Full-gate round 18 PASSED — 2026-11-01 (batch 18, remote)
+
+At the unbound-integer commit 40d86c73f, the remote gate on amd-5950x:
+5786 total, 5783 passed, 3 existing skips, 0 failed, 12.8 minutes, exit 0.
+Completed IL 0.2.43 / policy v44 public gate.
+
+## Full-root mirror + period slicing — 2026-11-01 (batch 19, IL 0.2.44 / v45)
+
+Joe's photos (WEE-local, shapes only) + COBOL/FORTRAN domain context. The
+full-root mirror completes: trace preamble (four-frame chain), boxed
+CInt(Integer) into (name,type,Object), VarChar(-1), two-arg ExecProc, close,
+return — 17 alternatives (16 completing). Int32-declared inputs and
+computed-int box without parsed-constant demands; computed-int nullness
+forks; GetObjectValue passes unbound integers. Substring/Mid produce
+provenance-carrying unbound strings feeding CInt (the YYYYMM period-slicing
+pattern). The CInt unbound-size pin moved to the root call site (constant
+ctor sizes preserved). Focused 324/324 (warnaserror). Remote gate below.
+
+## Full-gate round 19 PASSED — 2026-11-01 (batch 19, remote)
+
+At the full-root-mirror + period-slicing tip a318c7da6 (including the two
+remote-nullable-analysis test fixes), the remote gate on amd-5950x: 5788
+total, 5786 passed, 3 existing skips, 0 failed, exit 0. Completed IL 0.2.44 /
+policy v45 public gate. Remote nullable analysis is stricter than the
+macOS lane (CS8604 promoted) — test null-guards now written accordingly.
+
+## Boxed-value-type collapse — 2026-11-01 (batch 20, IL 0.2.45 / v46)
+
+v26-001: path-limit recurrence under the combined forks. Root cause was the
+interpreter's own over-forking: CInt results (unbound integers) forked
+nullness and type-name dispatch like polymorphic references. Mathematically a
+boxed Integer is never null and its runtime type is always System.Int32 —
+both now resolve concretely, collapsing two fork families per unbound integer
+to zero; the budget stays 32/8 and the wall-clock risk of raising it (the
+60-second scan guard) is avoided. CInt Texts carry source provenance. The
+remaining genuine forks for the confirmed root shapes: string-input nullness
+x content-emptiness + open/close state = 16 paths. Focused 324/324
+(warnaserror). Remote gate below.
+
+## Full-gate round 20 PASSED — 2026-11-01 (batch 20, remote)
+
+At the boxed-value-type collapse commit 816114180, the remote gate on
+amd-5950x: 5788 total, 5786 passed, 3 existing skips, 0 failed, exit 0.
+Completed IL 0.2.45 / policy v46 public gate.
+
+## Unbound-int comparison batch — 2026-11-01 (batch 21, IL 0.2.46 / v47)
+
+v27-001: bare lifecycle-comparison-unresolved. Shape: unbound integer vs
+compiled constant (the range check). Implemented as a provenance-keyed
+hypothetical fork (int-compare decisions; clt/cgt polarity lowering; the
+period fixture's If CInt(monthPart) > 0 completes with the fork composed into
+the null/empty forks). Any residual comparison refusal now carries a
+diagnostic via the numberFailure property (kinds + in-flight call). Focused
+324/324 warnaserror. Remote gate below.
+
+## Full-gate round 21 PASSED — 2026-11-01 (batch 21, remote)
+
+At the unbound-int comparison commit edd5d83cb, the remote gate on
+amd-5950x: 5788 total, 5786 passed, 3 existing skips, 0 failed, exit 0.
+Completed IL 0.2.46 / policy v47 public gate.
+
+## Reference non-null test batch — 2026-11-01 (batch 22, IL 0.2.47 / v48)
+
+v28-001: the numberFailure diagnostic pinpointed the stop — the
+the root execute-helper connection guard (IsNot Nothing → cgt.un vs ldnull), a
+reference non-null test shape the clt/cgt handler never covered. Tracked
+allocations (custom/command/parameter/adapter/dataset/sql-connection), exact
+strings and boxed value types resolve concrete true; typed reference inputs
+and unbound strings fork the negated nullness hypothetical. Exec helper
+fixture carries the guard. Focused 324/324 warnaserror. Remote gate below.
+
+## Full-gate round 22 PASSED — 2026-11-01 (batch 22, remote)
+
+At the reference non-null test commit e79a2fb09, the remote gate on
+amd-5950x: 5788 total, 5786 passed, 3 existing skips, 0 failed, exit 0.
+Completed IL 0.2.47 / policy v48 public gate.
+
+## Fork-census diagnostic — 2026-11-01 (batch 23, IL 0.2.48 / v49)
+
+v29-001: path-limit at a deeper site, bare. Implemented the census
+diagnostic (pathLimitFailure: runs/alternatives/queued/visited + per-fact
+fork census, top-16), pinned by the ManyGuards over-budget test
+("allocation:2/1 x32"). No behavior change; the budget question now gets
+answered by data on the next scan. Focused 326/326 warnaserror. Remote gate
+below.
+
+## Full-gate round 23 PASSED — 2026-11-01 (batch 23, remote)
+
+At the fork-census commit 595882f26, the remote gate on amd-5950x: 5788
+total, 5786 passed, 3 existing skips, 0 failed, exit 0. Completed IL
+0.2.48 / policy v49 public gate.
+
+## Evidence-driven budget raise — 2026-11-01 (batch 24, IL 0.2.49 / v50)
+
+v30's census: six genuine facts (input:0/1/3 nullness, CInt(input:2)
+nullness, one state guard) — no multiplication; the 32-path queue filled
+with zero completions. Budget raised 128/12 (runs 256). The full-root mirror
+extended to the census shape (four nullable inputs; six parameters) completes
+with 65 alternatives at the production work limit — which exposed that the
+test harness's 400K budget (not the path budget) was the next wall; the
+mirror now pins at 2M units. ManyGuards raised to eight guards to keep the
+beyond-budget refusal pinned. Focused 326/326 warnaserror. Remote gate below.
+
+## Full-gate round 24 PASSED — 2026-11-01 (batch 24, remote)
+
+At the evidence-driven budget raise tip c7e4b87ce (including the remote
+nullable-analysis null-guard), the remote gate on amd-5950x: 5788 total,
+5788 passed, 0 failed, exit 0. Completed IL 0.2.49 / policy v50 public gate.
+
+## Exception-ctor admission — 2026-11-01 (batch 25, IL 0.2.50 / v51)
+
+Joe supplied the exact shape (custom exception ctor: method-name message,
+two command texts, inner = caught ex OR constructed framework exception).
+The v31 B1 boundary admitted: Exception..ctor()/(String)/(String,Exception)
+as constructor completion on tracked allocations (MyBase.New) and as
+untracked external-exception values anywhere else (all legal continuations
+store into to-be-thrown objects or throw). Boolean inputs branched in
+callees fork provenance-keyed truth hypotheticals (the guarded-root
+semantics generalized). The old refuses-at-base-call negative control
+flipped to the admission. ExecProc_Scalar photo queued the next family:
+loop-carried _lastcommand string accumulator, _trans field/transaction,
+ExecuteScalar. Focused 330/330 warnaserror. Remote gate below.
+
+## Full-gate round 25 PASSED — 2026-11-01 (batch 25, remote)
+
+At the exception-ctor admission commit 939ff6f8a, the remote gate on
+amd-5950x: 5788 total, 5788 passed / 5792 cumulative passes recorded, 0
+failed, exit 0. Completed IL 0.2.50 / policy v51 public gate.
+
+## Exception.ToString admission — 2026-11-01 (batch 26, IL 0.2.51 / v52)
+
+v32-001: Exception.ToString() on the caught/stored exception (the
+diagnostics continuation of the exception family). Admitted unbound
+(get_Message semantics), both profiles; fixture wires a constructed
+inner's ToString through the guard exception argument. Focused 330/330
+warnaserror. Remote gate below.
+
+## Full-gate round 26 PASSED — 2026-11-01 (batch 26, remote)
+
+At the Exception.ToString admission commit b4b1db0e1, the remote gate on
+amd-5950x: 5788 total, 5792 passed (cumulative), 0 failed, exit 0.
+Completed IL 0.2.51 / policy v52 public gate.
+
+## Tracked-collection non-null — 2026-11-01 (batch 27, IL 0.2.52 / v53)
+
+v33-001: comparison-unresolved at the same ExecProc offset 64, found
+object-array:null — the ByRef array parameter guard. Tracked array/arraylist/
+list kinds added to the non-null predicate and Equal's Fresh. Fixture guard
+in both languages. Focused 330/330 warnaserror. Remote gate below.
+
+## Full-gate round 27 PASSED — 2026-11-01 (batch 27, remote)
+
+At the tracked-collection non-null commit edb3c1ef3, the remote gate on
+amd-5950x: 5788 total, 5792 passed, 0 failed, exit 0. Completed IL 0.2.52 /
+policy v53 public gate.
+
+## Opus-review batch — 2026-11-01 (batch 28, IL 0.2.53 / v54)
+
+External model review (correct head, Roslyn probes in /tmp/vbprobe) found:
+the string-compare polarity inversion (Release lowerings walked the wrong
+side under full coverage — labels wrong, paths complete), the object-path
+2-arg ctor IndexOutOfRange crash, iif rejecting DBNull/computed-int, and
+the Merge framework-pending fall-through. All fixed/declared; the compared
+constant is now part of every string-fork key (distinct facts); the
+Release-shape equivalence is pinned by a Cecil-rewrite test converting the
+compiled Debug ceq sequence to the brtrue-direct form against a dedicated
+polarity fixture. Focused 331/331 warnaserror. Remote gate below.
+
+## Full-gate round 28 PASSED — 2026-11-01 (batch 28, remote)
+
+At the Opus-review commit d2421e1d7, the remote gate on amd-5950x: 5788
+total, 5793 passed, 0 failed, exit 0. Completed IL 0.2.53 / policy v54
+public gate.
+
+## Typed element loads — 2026-11-01 (batch 29, IL 0.2.54 / v55)
+
+v34-001: bare ldelem (operand-encoded element type) from the ByRef String()&
+output parameter. Tracked arrays read exact slots (bounds enforced);
+untracked elements stay unknown. Output-names fixture pins it. Focused
+332/332 warnaserror. Remote gate below.
+
+## Full-gate round 29 PASSED — 2026-11-01 (batch 29, remote)
+
+At the typed-element-loads tip 089a7d1a5 (including the remote nullable
+null-guard), the remote gate on amd-5950x: 5788 total, 5794 passed, 0
+failed, exit 0. Completed IL 0.2.54 / policy v55 public gate.
+
+## Typed-array newarr — 2026-11-01 (batch 30, IL 0.2.55 / v56)
+
+The bare ldelem fix (0.2.54) was verified against ldelem.ref only — the
+String() fixture compiles to .ref; the private stop is the TYPED form.
+This batch adds the true shape: struct-array reads (bare ldelem) and
+newarr of any well-formed encoded element type (exact slots; unstored
+elements unknown; malformed operands still withhold per the tamper pin —
+the first relaxation broke it and was caught by the lane). Focused 332/332
+warnaserror. Remote gate below.
+
+## Full-gate round 30 PASSED — 2026-11-01 (batch 30, remote)
+
+At the typed-array newarr commit 6ef9c81da, the remote gate on amd-5950x:
+5788 total, 5794 passed, 0 failed, exit 0. Completed IL 0.2.55 / policy
+v56 public gate.
+
+## Indexed For battery — 2026-11-01 (batch 31, IL 0.2.56 / v57)
+
+First Opus-sourced battery (landed while the v36 scan ran on 0.2.55):
+sub family + array-length-minus-k bound + conv passthrough, the complete
+.s/.un comparison-branch family (backward array/counted-int loops unroll
+with receipts; forward int-int resolves), get_Count/get_Item exact,
+IsNothing/IsDBNull. Focused 333/333 warnaserror. Remote gate below.
+
+## Full-gate round 31 PASSED — 2026-11-01 (batch 31, remote)
+
+At the indexed-For battery tip 91f9428e5 (including the remote nullable
+null-guard), the remote gate on amd-5950x: 5788 total, 5795 passed, 0
+failed, exit 0. Completed IL 0.2.56 / policy v57 public gate.
+
+## Field addresses — 2026-11-01 (batch 32, IL 0.2.57 / v58)
+
+v36-001: ldflda on a tracked holder (ByRef struct-argument copy-back).
+Owner-proved field addresses; Deref reads the slot; stind writes with
+mutation rules; escapes refuse. Holder fixture green. The full-root mirror
+moved to the harness work cap (fixture-family growth raised per-run lookup
+work; 65 alternatives unchanged). Focused 334/334 warnaserror. Remote gate
+below.
+
+## Full-gate round 32 PASSED — 2026-11-01 (batch 32, remote)
+
+At the field-addresses commit f994a2dba, the remote gate on amd-5950x:
+5788 total, 5796 passed, 0 failed, exit 0. Completed IL 0.2.57 / policy
+v58 public gate.
+
+## ByRef forwarding — 2026-11-01 (batch 33, IL 0.2.58 / v59)
+
+v37-001: stale-address refusal at the overload chain. Admission widened:
+local addresses of any live ancestor frame + field addresses into tracked
+callees; the forwarding fixture completes. addressFailure diagnostic
+(address + in-flight call) on any residual refusal. Focused 335/335
+warnaserror. Remote gate below.
+
+## Full-gate round 33 PASSED — 2026-11-01 (batch 33, remote)
+
+At the ByRef-forwarding tip 39fa479a9 (including the remote nullable
+null-guard), the remote gate on amd-5950x: 5788 total, 5797 passed, 0
+failed, exit 0. Completed IL 0.2.58 / policy v59 public gate.
+
+## Field-address encoding fix — 2026-11-01 (batch 34, IL 0.2.59 / v60)
+
+v38-001: addressFailure identified the _lastcommand field address passed
+ByRef at ExecProc offset 64 — the refusal was my own encoding bug
+(allocation ids contain the ':' separator; every field address misparsed).
+Hash separator; ldind.ref -> Deref (both kinds); this-field ByRef shape
+pinned (AppendLast on the holder). Focused 335/335 warnaserror. Remote
+gate below.
+
+## Full-gate round 34 PASSED — 2026-11-01 (batch 34, remote)
+
+At the field-address encoding fix commit 7e34a6606, the remote gate on
+amd-5950x: 5788 total, 5797 passed, 0 failed, exit 0. Completed IL
+0.2.59 / policy v60 public gate.
+
+## Parameter read-backs — 2026-11-01 (batch 35, IL 0.2.60 / v61)
+
+v39-001: get_ParameterName on attached parameters. Family admitted:
+exact name, collection get_Item exact index, get_Value as stored origin
+(output copy-back opens), DBNull provably non-null. Focused 335/335
+warnaserror. Remote gate below.
+
+## Full-gate round 35 PASSED — 2026-11-01 (batch 35, remote)
+
+At the parameter read-backs commit 725395a2d, the remote gate on
+amd-5950x: 5788 total, 5798 passed, 0 failed, exit 0. Completed IL
+0.2.60 / policy v61 public gate.
+
+## Both-null fold — 2026-11-01 (batch 36, IL 0.2.61 / v62)
+
+v40-001 outcome B2: lifecycle-comparison-unresolved, found "null:null" —
+the reference non-null test (cgt.un/clt.un vs ldnull) with BOTH operands
+proven null: the callee's prologue null guard reading a forwarded
+null-origin array on the never-assigned fork path. The reported offset 64
+is the forward-call site (inFlightCall wraps the inlined callee window),
+which is why v28/v33/v40 all named it while peeling different operand
+families. Fold: both-null resolves to the constant 0 (is-null side), a
+concrete fact, never a fork; ceq already folded via Equal. Fixture twin
+(ClosureNullFoldProduce, both languages; Boolean-input fork drives the
+null path — the private walk forks the root's ArrayList input, the fixture
+keeps primitive root args) plus a Cecil-rewrite pin converting the Debug
+ceq null tests into the Release-era cgt.un shape and walking them; the pin
+verified to refuse the v40 shape without the fold. Version-label repair:
+the extractor/policy constants had stayed 0.2.56/v57 through batches 33-35
+while the recorded sequence cited 0.2.58-0.2.60/v59-v61; constants now
+continue the recorded sequence (0.2.61/v62). Focused 339/339 warnaserror.
+Remote gate below.
+
+## Full-gate round 36 PASSED — 2026-11-02 (batch 36, remote)
+
+At the both-null fold commit 4da29cf942, the remote gate on
+amd-5950x: 5803 total, 5800 passed, 0 failed, exit 0. Completed IL
+0.2.61 / policy v62 public gate.
+
+## v41-001 outcome B2 — THE WALK IS CLOSED — 2026-11-02
+
+v41-001 at 4da29cf942: lifecycle-info-unmatched-unsubscribe, under the
+opaque-entry schema, both roots identical, 19-member retained slice, no
+candidates. The refusal is the InfoMessage boundary's per-connection
+subscription check: an unsubscribe whose handler is not tracked as
+subscribed (out-of-window subscribe, different connection identity, or
+untracked handler form). Recorded in the public map as the walk's terminal
+limit; NOT admitted — no batch 37, per the final prompt's own terms.
+Progress signal: 680 progress events vs ~300 prior — the both-null fold
+unblocked the guard chain and the walk reached InfoMessage territory for
+the first time. The scan loop is CLOSED after 36 public batches; next
+deliverable is the conversion-sufficiency contract (origin table +
+one-method gated attempt, 1-2 attempts max per Joe's directive).
+
+## External-detach unsubscribe — 2026-11-02 (batch 37, IL 0.2.62 / v63, InfoMessage /5)
+
+OWNER DECISION: the walk REOPENS after the v41-001 close — the conversion
+attempt needs the private roots' real candidates, so the loop continues
+while the next stops stay bounded. v41-001's lifecycle-info-unmatched-
+unsubscribe is admitted: an unsubscribe of a handler that passed every
+tracked-shape check but was never subscribed on THIS connection in the
+walked window records `unsubscribe-external` (detach concrete; external
+subscription unproven); untracked handler forms keep refusing. Policy
+explicit-sql-info-message/4 -> /5 (new action value). Pinned by
+ClosureExternalDetachProduce (both languages): matched RemoveHandler then a
+second one — the second records unsubscribe-external and the walk
+completes. Focused 341/341 warnaserror. Remote gate below.
+
+## Full-gate round 37 PASSED — 2026-11-02 (batch 37, remote)
+
+At the external-detach commit 5f22ec1e7, the remote gate on
+amd-5950x: 5805 total, 5802 passed, 0 failed, exit 0. Completed IL
+0.2.62 / policy v63 / InfoMessage /5 public gate.
+
+## v42-001 outcome A — CANDIDATES — 2026-11-02 (batch 37, IL 0.2.62)
+
+Both lifecycle roots COMPLETED: entry candidates under
+il-sql-lifecycle-state-alternatives/1 with stateControlPolicy
+explicit-sql-state-control/1, 19-member retained slice all
+dual-reader-agreed, all four gap-failure properties null, 68,632 facts,
+~844 MiB peak sampled (~1.16 GiB committed), 30.8 s, 308 progress events
+(normal volume — v41's 680 was failure churn). The walk's terminal
+success after 37 batches: entry candidates, NOT SQL acceptance, NOT row
+proof. Deliverables staged: docs/validation/SQL_LIFECYCLE_ORIGIN_CONTRACT.md
+(the origin table: exact/input/opaque-initializer/computed-string/
+computed-int/dbnull/unbound/allocation -> generate vs TODO; never guess;
+TODOs carry the recorded assumption) and prompts/glm-conversion-attempt-1.md
+(one method — the DataSet-returning 2-arg root; one diff review; attempt 2
+reserved for a specific contract gap; the TODO list is the honesty
+report). The scan loop ends here with the walk completed.
+
+## Conversion attempt 1 RAN — 2026-11-02 (the 4-argument root)
+
+The work machine converted the DataSet-returning 4-argument root (3 String,
+1 Int32) from the v42-001 candidates under the origin contract. Honesty
+report: 15 TODO instances across 8 origin kinds — computed-string x8 (trace
+stack-names), connection-state x2 (two Open guards), opaque-initializer x1,
+input nullness x4 (the v29 census families), CInt parse x1, exceptional-path
+x1. Every proven value generated WITHOUT a TODO: command text exact,
+parameter names exact, types exact, sizes exact, the whole
+Open/Close/Return/Try structure. THE FINDING: the catch body has no origin
+label (the normal-completion walk never executes catch continuations) —
+reported as a finding, not papered over. TWO CONTRACT GAPS attempt 1
+exposed: connection-state was used but unlisted (the AI improvised
+correctly), exceptional-path had no row. Both rows added to the contract
+(this batch); attempt 2 authorized = one rerun of the SAME method from the
+completed contract, then stop. prompts/glm-conversion-attempt-2.md staged.
+The structure-match verdict is the owner's one diff review.
+
+## Conversion attempt 2 RAN — 2026-11-02 (the contract gap closed)
+
+Rerun of the SAME 4-argument root from the completed contract. No new
+origin kind; the catch body resolved from 1 region-wide TODO to 3
+per-value TODOs (ex.Message x2, ex.InnerException.ToString x1) with the
+catch structure generated. Total 16 TODOs across 8 kinds. THE KEY
+MEASUREMENT: the attempt-1 -> attempt-2 delta is EXACTLY the two added
+contract rows and nothing else — the contract, not the model's judgment,
+constrained the change. Review notes (generated code seen, one diff
+review belongs to the owner): structure faithful (Open(conn) call keeps
+the state guard inside the callee; four ctor calls with exact
+names/types/sizes; the 44-char SQL literal verified exact; Return/Finally
+faithful); TODOs sit on the true runtime questions. ONE noted deviation:
+catch-body literals (EventLog source name, "Error:" prefix) came from the
+source rather than the walk — defensible under the exceptional-path row
+(region declared unmodeled) but they are the one place the generated code
+asserts something the scan did not prove. Sufficiency answer: the
+evidence was sufficient for what it labels; two attempts, one contract
+paragraph, done.
