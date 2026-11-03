@@ -2503,3 +2503,43 @@ source rather than the walk — defensible under the exceptional-path row
 asserts something the scan did not prove. Sufficiency answer: the
 evidence was sufficient for what it labels; two attempts, one contract
 paragraph, done.
+
+## One bounded production-budget diagnostic batch — 2026-11-03
+
+Branch codex/sql-production-budget-fit, cut from origin/dev
+b1d490967b7443177f24b25d46d58ba2b6dd9f50. Preserve unrelated untracked
+docs/reports/. Scope is the diagnostic half of #931 plus production-configuration
+regression pins. No budget raises, private scans, source conversion, origin-contract
+changes, merges, ACK changes or VB fixture growth are authorized by this batch.
+
+The observed validation mismatch is real: semantic mirror tests use larger fresh
+budgets; native interpretation shares one default 2M budget across canonicalized
+roots/guards. CLI selector reversal is canonicalized, not an order experiment.
+No conclusion about any stopped private root's standalone cost is made here.
+
+IL extractor 0.2.69 / policy v70 adds WorkAccounting, WorkLimitFailure census and
+native lifecycleWork/scope/rootOrdinal fields under existing provenance. Original
+refusal strings, interpreter outcomes and maximums remain unchanged. Refusal-counter
+deltas record whether a shared request was refused during extraction; they do
+not claim a unique throw-site cause (an optional probe may precede a local stop).
+Failure prefixes never become entry candidates. Three pins failed as intended
+before the change; the six final diagnostic/outcome pins now pass (4.5 seconds).
+The pre-exhausted-budget pin initially expected work-limit; actual existing
+index-limit was preserved and pinned instead. Public native pair retains 3/2
+and 36/36 alternative/entry outcomes under 2M in both selector orders. This is
+not a claim about another input's fit.
+
+Validation logs so far: /tmp/tracemap-budget-pin-before.log (three intended
+failures), /tmp/tracemap-budget-pins-final.log (six passes). Focused local lane completed: 719 passed, 1 existing skip, 0 failed,
+5m17s; command `dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -p:TreatWarningsAsErrors=true --nologo --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgress|FullyQualifiedName~Report'`.
+After refining budgetObservation labels to avoid causal overstatement, the final
+six budget pins passed again (3 seconds, -warnaserror).
+Logs: /tmp/tracemap-production-budget-focused.log,
+/tmp/tracemap-budget-final-verified.log.
+Compile-only public smoke passed: original 20 cases (10 paths/10 unknown),
+table 26 (4 paths/22 unknown), 2 local IL shapes; no SQL execution.
+Command `python3 scripts/validation/sql-compiled-wrapper-smoke.py --cli src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll --out /tmp/tracemap-production-budget-smoke-20261103`.
+Log: /tmp/tracemap-production-budget-smoke.log.
+`git diff --check` passes. Remote exact-head full gate and PR handoff pending.
+See docs/validation/SQL_LIFECYCLE_BUDGET_DIAGNOSTICS.md for the complete contract
+and a non-dispatched one-run owner validation template.

@@ -891,3 +891,19 @@ position. Two corrections:
   and >=2 distinct emptiness keys. The nine-guard C# ManyGuards keeps the
   beyond-budget census pin (512 > 256); VB's eight guards sit exactly at
   capacity and complete (256 alternatives, pinned).
+
+## Production-budget diagnostics and fit pins (2026-11-03, IL 0.2.69 / v70)
+
+Diagnostic half of #931: a shared-budget failure does not establish the stopped
+root's standalone cost. Root/guard interpretation work ledgers now expose start,
+end, delta, remainder and refusal counts under existing fact provenance. Work-limit
+stops retain the explored fork census and distinguish a refused shared request
+from the interpreter's existing local work/shape bound. No failure prefix is
+promoted to an entry. No budget, admission or origin semantics changed.
+
+C#-only pins cover both direct execution orders and both CLI selector orders
+(which canonicalize to the same root order). The native public pair completes
+at the unchanged 2M maximum, with exact 3/2 and 36/36 alternative/entry counts;
+this is a public denominator, not private acceptance. Larger-budget semantic
+mirror tests are not substituted for this production-configuration pin.
+See SQL_LIFECYCLE_BUDGET_DIAGNOSTICS.md for fields, refusal scope and owner gates.

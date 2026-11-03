@@ -238,3 +238,14 @@
   - [x] IL 0.2.27 state-dependent control: bounded path alternatives (max 8 paths / 6 sites), per-alternative identities, direct-throw construction + uncaught-throw termination, loop abandonment on early leave; no enum substitution, no silent path selection, no attachment merging.
   - [x] Focused validation 237 passed, 0 failed/skipped, Debug -warnaserror, incl. native CLI candidate emission and deterministic replay.
   - [ ] Complete passing full shared-core Debug -warnaserror gate for IL 0.2.27 on an immutable head copy.
+
+## Production-budget fit and work-limit diagnostics (0.2.69 / v70)
+
+- [x] Pin missing work-limit census/accounting before implementation (three intended failures).
+- [x] Add caller-owned shared-budget interpretation ledgers and native root/guard scope/order properties.
+- [x] Attach bounded fork census to work-limit stops; record shared-request refusal observations without claiming a unique throw-site cause.
+- [x] Pin canonical native selector order, direct root sequences in both orders, exact public alternative/entry outcomes and pre-exhausted budget behavior (six pins pass).
+- [x] Focused local IlSql/ScanDiagnosticProgress/Report lane: 719 passed, 1 existing skip; final six budget pins rerun after observational-label refinement.
+- [x] Compile-only public smoke: retained original/table cases and local IL shapes pass, no SQL execution.
+- [ ] Pushed exact-head remote full Debug -warnaserror gate.
+- [ ] Reviewable branch/PR handoff with limits and remaining owner decisions.

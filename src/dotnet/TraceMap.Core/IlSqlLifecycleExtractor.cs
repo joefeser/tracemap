@@ -95,6 +95,10 @@ internal static partial class IlSqlLifecycleExtractor
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public PathLimitFailure? PathLimitFailure { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public WorkLimitFailure? WorkLimitFailure { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+        public WorkAccounting? WorkAccounting { get; init; }
+        [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public BodyMetadataFailure? MetadataFailure { get; init; }
         [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
         public FieldOwnerRejection? FieldOwnerFailure { get; init; }
@@ -145,6 +149,11 @@ internal static partial class IlSqlLifecycleExtractor
     /// <summary>Diagnostic attached to path-limit refusals: the run counters and the fork census that consumed the budget.</summary>
     internal sealed record PathLimitFailure(int Runs, int Alternatives, int Queued, int VisitedSites,
         IReadOnlyList<string> ForkCensus);
+
+    internal sealed record WorkAccounting(long Maximum, long ConsumedBefore, long ConsumedAfter,
+        long RootConsumed, long RemainingBefore, long RemainingAfter, long RefusedBefore, long RefusedAfter);
+    internal sealed record WorkLimitFailure(string BudgetObservation, int Runs, int Alternatives, int Queued,
+        int VisitedSites, IReadOnlyList<string> ForkCensus);
 
     internal sealed record StateDecision(string Policy, Site Site, string Connection, string Constant,
         string Comparison, bool EqualAssumed, int Occurrence,
@@ -197,6 +206,20 @@ internal static partial class IlSqlLifecycleExtractor
     internal static Result Extract(Body root, IReadOnlyList<Body> bodies, bool enabled,
         IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers = false, bool externalTraceBoundary = false, bool compiledScalarBoundary = false, bool infoMessageBoundary = false)
     {
+        var before = budget.Consumed;
+        var refusedBefore = budget.RefusedRequests;
+        var result = ExtractCore(root, bodies, enabled, budget, opaqueRootInitializers, externalTraceBoundary,
+            compiledScalarBoundary, infoMessageBoundary);
+        return result with { WorkAccounting = new(budget.Maximum, before, budget.Consumed,
+            budget.Consumed - before, budget.Maximum - before, budget.Maximum - budget.Consumed,
+            refusedBefore, budget.RefusedRequests) };
+    }
+
+    private static Result ExtractCore(Body root, IReadOnlyList<Body> bodies, bool enabled,
+        IlBodyEvidenceExtractor.IlWorkBudget budget, bool opaqueRootInitializers, bool externalTraceBoundary,
+        bool compiledScalarBoundary, bool infoMessageBoundary)
+    {
+        var refusedBefore = budget.RefusedRequests;
         // Bounded path alternatives: an unbound runtime-state comparison never picks a
         // side. The first run uses no assumptions and behaves exactly like a state-free
         // extraction; each undecided state branch expands the work list by both
@@ -246,7 +269,17 @@ internal static partial class IlSqlLifecycleExtractor
                 alternatives.Add(new(StateControlPolicy, machine.RecordedDecisions.ToArray(), "exceptional-termination",
                     terminated.Site, terminated.Limitation, null));
             }
-            catch (Refusal error) { return FailureResult(machine, error); }
+            catch (Refusal error)
+            {
+                var failed = FailureResult(machine, error);
+                return error.Message == "lifecycle-work-limit" ? failed with
+                {
+                    WorkLimitFailure = new(budget.RefusedRequests > refusedBefore
+                        ? "shared-request-refused-during-extraction" : "no-shared-request-refused-during-extraction",
+                        runs, alternatives.Count, queue.Count, visited.Count,
+                        census.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => pair.Key + " x" + pair.Value).ToArray())
+                } : failed;
+            }
         }
         return new Result([], [], null, []) { StateAlternatives = alternatives.ToArray() };
     }
