@@ -2503,3 +2503,61 @@ source rather than the walk — defensible under the exceptional-path row
 asserts something the scan did not prove. Sufficiency answer: the
 evidence was sufficient for what it labels; two attempts, one contract
 paragraph, done.
+
+## One bounded production-budget diagnostic batch — 2026-11-03
+
+Branch codex/sql-production-budget-fit, cut from origin/dev
+b1d490967b7443177f24b25d46d58ba2b6dd9f50. Preserve unrelated untracked
+docs/reports/. Scope is the diagnostic half of #931 plus production-configuration
+regression pins. No budget raises, private scans, source conversion, origin-contract
+changes, merges, ACK changes or VB fixture growth are authorized by this batch.
+
+The observed validation mismatch is real: semantic mirror tests use larger fresh
+budgets; native interpretation shares one default 2M budget across canonicalized
+roots/guards. CLI selector reversal is canonicalized, not an order experiment.
+No conclusion about any stopped private root's standalone cost is made here.
+
+IL extractor 0.2.69 / policy v70 adds WorkAccounting, WorkLimitFailure census and
+native lifecycleWork/scope/rootOrdinal fields under existing provenance. Original
+refusal strings, interpreter outcomes and maximums remain unchanged. Refusal-counter
+deltas record whether a shared request was refused during extraction; they do
+not claim a unique throw-site cause (an optional probe may precede a local stop).
+Failure prefixes never become entry candidates. Three pins failed as intended
+before the change; the six final diagnostic/outcome pins now pass (4.5 seconds).
+The pre-exhausted-budget pin initially expected work-limit; actual existing
+index-limit was preserved and pinned instead. Public native pair retains 3/2
+and 36/36 alternative/entry outcomes under 2M in both selector orders. This is
+not a claim about another input's fit.
+
+Validation logs so far: /tmp/tracemap-budget-pin-before.log (three intended
+failures), /tmp/tracemap-budget-pins-final.log (six passes). Focused local lane completed: 719 passed, 1 existing skip, 0 failed,
+5m17s; command `dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -p:TreatWarningsAsErrors=true --nologo --filter 'FullyQualifiedName~IlSql|FullyQualifiedName~ScanDiagnosticProgress|FullyQualifiedName~Report'`.
+After refining budgetObservation labels to avoid causal overstatement, the final
+six budget pins passed again (3 seconds, -warnaserror).
+Logs: /tmp/tracemap-production-budget-focused.log,
+/tmp/tracemap-budget-final-verified.log.
+Compile-only public smoke passed: original 20 cases (10 paths/10 unknown),
+table 26 (4 paths/22 unknown), 2 local IL shapes; no SQL execution.
+Command `python3 scripts/validation/sql-compiled-wrapper-smoke.py --cli src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll --out /tmp/tracemap-production-budget-smoke-20261103`.
+Log: /tmp/tracemap-production-budget-smoke.log.
+`git diff --check` passes. Remote exact-code full Debug -warnaserror gate passed at
+fcd36a34f5a50610ba79519312ee706fcc4296d0: 5825 passed, 3 existing skips, 0 failed,
+5828 total, 18.6482 minutes; build/test exit 0. The runner used a fresh isolated
+checkout and exact-HEAD bundle. Log summary: /tmp/tracemap-production-budget-remote.log;
+full runner log is named tracemap-budget-<code-sha>.log under its home (no private
+runner path in tracked files). Docs-only final validation recording follows this
+code head; source/project tree is unchanged.
+
+Draft PR: https://github.com/joefeser/tracemap/pull/933 (base dev).
+The integration branch disappeared mid-run and was restored by the owner to the
+same starting SHA; no main-targeted PR was opened. The primary checkout remains
+on dev with its unrelated untracked docs/reports/ preserved. Final notes are edited
+in an attached sql-budget-finalize worktree, not the owner's primary checkout.
+
+No private validation was dispatched and the stopped lifecycle root is not claimed
+to complete. Budget ceilings and origin semantics remain unchanged. #931 remains
+open for its owner-controlled work-budget/isolation decision. ACK status-only
+readback was PR_IS_DRAFT / owner_decision_required at the code head; no merge-ready
+claim or review requests/merges are made. This bounded diagnostic batch is complete.
+See docs/validation/SQL_LIFECYCLE_BUDGET_DIAGNOSTICS.md for the complete contract
+and a non-dispatched one-run owner validation template.
