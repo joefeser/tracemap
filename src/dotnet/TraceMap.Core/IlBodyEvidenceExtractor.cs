@@ -27,7 +27,7 @@ namespace TraceMap.Core;
 internal static class IlBodyEvidenceExtractor
 {
     internal const string SchemaVersion = "il-body-provenance.v1";
-    internal const string PolicyVersion = "explicit-il-body-evidence.v69";
+    internal const string PolicyVersion = "explicit-il-body-evidence.v70";
     internal const string IlLocationKind = "managed-il-v1";
     internal const string BodyLimitation = "IL body evidence proves only that the admitted assembly contains this exact bounded operand-aware instruction stream at this module-local method row; it does not prove execution, dispatch, reachability, behavior, source ownership, semantic equivalence, or rewrite preservation.";
     internal const string CallLimitation = "A call site records the static member reference or calli standalone signature encoded in this module's IL; a calli signature does not identify a target member. No call site proves execution, virtual dispatch resolution, target presence, cross-assembly resolution, call-graph reachability, or rewrite equivalence.";
@@ -724,8 +724,10 @@ internal static class IlBodyEvidenceExtractor
         var roots = selected ? evaluation.LifecycleRoots.Select(selection => bodies.Single(body =>
             body.Input.RawFileSha256 == selection.BinarySha256 && body.Observation.MetadataToken == selection.MetadataToken))
             : bodies.Where(body => IlSqlLifecycleExtractor.IsRoot(body.Observation));
+        var rootOrdinal = 0;
         foreach (var originalRoot in roots)
         {
+            var ordinal = rootOrdinal++;
             using var slice = selected ? new IlSqlLifecycleSlice(evaluation, bodies, originalRoot, sliceDecodeBudget) : null;
             var root = slice?.Root ?? originalRoot;
             var scopedBodies = slice?.Bodies ?? bodies;
@@ -742,6 +744,12 @@ internal static class IlBodyEvidenceExtractor
                 if (result.InfoMessages is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.InfoMessageSchema;
                 if (result.StateAlternatives is { Count: > 0 }) lifecycleSchema = IlSqlLifecycleExtractor.StateAlternativesSchema;
                 var common = new Dictionary<string, string>(CommonProperties(provenance, root.Input), StringComparer.Ordinal);
+                if (result.WorkAccounting is not null)
+                {
+                    common["lifecycleWork"] = SqlServerSchemaEvidence.Json(result.WorkAccounting);
+                    common["lifecycleBudgetScope"] = "shared-across-roots-and-guards";
+                    common["lifecycleRootOrdinal"] = ordinal.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
                 if (evaluation.InfoMessageBoundary) common["infoMessagePolicy"] = IlSqlLifecycleExtractor.InfoMessagePolicy;
                 if (evaluation.CompiledScalarBoundary)
                     common["compiledScalarPolicy"] = IlSqlLifecycleExtractor.CompiledScalarPolicy;
@@ -814,6 +822,8 @@ internal static class IlBodyEvidenceExtractor
                         gapProperties["numberFailure"] = SqlServerSchemaEvidence.Json(result.NumberFailure);
                     if (result.AddressFailure is not null)
                         gapProperties["addressFailure"] = SqlServerSchemaEvidence.Json(result.AddressFailure);
+                    if (result.WorkLimitFailure is not null)
+                        gapProperties["workLimitFailure"] = SqlServerSchemaEvidence.Json(result.WorkLimitFailure);
                     if (result.PathLimitFailure is not null)
                         gapProperties["pathLimitFailure"] = SqlServerSchemaEvidence.Json(result.PathLimitFailure);
                     if (result.FieldOwnerFailure is not null)
