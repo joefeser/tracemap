@@ -660,6 +660,36 @@ namespace PublicSql.CSharp
             var copied = (int[])mixed.ToArray(typeof(int));
             return new DataSet(copied.Length.ToString());
         }
+        public DataSet ClosureLiteralEqualityProduce(string connection)
+        {
+            // PR #929 review: identical literals compare by digest — two locals
+            // from the same interned literal take the true branch (its SQL
+            // evidence must not be silently dropped); a different literal folds
+            // unequal and the method continues to its entry.
+            string first = "public-literal";
+            string second = "public-literal";
+            var parameters = new ArrayList();
+            parameters.Add(new ClosureStructNullGuardParameter("@public", SqlDbType.VarChar, 12, connection));
+            if (!(first == second)) return new DataSet();
+            return ClosureStructNullGuardExec.Execute("public.literal_equality", ref parameters);
+        }
+        public DataSet ClosurePrivateShapeProduce(string employee, string domicile, int bidMonth, int bidYear)
+        {
+            // The private root census shape (v43-001): two string inputs (nullness
+            // + emptiness each), two Int32 inputs (nullness each), and the two
+            // connection-state guards — roughly eight genuine runtime binaries.
+            // The census-driven capacity (256 paths) must complete this shape
+            // with entry candidates.
+            var parameters = new ArrayList();
+            // The string inputs go through the DIRECTION overload — the confirmed
+            // four-overload ctor shape with the type-name dispatch and the nested
+            // emptiness guard (the runtime facts the census counted).
+            parameters.Add(new ClosureStructNullGuardParameter("@pc_emplid", SqlDbType.VarChar, ParameterDirection.Input, 15, employee));
+            parameters.Add(new ClosureStructNullGuardParameter("@pc_domicile", SqlDbType.VarChar, ParameterDirection.Input, 10, domicile));
+            parameters.Add(new ClosureStructNullGuardParameter("@pc_bid_month", SqlDbType.Int, 0, bidMonth));
+            parameters.Add(new ClosureStructNullGuardParameter("@pc_bid_year", SqlDbType.Int, 0, bidYear));
+            return ClosureStructNullGuardExec.Execute("public.private_shape", ref parameters);
+        }
         public DataSet ClosureFillZeroProduce(string connection)
         {
             // Negative control: an EQUALITY test on the unbound Fill count
