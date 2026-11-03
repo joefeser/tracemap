@@ -247,5 +247,5 @@
 - [x] Pin canonical native selector order, direct root sequences in both orders, exact public alternative/entry outcomes and pre-exhausted budget behavior (six pins pass).
 - [x] Focused local IlSql/ScanDiagnosticProgress/Report lane: 719 passed, 1 existing skip; final six budget pins rerun after observational-label refinement.
 - [x] Compile-only public smoke: retained original/table cases and local IL shapes pass, no SQL execution.
-- [ ] Pushed exact-head remote full Debug -warnaserror gate.
-- [ ] Reviewable branch/PR handoff with limits and remaining owner decisions.
+- [x] Pushed exact-head remote full Debug -warnaserror gate: 5825 passed, 3 existing skips, 0 failed at fcd36a34f.
+- [x] Reviewable branch and draft PR #933; no merge or budget/private-scan authorization implied.
