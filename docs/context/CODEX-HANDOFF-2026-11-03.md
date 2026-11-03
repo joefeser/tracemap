@@ -51,9 +51,10 @@ owner's work machine." Never private names, SQL, binaries, or paths.
   issue comments). Close when convenient.
 - **#925 — salvage AUTHORIZED** (the owner's decision is recorded in
   the resolution doc): port three behaviors + tests per
-  `docs/context/BASE44-PRESERVED-BRANCH-RESOLUTION-2026-11-02.md`;
-  do NOT cherry-pick the one superseded hunk; delete-branch/close-issue
-  tail step. Safe to execute autonomously.
+  `docs/context/BASE44-PRESERVED-BRANCH-RESOLUTION-2026-11-02.md` and
+  open the PR; do NOT cherry-pick the one superseded hunk. The
+  delete-branch/close-issue TAIL step runs only AFTER the owner merges
+  that PR — branch deletion stays owner-gated.
 - **#926 / #927 / #928 — dispositioned corners**, each with its bounded
   fix written in the issue: covariant array stores; `brtrue` on a boxed
   Boolean tests the reference; digest-mismatch folding under
@@ -95,7 +96,8 @@ owner's work machine." Never private names, SQL, binaries, or paths.
 - #926/#927/#928 bounded fixes (as written in the issues): C#-only
   fixtures, pin-first, focused lane + full remote gate, PR to `dev`
   (leave merging to the owner).
-- #925 salvage exactly as its resolution doc specifies.
+- #925 salvage implementation + PR exactly as its resolution doc
+  specifies (the deletion tail step awaits the owner's merge).
 - The diagnostic half of #931 (census on work-limit).
 - upgrade-authority work per its own queue (`ua` = PRs #903 + #905;
   its bug reports arrive from downstream consumers).
