@@ -180,6 +180,12 @@ public sealed record ScanOptions(
     string? WebFormsPublishedRootPath = null,
     string? WebFormsPublishSourceRelativeBase = null)
 {
+    public IReadOnlyList<string>? IlLifecycleRoots { get; init; }
+    public bool IlOpaqueRootInitializers { get; init; }
+    public bool IlExternalTraceBoundary { get; init; }
+    public bool IlCompiledScalarBoundary { get; init; }
+    public bool IlInfoMessageBoundary { get; init; }
+    public bool CompiledOnly { get; init; }
     public bool IndexDepsJson { get; init; }
     public DepsJsonLimits? DepsJsonLimits { get; init; }
     public string? WebFormsVbImportContextPath { get; init; }
@@ -456,6 +462,11 @@ public static class FactTypes
     public const string ManagedIlCallValuesObserved = nameof(ManagedIlCallValuesObserved);
     public const string ManagedIlReturnValuesObserved = nameof(ManagedIlReturnValuesObserved);
     public const string ManagedIlDatabaseCommandCandidate = nameof(ManagedIlDatabaseCommandCandidate);
+    public const string ManagedIlSqlShapeCandidate = nameof(ManagedIlSqlShapeCandidate);
+    public const string ManagedIlSqlObjectPathCandidate = nameof(ManagedIlSqlObjectPathCandidate);
+    public const string LinqPipelineCandidate = nameof(LinqPipelineCandidate);
+    public const string ManagedIlSqlLifecycleCandidate = nameof(ManagedIlSqlLifecycleCandidate);
+    public const string ManagedIlSqlLifecycleEntryCandidate = nameof(ManagedIlSqlLifecycleEntryCandidate);
     public const string ManagedIlRewriteObserved = nameof(ManagedIlRewriteObserved);
     public const string ManagedIlCallRetargetObserved = nameof(ManagedIlCallRetargetObserved);
     public const string ManagedIlRewritePdbObserved = nameof(ManagedIlRewritePdbObserved);
@@ -692,6 +703,10 @@ public static class RuleIds
     public const string DotNetIlLateBindingCensus = "dotnet.il.late-binding-census.v1";
     public const string DotNetIlValues = "dotnet.compiled.il-values.v1";
     public const string DotNetIlCommandBinding = "dotnet.compiled.il-command-binding.v1";
+    public const string DotNetIlSqlShape = "dotnet.compiled.il-sql-shape.v1";
+    public const string DotNetIlSqlObjectPath = "dotnet.compiled.il-sql-object-path.v1";
+    public const string DotNetSemanticLinqPipeline = "dotnet.semantic.linq-pipeline.v1";
+    public const string DotNetIlSqlLifecycle = "dotnet.compiled.il-sql-lifecycle.v1";
     public const string DotNetIlGap = "dotnet.compiled.il-gap.v1";
     public const string DotNetIlRewrite = "dotnet.compiled.il-rewrite.v1";
     public const string DotNetIlRewriteGap = "dotnet.compiled.il-rewrite-gap.v1";
@@ -722,7 +737,7 @@ public static class ScannerVersions
     public const string ManagedMetadataExtractor = "managed-metadata/0.2.0+cecil-0.11.6"; // 0.2.0: ManagedAssemblyDeclared gains runtimeFloor* properties (#853)
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.0+srm-10.0.0+cecil-0.11.6"; // 0.2.0: per-assembly ManagedLateBindingCensus (#854)
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.67+srm-10.0.0+cecil-0.11.6"; // 0.2.67: review round 5 — concatenations containing digest-only literals stay unbound, ToArray validates every element against the requested type, and the equality-only nonzero marker resolves solely against zero. 0.2.66: review round 4 — unbound-int comparison polarity (every strict relation vs 0/1 negates the equal-assumption), digest-mismatched string comparisons return an equality-only nonzero marker (ordering consumers refuse), and array casts validate the element type (tok:/t: prefixes compared bare). 0.2.65: review round 3 — unsigned ordering honored in short branch forms (.un.s), IsNothing returns the raw null-equality test (never negated), same-form plain-string equality compares texts, and concrete checked-overflow arithmetic refuses by name. 0.2.64: review round 2 — merges of written sources refuse, executed output parameters read back unknown, boxed booleans retain their runtime type, and derived-exact strings compare against ldstr digests by digest reconstruction (the ordinal shortcut never crosses the plain/digest forms — it had silently mis-folded the type-name dispatch). 0.2.63: review fixes — per-opcode strict integer comparisons (cgt is x>y, never !(x<y); .un compares unsigned) and the Fill count stays an unbound integer (fork on 0/1 compares, refuse equality, discard fine). 0.2.62: external-detach unsubscribe (an unmatched InfoMessage remove_InfoMessage of a tracked-shape handler records unsubscribe-external instead of refusing; the external subscription stays unproven). 0.2.61: both-null fold in the reference non-null test (cgt.un/clt.un with both operands proven null resolves to the is-null constant; pinned by the Cecil-rewritten Release-shape pin). 0.2.56: indexed For battery (sub/sub.ovf, length-k bounds, full .s/.un branch family, backward counted loops, get_Count/get_Item, IsNothing/IsDBNull)
     public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
     public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
@@ -747,5 +762,6 @@ public static class ScannerVersions
     public const string LegacyDataSymbolComposition = "legacy-data-composition/0.1.0";
     public const string AccessExtractor = "legacy-access/0.3.2";
     public const string EndpointAlignment = "endpoint-alignment/0.1.0";
+    public const string LinqPipelineEvidenceExtractor = "linq-pipeline-evidence/0.2.0";
     public const string RazorBindingExtractor = "csharp-razor-binding/0.1.0";
 }

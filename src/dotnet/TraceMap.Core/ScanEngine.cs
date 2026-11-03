@@ -27,6 +27,15 @@ public static class ScanEngine
             throw new DirectoryNotFoundException($"Repository path does not exist: {repoPath}");
         }
 
+        if (options.CompiledOnly && ((options.CompiledInputPaths?.Count ?? 0) == 0
+            || options.Restore || options.ExactSourceScope
+            || options.SolutionPaths is { Count: > 0 } || options.ProjectPaths is { Count: > 0 }
+            || options.IncludeGlobs is { Count: > 0 } || options.ExcludeGlobs is { Count: > 0 }
+            || options.TargetFramework is not null || options.BinlogPaths is { Count: > 0 }
+            || options.WebFormsVbImportContextPath is not null || options.VisualBasicCompilationContextPath is not null
+            || options.IndexCiProducers || options.IndexDepsJson))
+            throw new ArgumentException("CompiledOnlyRequiresInputsAndNoSourceAnalysisOptions", nameof(options));
+
         GitMetadata git;
         IReadOnlyList<FileInventoryItem> fullInventory;
         IReadOnlyList<FileInventoryItem> inventory;
@@ -47,7 +56,7 @@ public static class ScanEngine
                 MsBuildBinlogExtractor.ValidateCommitBinding(git.CommitSha, options.BinlogPaths, options.BinlogCommitSha);
                 progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.Inventory);
                 var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
-                fullInventory = FileInventory.Collect(
+                fullInventory = options.CompiledOnly ? [] : FileInventory.Collect(
                     repoPath,
                     outputPath,
                     options.ExcludeGlobs,
@@ -104,10 +113,13 @@ public static class ScanEngine
                 ScanProgressStages.ProjectSelection,
                 "completed",
                 counts: ProjectSelectionCounts(inventory));
+            progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SourceSemanticAnalysis);
             using (var semanticOperation = TraceMapDiagnostics.StartPhase("scan", TraceMapDiagnosticPhases.SemanticAnalysis, cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                csharpSemanticResult = CSharpSemanticExtractor.Extract(
+                csharpSemanticResult = options.CompiledOnly
+                    ? new SemanticExtractionResult([], [], false, true)
+                    : CSharpSemanticExtractor.Extract(
                     repoPath,
                     inventory,
                     options,
@@ -118,7 +130,9 @@ public static class ScanEngine
                 // A C# restore does not establish coverage of independent VB targets.
                 // Preserve the explicit restore request; repeated solution restores are
                 // preferable to silently omitting an unproven target.
-                var visualBasicSemanticResult = VisualBasicSemanticExtractor.Extract(
+                var visualBasicSemanticResult = options.CompiledOnly
+                    ? new SemanticExtractionResult([], [], false, true)
+                    : VisualBasicSemanticExtractor.Extract(
                     repoPath,
                     inventory,
                     options,
@@ -126,7 +140,7 @@ public static class ScanEngine
                     cancellationToken,
                     progress);
                 semanticResult = SemanticExtractionResultMerge.Merge(semanticResult, visualBasicSemanticResult);
-                semanticToolchainReducedCoverage = HasToolchainSemanticReduction(semanticResult);
+                semanticToolchainReducedCoverage = options.CompiledOnly || HasToolchainSemanticReduction(semanticResult);
                 var semanticStageCoverage = semanticResult.Attempted
                     ? semanticToolchainReducedCoverage ? "semantic-reduced" : "semantic"
                     : semanticToolchainReducedCoverage ? "syntax-reduced" : "syntax";
@@ -145,6 +159,8 @@ public static class ScanEngine
                     "semantic-input-snapshot-verified",
                     retryability: SemanticRetryability(semanticToolchainReducedCoverage, semanticResult.GapFacts),
                     nextAction: semanticToolchainReducedCoverage ? "review-analysis-gaps" : "continue");
+                progress?.FinishStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SourceSemanticAnalysis,
+                    semanticToolchainReducedCoverage ? "partial" : "completed");
             }
         }
         catch (Exception ex)
@@ -172,7 +188,7 @@ public static class ScanEngine
         {
             progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SourceVerification);
             var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
-            var refreshedFullInventory = FileInventory.Collect(
+            var refreshedFullInventory = options.CompiledOnly ? Array.Empty<FileInventoryItem>() : FileInventory.Collect(
                 repoPath,
                 outputPath,
                 options.ExcludeGlobs,
@@ -231,9 +247,11 @@ public static class ScanEngine
             .Select(item => item.RelativePath)
             .OrderBy(path => path, StringComparer.Ordinal)
             .ToArray();
-        var compiledEvaluation = ManagedMetadataExtractor.Evaluate(repoPath, git.CommitSha, options, cancellationToken);
+        var compiledEvaluation = ScanProgressAmbient.Observe(ScanProgressStages.CompiledMetadata,
+            () => ManagedMetadataExtractor.Evaluate(repoPath, git.CommitSha, options, cancellationToken));
         var pdbEvaluation = PortablePdbExtractor.Evaluate(repoPath, options, compiledEvaluation, cancellationToken);
-        var ilEvaluation = IlBodyEvidenceExtractor.Evaluate(options, compiledEvaluation, cancellationToken);
+        var ilEvaluation = ScanProgressAmbient.Observe(ScanProgressStages.IlDecode,
+            () => IlBodyEvidenceExtractor.Evaluate(options, compiledEvaluation, cancellationToken));
         var ilRewriteEvaluation = IlRewriteEvidenceExtractor.Evaluate(options, cancellationToken);
         var ilRewritePdbEvaluation = IlRewritePdbEvidenceExtractor.Evaluate(options, ilRewriteEvaluation, cancellationToken);
         var webFormsPublishEvaluation = WebFormsPublishMapExtractor.Evaluate(repoPath, git.CommitSha, options, cancellationToken);
@@ -257,6 +275,7 @@ public static class ScanEngine
             .Select(GetGapMessage)
             .ToArray();
         var semanticKnownGaps = git.KnownGaps
+            .Concat(options.CompiledOnly ? ["SourceAnalysisExcludedByCompiledOnly: source inventory, MSBuild, semantic and syntax analysis were explicitly excluded; source snapshot covers zero files."] : [])
             .Concat(semanticResult.GapFacts.Select(GetGapMessage))
             .Concat(migrationFallbackGaps)
             .Concat(compiledEvaluation.KnownGaps)
@@ -290,7 +309,7 @@ public static class ScanEngine
             : "NotRun";
         var semanticAnalysisLevel = semanticResult.Attempted
             ? semanticToolchainReducedCoverage || migrationFallbackReducedCoverage || packageManifestReducedCoverage ? "Level1SemanticAnalysisReduced" : "Level1SemanticAnalysis"
-            : migrationFallbackReducedCoverage || packageManifestReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
+            : options.CompiledOnly || migrationFallbackReducedCoverage || packageManifestReducedCoverage ? "Level3SyntaxAnalysisReduced" : "Level3SyntaxAnalysis";
         var provisionalBuildStatus = packageManifestReducedCoverage ? "FailedOrPartial" : semanticBuildStatus;
         var provisionalKnownGaps = semanticKnownGaps
             .Concat(packageManifestGaps)
@@ -429,7 +448,7 @@ public static class ScanEngine
         {
             progress?.StartStage(ScanProgressReporter.ScanOperation, ScanProgressStages.SourceVerification);
             var sourcePathComparer = CSharpSemanticExtractor.CreateSourcePathComparer(repoPath);
-            var verificationFullInventory = FileInventory.Collect(
+            var verificationFullInventory = options.CompiledOnly ? Array.Empty<FileInventoryItem>() : FileInventory.Collect(
                 repoPath,
                 outputPath,
                 options.ExcludeGlobs,
@@ -556,6 +575,7 @@ public static class ScanEngine
             $"ilrewrite={ilRewriteBoundedInputSha256 ?? string.Empty}",
             $"ilrewritepdb={ilRewritePdbBoundedInputSha256 ?? string.Empty}",
             $"webformspublish={webFormsPublishBoundedInputSha256 ?? string.Empty}");
+        if (options.CompiledOnly) optionSignature += "|compiledonly=1";
         if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonInputSignature}";
         if (options.IndexCiProducers) optionSignature += $"|ciproducers={ciProducersInputSignature}";
         if (options.CiHintWorkflows is { Count: > 0 }) optionSignature += $"|cihints={FrameValues(options.CiHintWorkflows)}";
@@ -946,7 +966,8 @@ public static class ScanEngine
         var compiledFacts = ManagedMetadataExtractor.MaterializeFacts(manifest, compiledEvaluation);
         facts.AddRange(compiledFacts);
         facts.AddRange(PortablePdbExtractor.MaterializeFacts(repoPath, manifest, pdbEvaluation, compiledFacts, inventory, cancellationToken));
-        facts.AddRange(IlBodyEvidenceExtractor.MaterializeFacts(manifest, ilEvaluation, compiledFacts, cancellationToken));
+        facts.AddRange(ScanProgressAmbient.Observe(ScanProgressStages.IlMaterialization,
+            () => IlBodyEvidenceExtractor.MaterializeFacts(manifest, ilEvaluation, compiledFacts, cancellationToken)));
         var ilRewriteFacts = IlRewriteEvidenceExtractor.MaterializeFacts(manifest, ilRewriteEvaluation, cancellationToken);
         facts.AddRange(ilRewriteFacts);
         facts.AddRange(IlRewritePdbEvidenceExtractor.MaterializeFacts(manifest, ilRewritePdbEvaluation, ilRewriteFacts, cancellationToken));
