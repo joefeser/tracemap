@@ -3,6 +3,17 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.workspace.compiled-collection.v1
+    name: Local source workspace with native fresh compiled review
+    description: Composes unchanged prepared native fresh configuration with additional source scans, verifies checkpoint-owned raw evidence and generates combined source reports.
+    evidenceTier: Tier2Structural
+    emits:
+      - WorkspaceCompiledRun
+    limitations:
+      - Opt-in workspace v2; native configuration owns web scope and must match the selected source root and commit. Primary metadata and publish receipt bindings are checked by existing Core policies before collection.
+      - No implicit source correspondence attestation, config projection, application build, restore, fetch, database execution or retained-source attachment; dependencies can remain unbound context with explicit native gaps.
+      - The native completed-run verifier pins checkpoint history, artifacts and runtime. Raw indexes and manifests are rechecked after combination and before completion; local integrity hashes are not authenticated build or runtime proof.
+      - Native and combined reports retain independent index identities. Added framework source does not automatically resolve every compiled or source call or establish legacy-output parity. Coverage remains partial and SQL is not ingested.
   - id: workflow.workspace.source-collection.v1
     name: Local multi-repository source workspace orchestration
     description: Verifies strict configuration and repository filters, collects selected source scans into a fresh run, combines raw indexes and renders source reports with local provenance.

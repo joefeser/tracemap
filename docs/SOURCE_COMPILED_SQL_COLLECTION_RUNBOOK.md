@@ -5,6 +5,12 @@ application and database exports. Collect repository source, the existing compil
 ASP.NET publication, and an offline SQL schema script. Keep their provenance and
 coverage separate while identifying the connections the installed tool can prove.
 
+For a new web + framework + existing publication collection, start with the
+[compiled workspace guide](WORKSPACE_COMPILED_GETTING_STARTED.md). It collects web
+source and compiled inputs together, scans framework source separately and
+combines the raw indexes. The retained-source attachment sections below describe
+the distinct case where an existing source scan must stay immutable.
+
 The source and compiled-site workflow exists. General private SQL-dump admission
 into that same workflow is a remaining integration task. Supplying DDL to an agent
 does not by itself add admitted SQL contracts to a TraceMap index.

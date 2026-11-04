@@ -11,7 +11,10 @@
 - [x] Capture fresh versus attach design for web/framework/compiled collection.
 - [x] Prove three-index combine preserves the actual compiled parent and refuses a wrong framework parent (38 focused cases passed).
 - [ ] Review historical compiled config and plan supported migration with fixtures.
-- [ ] Complete configuration adaptation design and implement workspace source/compiled admission without weakening provenance.
+- [x] Implement v2 fresh compiled-workspace collection from an unchanged prepared native config, with scope checks and checkpoint-owned raw scan selection.
+- [x] Add a public synthetic compiled-workspace launcher trial and shell-specific getting-started instructions.
+- [x] Verify native input drift, excluded web scope, wrong source/config and native/combined output integrity; 113 focused cases and full Debug `-warnaserror` passed (5,863 passed, 3 skipped, 0 failed).
+- [ ] Extend workspace to the separate retained-source attachment route after fresh collection is verified.
 - [ ] Investigate offline SQL definition ingestion and application-contract bindings.
 - [ ] Design retained-scan reuse, run status and retention inventory so investigation does not create unnecessary rescans or ambiguous folders.
 - [ ] Replace broken legacy agent-template dependencies with freshly authored instructions tied to verified workflows and explicit SQL admission status.

@@ -1,6 +1,8 @@
 # Next slice: source repositories and an existing compiled publication
 
-Status: design and bounded contract proof; not implemented in workspace CLI.
+Status: native fresh workspace route implemented and locally verified, including
+built synthetic replays and the full Debug suite. Owner trial is next.
+Retained-source attach remains a separate unimplemented extension.
 
 ## User journey
 
@@ -38,7 +40,20 @@ of the compiled child. No connection is inferred from similar names or commits.
 Source/assembly binding and source-to-source relationships retain their own
 evidence requirements.
 
-## Configuration proposal to verify
+## Configuration implemented for fresh collection
+
+Opt-in `tracemap-workspace.v2` uses
+`compiledReview: { repositoryId, nativeConfigPath }`. The referenced prepared
+native config is consumed unchanged, must be fresh, and owns web scope. The web
+workspace entry cannot override project/solution/glob/target settings. Core primary
+metadata and publish receipt bindings are inspected during read-only verification.
+Native source identity must match the selected workspace web root and commit.
+
+The native completed-run verifier exposes only checkpoint-owned raw scan/report
+locations after verifying history, artifacts and current runtime identity.
+Workspace rechecks native inputs and source indexes after combination and before
+completion. It retains the native bundle's independent index/document identities.
+The original design below continues to constrain future config migration/attach.
 
 Keep the source-only v1 configuration valid. Design a versioned extension that
 names the web repository ID and an explicit native configuration/proof input.
@@ -48,7 +63,7 @@ an imported config whose provenance binds its exact bytes. Missing correspondenc
 requires the existing explicit owner attestation/preparation route, not an
 agent-generated claim.
 
-Still resolve before implementation:
+Constraints addressed by the fresh route; re-evaluate for future attachment:
 
 - Exact checkpoint-owned raw scan locator and retained snapshot prerequisites.
 - Supported reuse or projection of imported configurations without breaking

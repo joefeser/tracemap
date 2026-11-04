@@ -11,6 +11,8 @@ Compiled-site and database evidence must retain explicit admission boundaries.
 
 | Use case | Owning entry point | Configuration and outputs | Consolidation status |
 | --- | --- | --- | --- |
+| Multi-repository source workspace | `workspace init/verify/collect` v1 | `workspace.local.json`, repository filter, fresh raw scans, combined reports | Implemented; source owner trial completed |
+| Source plus existing publication workspace | `workspace verify/collect` v2 | Unchanged prepared native fresh config, checkpoint-owned raw web scan, separate framework scan, combined reports and retained native bundle | Implemented; built synthetic replays and full Debug gate passed; owner trial pending |
 | Single source review | `local-review run` | Existing CLI options; retained scan plus optional packet/explorer | Reuse implementation |
 | Legacy source pipeline | `Invoke-FocusedWebFormsPipeline.ps1` | `config/webforms-review.jsonc`, run receipt, scan, packet, evidence docs, workbench | Preserve pending parity |
 | Two source reviews | `Merge-FocusedWebFormsReview.ps1` | Verified web/backend scan receipts; combine then packet/docs/workbench | Establish simpler source entry point; not yet output parity |

@@ -11,7 +11,8 @@ public sealed record WorkspaceProvenance(string GeneratorSha256, string BoundedI
 public sealed record WorkspaceRepository(string Id, string Path, string[] Projects,
     string? Solution = null, string[]? Include = null, string[]? Exclude = null, string? TargetFramework = null);
 public sealed record WorkspaceConfiguration(string SchemaVersion, WorkspaceRepository[] Repositories,
-    string? ScopeFile = null, bool WebFormsReport = false, WorkspaceProvenance? TemplateProvenance = null);
+    string? ScopeFile = null, bool WebFormsReport = false, WorkspaceProvenance? TemplateProvenance = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WorkspaceCompiledReview? CompiledReview = null);
 
 /// <summary>Source collection orchestration; compiled and SQL admission remain separate contracts.</summary>
 public static partial class WorkspaceCommand
@@ -27,7 +28,8 @@ public static partial class WorkspaceCommand
         Scope is a nonempty list of configured repository IDs, one per line (# comments allowed).
         --scope resolves from the current shell and overrides the configured scopeFile.
         Verify is read-only. Collect runs source scans, combine and a report; optional Web Forms packet.
-        No implicit restore, repository build, fetch, compiled-site or database ingestion.
+        V2 can reference one prepared native fresh config through compiledReview; v1 stays source-only.
+        No implicit restore, repository build, fetch, attestation or database ingestion.
         All outputs are local-only. Existing runs are preserved; choose a new --out for another run.
         """;
 
@@ -54,6 +56,11 @@ public static partial class WorkspaceCommand
         string stage = "verification";
         var inputs = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var sources = new List<object>();
+        var scanRoots = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var runSchema = "tracemap-workspace-run.v1";
+        var rule = RuleId;
+        string[] limitations = ["source-only", "static-potentially-partial", "compiled-and-sql-not-ingested", "no-legacy-output-parity-claim"];
+        object? compiledRecord = null;
         try
         {
             if (args.Length == 0 || args[0] is not ("init" or "verify" or "collect"))
@@ -82,6 +89,13 @@ public static partial class WorkspaceCommand
             var config = JsonSerializer.Deserialize<WorkspaceConfiguration>(configBytes, Json)
                 ?? throw new ArgumentException("WORKSPACE_CONFIG_INVALID");
             Validate(config);
+            if (config.CompiledReview is not null)
+            {
+                runSchema = "tracemap-workspace-run.v2";
+                rule = CompiledRuleId;
+                limitations = ["source-and-explicit-compiled-inputs", "static-potentially-partial", "sql-not-ingested",
+                    "not-authenticated-build-or-runtime-proof", "no-legacy-output-parity-claim"];
+            }
             inputs.Add("configuration", Hash(configBytes));
             var scope = options.TryGetValue("--scope", out var explicitScope) ? Full(explicitScope)
                 : config.ScopeFile is null ? null : Full(config.ScopeFile, root);
@@ -107,7 +121,10 @@ public static partial class WorkspaceCommand
                 inputs.Add($"repository:{repository.Id}", Hash(Encoding.UTF8.GetBytes(path + "\n" + head)));
                 await output.WriteLineAsync($"Verified {repository.Id}: {head}");
             }
-            await output.WriteLineAsync($"Selected {repositories.Count} source repositories. Compiled publication and SQL are not collected by this command.");
+            var prospective = options.TryGetValue("--out", out var outputRoot) ? Full(outputRoot)
+                : System.IO.Path.Combine(root, ".verify-" + Guid.NewGuid().ToString("N"));
+            var compiledPlan = await VerifyCompiledAsync(config, root, prospective, repositories, inputs, token);
+            await output.WriteLineAsync($"Selected {repositories.Count} source repositories. Compiled publication: {(compiledPlan is null ? "not configured" : "prepared native fresh inputs verified")}. SQL is not collected.");
             if (operation == "verify") return 0;
 
             run = Full(options.GetValueOrDefault("--out")
@@ -133,19 +150,44 @@ public static partial class WorkspaceCommand
             await Record("running");
             var combine = new List<string> { "combine" };
             var partial = false;
+            WebFormsWorkspaceSnapshot? snapshot = null;
+            var nativeRoot = System.IO.Path.Combine(run, "native-review", "run");
             foreach (var repository in repositories)
             {
                 stage = "scan:" + repository.Config.Id;
                 if (await Git(repository.Root, token, "rev-parse", "--verify", "HEAD") != repository.Head)
                     throw new ArgumentException("WORKSPACE_HEAD_CHANGED: rerun verification.");
                 var scan = System.IO.Path.Combine(run, "sources", repository.Config.Id);
-                var scanArgs = new List<string> { "scan", "--repo", repository.Root, "--out", scan };
-                foreach (var project in repository.Config.Projects) scanArgs.AddRange(["--project", Full(project, repository.Root)]);
-                if (repository.Config.Solution is not null) scanArgs.AddRange(["--solution", Full(repository.Config.Solution, repository.Root)]);
-                foreach (var include in repository.Config.Include ?? []) scanArgs.AddRange(["--include", include]);
-                foreach (var exclude in repository.Config.Exclude ?? []) scanArgs.AddRange(["--exclude", exclude]);
-                if (repository.Config.TargetFramework is not null) scanArgs.AddRange(["--target-framework", repository.Config.TargetFramework]);
-                await Execute(scanArgs.ToArray());
+                if (compiledPlan is not null && repository.Config.Id == config.CompiledReview!.RepositoryId)
+                {
+                    stage = "native:" + repository.Config.Id;
+                    await Record("running");
+                    await WebFormsReviewInputValidation.RecheckAsync(compiledPlan.NativePlan, token);
+                    await Execute(["webforms-review", "start", "--config", compiledPlan.ConfigPath,
+                        "--out", System.IO.Path.GetDirectoryName(nativeRoot)!]);
+                    snapshot = await VerifySnapshotAsync(nativeRoot, compiledPlan, null, token);
+                    scan = snapshot.ScanRoot;
+                    inputs.Add("native:preflight", snapshot.PreflightSha256);
+                    inputs.Add("native:checkpoint", snapshot.CheckpointSha256);
+                    compiledRecord = new
+                    {
+                        repositoryId = repository.Config.Id, configurationSha256 = snapshot.ConfigurationSha256,
+                        nativeRun = "native-review/run", rawScan = Relative(scan), reportBundle = Relative(snapshot.ReportRoot),
+                        snapshot.PreflightSha256, snapshot.CheckpointSha256, snapshot.ManifestSha256, snapshot.IndexSha256,
+                        snapshot.Coverage, snapshot.Gaps
+                    };
+                    partial = true; // Native static evidence always retains build/runtime authenticity gaps.
+                }
+                else
+                {
+                    var scanArgs = new List<string> { "scan", "--repo", repository.Root, "--out", scan };
+                    foreach (var project in repository.Config.Projects) scanArgs.AddRange(["--project", Full(project, repository.Root)]);
+                    if (repository.Config.Solution is not null) scanArgs.AddRange(["--solution", Full(repository.Config.Solution, repository.Root)]);
+                    foreach (var include in repository.Config.Include ?? []) scanArgs.AddRange(["--include", include]);
+                    foreach (var exclude in repository.Config.Exclude ?? []) scanArgs.AddRange(["--exclude", exclude]);
+                    if (repository.Config.TargetFramework is not null) scanArgs.AddRange(["--target-framework", repository.Config.TargetFramework]);
+                    await Execute(scanArgs.ToArray());
+                }
                 var manifestPath = System.IO.Path.Combine(scan, "scan-manifest.json");
                 var manifestBytes = ReadBounded(manifestPath, 16_777_216);
                 using var manifest = JsonDocument.Parse(manifestBytes);
@@ -157,6 +199,7 @@ public static partial class WorkspaceCommand
                 partial |= level != "Level1SemanticAnalysis" || build != "Succeeded"
                     || manifestRoot.GetProperty("knownGaps").GetArrayLength() != 0;
                 var index = System.IO.Path.Combine(scan, "index.sqlite");
+                scanRoots.Add(repository.Config.Id, Relative(scan));
                 inputs.Add(stage + ":manifest", Hash(manifestBytes));
                 inputs.Add(stage + ":index", FileHash(index));
                 sources.Add(new { id = repository.Config.Id, commitSha = manifestHead, analysisLevel = level, buildStatus = build });
@@ -166,7 +209,14 @@ public static partial class WorkspaceCommand
             stage = "combine";
             var combined = System.IO.Path.Combine(run, "combined.sqlite");
             combine.AddRange(["--out", combined]);
+            if (compiledPlan is not null)
+                await VerifySnapshotAsync(nativeRoot, compiledPlan, snapshot, token);
             await Execute(combine.ToArray());
+            if (compiledPlan is not null)
+            {
+                await VerifySnapshotAsync(nativeRoot, compiledPlan, snapshot, token);
+                RecheckRawInputs();
+            }
             inputs.Add("combined-index", FileHash(combined));
             stage = "report";
             await Execute(["report", "--index", combined, "--out", System.IO.Path.Combine(run, "report.md")]);
@@ -175,15 +225,41 @@ public static partial class WorkspaceCommand
                 stage = "webforms-report";
                 await Execute(["webforms-modernization", "--index", combined, "--out", System.IO.Path.Combine(run, "webforms")]);
             }
-            stage = "completed";
+            stage = "completion-validation";
+            if (compiledPlan is not null)
+            {
+                await VerifySnapshotAsync(nativeRoot, compiledPlan, snapshot, token);
+                RecheckRawInputs();
+                if (FileHash(combined) != inputs["combined-index"]) throw new ArgumentException("WORKSPACE_COMBINED_INDEX_CHANGED");
+            }
+            var sourceLinks = string.Join("\n", scanRoots.Select(pair => $"- {pair.Key}: [{pair.Value}/report.md]({pair.Value}/report.md)"));
+            var compiledLinks = snapshot is null ? "Compiled publication and database definitions were not ingested."
+                : $"Native compiled workbench: [{Relative(snapshot.ReportRoot)}/index.html]({Relative(snapshot.ReportRoot)}/index.html).\n\n"
+                    + "The native bundle and combined reports use their own index identities; native gaps remain authoritative. "
+                    + "This is static review evidence, not an authenticated ASP.NET build, source-line identity or runtime proof. SQL was not ingested.";
             await File.WriteAllTextAsync(System.IO.Path.Combine(run, "START-HERE.md"),
-                $"# Source collection\n\nOutcome: {(partial ? "partial" : "completed")}. Read report.md and each sources/<id>/report.md.\n\n"
+                $"# {(snapshot is null ? "Source collection" : "Source and compiled collection")}\n\nOutcome: {(partial ? "partial" : "completed")}. Read [report.md](report.md).\n\n{sourceLinks}\n\n"
                 + "Combined index: combined.sqlite. Run state: workspace-run.local.json.\n\n"
-                + "Compiled publication and database definitions were not ingested. No repository build, restore or fetch was requested.\n"
+                + compiledLinks + "\n\nNo repository build, restore or fetch was requested.\n"
                 + "Reduced analysis and failed builds remain gaps; completion is not proof of complete coverage.\n", token);
+            stage = "completed";
             await Record(partial ? "partial" : "completed");
-            await output.WriteLineAsync($"Source collection {(partial ? "partial" : "completed")}: {System.IO.Path.Combine(run, "START-HERE.md")}");
+            await output.WriteLineAsync($"{(snapshot is null ? "Source" : "Source and compiled")} collection {(partial ? "partial" : "completed")}: {System.IO.Path.Combine(run, "START-HERE.md")}");
             return 0;
+
+            string Relative(string path) => System.IO.Path.GetRelativePath(run!, path).Replace('\\', '/');
+
+            void RecheckRawInputs()
+            {
+                foreach (var repository in repositories)
+                {
+                    var scan = System.IO.Path.Combine(run!, scanRoots[repository.Config.Id]);
+                    var key = (repository.Config.Id == config.CompiledReview!.RepositoryId ? "native:" : "scan:") + repository.Config.Id;
+                    if (FileHash(System.IO.Path.Combine(scan, "index.sqlite")) != inputs[key + ":index"]
+                        || FileHash(System.IO.Path.Combine(scan, "scan-manifest.json")) != inputs[key + ":manifest"])
+                        throw new ArgumentException("WORKSPACE_COMBINE_INPUT_CHANGED");
+                }
+            }
 
             async Task Execute(string[] command)
             {
@@ -196,14 +272,14 @@ public static partial class WorkspaceCommand
             {
                 var record = new
                 {
-                    schemaVersion = "tracemap-workspace-run.v1", ruleId = RuleId, visibility = "local-only",
+                    schemaVersion = runSchema, ruleId = rule, visibility = "local-only",
                     generatorSha256 = GeneratorHash(), boundedInputSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(inputs, Json)),
                     inputs, outcome, stage, sources,
-                    limitations = new[] { "source-only", "static-potentially-partial", "compiled-and-sql-not-ingested", "no-legacy-output-parity-claim" }
+                    limitations
                 };
                 var path = System.IO.Path.Combine(run!, "workspace-run.local.json");
                 var temporary = path + ".tmp";
-                await File.WriteAllBytesAsync(temporary, JsonSerializer.SerializeToUtf8Bytes(record, Json), CancellationToken.None);
+                await File.WriteAllBytesAsync(temporary, RunRecordBytes(record, compiledRecord), CancellationToken.None);
                 File.Move(temporary, path, overwrite: true);
             }
         }
@@ -213,13 +289,13 @@ public static partial class WorkspaceCommand
             {
                 var failure = new
                 {
-                    schemaVersion = "tracemap-workspace-run.v1", ruleId = RuleId, visibility = "local-only",
+                    schemaVersion = runSchema, ruleId = rule, visibility = "local-only",
                     generatorSha256 = GeneratorHash(), boundedInputSha256 = Hash(JsonSerializer.SerializeToUtf8Bytes(inputs, Json)),
                     inputs, outcome = ex is OperationCanceledException ? "cancelled" : "failed", stage, sources,
-                    limitations = new[] { "source-only", "incomplete-run-preserved" }
+                    limitations = limitations.Concat(["incomplete-run-preserved"]).ToArray()
                 };
                 await File.WriteAllBytesAsync(System.IO.Path.Combine(run, "workspace-run.local.json"),
-                    JsonSerializer.SerializeToUtf8Bytes(failure, Json), CancellationToken.None);
+                    RunRecordBytes(failure, compiledRecord), CancellationToken.None);
             }
             await error.WriteLineAsync($"error: {ex.Message}");
             if (ex is OperationCanceledException) throw;
@@ -243,8 +319,13 @@ public static partial class WorkspaceCommand
 
     private static void Validate(WorkspaceConfiguration config)
     {
-        if (config.SchemaVersion != SchemaVersion || config.Repositories is null || config.Repositories.Length is < 1 or > 64)
-            throw new ArgumentException("WORKSPACE_CONFIG_INVALID: expected tracemap-workspace.v1 and 1..64 repositories.");
+        if (config.SchemaVersion is not (SchemaVersion or CompiledSchemaVersion) || config.Repositories is null || config.Repositories.Length is < 1 or > 64)
+            throw new ArgumentException("WORKSPACE_CONFIG_INVALID: expected tracemap-workspace.v1/v2 and 1..64 repositories.");
+        if ((config.SchemaVersion == CompiledSchemaVersion) != (config.CompiledReview is not null))
+            throw new ArgumentException("WORKSPACE_COMPILED_REQUIRES_V2: v1 is source-only; v2 requires compiledReview.");
+        if (config.CompiledReview is { } compiled && (string.IsNullOrWhiteSpace(compiled.RepositoryId)
+            || string.IsNullOrWhiteSpace(compiled.NativeConfigPath)))
+            throw new ArgumentException("WORKSPACE_COMPILED_CONFIG_INVALID");
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var repository in config.Repositories)
         {
@@ -256,6 +337,8 @@ public static partial class WorkspaceCommand
                 || repository.TargetFramework is not null && string.IsNullOrWhiteSpace(repository.TargetFramework))
                 throw new ArgumentException("WORKSPACE_REPOSITORY_INVALID: use unique lowercase IDs, a path and projects array; select projects or one solution.");
         }
+        if (config.CompiledReview is { } review && !ids.Contains(review.RepositoryId))
+            throw new ArgumentException("WORKSPACE_COMPILED_WEB_ID_UNKNOWN");
         if (config.ScopeFile is not null && string.IsNullOrWhiteSpace(config.ScopeFile)) throw new ArgumentException("WORKSPACE_SCOPE_EMPTY");
     }
 

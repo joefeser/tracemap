@@ -1,6 +1,6 @@
 # Workspace configuration reference
 
-The initial source workspace uses strict JSON in `workspace.local.json` under
+The workspace uses strict JSON in `workspace.local.json` under
 the explicit `--root`. Unknown and duplicate properties fail. Begin with
 [Start a source collection workspace](WORKSPACE_GETTING_STARTED.md).
 
@@ -8,11 +8,18 @@ the explicit `--root`. Unknown and duplicate properties fail. Begin with
 
 | Field | Meaning |
 | --- | --- |
-| `schemaVersion` | Required: `tracemap-workspace.v1` |
+| `schemaVersion` | Required: `tracemap-workspace.v1` for source-only, or `tracemap-workspace.v2` for prepared native fresh collection |
 | `repositories` | Required: 1–64 configured source repositories for verify/collect; init creates an empty template |
 | `scopeFile` | Optional repository-ID filter file; resolved relative to the workspace |
 | `webFormsReport` | Optional, default `false`; render a Web Forms modernization packet after the combined report |
 | `templateProvenance` | Optional init-template generator/input SHA-256 values; does not attest subsequent edits |
+| `compiledReview` | V2 only and required in v2: `{ "repositoryId": "web", "nativeConfigPath": "native-evidence/review-config.local.json" }`; see the [compiled guide](WORKSPACE_COMPILED_GETTING_STARTED.md) |
+
+`schemaVersion: tracemap-workspace.v1` remains source-only. V2 requires one prepared
+native fresh config and its selected web repository. Native configuration owns
+web project/folder/page selection; workspace web project/solution/glob/target
+overrides are rejected. Framework entries retain their normal selection fields.
+No native config is rewritten and no correspondence attestation is generated.
 
 Each repository has:
 
@@ -59,7 +66,7 @@ must not overlap a selected source, the configuration files or the running tool.
 
 ## Run record
 
-`workspace-run.local.json` uses `tracemap-workspace-run.v1` and rule
+Source-only `workspace-run.local.json` uses `tracemap-workspace-run.v1` and rule
 `workflow.workspace.source-collection.v1`. It records `outcome`, `stage`, source
 commits/build status/analysis level, exact CLI assembly SHA-256 and an input map.
 The input-map values hash the actual configuration, optional scope bytes,
@@ -75,6 +82,16 @@ still does not claim complete extraction, runtime validation, compiled binding,
 SQL contracts or migration readiness. No application build/restore/fetch is
 requested by this orchestration. Normal scanner project evaluation is unchanged.
 
-Compiled-site configuration, private SQL admission, build/publish orchestration,
-retained-scan reuse and resume are follow-up contracts. The workspace rejects
+V2 records use `tracemap-workspace-run.v2` and
+`workflow.workspace.compiled-collection.v1`. The input map adds the exact native
+input fingerprints and completed preflight/checkpoint hashes. `compiledReview`
+records the admitted raw scan and native report bundle locations and hashes.
+The existing native completed-run verifier rechecks the checkpoint chain,
+artifacts and runtime identity; native and framework inputs are rechecked after
+combination and before completion. The combined index itself is also rechecked.
+V2 remains partial because static/native correspondence gaps remain authoritative.
+
+Private SQL admission, application build/publish orchestration, workspace
+retained-source attachment, retained-scan reuse and resume are follow-up
+contracts. The workspace rejects
 invented fields for those capabilities instead of silently ignoring them.

@@ -71,7 +71,12 @@ repository-ID scope filtering. Fresh source scans feed existing combine/report
 commands; `webFormsReport` optionally adds the existing packet. Init refuses
 overwrites; collection refuses existing/overlapping destinations, preserves stage
 failures and records local CLI/input hashes. There is no resume/cache in this
-initial path. Compiled inputs and SQL fields are deliberately not in this schema.
+initial source path. V1 remains source-only. Opt-in `tracemap-workspace.v2` now
+accepts `compiledReview: { repositoryId, nativeConfigPath }` and consumes that
+unchanged prepared native fresh config for the web source. Native checkpoints
+select the raw scan and its report bundle; framework source is scanned separately.
+The workspace combines raw indexes, rechecks consumed bytes and links both report
+contexts from `START-HERE.md`. Native gaps remain authoritative and SQL is absent.
 
 Start page: `docs/WORKSPACE_GETTING_STARTED.md`. Reference:
 `docs/WORKSPACE_CONFIGURATION.md`. Synthetic trial:
@@ -80,6 +85,40 @@ Start page: `docs/WORKSPACE_GETTING_STARTED.md`. Reference:
 
 ## Next steps
 
+2026-11-04: owner authorized implementation of the compiled milestone. Native
+settings remain unchanged and authoritative for web scope; no inferred
+attestation or config projection. Retained attach remains a separate follow-up.
+SQL admission remains out of scope.
+
+Compiled validation so far:
+
+- 113 focused Debug tests passed with `-warnaserror`: workspace, compiled
+  admission, native preflight and attachment-combine lanes.
+- Built synthetic trial passed after fixing a native PDB option bug: aggregate
+  default 128 was forwarded as a PDB limit despite Core's maximum of 32. Native
+  fresh and attach now use the smaller lane ceiling; preflight rejects excessive
+  explicit PDB selections. Two option-bound tests and one refusal test pin this.
+- Trial 02 completed both two-source and web-only collections. The web scan had
+  semantic analysis, an admitted/bound primary, complete bounded PDB coverage,
+  effective PDB cap 32 and seven exact source/metadata joins. Top-level outcome
+  correctly remains partial; no authenticated build or runtime claim.
+- Trial root: `~/.local/share/tracemap-workflow-trials/20261104-compiled-replay-02/`.
+  Failed trial 01 and its bounded toy-only diagnostics are preserved separately.
+- Final launcher replay from the sibling upgrade-authority working directory
+  passed at `20261104-compiled-replay-03`: both two-source and web-only collections
+  completed with expected partial coverage, linked native workbenches and raw
+  compiled/PDB/IL evidence. Confirms current-directory independence.
+- Full Debug `dotnet test src/dotnet/TraceMap.sln -c Debug -warnaserror` passed:
+  **5,863 passed, 3 skipped, 0 failed**, duration 40m02s, exit 0. Log:
+  `/tmp/tracemap-workspace-compiled-full-suite.log`. Skips remain optional Oracle
+  goldens, native HTTP receipt interop and Windows ASP.NET publication. This
+  validates the implementation worktree before the local checkpoint commits;
+  it is not a fresh Windows or real-application acceptance result.
+- Release tool published and tested from both the TraceMap checkout and the
+  upgrade-authority working directory. The published tool bytes used by retained
+  native runs are preserved; no post-checkpoint rebuild is needed for the owner
+  synthetic trial. Current guide: `docs/WORKSPACE_COMPILED_GETTING_STARTED.md`.
+
 Owner executed the synthetic launcher trial and acknowledged the result. Both
 `owner-trial-01` collections had stage `completed` and expected partial coverage
 when inspected locally. This is synthetic usability evidence, not real-application
@@ -87,12 +126,12 @@ or Windows publication acceptance. The shell copy/paste problem was resolved wit
 a zsh-compatible one-line command; the guide now separates shell examples and
 explains existing completed output.
 
-The next runnable milestone is web + framework + existing compiled publication.
-See `compiled-admission-design.md`: native fresh can collect web source and
-compiled inputs in one raw scan, followed by a separate framework scan and
-combination. Later attach uses separate raw web/framework/compiled indexes plus
-the existing explicit parent/child combine contract. No workspace compiled CLI
-extension is implemented yet. The historical schema reader is still unlocated.
+The fresh compiled milestone is locally verified and awaiting owner trial. Later
+attach uses separate raw web/framework/compiled indexes
+plus the existing explicit parent/child contract. Historical schema migration is
+still unverified; the reader remains unlocated.
 
-No push or PR. Recheck the final head before a future merge; the broad validation
-above covers the source implementation before this test/documentation follow-up.
+No push or PR. Native PDB correction is checkpoint `dfba22eb`; workspace
+integration is the following separate local checkpoint (see Git HEAD). Recheck
+the final head before a future merge. Owner synthetic compiled trial and real
+application/Windows acceptance remain distinct follow-ups.

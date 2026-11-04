@@ -2,8 +2,9 @@
 
 Configure your web and framework source repositories once, verify the selection,
 then collect and combine their evidence into a new run. This first workspace
-workflow covers **source repositories**. Existing compiled-site admission and SQL
-definitions remain separate workflows; this command does not ingest them.
+walkthrough covers **source repositories**. To include an existing compiled
+publication, use [the compiled workspace guide](WORKSPACE_COMPILED_GETTING_STARTED.md).
+SQL definitions remain a separate evidence channel.
 
 ## 1. Prepare TraceMap
 
@@ -128,7 +129,9 @@ selected when no filter is supplied.
 
 ## Add compiled publication or database evidence
 
-Use the [source, compiled-site and SQL collection runbook](SOURCE_COMPILED_SQL_COLLECTION_RUNBOOK.md)
+Use the [compiled workspace guide](WORKSPACE_COMPILED_GETTING_STARTED.md) for
+native fresh collection with framework source. Use the
+[source, compiled-site and SQL collection runbook](SOURCE_COMPILED_SQL_COLLECTION_RUNBOOK.md)
 to inventory those channels and the [native compiled workflow](WEBFORMS_NATIVE_WORKFLOW.md)
 for its existing admission path. The historical
 `webforms-compile-web-config.v1` config is not this workspace schema; migration
