@@ -126,12 +126,19 @@ or Windows publication acceptance. The shell copy/paste problem was resolved wit
 a zsh-compatible one-line command; the guide now separates shell examples and
 explains existing completed output.
 
-The fresh compiled milestone is locally verified and awaiting owner trial. Later
+Owner's compiled synthetic trial also passed: pasted terminal output ends with
+`Workspace launcher replay passed`. Persisted `compiled-trial-01` records were
+checked: first collection stage completed with two sources (190 combined facts
+reported); web-only collection stage completed with one source (172 facts).
+Both retain compiled review data for `web` and expected partial outcome. This
+establishes successful owner execution, not real-application or Windows acceptance.
+
+The fresh compiled milestone is locally verified and owner-executed. Later
 attach uses separate raw web/framework/compiled indexes
 plus the existing explicit parent/child contract. Historical schema migration is
 still unverified; the reader remains unlocated.
 
 No push or PR. Native PDB correction is checkpoint `dfba22eb`; workspace
 integration is the following separate local checkpoint (see Git HEAD). Recheck
-the final head before a future merge. Owner synthetic compiled trial and real
-application/Windows acceptance remain distinct follow-ups.
+the final head before a future merge. Real application/Windows acceptance remains
+a separate follow-up; owner synthetic execution is complete.
