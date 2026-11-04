@@ -43,6 +43,8 @@ ScaffoldingReadMe.txt
 .env.kiro.local
 
 # Local review artifacts
+workspace.local.json
+workspace-run.local.json
 .tmp/kiro-reviews/
 .tmp/legacy-baselines/
 .tmp/legacy-codebase-validation/

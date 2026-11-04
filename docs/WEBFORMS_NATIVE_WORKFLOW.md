@@ -5,6 +5,12 @@ commands support fresh source-plus-compiled collection and immutable attachment
 to an existing source scan. Keep the proven PowerShell workflow and its inputs
 until your authorized Windows comparison passes.
 
+For a collection handoff covering repository source, an existing compiled site,
+and an offline database schema export, start with the
+[source, compiled-site and SQL collection runbook](SOURCE_COMPILED_SQL_COLLECTION_RUNBOOK.md).
+It distinguishes existing collection capabilities from the remaining private SQL
+admission and integration work.
+
 This is static, potentially partial, review-only evidence—not SQL execution,
 page activation, authenticated compilation, source-line identity, complete
 application coverage or release approval.

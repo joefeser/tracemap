@@ -3,6 +3,17 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.workspace.source-collection.v1
+    name: Local multi-repository source workspace orchestration
+    description: Verifies strict configuration and repository filters, collects selected source scans into a fresh run, combines raw indexes and renders source reports with local provenance.
+    evidenceTier: Tier2Structural
+    emits:
+      - WorkspaceRun
+    limitations:
+      - Local-only configuration and input fingerprints; exact CLI assembly hash and bounded orchestration input map are recorded, not an authenticated build or a shareable projection.
+      - Verification checks selected paths, projects and Git HEADs; scanner project evaluation, analysis gaps and source coverage limits remain unchanged.
+      - Completion can be partial and does not prove runtime behavior, full extraction, compiled publication correspondence, SQL contracts or migration readiness.
+      - No implicit restore, repository build, fetch, compiled attachment or database execution; no retained-scan reuse, resume or legacy output parity is claimed.
   - id: diagnostic.graph.source-database-terminal-audit.v1
     name: Retained source database terminal audit
     description: Compares admitted source operation facts with projected terminal nodes, exact caller attachments and bounded unfiltered graph reachability; joins reachable database-operation name observations to exact retained operation sites.
