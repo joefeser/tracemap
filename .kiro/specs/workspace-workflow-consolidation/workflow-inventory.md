@@ -21,7 +21,7 @@ Compiled-site and database evidence must retain explicit admission boundaries.
 | Historical compiled config | Owner reports `webforms-compile-web-config.v1` | Original local file not inspected; exact schema string not found in current scripts/CLI/docs | Investigate explicit migration; do not guess |
 | Page/method inspection | Show/compare/diagnose/requery commands | Existing indexes, packets and run state | Distinguish query from collection; inventory incrementally |
 | Legacy agent launchers | Start/continue Claude review wrappers | Still reference previously purged templates | Not a working starting path; author clean replacements from verified workflows, never restore private historical text |
-| SQL definition evidence | Separate SQL Server producers | Bounded public synthetic contracts | Not a private dump admission route |
+| SQL definition evidence | `sqlserver-definitions verify/collect`; workspace V3 `sqlEvidence` | Separate bounded local-only manifest and sidecar; old public synthetic routes preserved | No arbitrary dump execution, source-call join or deployed identity |
 
 Hardcoded tool paths are confirmed in `wverify.ps1`, `wrefresh.ps1`,
 `wstatus.ps1`, `Invoke-FocusedWebFormsPipeline.ps1` and
@@ -50,9 +50,12 @@ owner-authorized build/publish, retained-proof reuse, source correspondence and
 multi-repository admission with synthetic tests before replacing the wrappers.
 Keep native attachment joins distinct from generic multi-index combination.
 
-## Backlog concept: offline database-definition evidence
+## Offline database-definition evidence and remaining backlog
 
-Investigate how the work agent rendered the existing dump: tool importer, custom
+The first local-only definition-set collector and V3 workspace sidecar are implemented;
+see `docs/WORKSPACE_SQL_GETTING_STARTED.md`. Remaining work includes broader dump
+compatibility and explicit application-call bindings. Investigate how the work
+agent rendered the existing dump: tool importer, custom
 parser or human/agent interpretation. Do not transfer private data into public
 fixtures. Specify offline SQL Server definition admission for parameters, result
 projections and dependent tables/views/types, identity bindings to application

@@ -85,10 +85,19 @@ Start page: `docs/WORKSPACE_GETTING_STARTED.md`. Reference:
 
 ## Next steps
 
+2026-11-04 SQL slice authorized: reuse the pinned ScriptDom parser, not a new
+regex SQL grammar. Implement a distinct local-only definition-set contract;
+never mark a private dump publicSynthetic. First scope: bounded offline schema
+definitions, procedure parameter declarations, AST references/dependencies,
+supported single-result projections and explicit unknowns. No SQL execution,
+connection, literal/body output or automatic source-call/deployment binding.
+Application repo/commit is context only, not the database export revision.
+Keep SQL sidecars distinct from existing source/compiled scan indexes.
+
 2026-11-04: owner authorized implementation of the compiled milestone. Native
 settings remain unchanged and authoritative for web scope; no inferred
 attestation or config projection. Retained attach remains a separate follow-up.
-SQL admission remains out of scope.
+At that compiled milestone SQL admission was deferred; the separately authorized SQL implementation below now supersedes that boundary.
 
 Compiled validation so far:
 
@@ -142,3 +151,59 @@ No push or PR. Native PDB correction is checkpoint `dfba22eb`; workspace
 integration is the following separate local checkpoint (see Git HEAD). Recheck
 the final head before a future merge. Real application/Windows acceptance remains
 a separate follow-up; owner synthetic execution is complete.
+
+
+## Offline SQL implementation and validation (2026-11-04)
+
+- Implemented distinct `sqlserver-local-definitions-input/1` / `sqlserver-definitions verify|collect`
+  over the retained ScriptDom 170.191.0 TSql160 parser. Existing public-synthetic
+  input gates are unchanged. No private dump was inspected or relabeled.
+- Added V3 workspace `sqlEvidence`; context repository ID/HEAD and explicit scope
+  must agree. SQL is a separate local JSON/SQLite/report sidecar; it never enters
+  generic combine and never automatically binds application calls. V1/V2 preserved.
+- New 36 unit/integration cases cover declarations, ordered results, line spans,
+  parameters, references, unknowns, mutation/context/scope/digest failures, strict
+  manifests, literal/default omission, SQLite readback, output preservation,
+  cancellation and symlink/late-drift publication refusal. A new path test exposed
+  macOS /var ancestor aliases through symlinks; SQL overlap checks now resolve those
+  recursively. The added tests plus retained DNN/catalog lane passed 42/42.
+- Earlier broad focused SQL/workspace run passed 474/474. Final full Debug
+  `-warnaserror` PASSED: 5,899 passed, 3 skipped, 0 failed; exit 0, 35.227 minutes.
+  Log `/tmp/tracemap-workspace-sql-full-suite.log`.
+- Release launcher published successfully. Actual `-WithSql` trial ran from
+  upgrade-authority cwd at
+  `/Users/josephfeser/.local/share/tracemap-workflow-trials/20261104-sql-replay-01/`.
+  Both two-repository and web-only runs completed partial. SQL readback: four
+  objects, three parameters, three result shapes, two references, eight gaps;
+  ReadItems has Label,Id; filtered/dynamic procedures stay unknown. All SQL output
+  hashes match the run record. This is an authored managed fixture, not IIS proof.
+- Opt-in public corpus smoke passed four cases at `/tmp/tracemap-sql-public-corpus-01`:
+  two pinned WWI procedures with declared parameters/references and unknown
+  complex shapes, plus three expected refusals (DNN unchanged qualifier template,
+  whole DNN install file over the limit, WWI table setup with top-level EXEC).
+  Exact public source bytes and licenses retained; no substitution or SQL execution.
+- DNN Python harness guards passed 20/20. All four retained CLI smokes PASSED
+  at `/tmp/tracemap-workspace-sql-retained-01`: JSON and DDL parameter routes each
+  52 cases (8 match / 12 mismatch / 32 unknown); result JSON 36/10/36, DDL 36/10/58
+  with 20 refusals; table 64 cases/language, totals 44/10/88 with 24 refusals.
+  The old script denominators and public admission contracts were unchanged.
+- Full-suite unified exec session 20747 completed successfully. Source files stayed
+  frozen throughout the run. Published runtime remains at `artifacts/workspace-cli/Release`;
+  exact bytes are pinned by the retained synthetic/native/public receipts. Do not
+  rebuild that runtime and expect old native runs to resume under new tool hashes.
+  No push or PR authorized in this slice.
+- Canonical SQL owner instructions: `docs/WORKSPACE_SQL_GETTING_STARTED.md`.
+  Nothing pushed and no PR or public message created. No source/SQL-call binding,
+  database export revision, live SQL or private application acceptance is claimed.
+
+- Final documentation relative-link checks, PowerShell syntax parsing and
+  `git diff --check` passed. The three skips remain optional Oracle golden sweep,
+  native HTTP receipt interop and Windows ASP.NET publication acceptance; these
+  are not established by the managed synthetic trial.
+- Next owner trial: follow `docs/WORKSPACE_SQL_GETTING_STARTED.md`, build the
+  launcher once and run `Test-WorkspaceLauncher.ps1 -WithSql` against a fresh
+  `~/tracemap-reviews/sql-trial-01` folder. Owner SQL trial is pending.
+- Remaining capability work: broader dump/setup compatibility, explicit
+  application-call-to-SQL bindings, retained native attachment orchestration and
+  scan reuse/retention. The bounded offline collector is implemented, not a full
+  database migration engine or an application/runtime acceptance claim.

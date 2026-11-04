@@ -5419,3 +5419,30 @@ remain unsupported. Duplicate JSON properties are rejected. Named handler select
 now distinguishes no match (`HANDLER_REQUERY_ROOT_NOT_FOUND`) from multiple matches.
 The HTTP test lane includes a retained helper absent from the original report roots
 and rejection of mismatched source, scan, commit and symbol identities, with unchanged input hashes.
+
+## Local-only offline SQL definition collection
+
+[SQL workspace getting started](WORKSPACE_SQL_GETTING_STARTED.md) owns the separate
+`sqlserver-local-definitions-input/1` contract and workspace V3 sidecar. Run
+`SqlServerLocalDefinitionsTests`, `WorkspaceSqlTests`, existing source/compiled
+workspace tests and the retained SQL/DNN tests after shared parser changes. The
+new local route must not weaken existing public-synthetic admission gates.
+The full Debug solution with `-warnaserror` is required for this Core/CLI change.
+
+Run `Test-WorkspaceLauncher.ps1 -WithSql` against a fresh folder after publishing
+the current launcher. It authors and builds only synthetic inputs, then collects
+source, native compiled metadata and SQL twice (both repositories, web-only).
+The opt-in public compatibility lane is:
+
+```sh
+python3 scripts/tests/Test-SqlDefinitionCorpus.py --fetch --cli artifacts/workspace-cli/Release/tracemap.dll --out /tmp/tracemap-sql-public-corpus-01
+```
+
+The script pins DNN `33b8fbe440ab665b8423599789db1f34d2a500fc` and SQL Server
+samples `3c71696a3942879f0481f3bd65fe112a40023f18`, retains licenses and exact
+input digests, and records its generator plus CLI/Core/parser hashes. Expected:
+two WWI procedures with parameter declarations and unknown complex result shapes;
+DNN unchanged template slice refused as malformed, full DNN install over the file
+limit refused, and WWI table setup with top-level EXEC refused. No SQL execution,
+placeholder substitution, source-call binding or DNN/runtime acceptance. Default
+tests do not fetch these inputs.

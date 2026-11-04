@@ -142,3 +142,6 @@ every ordinary workspace scan already meets that separate admission contract.
 All workspace inputs, outputs and hashes are local-only. Keep real paths, source
 identities and database exports outside public documentation. This source path
 does not replace or claim output parity with the legacy page-inspection workflows.
+
+For the opt-in offline SQL sidecar and the combined synthetic trial, see
+[SQL collection getting started](WORKSPACE_SQL_GETTING_STARTED.md).

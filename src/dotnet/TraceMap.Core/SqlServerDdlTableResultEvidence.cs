@@ -83,7 +83,7 @@ public static class SqlServerDdlTableResultEvidence
         return export;
     }
 
-    private static (SqlServerDdlTable, SqlServerDdlTableUnsupported?) AnalyseTable(SqlServerObjectIdentity objectIdentity, string path, CreateTableStatement table)
+    internal static (SqlServerDdlTable, SqlServerDdlTableUnsupported?) AnalyseTable(SqlServerObjectIdentity objectIdentity, string path, CreateTableStatement table)
     {
         var identity = new SqlServerTableIdentity(objectIdentity.Server, objectIdentity.Database, objectIdentity.Schema, objectIdentity.Procedure);
         var start = table.StartLine;
@@ -127,7 +127,7 @@ public static class SqlServerDdlTableResultEvidence
         && key.IndexOptions.Count == 0 && key.OnFileGroupOrPartitionScheme is null && key.FileStreamOn is null
         && (key.IndexType is null || key.IndexType.IndexTypeKind is IndexTypeKind.Clustered or IndexTypeKind.NonClustered);
 
-    private static ((SqlServerResultShape, IReadOnlyList<SqlServerDdlResultUnsupported>), SqlServerDdlTableProjection?) AnalyseTableProjection(
+    internal static ((SqlServerResultShape, IReadOnlyList<SqlServerDdlResultUnsupported>), SqlServerDdlTableProjection?) AnalyseTableProjection(
         SqlServerObjectIdentity identity, string path, SelectStatement select, QuerySpecification query,
         SqlServerDdlResultEvidence.UnknownShape unknown, IReadOnlyList<SqlServerDdlTable> tables)
     {

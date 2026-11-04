@@ -137,6 +137,7 @@ public static class TraceMapCommand
                 "validate-index" => "tracemap validate-index --index <path> --commit <sha> --facts <count>",
                 "local-review" => LocalReviewHelp(),
                 "workspace" => WorkspaceCommand.Help,
+                "sqlserver-definitions" => SqlServerLocalDefinitionsCommand.Help,
                 "webforms-review" => rest.FirstOrDefault() == "wizard" ? WebFormsWizardCommand.Help : WebFormsReviewPreflightCommand.Help,
                 "report" => ReportHelp(),
                 "database-design-review" => DatabaseDesignReviewHelp(),
@@ -168,7 +169,7 @@ public static class TraceMapCommand
                 "explorer" => ExplorerHelp(),
                 _ => RootHelp()
             });
-            return command is "workspace" or "sqlserver-compiled-lifecycle" or "sqlserver-field-read" or "sqlserver-internal-helper-result" or "sqlserver-helper-result" or "sqlserver-dataset-result" or "sqlserver-datatable-result" or "sqlserver-ddl-table-result" or "sqlserver-ddl-result" or "sqlserver-result-schema" or "sqlserver-ddl" or "sqlserver-schema" or "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
+            return command is "sqlserver-definitions" or "workspace" or "sqlserver-compiled-lifecycle" or "sqlserver-field-read" or "sqlserver-internal-helper-result" or "sqlserver-helper-result" or "sqlserver-dataset-result" or "sqlserver-datatable-result" or "sqlserver-ddl-table-result" or "sqlserver-ddl-result" or "sqlserver-result-schema" or "sqlserver-ddl" or "sqlserver-schema" or "scan" or "versions" or "version" or "validate-index" or "local-review" or "webforms-review" or "report" or "database-design-review" or "webforms-modernization" or "reduce" or "flow" or "relate" or "export" or "endpoints" or "combine" or "paths" or "route-flow" or "property-flow" or "diff" or "snapshot-diff" or "impact" or "reverse-impact" or "reverse" or "release-review" or "access-review" or "portfolio" or "package-impact" or "package-decision" or "vault" or "docs-export" or "contract-diff" or "baseline" or "evidence-pack" or "explorer" ? 0 : 1;
         }
 
         using var commandOperation = TraceMapDiagnostics.StartCommand(command);
@@ -195,6 +196,7 @@ public static class TraceMapCommand
                 "validate-index" => await RunValidateIndexAsync(rest, output, error),
                 "local-review" => await LocalReviewCommand.RunAsync(rest, output, error, RunScanAsync, cancellationToken),
                 "workspace" => await WorkspaceCommand.RunAsync(rest, output, error, cancellationToken),
+                "sqlserver-definitions" => SqlServerLocalDefinitionsCommand.Run(rest, output, cancellationToken),
                 "webforms-review" => rest.FirstOrDefault() == "wizard"
                     ? await WebFormsWizardCommand.RunAsync(rest, Console.In, output, error, cancellationToken)
                     : rest.FirstOrDefault() == "start"
@@ -2935,6 +2937,7 @@ public static class TraceMapCommand
               tracemap version [--json]
               tracemap versions
               tracemap workspace <init|verify|collect> --root <workspace-folder> [options]
+              tracemap sqlserver-definitions <verify|collect> --input <local-manifest.json> --source-root <offline-definitions> [--out <new-folder>]
               tracemap local-review run --repo <path> --out <new-output-root> [--webforms-modernization] [--explorer]
               tracemap webforms-review preflight --config <private-json> --out <new-run-root>
               tracemap scan --repo <path> --out <path>

@@ -1,8 +1,9 @@
 [CmdletBinding()]
-param([Parameter(Mandatory = $true)][string]$OutputRoot, [switch]$WithCompiled)
+param([Parameter(Mandatory = $true)][string]$OutputRoot, [switch]$WithCompiled, [switch]$WithSql)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($WithSql) { $WithCompiled = $true }
 $root = [IO.Path]::GetFullPath($OutputRoot)
 if (Test-Path -LiteralPath $root) {
     throw "Existing replay preserved. Inspect '$root/workspace/runs/first/START-HERE.md', or choose a fresh OutputRoot to rerun."
@@ -99,6 +100,47 @@ if ($WithCompiled) {
     $configuration['compiledReview'] = [ordered]@{ repositoryId = 'web'; nativeConfigPath = (Join-Path $evidence 'review-config.local.json') }
     $configuration.repositories[1].projects = @('GenericFramework.csproj')
 }
+if ($WithSql) {
+    $sqlRoot = Join-Path $root 'sql-definitions'
+    [void][IO.Directory]::CreateDirectory($sqlRoot)
+    $sqlPath = Join-Path $sqlRoot 'schema.sql'
+    # Entirely authored test definitions. No database is contacted or SQL executed.
+    $sql = @'
+USE ExampleDatabase;
+GO
+SET ANSI_NULLS ON;
+GO
+SET QUOTED_IDENTIFIER ON;
+GO
+CREATE TABLE dbo.Items (Id int NOT NULL, Name nvarchar(50) NULL);
+GO
+CREATE PROC dbo.ReadItems @id int, @count int OUTPUT AS
+BEGIN
+  SET NOCOUNT ON;
+  SELECT Name AS Label, Id FROM dbo.Items;
+END;
+GO
+CREATE PROC dbo.ReadFiltered @id int AS SELECT Id FROM dbo.Items WHERE Id = @id;
+GO
+CREATE PROC dbo.ReadDynamic AS EXEC(N'SELECT 1 AS Hidden');
+'@
+    [IO.File]::WriteAllText($sqlPath, $sql)
+    $sqlManifest = Join-Path $workspace 'sql-definitions.local.json'
+    $sqlInput = [ordered]@{
+        version = 'sqlserver-local-definitions-input/1'; visibility = 'local-only'
+        contextRepository = 'web'; contextCommitSha = $sourceCommit
+        definitionSet = 'synthetic-workflow'; server = 'ExampleServer'; database = 'ExampleDatabase'
+        files = @([ordered]@{ path = 'schema.sql'; sha256 = (Get-FileHash -LiteralPath $sqlPath -Algorithm SHA256).Hash.ToLowerInvariant() })
+    }
+    $inputBytes = [Text.Encoding]::UTF8.GetBytes(($sqlInput | ConvertTo-Json -Depth 8 -Compress))
+    $sqlInput['provenance'] = [ordered]@{
+        generatorSha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        boundedInputSha256 = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($inputBytes)).ToLowerInvariant()
+    }
+    [IO.File]::WriteAllText($sqlManifest, ($sqlInput | ConvertTo-Json -Depth 8))
+    $configuration.schemaVersion = 'tracemap-workspace.v3'
+    $configuration['sqlEvidence'] = [ordered]@{ repositoryId = 'web'; manifestPath = $sqlManifest; sourceRoot = $sqlRoot }
+}
 [IO.File]::WriteAllText((Join-Path $workspace 'workspace.local.json'), ($configuration | ConvertTo-Json -Depth 8))
 $run = Join-Path $workspace 'runs/first'
 Invoke-Tool @('workspace', 'verify', '--root', $workspace)
@@ -106,9 +148,19 @@ Invoke-Tool @('workspace', 'collect', '--root', $workspace, '--out', $run)
 $record = Get-Content -LiteralPath (Join-Path $run 'workspace-run.local.json') -Raw | ConvertFrom-Json
 if ($record.outcome -ne 'partial' -or @($record.sources).Count -ne 2) { throw 'Expected two source collections with explicit partial coverage.' }
 if ($WithCompiled) {
-    if ($record.schemaVersion -ne 'tracemap-workspace-run.v2' -or $record.compiledReview.repositoryId -ne 'web') { throw 'Compiled review record missing.' }
+    if ($record.schemaVersion -ne $(if ($WithSql) { 'tracemap-workspace-run.v3' } else { 'tracemap-workspace-run.v2' }) -or $record.compiledReview.repositoryId -ne 'web') { throw 'Compiled review record missing.' }
     if (!(Test-Path -LiteralPath (Join-Path $run ($record.compiledReview.rawScan + '/index.sqlite')) -PathType Leaf)) { throw 'Native raw scan missing.' }
     if (!(Test-Path -LiteralPath (Join-Path $run ($record.compiledReview.reportBundle + '/index.html')) -PathType Leaf)) { throw 'Native workbench missing.' }
+}
+if ($WithSql) {
+    if ($record.sqlEvidence.callBinding -ne 'not-established') { throw 'SQL call-binding gap missing.' }
+    $definitions = Get-Content -LiteralPath (Join-Path $run $record.sqlEvidence.definitions) -Raw | ConvertFrom-Json
+    if ($definitions.visibility -ne 'local-only' -or $definitions.coverage -ne 'partial' -or @($definitions.objects).Count -ne 4) { throw 'Unexpected SQL definition inventory.' }
+    $known = @($definitions.objects | Where-Object name -eq 'ReadItems')[0]
+    if ($known.resultShape.completeness -ne 'complete' -or ($known.resultShape.columns.name -join ',') -ne 'Label,Id') { throw 'Known SQL shape was not preserved.' }
+    $unknown = @($definitions.objects | Where-Object { $_.kind -eq 'procedure' -and $_.name -ne 'ReadItems' })
+    if (@($unknown | Where-Object { $_.resultShape.completeness -ne 'unknown' }).Count -ne 0) { throw 'Unsupported SQL shape was promoted.' }
+    if (!(Test-Path -LiteralPath (Join-Path $run $record.sqlEvidence.index) -PathType Leaf)) { throw 'SQL sidecar missing.' }
 }
 foreach ($path in @('START-HERE.md', 'report.md', 'combined.sqlite', 'webforms/webforms-modernization.md')) {
     if (!(Test-Path -LiteralPath (Join-Path $run $path) -PathType Leaf)) { throw "Missing replay output: $path" }

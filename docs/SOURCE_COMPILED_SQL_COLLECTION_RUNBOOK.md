@@ -11,9 +11,10 @@ source and compiled inputs together, scans framework source separately and
 combines the raw indexes. The retained-source attachment sections below describe
 the distinct case where an existing source scan must stay immutable.
 
-The source and compiled-site workflow exists. General private SQL-dump admission
-into that same workflow is a remaining integration task. Supplying DDL to an agent
-does not by itself add admitted SQL contracts to a TraceMap index.
+For bounded offline SQL definitions, use the [V3 workspace guide](WORKSPACE_SQL_GETTING_STARTED.md).
+It adds a separate local SQL sidecar and links it from the same start page.
+Arbitrary full dumps and automatic application-to-procedure binding remain
+unsupported. Supplying DDL to an agent does not by itself add admitted contracts.
 
 ## Current capabilities
 
@@ -143,6 +144,14 @@ an arbitrary merge or direct SQLite edit is not a substitute for that admission.
 
 ## Collect the SQL channel and determine its status
 
+The [local definition-set route](WORKSPACE_SQL_GETTING_STARTED.md) is now the
+starting point: `sqlserver-definitions verify|collect`, optionally through workspace
+V3 `sqlEvidence`. It inventories declarations, parameters, references and bounded
+result shapes in local JSON/SQLite/report sidecars. Its manifest binds files to an
+application context, not to a database deployment; it does not join application
+calls to SQL declarations. The public-synthetic comparison routes below retain
+their original, separate admission contracts.
+
 Keep the offline dump alongside the private collection, outside the public
 TraceMap checkout. Record its actual file hash, source/export identity, scope and
 known omissions in the local summary. Parse definitions only; do not execute the
@@ -171,17 +180,17 @@ unsupported. The documented producers require independently authored public
 synthetic inputs. **Do not mark a work dump `publicSynthetic: true` or use a public
 synthetic export as evidence for the work database.**
 
-If the authorized work checkout has an additional private importer, identify its
-implementation revision, accepted format, generator/input hashes, output schema,
-rules, limitations and binding tests. Establish that route before using it.
-Otherwise retain the dump as a separate evidence channel and report the missing
-private admission/integration capability. A generic `.sql` scan supplies inventory
-facts, not a substitute for accepted procedure contracts.
+Use the local-only route only for its documented definition-set subset and limits.
+If an export requires additional preprocessing or exceeds those limits, preserve
+the original and record the unsupported boundary; do not silently substitute
+qualifiers, discard setup statements or invent a database revision. Any additional
+importer must identify its implementation, input/output hashes, schema, rules and
+binding tests. A generic `.sql` scan alone does not supply accepted procedure contracts.
 
 The separate `--sql-validation-summary` option consumes validator observations
 for the [SQL operator packet](SQL_OPERATOR_RUNBOOK_PACKET.md). It is not a DDL
 dump importer or a procedure-result-shape input. Do not substitute that contract
-for the missing schema admission route.
+for offline definition admission or source-call binding.
 
 Keep any agent-inferred shape in the human interpretation section, citing the
 relevant local SQL file and line spans. Do not insert it as a native fact or claim

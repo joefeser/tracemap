@@ -95,3 +95,11 @@ Private SQL admission, application build/publish orchestration, workspace
 retained-source attachment, retained-scan reuse and resume are follow-up
 contracts. The workspace rejects
 invented fields for those capabilities instead of silently ignoring them.
+
+## V3 offline SQL definitions
+
+`tracemap-workspace.v3` requires `sqlEvidence: { repositoryId, manifestPath, sourceRoot }`
+and permits the existing optional `compiledReview`. SQL context must match a selected
+repository ID and HEAD. It produces a separate local SQL sidecar, never a raw scan
+merge or automatic source-call binding. See [SQL collection](WORKSPACE_SQL_GETTING_STARTED.md)
+for the exact manifest, bounds, supported subset and known refusals.

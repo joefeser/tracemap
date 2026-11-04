@@ -8145,3 +8145,37 @@ rules:
       - Tables support identifier columns with one-part built-in types, NULL/NOT NULL, IDENTITY and PRIMARY KEY/UNIQUE without index options or placement. Computed columns, defaults, COLLATE, alias/CLR/xml types, CHECK/FOREIGN KEY, column options, table options, indexes, duplicate or case-only columns make the table unknown with a Tier4 record and no columns; it never backs a shape.
       - A complete shape needs every projected element to be a direct column reference (optional identifier output alias, optional qualifier equal to the one simple table alias) that resolves exactly against a supported table. SELECT *, joins/APPLY, views, CTEs, subqueries, UNION, temporary tables, table variables, functions, hints, WHERE and other clauses, expressions, COLLATE, string aliases, missing/case-only/cross-database references, duplicate output names, dynamic SQL/EXEC and conditional or multiple statements are explicit unknown shapes, never partial column lists.
       - Output order and names plus the backing table column per output are retained; table column type spellings are visible uncompared facets. Nullability, keys, defaults, rows, values and body text are never compared or retained. Admission binds exact generator, parser and bounded-input SHA-256 plus file digests; hashes establish integrity, not authenticity, and no SQL execution occurs.
+  - id: database.sqlserver.local-definitions.v1
+    name: Local-only offline SQL Server definition inventory
+    description: Inventories explicit schema-qualified table, procedure, view and function declarations from a hashed bounded definition set, with procedure parameters and conservative first-result shapes.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlLocalExport
+      - SqlLocalGap
+    limitations:
+      - Separate sqlserver-local-definitions-input/1 local-only contract; never manufactured publicSynthetic input. Core generator, parser and bounded-input SHA-256 bind exact admitted files. No public privacy projection is provided.
+      - ScriptDom 170.191.0 TSql160 parsing uses the existing 64 MiB parser thread, 32-file, 256 KiB/file, 1 MiB total, token and complexity bounds. At most 512 objects and 4096 references; malformed SQL, SQLCMD, digest drift and duplicate/case-only identities refuse admission.
+      - Application repository and commit identify context only, not a database export revision, deployment, binary correspondence or source-call binding. No SQL execution or database connection occurs.
+      - Only bounded constant or direct single-table first SELECT projections are modeled; joins, filters, branches, dynamic SQL, multiple results, views and functions stay unknown. Leading SET NOCOUNT is ignored only for result-column shape analysis, never as runtime proof.
+      - Matching USE and ANSI_NULLS/QUOTED_IDENTIFIER ON headers are admitted as declarations with runtime gaps. OFF and unapplied ALTER TABLE/DROP statements invalidate complete table and result claims. Other unsupported top-level statements, including inserts and extended-property EXEC calls, are refused. No migration ordering or qualifier substitution.
+      - Parameter type spellings and direction are declarations, not full comparison contracts. Defaults, literal values and SQL body text are omitted; all evidence is partial with no aggregate clean verdict.
+  - id: database.sqlserver.local-definition-reference.v1
+    name: Local-only SQL definition reference
+    description: Records AST relation, procedure and function references with source line spans and exact matches to separately admitted declarations.
+    evidenceTier: Tier2Structural
+    emits:
+      - SqlLocalDependency
+    limitations:
+      - References are syntax observations, not execution, reachability, deployed resolution or application-call binding. Exact two-part names only; unqualified, cross-database and missing targets retain explicit unknown resolution.
+      - Table/view, procedure and function kinds must agree; case-insensitive collation is not assumed. Dynamic execution is a Tier4Unknown gap under database.sqlserver.local-definitions.v1.
+      - Same local-only provenance and parser/input bounds as the enclosing SqlLocalExport; no source bodies, literals or public projection.
+  - id: workflow.workspace.sql-collection.v1
+    name: Explicit offline SQL workspace sidecar
+    description: Collects selected source repositories with an optional prepared native compiled collection and an explicitly admitted local SQL definition set.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - tracemap-workspace-run.v3
+    limitations:
+      - Opt-in tracemap-workspace.v3 requires sqlEvidence with repositoryId, manifestPath and sourceRoot; compiledReview remains optional. SQL application context must match the selected repository ID and HEAD, without implying a database export revision.
+      - SQL evidence stays in sql/definitions.local.json and sql/sql-evidence.sqlite and is never passed to generic combine. No automatic application-to-procedure join, database connection, restore, fetch or SQL execution.
+      - Exact CLI generator and bounded-input SHA-256, input manifests and file digests, output hashes and rechecks precede completion. Local-only partial evidence; failed outputs are retained as failed and existing runs are preserved. V1 source and V2 compiled contracts remain separate.

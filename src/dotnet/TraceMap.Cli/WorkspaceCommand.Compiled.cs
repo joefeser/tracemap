@@ -62,10 +62,11 @@ public static partial class WorkspaceCommand
         return snapshot;
     }
 
-    private static byte[] RunRecordBytes<T>(T record, object? compiledReview)
+    private static byte[] RunRecordBytes<T>(T record, object? compiledReview, object? sqlEvidence = null)
     {
         var node = JsonSerializer.SerializeToNode(record, Json)!.AsObject();
         if (compiledReview is not null) node.Add("compiledReview", JsonSerializer.SerializeToNode(compiledReview, Json));
+        if (sqlEvidence is not null) node.Add("sqlEvidence", JsonSerializer.SerializeToNode(sqlEvidence, Json));
         return JsonSerializer.SerializeToUtf8Bytes(node, Json);
     }
 }
