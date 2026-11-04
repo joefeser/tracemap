@@ -27,6 +27,11 @@ files, one explicit external target, 1,024 bin entries, two metadata files and
 metadata-work and report limits still apply; these count bounds do not promise
 complete analysis or admission of every large configuration.
 
+PDB input has its own Core lane ceiling (currently 32 artifacts), independent of
+the aggregate native input budget. Native scan and attachment options cap the
+PDB lane accordingly; selecting more than that lane supports is rejected during
+preflight instead of forwarding an invalid aggregate limit to the PDB reader.
+
 Local regression replay: `pwsh -NoProfile -File scripts/wlocal.ps1` runs the
 public source/compiled/separate-DLL corpus plus the wizard's restart, repair,
 build-consent and multi-project tests. It creates a fresh temporary output root

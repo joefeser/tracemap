@@ -429,7 +429,12 @@ public static partial class WebFormsReviewPreflightCommand
             budget.IlMaxText is < 71 or > 65_536 || budget.MaxParentFacts is < 1 or > 100_000_000 ||
             budget.IlMaxBodies is < 1 or > 1_000_000 ||
             budget.MaxFactLineChars is < 128 or > 16_777_216) throw Fail("BUDGET_INVALID");
+        if (config.PdbInputs.Length > PdbArtifactLimit(budget)) throw Fail("PDB_LANE_INPUT_LIMIT");
     }
+
+    // The native aggregate input budget must not exceed the PDB reader's own supported lane ceiling.
+    internal static int PdbArtifactLimit(WebFormsReviewBudgets budget) =>
+        Math.Min(budget.MaxInputFiles, new PdbInputLimits().MaxArtifactCount);
 
     internal static void ValidateReportBudgets(WebFormsReviewReportBudgets budget)
     {

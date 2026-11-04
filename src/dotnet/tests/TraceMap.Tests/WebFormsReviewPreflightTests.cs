@@ -144,6 +144,29 @@ public sealed class WebFormsReviewPreflightTests
     }
 
     [Theory]
+    [InlineData(128, 32)]
+    [InlineData(16, 16)]
+    public async Task Native_scan_and_attachment_cap_the_pdb_lane_independently(int aggregate, int expected)
+    {
+        using var fixture = new Fixture();
+        fixture.Config = fixture.Config with { Budgets = fixture.Config.Budgets with { MaxInputFiles = aggregate } };
+        var plan = await fixture.Build();
+        var args = WebFormsReviewExecutionCommand.ScanArguments(plan, "public-output");
+        Assert.Equal(expected.ToString(System.Globalization.CultureInfo.InvariantCulture), args[Array.IndexOf(args, "--pdb-max-artifacts") + 1]);
+        Assert.Equal(expected, WebFormsReviewAttachmentExecution.Options(plan, "public-output").PdbInputLimits!.MaxArtifactCount);
+    }
+
+    [Fact]
+    public async Task Too_many_explicit_pdbs_are_refused_before_file_or_output_work()
+    {
+        using var fixture = new Fixture();
+        fixture.Config = fixture.Config with { PdbInputs = Enumerable.Range(0, 33).Select(index => $"bin/Public{index}.pdb").ToArray() };
+        var error = await Assert.ThrowsAsync<WebFormsReviewPreflightCommand.PreflightException>(() => fixture.Build());
+        Assert.Contains("PDB_LANE_INPUT_LIMIT", error.Message);
+        Assert.False(Directory.Exists(fixture.Output));
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(1000001)]

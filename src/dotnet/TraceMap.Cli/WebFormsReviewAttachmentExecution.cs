@@ -17,7 +17,7 @@ internal static class WebFormsReviewAttachmentExecution
             CompiledDependencyPaths: Paths("dependency-assembly"), CompiledBindingReceiptPaths: Paths("binding-receipt"),
             CompiledInputLimits: new(MaxArtifactCount: budget.MaxInputFiles, MaxFileSizeBytes: budget.MaxAssemblyBytes,
                 MaxTextLength: budget.MetadataMaxText, MaxTotalWorkUnits: budget.MetadataMaxWork),
-            PdbInputPaths: Paths("pdb"), PdbInputLimits: new(MaxArtifactCount: budget.MaxInputFiles,
+            PdbInputPaths: Paths("pdb"), PdbInputLimits: new(MaxArtifactCount: WebFormsReviewPreflightCommand.PdbArtifactLimit(budget),
                 MaxFileSizeBytes: budget.MaxAssemblyBytes), IlBodyEvidence: true,
             IlBodyLimits: new(MaxBodyCount: budget.IlMaxBodies ?? 50_000,
                 MaxTextLength: budget.IlMaxText, MaxTotalWorkUnits: budget.IlMaxWork),
