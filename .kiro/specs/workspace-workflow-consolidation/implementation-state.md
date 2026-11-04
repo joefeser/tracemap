@@ -200,9 +200,15 @@ a separate follow-up; owner synthetic execution is complete.
   `git diff --check` passed. The three skips remain optional Oracle golden sweep,
   native HTTP receipt interop and Windows ASP.NET publication acceptance; these
   are not established by the managed synthetic trial.
-- Next owner trial: follow `docs/WORKSPACE_SQL_GETTING_STARTED.md`, build the
-  launcher once and run `Test-WorkspaceLauncher.ps1 -WithSql` against a fresh
-  `~/tracemap-reviews/sql-trial-01` folder. Owner SQL trial is pending.
+- Owner SQL trial PASSED on 2026-11-04, launched from upgrade-authority:
+  `/Users/josephfeser/tracemap-reviews/sql-trial-01`. Both first (two sources,
+  190 combined facts) and web-only (one source, 172 combined facts) reached
+  stage completed with partial coverage. Read back both V3 run records and SQL
+  SQLite indexes; all three SQL artifact hashes matched each run record. Each
+  SQL sidecar contains four objects, three parameters, three shapes, two
+  references and eight gaps. ReadItems is complete with Label,Id; ReadFiltered
+  and ReadDynamic remain unknown. Source-call binding remains not-established.
+  The pasted terminal output ends with Workspace launcher replay passed.
 - Remaining capability work: broader dump/setup compatibility, explicit
   application-call-to-SQL bindings, retained native attachment orchestration and
   scan reuse/retention. The bounded offline collector is implemented, not a full
