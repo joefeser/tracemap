@@ -151,15 +151,18 @@ internal static class WebFormsWizardWorkspace
                 }
                 lastSqlFailureManifest = answers.SqlManifest;
                 lastSqlFailureReason = exception.Message;
-                if (exception is SqlLocalSizeLimitException size)
+                var encodingCanStream = exception is System.Text.DecoderFallbackException
+                    && SqlServerLocalDefinitionsCommand.IsOrdinaryManifest(answers.SqlManifest!);
+                if (exception is SqlLocalSizeLimitException || encodingCanStream)
                 {
                     sizeBlockedManifest = answers.SqlManifest;
-                    await output.WriteLineAsync("SQL setup is blocked by an admission limit. Retry cannot change that limit; no workspace was created.");
-                    var canStream = size.Scope == "SQL-file" && size.LimitBytes == SqlServerDdlEvidence.MaxFileBytes
-                        || size.Scope == "SQL-total" && size.LimitBytes == SqlServerDdlEvidence.MaxTotalBytes;
+                    await output.WriteLineAsync("SQL setup is blocked by an admission limit or source encoding. Retry cannot change that; no workspace was created.");
+                    var canStream = encodingCanStream || exception is SqlLocalSizeLimitException size
+                        && (size.Scope == "SQL-file" && size.LimitBytes == SqlServerDdlEvidence.MaxFileBytes
+                        || size.Scope == "SQL-total" && size.LimitBytes == SqlServerDdlEvidence.MaxTotalBytes);
                     if (canStream)
                     {
-                        await output.WriteLineAsync("Streamed definitions can read up to 8 GiB per file/total, using bounded GO batches. All listed files are retained; no SQL is executed or truncated. Parser/evidence limits still apply.");
+                        await output.WriteLineAsync("Streamed definitions can read up to 8 GiB per file/total, using bounded GO batches and strict UTF-8 or BOM-marked UTF-16 decoding. All listed files are retained; no SQL is executed or truncated. Parser/evidence limits still apply.");
                         await output.WriteLineAsync("Use streamed mode, select a different prepared manifest, or pause? [stream/select/later]");
                     }
                     else await output.WriteLineAsync("Select a DIFFERENT prepared SQL manifest or pause? [select/later]");

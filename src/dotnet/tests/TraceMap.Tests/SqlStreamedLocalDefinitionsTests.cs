@@ -14,6 +14,36 @@ public sealed class SqlStreamedLocalDefinitionsTests
     private static SqlLocalExport Produce(string text) => SqlServerLocalDefinitions.ProduceStreamed(Input(text), _ => new MemoryStream(Encoding.UTF8.GetBytes(text)));
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Bom_marked_utf16_preserves_raw_digest_unicode_and_original_lines(bool bigEndian)
+    {
+        var text = "-- public\r\nCREATE PROC dbo.ReadItems AS SELECT N'café漢字😀' AS Value;\r\nGO\r\nCREATE PROC dbo.ReadOther AS SELECT 1 AS Id;\r\nGO\r\n";
+        var encoding = new UnicodeEncoding(bigEndian, true, true);
+        var bytes = encoding.GetPreamble().Concat(encoding.GetBytes(text)).ToArray();
+        var input = JsonSerializer.Deserialize<SqlLocalInput>(Input(text), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        var json = JsonSerializer.Serialize(input with { Files = [new("export.sql", Convert.ToHexStringLower(SHA256.HashData(bytes)))] }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var export = SqlServerLocalDefinitions.ProduceStreamed(json, _ => new MemoryStream(bytes));
+        Assert.Equal(2, export.Objects.Count);
+        Assert.Equal(2, export.Objects[0].Span.StartLine);
+        Assert.Equal(4, export.Objects[1].Span.StartLine);
+        Assert.All(export.Objects, item => Assert.Equal("complete", item.ResultShape!.Completeness));
+        Assert.Contains("source-digest-mismatch", Assert.Throws<ArgumentException>(() => SqlServerLocalDefinitions.ProduceStreamed(json,
+            _ => new MemoryStream(bytes.Concat(encoding.GetBytes(" ")).ToArray()))).Message);
+        Assert.Contains("source-digest-mismatch", Assert.Throws<ArgumentException>(() => SqlServerLocalDefinitions.ProduceStreamed(Input(text),
+            _ => new MemoryStream(bytes))).Message);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0xff, 0xfe, 0x00, 0xd8 })] // unpaired surrogate
+    [InlineData(new byte[] { 0xfe, 0xff, 0xd8, 0x00 })]
+    [InlineData(new byte[] { 0xff, 0xfe, 0x61 })] // truncated code unit
+    [InlineData(new byte[] { 0xff, 0xfe, 0, 0 })] // UTF32 is not UTF16
+    [InlineData(new byte[] { 0, 0, 0xfe, 0xff })]
+    public void Invalid_utf16_and_utf32_are_not_replaced_or_guessed(byte[] bytes)
+        => Assert.ThrowsAny<ArgumentException>(() => SqlServerLocalDefinitions.ProduceStreamed(Input(""), _ => new MemoryStream(bytes)));
+
+    [Theory]
     [InlineData(667158)]
     [InlineData(6671580)]
     public void Normal_export_sizes_parse_in_verified_batches_with_original_line_spans(int size)

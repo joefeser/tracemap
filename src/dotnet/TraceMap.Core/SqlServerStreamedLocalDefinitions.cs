@@ -9,7 +9,7 @@ public static partial class SqlServerLocalDefinitions
 {
     public const string StreamInputVersion = "sqlserver-streamed-local-definitions-input/1";
     public const string StreamExportVersion = "sqlserver-streamed-local-definitions/1";
-    public const string StreamExtractorVersion = "sqlserver-streamed-local-definitions/1";
+    public const string StreamExtractorVersion = "sqlserver-streamed-local-definitions/2";
     public const long MaxStreamFileBytes = 8L * 1024 * 1024 * 1024;
     public const long MaxStreamTotalBytes = MaxStreamFileBytes;
     public const int MaxStreamBatchBytes = 4 * 1024 * 1024;
@@ -30,7 +30,7 @@ public static partial class SqlServerLocalDefinitions
         return input;
     }
 
-    /// <summary>Reads exact UTF-8 originals sequentially; only lexically verified GO batches reach the parser.</summary>
+    /// <summary>Reads exact UTF-8 or BOM-marked UTF-16 originals sequentially; only lexically verified GO batches reach the parser.</summary>
     public static SqlLocalExport ProduceStreamed(string json, Func<string, Stream> openSource, CancellationToken token = default)
     {
         var input = ReadStreamInput(json);
@@ -52,7 +52,27 @@ public static partial class SqlServerLocalDefinitions
                     Require(totalBytes <= MaxStreamTotalBytes, "stream-total-size-limit");
                     token.ThrowIfCancellationRequested();
                 });
-                using var reader = new StreamReader(bounded, new UTF8Encoding(false, true), false, 16_384, leaveOpen: true);
+                // Inspect only four raw bytes, through the hashing/budget stream. Do not use
+                // StreamReader BOM autodetection: its replacement fallbacks can hide corruption.
+                var prefix = new byte[4];
+                var prefixCount = 0;
+                while (prefixCount < prefix.Length)
+                {
+                    var next = bounded.ReadByte();
+                    if (next < 0) break;
+                    prefix[prefixCount++] = (byte)next;
+                }
+                Require(!(prefixCount == 4 && (prefix.AsSpan().SequenceEqual(new byte[] { 0xff, 0xfe, 0, 0 })
+                    || prefix.AsSpan().SequenceEqual(new byte[] { 0, 0, 0xfe, 0xff }))), "encoding-utf32-not-admitted");
+                Encoding encoding = new UTF8Encoding(false, true);
+                var skip = 0;
+                if (prefixCount >= 2 && prefix[0] == 0xff && prefix[1] == 0xfe)
+                { encoding = new UnicodeEncoding(false, false, true); skip = 2; }
+                else if (prefixCount >= 2 && prefix[0] == 0xfe && prefix[1] == 0xff)
+                { encoding = new UnicodeEncoding(true, false, true); skip = 2; }
+                else if (prefixCount >= 3 && prefix[0] == 0xef && prefix[1] == 0xbb && prefix[2] == 0xbf) skip = 3;
+                using var prefixed = new SqlPrefixReadStream(prefix, skip, prefixCount, bounded);
+                using var reader = new StreamReader(prefixed, encoding, false, 16_384, leaveOpen: true);
                 var buffer = new StringBuilder();
                 var startLine = 1;
                 var lineNumber = 0;
@@ -104,6 +124,28 @@ public static partial class SqlServerLocalDefinitions
             if ((line.Length & 8191) == 0) token.ThrowIfCancellationRequested();
             if (next == '\n') return line.ToString();
         }
+    }
+
+    private sealed class SqlPrefixReadStream(byte[] prefix, int start, int end, Stream inner) : Stream
+    {
+        private int position = start;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (position >= end) return inner.Read(buffer, offset, count);
+            var take = Math.Min(count, end - position);
+            prefix.AsSpan(position, take).CopyTo(buffer.AsSpan(offset, take));
+            position += take;
+            return take;
+        }
+        public override void Flush() => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private sealed class SqlHashReadStream(Stream inner, IncrementalHash hash, Action<int> consume) : Stream

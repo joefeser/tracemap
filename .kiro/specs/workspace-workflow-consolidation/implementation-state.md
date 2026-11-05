@@ -1046,3 +1046,16 @@ Work-machine continuation must use tm.ps1 -Build once after fetching to replace
 the old published tool; continue existing output-root answers, choose workspace
 and stream. No source/DLL/SQL setup restart. No PR/merge/ACK policy change.
 8 GiB is a source-container limit; independent parser/evidence limits remain.
+
+### UTF-16 BOM follow-up — 2026-11-05
+
+Owner confirmed SQL source is UTF-16 LE BOM after FF-at-index-0 refusal. The new
+streaming route was UTF-8-only; its ASCII stress fixture did not cover the SQL
+Server export encoding. Added strict prefix-selected UTF-16 LE/BE and UTF-8 BOM
+handling, without changing source bytes/hashes or allowing replacement fallbacks.
+UTF-32 explicitly refuses; no legacy code-page guessing. Whole raw-byte digest
+and source caps still include BOM; decoded parser batches retain UTF-8 bounds.
+Streamed extractor becomes /2; input/export shape stable. Ordinary v1/JSON
+decoding remains UTF-8; ordinary decoder failures now offer explicit stream
+conversion of the manifest when that manifest is valid. Tests/qualification
+pending before publication. No PR/merge or private source change.

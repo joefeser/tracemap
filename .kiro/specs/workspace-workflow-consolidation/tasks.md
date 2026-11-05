@@ -108,3 +108,9 @@
 - [x] Verify true GO boundaries, exact original digests/line spans, global context and duplicate handling across batches.
 - [x] Add wizard stream opt-in without editing originals; exact 667158/6671580-byte fixtures and full 7 MB SQLite replay pass.
 - [x] Finish 8 GiB byte-volume stress, exact-head full Debug gate and user-shaped large-export copy.
+
+## BOM-marked SQL source decoding — 2026-11-05
+
+- [x] Add strict BOM-selected UTF-16 LE/BE streaming while retaining exact original raw hashes and all budgets.
+- [x] Offer stream opt-in for ordinary SQL decoding failures without changing JSON/v1 decoding.
+- [ ] Verify malformed encodings, raw digest drift, Unicode/CRLF spans, small/large wizard inputs, full legacy workspace replay and full Debug gate.

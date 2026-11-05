@@ -21,7 +21,8 @@ def main():
     parser.add_argument("--legacy-web-target", choices=["net20", "net472", "net48"], default="net472", help="Explicit synthetic web build target; dependency remains net20")
     parser.add_argument("--size-limit-first", action="store_true", help="Prove oversized SQL gives measured limits and pauses instead of looping")
     parser.add_argument("--same-failure-first", action="store_true", help="Prove an unchanged SQL validation retry pauses rather than re-asking forever")
-    parser.add_argument("--sql-export-bytes", type=int, default=44, help="Author an exact-size public SQL export and opt into streamed mode when needed")
+    parser.add_argument("--sql-export-bytes", type=int, default=44, help="Author this many UTF-8 bytes before optional BOM/UTF16 encoding; opt into streamed mode when needed")
+    parser.add_argument("--sql-encoding", choices=["utf8", "utf16-le", "utf16-be"], default="utf8", help="Original SQL byte encoding; UTF16 fixtures include BOM and retain exact raw hashes")
     args = parser.parse_args()
     if args.same_failure_first:
         args.bad_manifest_first = True
@@ -119,6 +120,9 @@ def main():
         text.append("--" + "x" * (remaining - 2))
         sql_file.write_text("".join(text), encoding="utf-8")
         if sql_file.stat().st_size != args.sql_export_bytes: raise RuntimeError("SQL fixture size mismatch")
+    if args.sql_encoding != "utf8":
+        text = sql_file.read_text(encoding="utf-8")
+        sql_file.write_bytes((b"\xff\xfe" if args.sql_encoding == "utf16-le" else b"\xfe\xff") + text.encode("utf-16-le" if args.sql_encoding == "utf16-le" else "utf-16-be"))
     manifest = {"version": "sqlserver-local-definitions-input/1", "visibility": "local-only",
                 "contextRepository": "web", "contextCommitSha": head, "definitionSet": "synthetic-wizard-replay",
                 "server": "ExampleServer", "database": "ExampleDatabase",

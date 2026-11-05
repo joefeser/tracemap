@@ -53,6 +53,12 @@ internal static class SqlServerLocalDefinitionsCommand
         return 0;
     }
 
+    internal static bool IsOrdinaryManifest(string path)
+    {
+        try { _ = SqlServerLocalDefinitions.ReadInput(SqlServerDdlCommand.ReadBounded(path, SqlServerSchemaEvidence.MaxBytes)); return true; }
+        catch (Exception exception) when (exception is ArgumentException or JsonException or IOException or UnauthorizedAccessException) { return false; }
+    }
+
     internal static string CreateStreamedManifest(string original, string sourceRoot)
     {
         var text = SqlServerDdlCommand.ReadBounded(original, SqlServerSchemaEvidence.MaxBytes);

@@ -14,8 +14,15 @@ new route before workspace creation. No manual splitting, hash retyping or
 truncation is performed. The streamed export version is
 `sqlserver-streamed-local-definitions/1`.
 
-The reader consumes exact UTF-8 source bytes sequentially and validates the whole
-original SHA-256 before returning evidence. It buffers at most one batch. A
+The reader consumes exact original source bytes sequentially and validates the whole
+original SHA-256 before returning evidence. The streamed extractor `/2` accepts strict UTF-8 (with or without BOM), or
+BOM-marked UTF-16 LE/BE. BOM selection is explicit from the first four raw bytes;
+unmarked legacy encodings and UTF-32 are not guessed. Invalid sequences,
+truncated UTF-16 units and unpaired surrogates refuse admission rather than
+being replaced. Hashes and the 8 GiB cap cover original bytes including the BOM;
+the 4 MiB batch budget measures decoded text re-encoded as UTF-8. JSON manifests
+remain UTF-8. Ordinary v1 decoding is unchanged; its wizard decoding failure can
+also offer the explicit stream opt-in. It buffers at most one batch. A
 standalone GO line is a boundary only when the pinned ScriptDom lexer agrees;
 GO inside multiline strings, quoted identifiers or comments stays in its batch.
 Original line spans are retained. Global duplicate checks, table/procedure
