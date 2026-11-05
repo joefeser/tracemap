@@ -147,6 +147,16 @@ unknown. Setup statements or oversize dumps can refuse admission. A work export
 must never be marked `publicSynthetic: true`. Do not use the older synthetic DDL
 contract producer as a private importer. No SQL connection or execution is needed.
 
+The SQL manifest may stay beside the wizard's `root.config.json`, with SQL in a
+`sql` subfolder. In that layout list `sql/schema.sql` in the manifest. Current
+wizard continuation resolves it from the manifest directory, verifies hashes,
+and shows the resolved files without asking for another folder. Do not enter
+`sql` again and produce `sql/sql`. If the manifest lists only `schema.sql` and is
+stored elsewhere, the alternate base is the directory containing that file.
+The per-website folder holds wizard state; SQL config/files need not move there.
+Workspace outputs may use sibling `runs`; output inside SQL input directories
+remains refused. See the linked continuation guide for the one-root diagram.
+
 ## 5. Configure all inputs in one V3 workspace
 
 **If the wizard is already complete and the SQL manifest exists, continue that
