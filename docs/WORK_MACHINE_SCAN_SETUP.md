@@ -182,6 +182,11 @@ root or long switch list is needed.
 See [interactive continuation](https://github.com/joefeser/tracemap/blob/codex/workspace-scope-preflight/docs/WORKSPACE_FROM_WIZARD.md).
 Keep this docs branch for the walkthrough; no PR is implied.
 
+If continuation reports invalid or stale workspace answers, use its workspace-only
+`restart` option. It archives only workspace-answers.local.json; it does not repair
+or restart website setup. SQL validation errors offer `change/retry/later` with the
+actual reason. Do not use website repair to clear workspace or SQL selection state.
+
 The manual fallback below requires the **prepared receipt config**. The wizard's
 initial project `native.config.json` may not contain receipts and is not
 interchangeable with the prepared config printed as `webFormsPreparedConfig`.
