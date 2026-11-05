@@ -125,8 +125,11 @@ that the selected publication corresponds to it. If the values differ or you do
 not know the publication's source revision, type `later` to pause. This declaration
 is not authenticated build provenance. Native preparation checks committed source membership and
 receipts; failures remain failures. Sources need a Git commit and origin remote.
-Successful completed continuation verifies retained reports without creating a
-new scan. Failed attempts resume only through their pinned native manifest.
+Saved native attempts now offer `workspace`, `reports`, or `later` on continuation.
+Choose `workspace` to complete framework/SQL setup interactively in this same root,
+with each new answer saved across pauses. See [continue saved wizard setup](WORKSPACE_FROM_WIZARD.md).
+Choose `reports` to verify completed reports without a new scan, or resume a failed
+attempt through its pinned native manifest. Workspace setup does not resume scans.
 
 Add another website explicitly:
 

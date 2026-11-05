@@ -3,6 +3,17 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.workspace.wizard-setup.v1
+    name: Interactive saved-wizard workspace setup
+    description: Saves missing framework and SQL selections and delegates verified same-root workspace creation to the existing initializer.
+    evidenceTier: Tier2Structural
+    emits:
+      - WorkspaceWizardAnswerFile
+    limitations:
+      - Local-only answers bind the website and original native configuration hash; exact CLI generator and bounded-answer hashes detect ordinary drift, not authenticity or source correspondence.
+      - Setup does not scan, build, execute SQL, attest publication correspondence or import completed results. Existing native receipt and SQL admission policies remain authoritative.
+      - Framework project previews inspect at most 256 immediate root files, never nested membership; discovery requires explicit selection.
+      - Existing workspace configuration is preserved and offered verification. Saved paths must remain available; invalid inputs require correction before initialization.
   - id: workflow.workspace.compiled-collection.v1
     name: Local source workspace with native fresh compiled review
     description: Composes unchanged prepared native fresh configuration with additional source scans, verifies checkpoint-owned raw evidence and generates combined source reports.

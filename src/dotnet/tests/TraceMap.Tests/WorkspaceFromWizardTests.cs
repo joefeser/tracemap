@@ -122,7 +122,7 @@ public sealed class WorkspaceFromWizardTests
         return [.. arguments[..index], .. arguments[(index + 2)..]];
     }
 
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         private readonly TempDirectory temp = new();
         public string Site { get; }

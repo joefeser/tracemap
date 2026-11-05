@@ -6,7 +6,7 @@ namespace TraceMap.Cli;
 public static class WebFormsWizardCommand
 {
     public const string Help = "tracemap webforms-review wizard [--root <configuration-folder>] [--continue] [--add-project | --repair-project <id>]\n" +
-        "Continue reuses saved answers; add-project explicitly registers another website. Exit 2 means setup paused, not a completed review.";
+        "Continue reuses saved answers; add-project explicitly registers another website. Saved native attempts can continue interactive framework/SQL workspace setup in the same root. Exit 2 means paused.";
 
     public static async Task<int> RunAsync(string[] args, TextReader input, TextWriter output, TextWriter error,
         CancellationToken cancellationToken = default, WebFormsWizardProcessRunner? buildRunner = null,
@@ -184,19 +184,32 @@ public static class WebFormsWizardCommand
                 await output.WriteLineAsync("Copy the full 40-character application source commit displayed above ONLY if you can confirm the selected publication was built from that revision. Entering it declares that correspondence and starts TraceMap scan/reports; it is not build authenticity proof. If it differs or you cannot confirm, type later to pause:");
                 var answer = await input.ReadLineAsync(cancellationToken);
                 if (answer is null || answer.Trim() == "later") return 2;
-                return await WebFormsWizardExecution.RunAsync(store, id, answer.Trim(), output, error, cancellationToken, nativeRunner);
+                var code = await WebFormsWizardExecution.RunAsync(store, id, answer.Trim(), output, error, cancellationToken, nativeRunner);
+                return code == 0 ? await NextAfterNative(true) : code;
             }
             if (current.Step is "running" or "failed")
             {
-                await output.WriteLineAsync("A prior attempt is retained; this does not mean a process is still running. Resume its native checkpoints? [resume/later]");
+                await output.WriteLineAsync("A prior attempt is retained; this does not mean a process is still running. Resume native checkpoints, continue framework/SQL workspace setup, or pause? [resume/workspace/later]");
                 var answer = await input.ReadLineAsync(cancellationToken);
                 if (answer is null || answer.Trim() == "later") return 2;
+                if (answer.Trim() == "workspace") return await WebFormsWizardWorkspace.RunAsync(store, id, input, output, error, cancellationToken);
                 if (answer.Trim() != "resume") throw Invalid("CHOICE_INVALID");
-                return await WebFormsWizardExecution.RunAsync(store, id, null, output, error, cancellationToken, nativeRunner);
+                var code = await WebFormsWizardExecution.RunAsync(store, id, null, output, error, cancellationToken, nativeRunner);
+                return code == 0 ? await NextAfterNative(true) : code;
             }
-            if (current.Step == "completed") return await WebFormsWizardExecution.RunAsync(store, id, null, output, error, cancellationToken, nativeRunner);
+            if (current.Step == "completed") return await NextAfterNative(false);
             await output.WriteLineAsync($"Project {id}: saved step '{store.ReadProject(id).Step}'. No scan or customer website was executed.");
             return 2;
+
+            async Task<int> NextAfterNative(bool justVerified)
+            {
+                await output.WriteLineAsync("Native setup is saved. Continue framework/SQL workspace setup in this SAME root, view retained reports, or pause? [workspace/reports/later]");
+                var answer = await input.ReadLineAsync(cancellationToken);
+                if (answer?.Trim() == "later") return 2;
+                if (answer?.Trim() == "workspace") return await WebFormsWizardWorkspace.RunAsync(store, id, input, output, error, cancellationToken);
+                if (answer is not null && answer.Trim() != "reports") throw Invalid("CHOICE_INVALID");
+                return justVerified ? 0 : await WebFormsWizardExecution.RunAsync(store, id, null, output, error, cancellationToken, nativeRunner);
+            }
 
             async Task<WebFormsWizardProject> GatherProject()
             {

@@ -14,13 +14,49 @@ pwsh -NoProfile -File ./scripts/tm.ps1 -Build version
 if ($LASTEXITCODE -ne 0) { throw 'Tool preparation failed' }
 ```
 
+## Continue the existing wizard (recommended)
+
+Use your **one existing configuration root**. You do not need a second wizard
+root, another DLL selection, or a command containing all the workspace switches:
+
+```powershell
+pwsh -NoProfile -File ./scripts/tm.ps1 webforms-review wizard --root "C:/reviews/Application" --continue
+```
+
+Choose `workspace` when prompted. The wizard reuses the saved website, source
+commit, primary/dependency DLL selection and prepared receipts. It asks only for:
+
+1. The framework **source repository folder** (the dependency DLL does not identify this folder).
+2. Its project/solution: choose a displayed number, paste a path inside the repo,
+   or explicitly choose `discovery`. The preview lists root-level files only.
+3. The existing SQL manifest file from step 4.
+4. The folder containing the loose SQL files; this folder needs no Git repo.
+
+Each answer is saved immediately in the existing website folder. Type `later` to
+pause; run the same command and choose `workspace` to resume without re-entering
+saved choices. At the summary, `change` corrects one choice and `create` validates
+and creates `workspace.local.json` in **that same root**. An existing workspace is
+preserved and offered verification. Setup does not start a scan or rerun native
+reports. Choose `reports` separately to verify/resume the retained native attempt.
+
+`workspace-answers.local.json` is local-only selection state: exact generator and
+bounded-answer SHA-256 values detect ordinary drift, not authenticity. Keep it
+private with your existing configuration. Final setup revalidates inputs; saved
+answers do not override missing files, stale receipts or source/hash mismatches.
+
+## Advanced noninteractive setup
+
+The following switches are available for scripting; the interactive wizard above
+assembles them internally. For the same-root layout, use the same path for both
+root arguments.
+
 From PowerShell 7 in the TraceMap checkout, substitute the actual private paths.
 Put any path containing spaces in double quotes:
 
 ```powershell
 pwsh -NoProfile -File ./scripts/tm.ps1 workspace init-from-wizard `
-  --root C:/reviews/Application-workspace `
-  --wizard-root C:/reviews/Application/native-setup `
+  --root C:/reviews/Application `
+  --wizard-root C:/reviews/Application `
   --framework-repo C:/source/GenericFramework `
   --framework-target src/GenericFramework.csproj `
   --sql-manifest C:/reviews/Application/configuration/sql-definitions.local.json `
@@ -67,13 +103,13 @@ in `templateProvenance`; those hashes do not authenticate source correspondence.
 Inspect the printed scope and generated configuration. You may verify again:
 
 ```powershell
-pwsh -NoProfile -File ./scripts/tm.ps1 workspace verify --root C:/reviews/Application-workspace
+pwsh -NoProfile -File ./scripts/tm.ps1 workspace verify --root C:/reviews/Application
 ```
 
 When collection is intended, use the ordinary V3 command with a fresh output:
 
 ```powershell
-pwsh -NoProfile -File ./scripts/tm.ps1 workspace collect --root C:/reviews/Application-workspace --out C:/reviews/Application-workspace/runs/first
+pwsh -NoProfile -File ./scripts/tm.ps1 workspace collect --root C:/reviews/Application --out C:/reviews/Application/runs/first
 ```
 
 Collection currently performs fresh native/source collection; it does **not**

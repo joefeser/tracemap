@@ -680,3 +680,36 @@ and this helper instead of initial wizard native.config.json. Windows work input
 remain owner validation; no private acceptance claim, PR or merge. Existing source
 and compiled collection will still be fresh if later dispatched; retained scan
 reuse remains separate from this configuration helper.
+
+### Interactive continuation — 2026-11-05
+
+Branch codex/workspace-scope-preflight. User correction: removing manual JSON
+copying must not replace the wizard with a long switch list. Existing wizard
+--continue now offers workspace setup from a saved native attempt, including
+older-tool completed state, without resuming its scan/reports. The adapter asks
+only missing framework-source/target and existing SQL-manifest/folder choices,
+saves each answer locally under the existing website folder, supports pause and
+individual correction, and delegates same-root creation to init-from-wizard.
+Existing workspace configuration is offered verification without replacement.
+Original wizard scope/receipts and SQL admission remain authoritative. No Core
+extractor, scanner or shared-budget policy changes.
+
+New local-only answer envelope pins exact CLI generator SHA-256 and bounded
+answer SHA-256, website ID and original native-config hash; integrity is not
+authentication. Project preview is root-only and bounded to 256 files; nested
+selection needs an explicit path. Saved paths must remain available. Setup does
+not import completed scan results or change fresh collection behavior.
+
+Initial focused command/execution/import/UI lane passed 48/48 Debug -warnaserror.
+Public rehearsal used unchanged saved state from an older tool: pause after
+framework choices, restart the same wizard, answer only remaining SQL choices,
+and create verified config in the original root. Both expected exits (2 then 0)
+and absence of repeated framework prompts were checked. No scan was dispatched.
+Documentation now leads with the interactive flow; noninteractive switches remain
+available for automation. Full Debug gate at f1eeb732c belongs to the preceding
+backend change, not this UI head. No PR or merge performed.
+
+Final touched-lane command: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug
+-warnaserror --nologo --filter 'FullyQualifiedName~WebFormsWizard|FullyQualifiedName~Workspace'.
+Result: 278 passed, 0 failed, 0 skipped (2m54s). Whitespace and private-path
+guards passed. Work-machine guide branch dae854eca now leads with continuation.

@@ -53,3 +53,10 @@
 - [x] Expanded workspace lane: 147 passed, 0 failed/skipped, Debug -warnaserror; documented the one-command setup and retained reuse boundary.
 - [x] Final 13 setup cases pass; exact code head f1eeb732c full Debug -warnaserror: 6,001 passed, 3 skipped, 0 failed; older-tool saved wizard setup reuse rehearsal passes.
 - [ ] Owner verifies existing work-machine wizard/SQL setup; PR and merge remain deferred.
+
+## Interactive workspace continuation — 2026-11-05
+
+- [x] Restore the existing wizard as the preferred setup entry; reuse saved native scope and one configuration root.
+- [x] Save each missing framework/SQL answer, support pause/resume and individual correction, and delegate validation to init-from-wizard without scanning.
+- [x] Pin entry routing, persistence, same-root creation, correction, tamper refusal and existing-config verification; initial focused lane 48/48 and final wizard/workspace lane 278/278 pass Debug -warnaserror; older-tool saved-state pause/resume rehearsal passes.
+- [ ] Owner validates the continued wizard on the work machine; no PR or merge.
