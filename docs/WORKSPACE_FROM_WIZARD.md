@@ -206,3 +206,57 @@ For ordinary exports larger than 256 KiB, the size-refusal prompt now offers
 with an 8 GiB source limit and independent bounded parser/evidence budgets. See
 [streamed local definitions](SQL_STREAMED_DEFINITIONS.md) before interpreting that
 limit as unrestricted SQL support.
+
+## Add a missing framework source after workspace creation
+
+Continue the SAME wizard/output root with the updated tool (`-Build` once).
+The existing-workspace menu now shows the configured **source** count and offers
+`add-framework`. A dependency DLL does not count as a source repository.
+
+1. Choose `workspace`, then `add-framework`.
+2. Give the framework's source Git checkout folder. If you select a subfolder,
+   the wizard offers its detected repository root explicitly; it never silently
+   uses a bin/publication folder as the source root.
+3. Select its project relative to that root. Enter accepts the detected project
+   when exactly one project exists, even if a solution also exists. A bad target
+   repeats only that question; the valid folder is retained. Solution selection
+   remains explicit; this change does not fix or retest the earlier sln failure.
+4. Confirm `add`. The active workspace gains the source entry and an exact
+   previous-config backup is retained. Existing website/native/DLL/SQL fields,
+   source selections, original scope file and completed runs are preserved.
+5. Choose `collect` to create a NEW run. Before collection the second source is
+   **configured**, not yet scanned. Verify its source entry AND attributable
+   implementation facts in the new run; review the new run, not the old one.
+
+The signed initial wizard-answers file remains historical and is not rewritten.
+For an existing workspace, the active `workspace.local.json` controls source
+scope. An old cached skip value no longer hides the add-framework action.
+
+CLI automation can use the same operation without interactive setup:
+
+```powershell
+pwsh -NoProfile -File ./scripts/tm.ps1 -Build workspace add-source --root C:/tracemap-output --id framework --repo C:/source/framework --target Framework.csproj
+```
+
+Use actual paths. The command derives Git HEAD itself; no commit or DLL hash is
+requested. It validates the new checkout/selection and configuration structure;
+it does not scan, load MSBuild, reparse SQL or re-attest existing inputs. Full
+admission still occurs at verify/collect. Duplicate IDs, overlapping roots,
+bin/subfolder roots and invalid selections refuse without replacing the config.
+
+A saved scope filter is extended through a new provenance-commented copy that
+retains its previous selected IDs and adds the new source. The original scope
+file remains unchanged. Explicit future `--scope` overrides still select exactly
+what their owner specifies. Updated configuration provenance binds the prior
+config, new source HEAD/selection and saved scope inputs to the exact generator.
+
+Updates use a cooperative handle lock, input rechecks and atomic replacement
+with an exact prior-config backup. Non-cooperating external edits can race the
+last recheck; post-publication hash checks refuse a success claim if detected,
+and complete versions remain available. Do not edit the config concurrently.
+The empty `.workspace-update.lock` file may persist; its OS lock ends when the
+process exits. Generated scope copies may remain after a failed update so an
+I/O failure cannot leave an active configuration pointing to deleted input.
+
+Adding source does not establish source-to-DLL correspondence, turn partial
+analysis into semantic completeness, or change an earlier run's coverage.

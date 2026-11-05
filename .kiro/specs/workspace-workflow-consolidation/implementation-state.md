@@ -1281,3 +1281,30 @@ Read-only, bounded, no rescans/solution load/edits or receipt changes; proposes
 smallest preserving correction and flags missing post-create extension UX if
 found. No claim of work-machine root cause until local evidence returns.
 Docs-only; whitespace/private-path guards used. No new application test run.
+
+### Existing-workspace source extension — 2026-11-05
+
+Owner authorized fixing the missing framework source without fighting/restarting
+existing evidence. Added workspace add-source plus existing wizard add-framework
+menu. Active config count is visible; saved skip/historical answers cannot hide
+the new action. Only the new source checkout and project are needed; Git HEAD is
+derived and a unique project can be accepted with Enter. Bin/subfolder selection
+offers the actual Git root explicitly in UI and refuses as direct CLI repo root.
+Bad target repeats target only. Original signed answers are preserved; active
+workspace config is authoritative after creation.
+
+Extension preserves existing source/native/SQL blocks, config schema and completed
+runs. It validates only new root/target/HEAD plus config structure, not MSBuild,
+SQL or existing channel admission. Cooperative OS handle lock, source/input
+rechecks, atomic replace and exact config backup; detected external concurrent
+changes refuse success. Existing filters get a provenance-commented new scope
+copy retaining prior selected IDs plus new ID; old scope untouched. Failed scope
+copies remain conservatively if created; no dangling-input cleanup risk.
+
+Focused AddSource/Wizard/FromWizard lane reached 52 passes, Debug -warnaserror.
+Modern rich UTF16/context replay completed one-source run, added framework via
+existing wizard, collected a fresh two-source run, proved implementation-file
+facts through combined source-label joins, and checked old run file hashes plus
+old config backup/native/SQL/answers preservation. Latest application root/cleanup
+guards now need final legacy/net20 replay at committed head and full coverage.
+No Core/schema-output or ACK change; no PR/merge or private acceptance claim.

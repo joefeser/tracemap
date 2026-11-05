@@ -25,12 +25,15 @@ def main():
     parser.add_argument("--sql-encoding", choices=["utf8", "utf16-le", "utf16-be"], default="utf8", help="Original SQL byte encoding; UTF16 fixtures include BOM and retain exact raw hashes")
     parser.add_argument("--sql-context-repair", action="store_true", help="Author a mismatching public USE declaration, then accept its verified database through the wizard")
     parser.add_argument("--sql-rich-export", action="store_true", help="Include a 512-column table and 512 sequential conditionals to exercise real export width rather than comment padding only")
+    parser.add_argument("--add-framework-after-first-run", action="store_true", help="Finish a one-source run with saved skip, then add framework source through existing-workspace wizard and prove fresh two-source evidence")
     args = parser.parse_args()
     if args.same_failure_first:
         args.bad_manifest_first = True
     if args.legacy_layout:
         args.with_source = True
         args.sql_beside_workspace = True
+    if args.add_framework_after_first_run:
+        args.with_source = False
     root = Path(args.output_root).resolve()
     if root.exists():
         raise RuntimeError("Existing replay preserved; choose a fresh output root")
@@ -254,6 +257,54 @@ def main():
         if not path.is_file():
             raise RuntimeError(f"Missing report: {path}")
     tool("wizard-existing-workspace-verify", ["webforms-review", "wizard", "--root", str(workspace), "--continue"], "workspace\nverify\n")
+    if args.add_framework_after_first_run:
+        if len(record["sources"]) != 1: raise RuntimeError("Initial source skip did not produce exactly one source")
+        original_config = config_path.read_bytes()
+        original_config_value = json.loads(original_config)
+        original_run_files = {path.relative_to(collection): hashlib.sha256(path.read_bytes()).hexdigest()
+                              for path in collection.rglob("*") if path.is_file()}
+        answers_path = workspace / project_id / "workspace-answers.local.json"
+        original_answers = answers_path.read_bytes()
+        original_sql = (sql / "schema.sql").read_bytes()
+        extension = tool("wizard-add-framework-source", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
+                         "\n".join(["workspace", "add-framework", str(dependency), "Dependency.csproj", "add", "collect", ""]))
+        updated_config = json.loads(config_path.read_text())
+        if len(updated_config["repositories"]) != 2 or "Configured SOURCE repositories: 2" not in extension:
+            raise RuntimeError("Framework source was not added to active configuration")
+        for key in ("compiledReview", "sqlEvidence", "webFormsReport"):
+            if updated_config.get(key) != original_config_value.get(key): raise RuntimeError("Existing channel choice changed: " + key)
+        if answers_path.read_bytes() != original_answers or (sql / "schema.sql").read_bytes() != original_sql:
+            raise RuntimeError("Historical answers or SQL bytes changed during source addition")
+        backups = list(workspace.glob("workspace-before-add-*.local.json"))
+        if len(backups) != 1 or backups[0].read_bytes() != original_config: raise RuntimeError("Original config backup mismatch")
+        if {path.relative_to(collection): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in collection.rglob("*") if path.is_file()} != original_run_files:
+            raise RuntimeError("Completed one-source run was modified")
+        fresh = [path for path in (workspace / "runs").glob("workspace-*") if path != collection]
+        if len(fresh) != 1: raise RuntimeError("Source extension did not create exactly one fresh run")
+        new_record = json.loads((fresh[0] / "workspace-run.local.json").read_text())
+        if len(new_record["sources"]) != 2 or {source["id"] for source in new_record["sources"]} != {"web", "framework"}:
+            raise RuntimeError("Fresh run does not evidence both source repositories")
+        with sqlite3.connect((fresh[0] / "combined.sqlite").as_uri()+"?mode=ro", uri=True) as db:
+            if db.execute("pragma quick_check").fetchone()[0] != "ok": raise RuntimeError("Fresh combined index corrupt")
+            for source_id in ("web", "framework"):
+                if db.execute("select count(*) from combined_facts f join index_sources s using(source_index_id) where s.label=?", (source_id,)).fetchone()[0] == 0:
+                    raise RuntimeError("Missing attributable source facts: " + source_id)
+            columns = {row[1] for row in db.execute("pragma table_info(combined_facts)")}
+            if "file_path" not in columns: raise RuntimeError("Unexpected combined fact path schema")
+            if db.execute("select count(*) from combined_facts f join index_sources s using(source_index_id) where s.label='framework' and f.file_path like '%Service.cs'", ()).fetchone()[0] == 0:
+                raise RuntimeError("Framework implementation file has no source facts")
+        tool("workspace-verify-after-add-source", ["workspace", "verify", "--root", str(workspace)])
+        collection = fresh[0]
+        record = new_record
+        indexes = [collection / "combined.sqlite", collection / record["sqlEvidence"]["index"],
+                   collection / record["compiledReview"]["rawScan"] / "index.sqlite"]
+        for index in indexes:
+            with sqlite3.connect(index.as_uri()+"?mode=ro", uri=True) as db:
+                if db.execute("pragma quick_check").fetchone()[0] != "ok": raise RuntimeError("Fresh channel index corrupt")
+        print("PASS preserved one-source run and settings; existing wizard added framework source; fresh combined index contains BOTH source contributions", flush=True)
+        print("Fresh two-source report: " + str(fresh[0] / "START-HERE.md"))
+
     print("PASS full public wizard/SQL/SQLite replay", flush=True)
     print(f"Configuration: {config_path}\nReports: {collection / 'START-HERE.md'}")
     for index in indexes:

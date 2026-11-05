@@ -23,6 +23,7 @@ public static partial class WorkspaceCommand
     public const string Help = """
         tracemap workspace init --root <workspace-folder>
         tracemap workspace init-from-wizard --root <workspace-folder> --wizard-root <saved-wizard-folder> [--website-id <id>] [--framework-repo <path> --framework-target <repo-relative-project-or-solution|discovery>] --sql-manifest <path> --sql-source-root <folder>
+        tracemap workspace add-source --root <workspace-folder> --id <source-id> --repo <source-repo-folder> --target <repo-relative-project-or-solution|discovery>
         tracemap workspace verify --root <workspace-folder> [--scope <repository-ids.txt>]
         tracemap workspace collect --root <workspace-folder> --out <new-run-folder> [--scope <repository-ids.txt>]
 
@@ -68,14 +69,15 @@ public static partial class WorkspaceCommand
         object? sqlRecord = null;
         try
         {
-            if (args.Length == 0 || args[0] is not ("init" or "init-from-wizard" or "verify" or "collect"))
-                throw new ArgumentException("WORKSPACE_COMMAND_REQUIRED: use init, init-from-wizard, verify or collect; see workspace --help.");
+            if (args.Length == 0 || args[0] is not ("init" or "init-from-wizard" or "add-source" or "verify" or "collect"))
+                throw new ArgumentException("WORKSPACE_COMMAND_REQUIRED: use init, init-from-wizard, add-source, verify or collect; see workspace --help.");
             var operation = args[0];
             var options = Options(args.Skip(1).ToArray(), operation);
             var root = Full(options.GetValueOrDefault("--root")
                 ?? throw new ArgumentException("WORKSPACE_ROOT_REQUIRED"));
             Unlinked(root);
             var configPath = System.IO.Path.Combine(root, "workspace.local.json");
+            if (operation == "add-source") return await AddSourceAsync(root, options, output, token);
             if (operation == "init-from-wizard") return await InitializeFromWizardAsync(root, options, output, token);
             if (operation == "init")
             {
@@ -90,11 +92,7 @@ public static partial class WorkspaceCommand
                 return 0;
             }
 
-            var configBytes = ReadBounded(configPath, 1_048_576);
-            using (var document = JsonDocument.Parse(configBytes)) CheckProperties(document.RootElement);
-            var config = JsonSerializer.Deserialize<WorkspaceConfiguration>(configBytes, Json)
-                ?? throw new ArgumentException("WORKSPACE_CONFIG_INVALID");
-            Validate(config);
+            var config = ReadConfiguration(root, out var configBytes);
             if (config.CompiledReview is not null)
             {
                 runSchema = "tracemap-workspace-run.v2";
@@ -358,7 +356,8 @@ public static partial class WorkspaceCommand
             var key = args[i];
             if (key != "--root" && !(key == "--scope" && operation is "verify" or "collect")
                 && !(key == "--out" && operation == "collect")
-                && !(operation == "init-from-wizard" && FromWizardOptions.Contains(key, StringComparer.Ordinal)))
+                && !(operation == "init-from-wizard" && FromWizardOptions.Contains(key, StringComparer.Ordinal))
+                && !(operation == "add-source" && key is "--id" or "--repo" or "--target"))
                 throw new ArgumentException($"WORKSPACE_OPTION_UNKNOWN: {key}");
             if (i + 1 == args.Length || string.IsNullOrWhiteSpace(args[i + 1]) || args[i + 1].StartsWith("--", StringComparison.Ordinal)
                 || !result.TryAdd(key, args[i + 1])) throw new ArgumentException("WORKSPACE_OPTION_INVALID_OR_DUPLICATE");

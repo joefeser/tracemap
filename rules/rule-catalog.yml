@@ -8242,3 +8242,14 @@ rules:
       - Conditional target uses declared owner/qualifier values matching the separately admitted definition-selection input, never guessed defaults or deployment configuration. One input formal maps ordinal zero only; output-capable/multiple formals, types/sizes/coercion/values, OUTPUT/RETURN channels, cache/event entry, hydration and result shapes remain unproven.
       - External PetaPoco implementation/transport is not inspected. Provider StoredProcedure intent is translated to Exec text; no final SqlCommand CommandType, actual ADO parameter binding, database access or SQL execution is established. This is not a terminal DatabaseOperationCandidate or existing semantic comparison binding.
       - Exact Core/CLI/source-parser/SQL-parser and bounded-input SHA-256 bind original source selectors, normalized method hashes, spans, explicit assumptions and embedded regenerated SQL evidence. SQLite is a separate local sidecar. No raw bodies, unrelated literals, connection values, raw projected SQL, raw scan/index mutation or public privacy projection.
+
+  - id: workflow.workspace.add-source.v1
+    name: Add a source checkout to an existing collection workspace
+    evidenceTier: Tier2Structural
+    description: Preserves existing channels and completed runs while extending source configuration, saved selection scope and exact generator/input provenance for a future fresh run.
+    limitations:
+      - Configuration addition validates the new source Git root, current HEAD and selected project/solution path, but does not scan, load MSBuild, reparse SQL or attest source-to-DLL correspondence. Configured is not scanned.
+      - Duplicate IDs, overlapping roots, non-root bin/publication folders and invalid selections refuse. Existing native, SQL and source selections stay unchanged; the prior config is retained exactly.
+      - Saved filters are extended in a new provenance-commented scope copy; originals are retained. Future explicit scope overrides still apply as specified by the owner.
+      - A cooperative OS handle lock, input rechecks and atomic replace with backup protect updates. Non-cooperating external editors can race the final check; post-write checks refuse detected conflicts, and retained versions need owner review.
+      - Initial wizard answers remain historical; the active workspace source list governs existing-workspace continuation. Existing results retain their original scope; a new collection is required for evidence of the added source.

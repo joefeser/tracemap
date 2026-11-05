@@ -8,6 +8,34 @@ namespace TraceMap.Tests;
 public sealed class WebFormsWizardWorkspaceTests
 {
     [Fact]
+    public async Task Existing_one_source_workspace_can_add_framework_without_restarting_or_reentering_SQL()
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture(); await fixture.Prepare();
+        using (var first = new StringReader($"workspace\nskip\n{fixture.Manifest}\n{fixture.SqlRoot}\ncreate\nlater\n"))
+            Assert.True(await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], first, fixture.Output, fixture.Error) == 0, fixture.Error.ToString() + fixture.Output);
+        var configPath = Path.Combine(fixture.WizardRoot, "workspace.local.json"); var before = File.ReadAllBytes(configPath);
+        var answersPath = Path.Combine(fixture.WizardRoot, "site", "workspace-answers.local.json");
+        var answers = File.ReadAllBytes(answersPath);
+        var oldRun = Path.Combine(fixture.WizardRoot, "runs", "old-workspace-run"); Directory.CreateDirectory(oldRun);
+        File.WriteAllText(Path.Combine(oldRun, "report.md"), "keep");
+        fixture.Output.GetStringBuilder().Clear();
+        using var next = new StringReader($"workspace\nadd-framework\n{fixture.Framework}\nwrong.dll\n\nadd\nlater\n");
+        Assert.Equal(2, await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], next, fixture.Output, fixture.Error));
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!;
+        Assert.Equal(2, config["repositories"]!.AsArray().Count);
+        Assert.Equal("framework", config["repositories"]![1]!["id"]!.GetValue<string>());
+        Assert.Equal("Framework.csproj", config["repositories"]![1]!["projects"]![0]!.GetValue<string>());
+        Assert.Equal(before, File.ReadAllBytes(Assert.Single(Directory.GetFiles(fixture.WizardRoot, "workspace-before-add-*.local.json"))));
+        Assert.Equal(answers, File.ReadAllBytes(answersPath));
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(oldRun, "report.md")));
+        Assert.DoesNotContain("Existing SQL manifest FILE", fixture.Output.ToString());
+        Assert.DoesNotContain("Framework SOURCE repository folder if you have its checkout", fixture.Output.ToString());
+        Assert.Contains("Configured SOURCE repositories: 2", fixture.Output.ToString());
+        Assert.Equal(1, fixture.Output.ToString().Split("Framework SOURCE Git repository folder", StringSplitOptions.None).Length - 1);
+        Assert.Equal(0, await WorkspaceCommand.RunAsync(["verify", "--root", fixture.WizardRoot], fixture.Output, fixture.Error));
+    }
+
+    [Fact]
     public async Task Ordinary_flat_width_guard_offers_stream_profile_without_editing_SQL()
     {
         using var fixture = new WorkspaceFromWizardTests.Fixture(); await fixture.Prepare();

@@ -28,13 +28,75 @@ internal static class WebFormsWizardWorkspace
         var root = store.DirectoryPath;
         if (File.Exists(Path.Combine(root, "workspace.local.json")))
         {
-            await output.WriteLineAsync("Workspace configuration already exists in this root. Verify the saved configuration, collect evidence now, or pause? [verify/collect/later]");
-            var choice = await input.ReadLineAsync(token);
-            if (choice is null || choice.Trim() == "later") return 2;
-            if (choice.Trim() == "collect") { store.Dispose(); return await Collect(); }
-            if (choice.Trim() != "verify") throw Fail("CHOICE_INVALID");
-            store.Dispose();
-            return await WorkspaceCommand.RunAsync(["verify", "--root", root], output, error, token);
+            while (true)
+            {
+                var configured = WorkspaceCommand.ReadConfiguration(root, out _);
+                await output.WriteLineAsync("Configured SOURCE repositories: " + configured.Repositories.Length + " "
+                    + JsonSerializer.Serialize(configured.Repositories.Select(item => item.Id).ToArray())
+                    + ". Compiled dependency DLLs are separate from source repositories.");
+                await output.WriteLineAsync("Workspace configuration already exists in this root. Verify, collect a fresh run, add framework SOURCE, or pause? [verify/collect/add-framework/later]");
+                var choice = await input.ReadLineAsync(token);
+                if (choice is null || choice.Trim() == "later") return 2;
+                if (choice.Trim() == "collect") { store.Dispose(); return await Collect(); }
+                if (choice.Trim() == "add-framework")
+                {
+                    if (configured.Repositories.Any(item => item.Id == "framework"))
+                    {
+                        await output.WriteLineAsync("A framework source entry is already configured; it is not replaced. Choose verify or collect to inspect/use that scope.");
+                        continue;
+                    }
+                    var folder = await Existing("Framework SOURCE Git repository folder (not the DLL/bin folder), or later:", false);
+                    if (folder is null) return 2;
+                    var sourceGitRoot = GitMetadataProvider.Detect(folder).GitRootPath;
+                    if (sourceGitRoot is null)
+                    { await output.WriteLineAsync("No Git source repository was found at that folder. Existing setup is preserved; choose the source checkout on continuation."); return 2; }
+                    sourceGitRoot = WebFormsWizardStore.Physical(sourceGitRoot);
+                    if (!folder.Equals(sourceGitRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                    {
+                        await output.WriteLineAsync("That folder is inside the source checkout " + JsonSerializer.Serialize(sourceGitRoot)
+                            + ". Use the detected repository root and select its project next? [use-root/later]");
+                        if ((await input.ReadLineAsync(token))?.Trim() != "use-root") return 2;
+                        folder = sourceGitRoot;
+                    }
+                    var names = Directory.EnumerateFiles(folder).Take(257).ToArray();
+                    if (names.Length > 256) { await output.WriteLineAsync("Root listing exceeds 256 entries; enter the exact project/solution path below."); names = []; }
+                    var projects = names.Where(item => Path.GetExtension(item).ToLowerInvariant() is ".csproj" or ".vbproj" or ".fsproj")
+                        .Select(item => Path.GetFileName(item)!).Order(StringComparer.Ordinal).ToArray();
+                    var selections = names.Where(Supported).Select(item => Path.GetFileName(item)!).Order(StringComparer.Ordinal).ToArray();
+                    await output.WriteLineAsync("Root project/solution files: " + JsonSerializer.Serialize(selections) + ". Nested projects are not inventoried.");
+                    var detected = projects.Length == 1 ? projects[0] : null;
+                    string target;
+                    while (true)
+                    {
+                        await output.WriteLineAsync("Framework project/solution path relative to that folder, discovery, or later"
+                            + (detected is null ? ":" : "; Enter uses detected project " + JsonSerializer.Serialize(detected) + ":"));
+                        var selectedTarget = await input.ReadLineAsync(token);
+                        if (selectedTarget is null || selectedTarget.Trim() == "later") return 2;
+                        target = Unquote(selectedTarget);
+                        if (target.Length == 0 && detected is not null) target = detected;
+                        if (target != "discovery")
+                        {
+                            var full = WebFormsWizardStore.Physical(Path.GetFullPath(target.Replace('\\', '/'), folder));
+                            var relative = Path.GetRelativePath(folder, full);
+                            if (!File.Exists(full) || !Supported(full) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                            { await output.WriteLineAsync("Select an existing supported project/solution inside the framework source folder. Folder and earlier choices are retained."); continue; }
+                            target = relative.Replace('\\', '/');
+                        }
+                        break;
+                    }
+                    await output.WriteLineAsync("Add framework SOURCE " + JsonSerializer.Serialize(folder) + "; target=" + JsonSerializer.Serialize(target)
+                        + "? Existing website/DLL/SQL choices and runs stay intact; no scan starts. [add/later]");
+                    if ((await input.ReadLineAsync(token))?.Trim() != "add") return 2;
+                    store.VerifyUnchanged();
+                    var added = await WorkspaceCommand.RunAsync(["add-source", "--root", root, "--id", "framework", "--repo", folder, "--target", target], output, error, token);
+                    if (added != 0) return added;
+                    await output.WriteLineAsync("Framework SOURCE configured. Choose collect for a fresh two-source run. Existing setup answers are historical; the active workspace configuration now controls source scope.");
+                    continue;
+                }
+                if (choice.Trim() != "verify") throw Fail("CHOICE_INVALID");
+                store.Dispose();
+                return await WorkspaceCommand.RunAsync(["verify", "--root", root], output, error, token);
+            }
         }
         var native = store.ReadProject(id).Native ?? throw Fail("NATIVE_CONFIG_MISSING");
         var path = WebFormsReviewPreflightCommand.Child(Path.GetDirectoryName(store.ProjectPath(id))!, "workspace-answers.local.json");
