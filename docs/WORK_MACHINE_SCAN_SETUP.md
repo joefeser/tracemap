@@ -164,7 +164,11 @@ have the DLL or do not want another source checkout scanned. This retains the
 existing compiled DLL selection and continues to the SQL manifest/folder, saving
 each answer. `later` pauses; the same command resumes;
 `change` corrects one choice; `create` validates and creates the workspace in that
-same root without scanning. No second wizard root or long switch list is needed.
+same root. It then offers `collect` to create the reports and SQLite evidence, or
+`later` to finish configuration only. Collection prints the exact output paths;
+SQLite files are under the new run folder, not beside workspace.local.json.
+An existing workspace offers `verify`, `collect`, or `later`. No second wizard
+root or long switch list is needed.
 See [interactive continuation](https://github.com/joefeser/tracemap/blob/codex/workspace-scope-preflight/docs/WORKSPACE_FROM_WIZARD.md).
 Keep this docs branch for the walkthrough; no PR is implied.
 
