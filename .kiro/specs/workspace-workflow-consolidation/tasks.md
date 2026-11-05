@@ -16,7 +16,9 @@
 - [x] Verify native input drift, excluded web scope, wrong source/config and native/combined output integrity; 113 focused cases and full Debug `-warnaserror` passed (5,863 passed, 3 skipped, 0 failed).
 - [x] Owner executed compiled synthetic trial from upgrade-authority; both native collections, combined reports and repository filtering completed successfully.
 - [ ] Extend workspace to the separate retained-source attachment route after fresh collection is verified.
-- [ ] Design explicit application-call-to-SQL contract bindings; bounded offline definition ingestion is implemented.
+- [x] Design explicit application-call-to-SQL candidate contract with source/SQL admission, wrapper observations and retained gaps.
+- [x] Implement bounded DNN-style reader-wrapper AST profile, conditional procedure/positional parameter candidate and local CLI sidecars.
+- [x] Verify source mutations, ambiguous overloads, SQL/context drift, preserved public routes and DNN candidate trial02: 29 new tests, 109 focused, five public cases, four retained smokes; full Debug `-warnaserror` passed 5,968 with 3 skips and 0 failures.
 - [x] Implement a separate local-only ScriptDom definition-set contract with bounded parsing, parameters, dependencies and conservative result shapes.
 - [x] Add standalone SQL collection plus opt-in workspace integration and a synthetic source/compiled/SQL trial.
 - [x] Validate local-only privacy, unsupported shapes, drift/refusal and unchanged public-synthetic gates: 36 new tests, 474 broad focused cases, 42 focused DNN/catalog/new cases, four retained smokes, public corpus and synthetic launcher passed; full Debug `-warnaserror` passed 5,899 with 3 skips and 0 failures.

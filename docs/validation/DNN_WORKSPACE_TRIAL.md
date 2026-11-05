@@ -124,3 +124,40 @@ The final run uses the quote-aware pre-lexing comment-depth guard. The earlier
 `dnn-selection-trial-01` remains available as pre-guard trial evidence; the new
 `dnn-selection-trial-02` is the depth-guard trial;
 `dnn-selection-trial-03` records the final runtime including LF/CRLF line-format validation.
+
+## Conditional source-to-procedure follow-up (2026-11-04)
+
+The separate [source candidate command](../SQL_SOURCE_BINDING.md) now recognizes
+five selected wrapper shapes from the pinned public files. It does not modify
+previous scan/SQL indexes or promote their missing reader terminal.
+
+Final local report:
+`/Users/josephfeser/tracemap-reviews/dnn-binding-trial-02/collected/report.md`.
+
+| Observation | Original source evidence |
+| --- | --- |
+| Entry | Data/DataProvider.cs:1917–1920, GetRoleGroups(int) forwards the literal procedure identifier and portal argument |
+| Provider | Data/SqlDataProvider.cs:72–75, owner/qualifier composition and StoredProcedure intent with the same argument array |
+| Connection | Data/SqlDatabaseConnectionProvider.cs:51–54, direct forwarding to selected helper name |
+| Helper | Data/PetaPoco/PetaPocoHelper.cs:143–171, formatter translation and external ExecuteReader invocation syntax |
+| Formatter | Data/DataUtil.cs:18–47, supported primitive positional formatter path |
+
+Actual status: `conditional-profile-candidate`. Under explicit review-scenario
+owner `dbo`, qualifier `DnnTrial_`, and selected provider assumptions, source
+`portalId` ordinal zero is associated with selected SQL `@PortalID` ordinal zero
+on `dbo.DnnTrial_GetRoleGroups`. Its status is
+`conditional-positional-candidate`, with Tier3 syntax evidence.
+
+Nine explicit gaps remain: compiler symbols/overloads; virtual provider dispatch;
+configured connection-provider dispatch; actual source owner/qualifier property
+values; external PetaPoco parameter/command transport; preprocessor configuration;
+runtime invocation; caller cache/event/hydration path; result shapes/type coercion.
+Provider StoredProcedure intent is translated to Exec text; no final SqlCommand
+CommandType or actual ADO parameter binding is asserted.
+
+The CLI checked all five source files against immutable Git commit blobs,
+including their BOM bytes. SQLite readback verified five observations, one
+parameter candidate and the source-commit verification flag. The report embeds
+regenerated SQL evidence and its digest so the exact admitted parent remains
+inspectable after generator changes. No raw source bodies or connection values
+were emitted, and no DNN build, application invocation or SQL execution occurred.

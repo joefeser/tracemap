@@ -139,3 +139,7 @@ not full DNN route binding or runtime acceptance.
 
 For the actual bounded public DNN workspace trial and its SQL admission gaps, see
 [DNN trial results](validation/DNN_WORKSPACE_TRIAL.md).
+
+For the separate conditional C# wrapper-to-procedure inspection command, see
+[Source-to-SQL candidates](SQL_SOURCE_BINDING.md). It retains dispatch/transport
+gaps and does not automatically change workspace or semantic binding behavior.

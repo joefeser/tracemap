@@ -5465,3 +5465,17 @@ large DNN install file now admits one table and one procedure. Original DNN
 no-settings inputs still refuse. DNN selected results remain unknown; no database,
 application execution or compiled correspondence is established. The workspace
 trial uses a fresh run and records original file hashes in its input map.
+
+
+## Conditional source-to-procedure wrapper candidate
+
+[Source-to-SQL candidate guide](SQL_SOURCE_BINDING.md) owns the separate local-only
+`sqlserver-source-binding` command. Run `SqlServerSourceBindingTests` plus retained
+local/selection/DNN lanes and the full Debug `-warnaserror` solution. Independently
+authored syntax fixtures require five role observations, conditional ordinal zero,
+explicit settings/SQL context, alias/overload/flow/formatter refusals, strict source
+and SQL hashes, embedded parent admission, BOM-safe committed-source verification,
+SQLite readback and output preservation. These are not compiled application tests.
+Replay the actual pinned DNN five-method path against the selected SQL scenario;
+all unresolved compiler, dispatch, external PetaPoco, event/hydration, result and
+runtime boundaries must remain. No SQL execution or raw index mutation.

@@ -420,3 +420,93 @@ Preserve v1 local and all public-synthetic contracts; full Debug gate required.
   DNN correspondence and full real-application acceptance remain separate work.
   No SQL executed, private input inspected, original source rewritten, push or
   PR/public message created.
+
+
+## Source-to-procedure candidate implementation (2026-11-04, complete)
+
+Owner authorized one DNN GetRoleGroups operation. The public slice has no compiler
+project or PetaPoco implementation. Implement a distinct local-only DNN-style
+reader wrapper profile using Roslyn syntax ASTs and admitted selected SQL. Five
+explicit hashed method selectors: entry, provider, connection, helper, formatter.
+Require explicit owner/qualifier values matching SQL selection and explicit
+review-scenario/owner-supplied dispatch origin. Output only a conditional profile
+candidate, not a compiler-resolved call, final ADO CommandType or runtime binding.
+Map one built-in int entry argument to SQL formal ordinal zero only when all
+forwarding/formatter shapes match; retain external terminal, virtual/configured
+dispatch, symbol, hydration and result gaps. No raw bodies or source strings beyond
+procedure/parameter identifiers, hashes and spans. No raw scan/index mutation or
+implicit global scanner changes. New local CLI sidecar; full Debug gate required.
+
+
+### Source-binding implementation status (frozen for final gate)
+
+- Added SqlServerSourceBinding and narrow AST profile helpers. Five explicit
+  source method selectors, raw source hashes, full type/signature selectors and
+  admitted SQL selection with exact context/template/manifest hash. All route and
+  parameter associations are conditional syntax candidates; no terminal fact or
+  existing semantic binding is manufactured. SourceParser CSharp14/default symbols.
+- Added sqlserver-source-binding compare CLI. Exact source bytes must match the
+  declared Git commit blobs; binary hashing preserves BOM. Git HEAD/source/SQL
+  rechecked inside atomic publication. Reject overlaps, linked files, dirty source,
+  malformed/ambiguous metadata and existing output. Writes binding.local.json,
+  source-sql-bindings.sqlite and report.md. The Core report embeds regenerated SQL
+  evidence and its digest. CLI index binds its own generator/report hash and
+  source_commit_verified flag. No original/index modification or database access.
+- Added 29 tests: five source observations, conditional ordinal association,
+  argument/composition/dispatch/formatter mutations, aliases/shadows, unavailable/
+  ambiguous/nonprimitive entries, strict hashes/context/report admission, BOM-safe
+  Git source checks, queryable index, output preservation, source links/dirty
+  files and overlap refusal. Focused new/local/selection/workspace/DNN lane PASSED
+  109/109 with zero warnings/errors. Earlier 25-case lane passed; final adds four.
+- Final Release published. Real DNN trial02 completed at
+  `/Users/josephfeser/tracemap-reviews/dnn-binding-trial-02/collected/`.
+  All five profile shapes supported at original lines 1917,72,51,143,18; one
+  conditional portalId -> @PortalID ordinal-zero row, nine gaps. Embedded SQL
+  evidence digest, five observation/one parameter SQLite counts and commit flag
+  verified. Review-scenario values only; compiler/dispatch/source property/terminal/
+  preprocessor/runtime/hydration/result boundaries remain unknown.
+- No fresh source scan or SQL-index rewrite was needed; reads the five committed
+  C# files and regenerates selected SQL metadata. Prior source/SQL indexes remain.
+- Full Debug -warnaserror PASSED in unified exec session 63891; log
+  `/tmp/tracemap-source-binding-full-suite.log`: 5,968 passed, three skipped,
+  zero failed, exit 0, 40.2074 minutes. C# and runtime bytes stayed frozen
+  throughout the gate. All 29 added candidate tests passed.
+- All four retained SQL CLI smokes PASSED in session 98622; log
+  `/tmp/tracemap-source-binding-retained.log`, output
+  `/tmp/tracemap-source-binding-retained-01`. Counts/refusals unchanged: parameter
+  JSON/DDL 8/12/32 each; result JSON 36/10/36 and DDL 36/10/58 with 20 refusals;
+  table 44/10/88 with 24 refusals. Public corpus v2 PASSED all five cases in session
+  64260, log `/tmp/tracemap-source-binding-public-corpus.log`, output
+  `/tmp/tracemap-source-binding-public-corpus-01`.
+- Docs/rule entry added: docs/SQL_SOURCE_BINDING.md, SQL guide/validation link,
+  DNN trial follow-up, database.sqlserver.source-procedure-candidate.v1.
+- Final full/retained/public results, artifact/unchanged-index hashes and docs
+  links verified; implementation milestone complete. No push/PR authorized.
+
+- Retained DNN selection-trial03 raw source, combined and SQL artifact hashes
+  still match the original run record; no input/index mutation. Documentation
+  relative links and diff checks passed. Full suite completed; final local state
+  and task checkboxes updated. Keep the published runtime pinned by trial02.
+
+
+## Final source-candidate milestone result (2026-11-04)
+
+- 29 new tests, 109-case focused lane and full Debug solution -warnaserror passed:
+  5,968 passed / three skipped / zero failed, exit 0, 40.2074 minutes.
+- Three skips remain optional Oracle golden sweep, native HTTP receipt interop
+  and Windows ASP.NET publication acceptance. No new compiled DNN/runtime proof.
+- Real DNN binding-trial02: five syntax shapes, one conditional portalId ->
+  @PortalID ordinal-zero association under review-scenario owner/qualifier and
+  dispatch assumptions, nine explicit gaps. Both raw/BOM Git source bytes and
+  embedded regenerated SQL parent digest verified; SQLite header records source
+  commit verification. Existing source/combined/SQL artifacts remain byte-identical.
+- Five-case public SQL corpus and four retained CLI smokes passed unchanged
+  outcomes/denominators. Final docs links and git diff checks passed.
+- Remaining capability boundaries: compiler semantic/overload and partial-file
+  resolution, actual configured dispatch and owner properties, external PetaPoco
+  transport/ADO parameter binding, event/cache/hydration callers and result/type
+  contracts, compiled correspondence and runtime invocation. The new artifact is
+  a conditional syntax profile candidate, never a terminal fact or complete path.
+- No C# edits after the full gate, no source/SQL execution, no private input,
+  no rewritten original/index, no push, PR or public message. Save a local feature
+  commit only; owner can inspect docs/SQL_SOURCE_BINDING.md and trial02 report.
