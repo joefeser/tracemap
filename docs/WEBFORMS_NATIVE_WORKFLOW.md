@@ -5,6 +5,12 @@ commands support fresh source-plus-compiled collection and immutable attachment
 to an existing source scan. Keep the proven PowerShell workflow and its inputs
 until your authorized Windows comparison passes.
 
+For a collection handoff covering repository source, an existing compiled site,
+and an offline database schema export, start with the
+[source, compiled-site and SQL collection runbook](SOURCE_COMPILED_SQL_COLLECTION_RUNBOOK.md).
+It distinguishes native attachment from workspace collection, local SQL admission
+and the remaining integration work.
+
 This is static, potentially partial, review-only evidence—not SQL execution,
 page activation, authenticated compilation, source-line identity, complete
 application coverage or release approval.
@@ -20,6 +26,11 @@ files, one explicit external target, 1,024 bin entries, two metadata files and
 128 external dependencies (11,155 maximum). Independent byte, configuration-size,
 metadata-work and report limits still apply; these count bounds do not promise
 complete analysis or admission of every large configuration.
+
+PDB input has its own Core lane ceiling (currently 32 artifacts), independent of
+the aggregate native input budget. Native scan and attachment options cap the
+PDB lane accordingly; selecting more than that lane supports is rejected during
+preflight instead of forwarding an invalid aggregate limit to the PDB reader.
 
 Local regression replay: `pwsh -NoProfile -File scripts/wlocal.ps1` runs the
 public source/compiled/separate-DLL corpus plus the wizard's restart, repair,

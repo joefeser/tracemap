@@ -264,7 +264,7 @@ public static partial class WebFormsReviewExecutionCommand
         Add("--compiled-max-file-bytes", budget.MaxAssemblyBytes);
         Add("--compiled-max-text", budget.MetadataMaxText);
         Add("--compiled-max-work", budget.MetadataMaxWork);
-        Add("--pdb-max-artifacts", budget.MaxInputFiles);
+        Add("--pdb-max-artifacts", WebFormsReviewPreflightCommand.PdbArtifactLimit(budget));
         Add("--pdb-max-file-bytes", budget.MaxAssemblyBytes);
         Add("--il-max-text", budget.IlMaxText);
         if (budget.IlMaxBodies is { } bodies) Add("--il-max-bodies", bodies);

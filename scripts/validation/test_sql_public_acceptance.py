@@ -16,6 +16,18 @@ SPEC.loader.exec_module(A)
 
 class PublicAcceptanceTests(unittest.TestCase):
     """Small verifier unit tests; real reconstruction is covered separately below."""
+    def test_acceptance_parent_is_reachable_from_current_history(self):
+        # Object existence alone misses obsolete commits left locally after a
+        # rewrite: full-history CI checkouts contain only reachable ancestors.
+        A.command('git', 'merge-base', '--is-ancestor', A.PARENT, 'HEAD')
+
+    def test_acceptance_ci_lanes_fetch_history_for_ancestry_guard(self):
+        for workflow in ('dnn-sql-harness-guards.yml', 'sql-database-compatibility.yml'):
+            with self.subTest(workflow=workflow):
+                text = (A.ROOT / '.github/workflows' / workflow).read_text()
+                self.assertIn('test_sql_public_acceptance.py', text)
+                self.assertRegex(text, r'(?m)^\s+fetch-depth:\s*0\s*$')
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)

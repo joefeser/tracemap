@@ -5419,3 +5419,63 @@ remain unsupported. Duplicate JSON properties are rejected. Named handler select
 now distinguishes no match (`HANDLER_REQUERY_ROOT_NOT_FOUND`) from multiple matches.
 The HTTP test lane includes a retained helper absent from the original report roots
 and rejection of mismatched source, scan, commit and symbol identities, with unchanged input hashes.
+
+## Local-only offline SQL definition collection
+
+[SQL workspace getting started](WORKSPACE_SQL_GETTING_STARTED.md) owns the separate
+`sqlserver-local-definitions-input/1` contract and workspace V3 sidecar. Run
+`SqlServerLocalDefinitionsTests`, `WorkspaceSqlTests`, existing source/compiled
+workspace tests and the retained SQL/DNN tests after shared parser changes. The
+new local route must not weaken existing public-synthetic admission gates.
+The full Debug solution with `-warnaserror` is required for this Core/CLI change.
+
+Run `Test-WorkspaceLauncher.ps1 -WithSql` against a fresh folder after publishing
+the current launcher. It authors and builds only synthetic inputs, then collects
+source, native compiled metadata and SQL twice (both repositories, web-only).
+The opt-in public compatibility lane is:
+
+```sh
+python3 scripts/tests/Test-SqlDefinitionCorpus.py --fetch --cli artifacts/workspace-cli/Release/tracemap.dll --out /tmp/tracemap-sql-public-corpus-01
+```
+
+The script pins DNN `33b8fbe440ab665b8423599789db1f34d2a500fc` and SQL Server
+samples `3c71696a3942879f0481f3bd65fe112a40023f18`, retains licenses and exact
+input digests, and records its generator plus CLI/Core/parser hashes. Expected:
+two WWI procedures with parameter declarations and unknown complex result shapes,
+plus two explicitly selected DNN definitions under review-scenario owner/qualifier values;
+DNN unchanged template slice refused as malformed, full DNN install over the file
+limit refused, and WWI table setup with top-level EXEC refused. No SQL execution,
+implicit placeholder substitution, source-call binding or DNN/runtime acceptance. Default
+tests do not fetch these inputs.
+
+
+## Explicit SQL definition selection
+
+[Definition selection](SQL_DEFINITION_SELECTION.md) owns the separate local-only
+selection input. Run `SqlServerDefinitionSelectionTests`, `WorkspaceSqlTests`,
+existing local/public SQL tests and the full Debug `-warnaserror` solution gate.
+The added cases require exact original/projected hashes, original line mapping,
+whole-batch boundaries, settings/identity checks, refusal of literal/comment
+macros, omission of body text and original drift detection. No fake GO boundary
+inside a multiline string/comment or guessed owner/empty qualifier is accepted.
+
+The opt-in `Test-SqlDefinitionCorpus.py` v2 receipt has five cases: the first four
+retain their prior expected outcomes, and explicit selection from the unchanged
+large DNN install file now admits one table and one procedure. Original DNN
+no-settings inputs still refuse. DNN selected results remain unknown; no database,
+application execution or compiled correspondence is established. The workspace
+trial uses a fresh run and records original file hashes in its input map.
+
+
+## Conditional source-to-procedure wrapper candidate
+
+[Source-to-SQL candidate guide](SQL_SOURCE_BINDING.md) owns the separate local-only
+`sqlserver-source-binding` command. Run `SqlServerSourceBindingTests` plus retained
+local/selection/DNN lanes and the full Debug `-warnaserror` solution. Independently
+authored syntax fixtures require five role observations, conditional ordinal zero,
+explicit settings/SQL context, alias/overload/flow/formatter refusals, strict source
+and SQL hashes, embedded parent admission, BOM-safe committed-source verification,
+SQLite readback and output preservation. These are not compiled application tests.
+Replay the actual pinned DNN five-method path against the selected SQL scenario;
+all unresolved compiler, dispatch, external PetaPoco, event/hydration, result and
+runtime boundaries must remain. No SQL execution or raw index mutation.

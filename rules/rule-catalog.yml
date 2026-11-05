@@ -3,6 +3,28 @@
 # - deferred: documented future/planned rule that must not appear in emitted facts.
 # Existing rules without an explicit status are treated as active.
 rules:
+  - id: workflow.workspace.compiled-collection.v1
+    name: Local source workspace with native fresh compiled review
+    description: Composes unchanged prepared native fresh configuration with additional source scans, verifies checkpoint-owned raw evidence and generates combined source reports.
+    evidenceTier: Tier2Structural
+    emits:
+      - WorkspaceCompiledRun
+    limitations:
+      - Opt-in workspace v2; native configuration owns web scope and must match the selected source root and commit. Primary metadata and publish receipt bindings are checked by existing Core policies before collection.
+      - No implicit source correspondence attestation, config projection, application build, restore, fetch, database execution or retained-source attachment; dependencies can remain unbound context with explicit native gaps.
+      - The native completed-run verifier pins checkpoint history, artifacts and runtime. Raw indexes and manifests are rechecked after combination and before completion; local integrity hashes are not authenticated build or runtime proof.
+      - Native and combined reports retain independent index identities. Added framework source does not automatically resolve every compiled or source call or establish legacy-output parity. Coverage remains partial and SQL is not ingested.
+  - id: workflow.workspace.source-collection.v1
+    name: Local multi-repository source workspace orchestration
+    description: Verifies strict configuration and repository filters, collects selected source scans into a fresh run, combines raw indexes and renders source reports with local provenance.
+    evidenceTier: Tier2Structural
+    emits:
+      - WorkspaceRun
+    limitations:
+      - Local-only configuration and input fingerprints; exact CLI assembly hash and bounded orchestration input map are recorded, not an authenticated build or a shareable projection.
+      - Verification checks selected paths, projects and Git HEADs; scanner project evaluation, analysis gaps and source coverage limits remain unchanged.
+      - Completion can be partial and does not prove runtime behavior, full extraction, compiled publication correspondence, SQL contracts or migration readiness.
+      - No implicit restore, repository build, fetch, compiled attachment or database execution; no retained-scan reuse, resume or legacy output parity is claimed.
   - id: diagnostic.graph.source-database-terminal-audit.v1
     name: Retained source database terminal audit
     description: Compares admitted source operation facts with projected terminal nodes, exact caller attachments and bounded unfiltered graph reachability; joins reachable database-operation name observations to exact retained operation sites.
@@ -8123,3 +8145,66 @@ rules:
       - Tables support identifier columns with one-part built-in types, NULL/NOT NULL, IDENTITY and PRIMARY KEY/UNIQUE without index options or placement. Computed columns, defaults, COLLATE, alias/CLR/xml types, CHECK/FOREIGN KEY, column options, table options, indexes, duplicate or case-only columns make the table unknown with a Tier4 record and no columns; it never backs a shape.
       - A complete shape needs every projected element to be a direct column reference (optional identifier output alias, optional qualifier equal to the one simple table alias) that resolves exactly against a supported table. SELECT *, joins/APPLY, views, CTEs, subqueries, UNION, temporary tables, table variables, functions, hints, WHERE and other clauses, expressions, COLLATE, string aliases, missing/case-only/cross-database references, duplicate output names, dynamic SQL/EXEC and conditional or multiple statements are explicit unknown shapes, never partial column lists.
       - Output order and names plus the backing table column per output are retained; table column type spellings are visible uncompared facets. Nullability, keys, defaults, rows, values and body text are never compared or retained. Admission binds exact generator, parser and bounded-input SHA-256 plus file digests; hashes establish integrity, not authenticity, and no SQL execution occurs.
+  - id: database.sqlserver.local-definitions.v1
+    name: Local-only offline SQL Server definition inventory
+    description: Inventories explicit schema-qualified table, procedure, view and function declarations from a hashed bounded definition set, with procedure parameters and conservative first-result shapes.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlLocalExport
+      - SqlLocalGap
+    limitations:
+      - Separate sqlserver-local-definitions-input/1 local-only contract; never manufactured publicSynthetic input. Core generator, parser and bounded-input SHA-256 bind exact admitted files. No public privacy projection is provided.
+      - ScriptDom 170.191.0 TSql160 parsing uses the existing 64 MiB parser thread, 32-file, 256 KiB/file, 1 MiB total, token and complexity bounds. At most 512 objects and 4096 references; malformed SQL, SQLCMD, digest drift and duplicate/case-only identities refuse admission.
+      - Application repository and commit identify context only, not a database export revision, deployment, binary correspondence or source-call binding. No SQL execution or database connection occurs.
+      - Only bounded constant or direct single-table first SELECT projections are modeled; joins, filters, branches, dynamic SQL, multiple results, views and functions stay unknown. Leading SET NOCOUNT is ignored only for result-column shape analysis, never as runtime proof.
+      - Matching USE and ANSI_NULLS/QUOTED_IDENTIFIER ON headers are admitted as declarations with runtime gaps. OFF and unapplied ALTER TABLE/DROP statements invalidate complete table and result claims. Other unsupported top-level statements, including inserts and extended-property EXEC calls, are refused. No migration ordering or qualifier substitution.
+      - Parameter type spellings and direction are declarations, not full comparison contracts. Defaults, literal values and SQL body text are omitted; all evidence is partial with no aggregate clean verdict.
+  - id: database.sqlserver.local-definition-reference.v1
+    name: Local-only SQL definition reference
+    description: Records AST relation, procedure and function references with source line spans and exact matches to separately admitted declarations.
+    evidenceTier: Tier2Structural
+    emits:
+      - SqlLocalDependency
+    limitations:
+      - References are syntax observations, not execution, reachability, deployed resolution or application-call binding. Exact two-part names only; unqualified, cross-database and missing targets retain explicit unknown resolution.
+      - Table/view, procedure and function kinds must agree; case-insensitive collation is not assumed. Dynamic execution is a Tier4Unknown gap under database.sqlserver.local-definitions.v1.
+      - Same local-only provenance and parser/input bounds as the enclosing SqlLocalExport; no source bodies, literals or public projection.
+  - id: workflow.workspace.sql-collection.v1
+    name: Explicit offline SQL workspace sidecar
+    description: Collects selected source repositories with an optional prepared native compiled collection and an explicitly admitted local SQL definition set.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - tracemap-workspace-run.v3
+    limitations:
+      - Opt-in tracemap-workspace.v3 requires sqlEvidence with repositoryId, manifestPath and sourceRoot; compiledReview remains optional. SQL application context must match the selected repository ID and HEAD, without implying a database export revision.
+      - SQL evidence stays in sql/definitions.local.json and sql/sql-evidence.sqlite and is never passed to generic combine. No automatic application-to-procedure join, database connection, restore, fetch or SQL execution.
+      - Exact CLI generator and bounded-input SHA-256, input manifests and file digests, output hashes and rechecks precede completion. Local-only partial evidence; failed outputs are retained as failed and existing runs are preserved. V1 source and V2 compiled contracts remain separate.
+  - id: database.sqlserver.selected-definitions.v1
+    name: Explicit local SQL definition selection and template projection
+    description: Selects whole batches from exact hashed originals, applies explicit owner and qualifier values, verifies one expected definition per selection and maps evidence to original source lines.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - SqlDefinitionSelectionEvidence
+      - SqlLocalExport
+    limitations:
+      - Separate sqlserver-local-definition-selection-input/1 local-only contract and sqlserver-local-selected-definitions/1 output. At most eight original files, 4 MiB/file, 16 MiB total, 200000 lines/file and 1000000 lexer tokens/file; nested-comment depth is bounded at 128 before lexing, respecting quoted tokens. Selected inputs retain 32-file, 256 KiB/file, 1 MiB total and existing parser complexity bounds, including after expansion.
+      - The pinned ScriptDom lexer on the existing 64 MiB parser thread establishes standalone GO boundaries outside multiline literals/comments. Original line endings must be LF or CRLF so lexer and selection line numbers agree. Inclusive ranges must select whole batches, never overlapping fragments. Exactly one table/procedure/view/function of the expected owner, prefix-plus-name and kind per selection; no implicit statement stripping or migration ordering.
+      - Bare ASCII databaseOwner and explicit ASCII objectQualifier prefix or empty string are required. ValuesOrigin is review-scenario or owner-supplied; no defaults or deployment attestation. Only exact databaseOwner/objectQualifier brace markers are replaced; occurrences in comments, strings or ambiguous double-quoted tokens, owner markers inside identifiers, unsafe values and remaining identifier-like macros refuse admission.
+      - All selected procedure result shapes remain Tier4Unknown because omitted whole-script/session/migration state is not modeled. Table columns describe selected declarations only. Syntax references to selected definitions do not prove execution, reachability or application-call binding.
+      - Exact generator/parser and original bounded-input SHA-256, original file digests, projected hashes, settings, replacement counts and original line mappings are retained. Projected SQL remains in memory; no SQL body, default/literal values or public privacy projection. Input drift outside selected ranges also refuses admission. No SQL execution, source rewrite, database connection or compiled attestation.
+  - id: database.sqlserver.source-procedure-candidate.v1
+    name: Conditional CSharp wrapper to selected SQL procedure candidate
+    description: Uses five explicit hashed CSharp method selectors and narrow Roslyn AST forwarding/formatter observations to associate one literal procedure identifier and one primitive argument ordinal with separately regenerated selected SQL under explicit configuration assumptions.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - SqlSourceBindingReport
+      - SqlSourceObservation
+      - SqlSourceParameterCandidate
+      - SqlSourceBindingGap
+    limitations:
+      - Local-only sqlserver-source-binding-input/1 and dnn-reader-wrapper/1 profile. Exactly five roles, 1 MiB/source file, 4 MiB total, 200000 AST nodes/file and 8192 tokens/selected method; explicit repository/commit, source SHA-256 and SQL manifest SHA-256. CLI verifies selected source bytes against Git commit blobs including BOM bytes; source/SQL drift refuses atomic publication.
+      - Pinned Roslyn CSharp14 syntax with default preprocessor symbols only. No compiler project/reference/semantic model is loaded. Explicit selected declarations and matching short owner names do not prove symbol identity, overload resolution, other partial declarations, virtual/configured dispatch, owner/qualifier property values or runtime invocation.
+      - Requires direct int entry argument, literal identifier, exact wrapper composition/forwarding, configured-provider fallback shape, conventional SqlClient helper structure and recognized primitive positional Exec formatter. Names alone, changed expressions, ambiguous selectors, visible protocol aliases/shadows and unsupported shapes do not bind a target or parameter candidate.
+      - Conditional target uses declared owner/qualifier values matching the separately admitted definition-selection input, never guessed defaults or deployment configuration. One input formal maps ordinal zero only; output-capable/multiple formals, types/sizes/coercion/values, OUTPUT/RETURN channels, cache/event entry, hydration and result shapes remain unproven.
+      - External PetaPoco implementation/transport is not inspected. Provider StoredProcedure intent is translated to Exec text; no final SqlCommand CommandType, actual ADO parameter binding, database access or SQL execution is established. This is not a terminal DatabaseOperationCandidate or existing semantic comparison binding.
+      - Exact Core/CLI/source-parser/SQL-parser and bounded-input SHA-256 bind original source selectors, normalized method hashes, spans, explicit assumptions and embedded regenerated SQL evidence. SQLite is a separate local sidecar. No raw bodies, unrelated literals, connection values, raw projected SQL, raw scan/index mutation or public privacy projection.

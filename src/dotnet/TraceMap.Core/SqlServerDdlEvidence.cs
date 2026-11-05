@@ -87,42 +87,7 @@ public static class SqlServerDdlEvidence
             total += bytes.Length;
             Require(bytes.Length <= MaxFileBytes && total <= MaxTotalBytes, "input-size-limit");
             Require(SqlServerSchemaEvidence.Hash(bytes) == file.Sha256, "source-digest-mismatch");
-            // Refuse unresolved SQLCMD anywhere, including strings/comments; never substitute.
-            Require(!text!.Contains("$(", StringComparison.Ordinal)
-                && !text.Contains("!!", StringComparison.Ordinal) && !SqlCmdDirective.IsMatch(text)
-                && !text.Split('\n').Any(l => l.TrimStart().StartsWith(':') || l.TrimStart().StartsWith("!!", StringComparison.Ordinal)), "sqlcmd-unresolved");
-            var parser = new TSql160Parser(initialQuotedIdentifiers: true);
-            // The digest above covers the exact bytes, including a leading UTF-8 BOM (common in
-            // SSMS-saved scripts). ScriptDom treats U+FEFF as a syntax error, so lex without that
-            // one leading mark; it precedes line 1, so recorded line spans are unchanged.
-            var lexText = text.StartsWith('\uFEFF') ? text[1..] : text;
-            var (tokens, tokenErrors) = OnParserStack(() =>
-            {
-                using var tokenReader = new StringReader(lexText);
-                var stream = parser.GetTokenStream(tokenReader, out var lexErrors);
-                return (stream, lexErrors);
-            });
-            Require(tokenErrors.Count == 0, "malformed-sql");
-            Require(tokens.Count <= MaxTokens, "token-limit");
-            var nestingBudget = 0;
-            foreach (var token in tokens)
-            {
-                // Token kinds separate strings/comments from grammar. Conservatively bound
-                // total open constructs, including BEGIN TRANSACTION, rather than infer flow.
-                if (token.Text is "(" || token.TokenType.ToString() is "Begin" or "Case" or "If" or "While") nestingBudget++;
-                Require(nestingBudget <= 128, "syntax-complexity-limit");
-            }
-            // Repetition of GO would imply execution ordering/repetition; reject it.
-            for (var i = 0; i < tokens.Count; i++)
-                if (tokens[i].TokenType == TSqlTokenType.Go)
-                {
-                    var next = i + 1;
-                    while (next < tokens.Count && tokens[next].TokenType == TSqlTokenType.WhiteSpace) next++;
-                    Require(next == tokens.Count || tokens[next].TokenType != TSqlTokenType.Integer, "batch-repeat-unsupported");
-                }
-            var (fragment, errors) = OnParserStack(() => (parser.Parse(tokens, out var parseErrors), parseErrors));
-            var script = fragment as TSqlScript;
-            Require(errors.Count == 0 && script is not null, "malformed-sql");
+            var script = ParseBoundedSql(text!);
             foreach (var statement in script!.Batches.SelectMany(b => b.Statements))
             {
                 if (tableVisitor is not null && statement is CreateTableStatement table)
@@ -207,6 +172,49 @@ public static class SqlServerDdlEvidence
         return export;
     }
 
+    // Parsing/limits are shared; caller admission contracts remain separate.
+    internal static TSqlScript ParseBoundedSql(string text)
+    {
+        Require(new UTF8Encoding(false, true).GetByteCount(text) <= MaxFileBytes, "input-size-limit");
+        // Refuse unresolved SQLCMD anywhere, including strings/comments; never substitute.
+        Require(!text!.Contains("$(", StringComparison.Ordinal)
+            && !text.Contains("!!", StringComparison.Ordinal) && !SqlCmdDirective.IsMatch(text)
+            && !text.Split('\n').Any(l => l.TrimStart().StartsWith(':') || l.TrimStart().StartsWith("!!", StringComparison.Ordinal)), "sqlcmd-unresolved");
+        var parser = new TSql160Parser(initialQuotedIdentifiers: true);
+        // Caller digests cover the exact bytes, including a leading UTF-8 BOM (common in
+        // SSMS-saved scripts). ScriptDom treats U+FEFF as a syntax error, so lex without that
+        // one leading mark; it precedes line 1, so recorded line spans are unchanged.
+        var lexText = text.StartsWith('\uFEFF') ? text[1..] : text;
+        var (tokens, tokenErrors) = OnParserStack(() =>
+        {
+            using var tokenReader = new StringReader(lexText);
+            var stream = parser.GetTokenStream(tokenReader, out var lexErrors);
+            return (stream, lexErrors);
+        });
+        Require(tokenErrors.Count == 0, "malformed-sql");
+        Require(tokens.Count <= MaxTokens, "token-limit");
+        var nestingBudget = 0;
+        foreach (var token in tokens)
+        {
+            // Token kinds separate strings/comments from grammar. Conservatively bound
+            // total open constructs, including BEGIN TRANSACTION, rather than infer flow.
+            if (token.Text is "(" || token.TokenType.ToString() is "Begin" or "Case" or "If" or "While") nestingBudget++;
+            Require(nestingBudget <= 128, "syntax-complexity-limit");
+        }
+        // Repetition of GO would imply execution ordering/repetition; reject it.
+        for (var i = 0; i < tokens.Count; i++)
+            if (tokens[i].TokenType == TSqlTokenType.Go)
+            {
+                var next = i + 1;
+                while (next < tokens.Count && tokens[next].TokenType == TSqlTokenType.WhiteSpace) next++;
+                Require(next == tokens.Count || tokens[next].TokenType != TSqlTokenType.Integer, "batch-repeat-unsupported");
+            }
+        var (fragment, errors) = OnParserStack(() => (parser.Parse(tokens, out var parseErrors), parseErrors));
+        var script = fragment as TSqlScript;
+        Require(errors.Count == 0 && script is not null, "malformed-sql");
+        return script!;
+    }
+
     /// <summary>
     /// ScriptDom's recursive-descent parser recurses on some constructs that the lexical
     /// nesting budget does not cap (prefix unary chains, JOIN/APPLY chains). A stack overflow
@@ -215,7 +223,7 @@ public static class SqlServerDdlEvidence
     /// Measured worst uncapped cost is about 200 bytes of stack per token; MaxTokens therefore
     /// needs about 20 MiB, and this fixed size leaves a margin of more than 3x.
     /// </summary>
-    private static T OnParserStack<T>(Func<T> work)
+    internal static T OnParserStack<T>(Func<T> work)
     {
         T result = default!;
         System.Runtime.ExceptionServices.ExceptionDispatchInfo? failure = null;

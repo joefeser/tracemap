@@ -636,7 +636,7 @@ public sealed class WebFormsReviewPreparationTests
 
     private static string Hash(string path) { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant(); }
 
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         public string Root { get; } = WebFormsReviewPreflightCommand.PhysicalPath(Path.Combine(Path.GetTempPath(), "tracemap native preparation #&%-" + Guid.NewGuid().ToString("N")));
         public string Source => Path.Combine(Root, "source");

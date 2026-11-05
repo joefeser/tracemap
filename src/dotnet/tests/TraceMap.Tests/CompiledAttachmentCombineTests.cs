@@ -12,6 +12,57 @@ namespace TraceMap.Tests;
 public sealed class CompiledAttachmentCombineTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Framework_source_can_join_web_and_compiled_inputs_without_becoming_the_attachment_parent(bool wrongParent)
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var frameworkRoot = Path.Combine(fixture.Path, "framework");
+        Directory.CreateDirectory(frameworkRoot);
+        var file = Path.Combine(frameworkRoot, "Framework.cs");
+        File.WriteAllText(file, "public class Framework { public void Save() {} }");
+        FileInventoryItem[] inventory = [new("Framework.cs", "CSharp", new FileInfo(file).Length)];
+        var snapshot = SourceSnapshotInspector.InspectOrderedInventory(frameworkRoot, inventory, 10, 1024);
+        // Synthetic manifest/index contract fixture, not a real repository scan or publication acceptance.
+        var manifest = new ScanManifest("scan-public-framework", "public-framework", null, "fixture", new string('b', 40),
+            ScannerVersions.TraceMap, DateTimeOffset.UnixEpoch, "Level3SyntaxAnalysisReduced", "NotRun", [], [], [], [],
+            ScanRootPathHash: FactFactory.Hash(frameworkRoot, 32), SourceSnapshotDigest: snapshot.Digest);
+        var fact = FactFactory.Create(manifest, FactTypes.MethodDeclared, RuleIds.CSharpSyntaxDeclarations,
+            EvidenceTiers.Tier3SyntaxOrTextual, new("Framework.cs", 1, 1, null, "PublicFixture", "1.0"), targetSymbol: "Framework.Save()");
+        var frameworkManifest = Path.Combine(frameworkRoot, "scan-manifest.json");
+        var frameworkIndex = Path.Combine(frameworkRoot, "index.sqlite");
+        await ManifestWriter.WriteAsync(frameworkManifest, manifest);
+        SqliteIndexWriter.Write(frameworkIndex, manifest, [fact]);
+        var originals = new[] { fixture.ParentIndex, frameworkIndex, fixture.ChildIndex }.ToDictionary(path => path, Hash);
+        var options = fixture.Options with
+        {
+            IndexPaths = [fixture.ParentIndex, frameworkIndex, fixture.ChildIndex],
+            Labels = ["web", "framework", "compiled"],
+            CompiledAttachments = [new(wrongParent ? frameworkIndex : fixture.ParentIndex,
+                wrongParent ? frameworkManifest : fixture.ParentManifest, fixture.ChildIndex, fixture.ChildManifest)]
+        };
+        if (wrongParent)
+        {
+            var error = await Assert.ThrowsAsync<InvalidDataException>(() => CombinedIndexBuilder.CombineAsync(options));
+            Assert.Equal("COMPILED_ATTACHMENT_COMBINE_PARENT_CONTEXT_MISMATCH", error.Message);
+            Assert.False(File.Exists(options.OutputPath));
+        }
+        else
+        {
+            var combined = await CombinedIndexBuilder.CombineAsync(options);
+            Assert.Equal(3, combined.Sources.Count);
+            await using var connection = new SqliteConnection($"Data Source={combined.OutputPath}");
+            await connection.OpenAsync();
+            var report = await CombinedDependencyReporter.ReadAsync(connection, CancellationToken.None);
+            var link = Assert.Single(report.CompiledAttachmentLinks);
+            Assert.Equal(combined.Sources.Single(source => source.Label == "web").SourceIndexId, link.ParentSourceIndexId);
+            Assert.Equal(combined.Sources.Single(source => source.Label == "compiled").SourceIndexId, link.AttachmentSourceIndexId);
+            Assert.NotEqual(combined.Sources.Single(source => source.Label == "framework").SourceIndexId, link.ParentSourceIndexId);
+        }
+        foreach (var (path, hash) in originals) Assert.Equal(hash, Hash(path));
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData(" uri #%?")]
     public async Task Explicit_attachment_link_pins_actual_bytes_without_relabeling_parent_facts(string suffix)
