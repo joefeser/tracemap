@@ -2938,7 +2938,7 @@ public static class TraceMapCommand
             Usage:
               tracemap version [--json]
               tracemap versions
-              tracemap workspace <init|verify|collect> --root <workspace-folder> [options]
+              tracemap workspace <init|init-from-wizard|verify|collect> --root <workspace-folder> [options]
               tracemap sqlserver-source-binding compare --help
               tracemap sqlserver-definitions <verify|collect> --input <local-manifest.json> --source-root <offline-definitions> [--out <new-folder>]
               tracemap local-review run --repo <path> --out <new-output-root> [--webforms-modernization] [--explorer]

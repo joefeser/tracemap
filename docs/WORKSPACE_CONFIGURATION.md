@@ -4,6 +4,10 @@ The workspace uses strict JSON in `workspace.local.json` under
 the explicit `--root`. Unknown and duplicate properties fail. Begin with
 [Start a source collection workspace](WORKSPACE_GETTING_STARTED.md).
 
+For existing wizard setup plus offline SQL, [init-from-wizard](WORKSPACE_FROM_WIZARD.md)
+creates a verified V3 config from the selected saved prepared attempt and manifest.
+It preserves existing configuration and performs no scan or attestation.
+
 ## Configuration
 
 | Field | Meaning |

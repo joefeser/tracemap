@@ -1,5 +1,10 @@
 # Collect source, compiled publication and offline SQL definitions
 
+Already completed the native wizard and created your SQL manifest? Use
+[initialize from saved wizard setup](WORKSPACE_FROM_WIZARD.md) to generate and
+verify V3 configuration without manually copying paths or hashes. It reuses
+configuration/receipts, not completed scan results.
+
 Start with a disposable synthetic run. This creates two tiny Git repositories,
 compiles their managed assemblies, prepares the native correspondence receipts,
 and adds authored SQL definitions. It never connects to SQL Server or executes

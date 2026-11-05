@@ -1,5 +1,10 @@
 # Collect web source, framework source and a compiled publication
 
+Already completed the native wizard and created your SQL manifest? Use
+[initialize from saved wizard setup](WORKSPACE_FROM_WIZARD.md) to generate and
+verify V3 configuration without manually copying paths or hashes. It reuses
+configuration/receipts, not completed scan results.
+
 Use a workspace to collect all three evidence channels and open one starting
 report. Native fresh collection reads web source and an explicitly selected
 publication into one raw scan; framework source gets a separate raw scan. The

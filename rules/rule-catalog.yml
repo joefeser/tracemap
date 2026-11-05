@@ -22,6 +22,7 @@ rules:
     emits:
       - WorkspaceRun
     limitations:
+      - init-from-wizard creates local configuration from a selected saved prepared attempt and existing SQL manifest; it does not attest correspondence, scan, or import completed results. Native receipt admission and SQL context checks remain authoritative.
       - Verify and collect print operational scope diagnostics; these do not prove application completeness. Selection file extensions are checked before scanning; project contents and nested membership are not evaluated by the preview.
       - Local-only configuration and input fingerprints; exact CLI assembly hash and bounded orchestration input map are recorded, not an authenticated build or a shareable projection.
       - Verification checks selected paths, projects and Git HEADs; scanner project evaluation, analysis gaps and source coverage limits remain unchanged.

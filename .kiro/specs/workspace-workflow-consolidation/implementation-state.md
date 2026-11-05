@@ -627,3 +627,30 @@ lists. Final entire WebFormsWizard lane: 123 passed, 0 failed/skipped, Debug
 -warnaserror. This CLI input-adapter follow-up did not change shared Core; no fresh
 full-suite result is claimed for this follow-up. Prior exact-head full gate above
 remains historical. No private input, scan, PR or merge performed.
+
+
+## V3 initialization from existing wizard setup — 2026-11-04
+
+Owner testing identified excessive manual copying and a prepared-config trap:
+wizard native.config.json can be unprepared, while the selected wizard attempt's
+evidence/review-config.local.json holds the admitted receipts. Added the explicit
+workspace init-from-wizard command. It resolves only that saved run, validates the
+original wizard references and prepared scope, uses the existing SQL manifest's
+context and checks framework selection. A single website can be selected without
+retyping an ID; multiple sites require --website-id. No newest-folder discovery,
+implicit attestation, preparation, scanner execution or completed-scan import.
+Existing config, wizard data and receipts are preserved; creation is atomic and
+refuses any existing workspace config. Generated local-only V3 configuration
+records exact CLI generator SHA-256 and bounded setup-input SHA-256 in existing
+templateProvenance. Config must live outside Git; no private values enter this repo.
+Source/compiled/SQL collection still performs fresh collection later if dispatched;
+retained scan reuse is not implemented by this setup helper.
+
+Three positive setup cases fail as intended with init-from-wizard dispatch disabled.
+Tests cover project/solution/discovery selection, loose SQL, no scan invocation,
+prepared-scope drift, missing receipts, SQL hash/context drift, missing framework,
+wrong target kind, missing options, source-repo output, ambiguous site and overwrite
+refusal. Expanded workspace lane passed 147/147 Debug -warnaserror. Final public
+entry-point assertions and exact-head full Debug gate remain pending at this
+checkpoint. New getting-started guide: docs/WORKSPACE_FROM_WIZARD.md; existing SQL,
+compiled and configuration guides point to it. No PR or merge performed.

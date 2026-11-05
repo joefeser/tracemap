@@ -44,3 +44,12 @@
 
 - [x] Clarify wizard attestation hash as application source Git HEAD, show source folder and read-only verification command; wording pin failed before change, 18 command/execution cases passed with warnings as errors.
 - [x] Accept comma/semicolon dependency lists with quoted separator paths; name missing DLLs before advancing, preserve correction/resume state and existing Core validation; all 123 wizard regressions pass Debug -warnaserror.
+
+## Initialize from existing wizard evidence — 2026-11-04
+
+- [x] Add init-from-wizard to resolve the saved attempt's prepared config, preserve original scope and reuse the existing local SQL manifest without retyping hashes.
+- [x] Validate repositories, native receipts and SQL inputs before atomically creating a fresh V3 config; no attestation, scan, build or completed-result import.
+- [x] Prove three positive setup pins fail with the command dispatch disabled; exercise missing/stale/changed/ambiguous input and overwrite refusal controls.
+- [x] Expanded workspace lane: 147 passed, 0 failed/skipped, Debug -warnaserror; documented the one-command setup and retained reuse boundary.
+- [ ] Final entry-point cases and exact-head full Debug warnings-as-errors gate.
+- [ ] Owner verifies existing work-machine wizard/SQL setup; PR and merge remain deferred.
