@@ -51,5 +51,5 @@
 - [x] Validate repositories, native receipts and SQL inputs before atomically creating a fresh V3 config; no attestation, scan, build or completed-result import.
 - [x] Prove three positive setup pins fail with the command dispatch disabled; exercise missing/stale/changed/ambiguous input and overwrite refusal controls.
 - [x] Expanded workspace lane: 147 passed, 0 failed/skipped, Debug -warnaserror; documented the one-command setup and retained reuse boundary.
-- [ ] Final entry-point cases and exact-head full Debug warnings-as-errors gate.
+- [x] Final 13 setup cases pass; exact code head f1eeb732c full Debug -warnaserror: 6,001 passed, 3 skipped, 0 failed; older-tool saved wizard setup reuse rehearsal passes.
 - [ ] Owner verifies existing work-machine wizard/SQL setup; PR and merge remain deferred.

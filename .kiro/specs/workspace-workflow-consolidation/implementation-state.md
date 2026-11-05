@@ -654,3 +654,29 @@ refusal. Expanded workspace lane passed 147/147 Debug -warnaserror. Final public
 entry-point assertions and exact-head full Debug gate remain pending at this
 checkpoint. New getting-started guide: docs/WORKSPACE_FROM_WIZARD.md; existing SQL,
 compiled and configuration guides point to it. No PR or merge performed.
+
+
+### Wizard-to-workspace validation completed — 2026-11-05
+
+Exact code/test head f1eeb732ccd4b7bdf20457ab3b8d3c3b403ae04a. Final 13 setup
+cases pass Debug -warnaserror; expanded workspace lane passed 147/147. Remote
+isolated full Debug -warnaserror: 6,001 passed, 3 skipped, 0 failed, 6,004 total,
+13.9913 minutes, successful process exit. No source/CLI/script changes after that
+head; this final checkpoint is documentation only.
+
+Cross-version public rehearsal: an unchanged copied 9d189373f Release tool completed
+a synthetic projectless wizard run with classic compiled maps. The new f1eeb732c
+Release tool initialized V3 config from that saved wizard state and an authored
+loose-SQL manifest; independent workspace verify succeeded. The unchanged old tool
+still verified its original completed reports afterward. Setup performed no scan,
+source build, SQL execution or attestation. The initial unrelated project-backed
+toy-publication attempt lacked classic compiled-map admission and was refused;
+its failed output was preserved, not normalized or used as proof. The valid
+classic-map fixture replaced that rehearsal input without a code/policy change.
+
+Setup guide PowerShell syntax/local links, whitespace and private-path checks pass.
+The separate docs branch correction bc3fbcbb7 points to the prepared receipt config
+and this helper instead of initial wizard native.config.json. Windows work inputs
+remain owner validation; no private acceptance claim, PR or merge. Existing source
+and compiled collection will still be fresh if later dispatched; retained scan
+reuse remains separate from this configuration helper.
