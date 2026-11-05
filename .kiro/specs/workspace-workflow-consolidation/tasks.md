@@ -143,3 +143,7 @@
 - [x] Offer add-framework on existing wizard continuation, show configured source count, derive Git HEAD and detected project, retain valid folder on target retry, preserve historical answers/native/SQL/runs.
 - [x] Prove no scan/SQL revalidation during addition, existing scope inclusion, preserved prior artifacts, refused bad/concurrent inputs and attributable new source implementation facts in a fresh run.
 - [x] Finish final net20 rich late-add replay, broad Debug coverage and private-machine continuation prompt; push without PR/merge.
+
+## Single-sample evidence review after two-source collection — 2026-11-05
+
+- [x] Add bounded read-only prompt relating existing standalone lifecycle proof to new two-source evidence, separating sample-path blockers from unrelated gaps without rescans, source/DLL assumptions or conversion changes.

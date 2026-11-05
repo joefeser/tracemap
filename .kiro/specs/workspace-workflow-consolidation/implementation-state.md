@@ -1357,3 +1357,15 @@ Focused exact-head AddSource: 10 passed, 0 failed. Combined focused lane:
 legacy rich late-add replays passed; legacy replay used exact final app code.
 Private path guard and git diff --check passed. No PR/merge, no private scan or
 runtime acceptance; work-machine continuation remains the owner's next run.
+
+### Single-sample read-only review dispatch — 2026-11-05
+
+Added `prompts/review-single-sample-with-two-source-evidence-once.md` after owner
+reported two-source collection completed. Prompt only: bind the earlier sample
+from its existing handoff/selector, inspect existing lifecycle/source/native/SQL
+layers separately, identify new source contribution and sample-specific gaps,
+then assess annotated-conversion readiness. No build/scan/config/source/conversion
+changes authorized; 30-tool-call/15-minute bound, private evidence references and
+sanitized public response. Does not certify the private report or equate source
+presence with compiled correspondence. Existing application validation remains
+unchanged; documentation-only validation is private-path guard and diff check.
