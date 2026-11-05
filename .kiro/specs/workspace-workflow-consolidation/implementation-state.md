@@ -576,3 +576,14 @@ This is synthetic managed/public SQL evidence on macOS, not a Windows ASP.NET or
 private application trial. Markdown links, JSON/PowerShell examples, whitespace
 and private-path checks passed. No .NET suite rerun for this docs-only change.
 Owner work-machine walkthrough test remains pending; no PR requested or opened.
+
+
+### Work-machine setup correction — 2026-11-05
+
+Manual fallback now identifies the selected attempt's prepared receipt config
+(evidence/review-config.local.json), not the wizard's initial native.config.json.
+The guide points owners with completed wizard/SQL setup to the initialization
+helper on codex/workspace-scope-preflight. This docs branch does not itself contain
+the new command; rebuild from that code branch before invoking it. The helper
+reuses configuration/receipts, not completed scans. No PR or merge performed.
+Whitespace, links and private-path checks passed; docs-only follow-up.

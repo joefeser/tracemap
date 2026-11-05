@@ -91,8 +91,10 @@ Choose a bounded page scope first. Point publication at the site root, not `bin`
 Projectless publication requires `PrecompiledApp.config`. Attest exact source
 correspondence only when the owner has established it. Keep the whole generated
 configuration and receipts, including staged dependency copies. Use the selected
-project's generated `native.config.json` (or recorded repair config), not
-`root.config.json`, as `nativeConfigPath` below. If the source is a subfolder of a
+attempt's prepared `evidence/review-config.local.json`, printed as
+`webFormsPreparedConfig`, as `nativeConfigPath` below. The project's initial
+`native.config.json` (including a repair config) is not necessarily prepared;
+`root.config.json` is wizard state, not a native receipt config. If the source is a subfolder of a
 larger repo, use the exact source-root/commit convention required by the native
 config; do not guess a workspace root that conflicts with it.
 
@@ -147,6 +149,19 @@ contract producer as a private importer. No SQL connection or execution is neede
 
 ## 5. Configure all inputs in one V3 workspace
 
+**If the wizard is already complete and the SQL manifest exists, use the
+[one-command initialization helper](https://github.com/joefeser/tracemap/blob/codex/workspace-scope-preflight/docs/WORKSPACE_FROM_WIZARD.md)
+in branch `codex/workspace-scope-preflight` instead of manually copying this
+section.** It reads the saved wizard attempt and prepared receipts, derives the
+web source identity and validates the SQL manifest. It creates verified V3 config
+without starting a scan. Rebuild the tool from that branch before using the new
+command. Keep this docs branch for the walkthrough; no PR is implied.
+
+The manual fallback below requires the **prepared receipt config**. The wizard's
+initial project `native.config.json` may not contain receipts and is not
+interchangeable with the prepared config printed as `webFormsPreparedConfig`.
+Do not retype hashes or edit receipts to make the initial file appear prepared.
+
 Initialize once (init refuses an existing config):
 
 ```powershell
@@ -168,7 +183,7 @@ If the folder was already initialized, edit its existing config instead. Replace
   "webFormsReport": true,
   "compiledReview": {
     "repositoryId": "web",
-    "nativeConfigPath": "native-setup/website-id/native.config.json"
+    "nativeConfigPath": "native-setup/runs/website-id-attempt/evidence/review-config.local.json"
   },
   "sqlEvidence": {
     "repositoryId": "web",
