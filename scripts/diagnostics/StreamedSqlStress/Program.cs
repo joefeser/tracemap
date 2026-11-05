@@ -14,10 +14,15 @@ var padding = Encoding.UTF8.GetBytes("--" + new string('x', chunkBytes - 6) + "\
 const string ending = "\nCREATE PROC dbo.ReadItems AS SELECT 1 AS Id;\nGO\n";
 var last = Encoding.UTF8.GetBytes("--" + new string('x', chunkBytes - ending.Length - 2) + ending);
 using var process = Process.GetCurrentProcess();
-using var watchdog = new Timer(_ =>
+long sampledPeak = 0;
+await using var watchdog = new Timer(_ =>
 {
     process.Refresh();
-    if (process.WorkingSet64 > 1024L * 1024 * 1024)
+    var resident = process.WorkingSet64;
+    long previous;
+    do { previous = Interlocked.Read(ref sampledPeak); }
+    while (resident > previous && Interlocked.CompareExchange(ref sampledPeak, resident, previous) != previous);
+    if (resident > 1024L * 1024 * 1024)
     {
         Console.Error.WriteLine("FAIL: stress process exceeded 1 GiB resident memory");
         Environment.Exit(3);
@@ -38,7 +43,7 @@ if (export.Objects[0].Span.StartLine != (blocks - 1) * 2 + 2)
     throw new InvalidOperationException("Original line mapping incorrect");
 process.Refresh();
 Console.WriteLine($"PASS bytesConsumed={observed.BytesRead}; expectedBytes={bytes}; batches={blocks}; objects={export.Objects.Count}");
-Console.WriteLine($"elapsedMs={elapsed.ElapsedMilliseconds}; peakWorkingSetBytes={process.PeakWorkingSet64}; residentLimitBytes=1073741824");
+Console.WriteLine($"elapsedMs={elapsed.ElapsedMilliseconds}; sampledPeakResidentBytes={Interlocked.Read(ref sampledPeak)}; osPeakWorkingSetBytes={process.PeakWorkingSet64}; residentLimitBytes=1073741824");
 Console.WriteLine("Virtual content was generated/read/hashed in full. No 8 GiB byte array or disk file was allocated. SQL was not executed.");
 
 sealed class SyntheticStream(byte[] repeated, byte[] last, int blocks) : Stream

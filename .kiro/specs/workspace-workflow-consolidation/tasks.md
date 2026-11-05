@@ -107,4 +107,4 @@
 - [x] Preserve v1/selection refusals and add an explicit 8 GiB sequential input contract with bounded batches/retained AST/evidence.
 - [x] Verify true GO boundaries, exact original digests/line spans, global context and duplicate handling across batches.
 - [x] Add wizard stream opt-in without editing originals; exact 667158/6671580-byte fixtures and full 7 MB SQLite replay pass.
-- [ ] Finish 8 GiB byte-volume stress, exact-head full Debug gate and user-shaped large-export copy.
+- [x] Finish 8 GiB byte-volume stress, exact-head full Debug gate and user-shaped large-export copy.

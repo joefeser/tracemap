@@ -1009,3 +1009,40 @@ above-8GiB pre-read refusal. Actual full launcher/wizard/SQLite replay with exac
 6671580 bytes passed. Full 8 GiB virtual byte-volume stress and broad/exact-head
 gates pending at this checkpoint. Core change requires full Debug -warnaserror.
 No PR/merge or private-input success claim.
+
+Qualification update: touched wizard/workspace/SQL/DDL lanes passed 578/578,
+Debug -warnaserror. Exact committed Core/CLI code checkpoint
+807b2b0fd1843ed513567e29644fa485dff5feb3 completed the sibling-repo/net20
+launcher replay with 6,671,580 bytes, 552 SQL objects, 129 combined facts,
+110 native facts, three SQLite quick_check=ok results, plus direct saved-copy
+Verify.ps1 and original/stream manifest file-set/digest equality.
+The actual 8,589,934,592-byte stress stream passed twice; the final probe adds
+sampled resident reporting (the macOS OS peak counter reports zero). Final
+probe: 372,581 ms; sampled peak resident 261,373,952 bytes; 2048 batches;
+one final object with correct original span; whole-source digest checked.
+No 8 GiB array/disk file or SQL execution. Full exact-code-head gate running.
+
+Final exact Core/CLI code-head gate passed at
+807b2b0fd1843ed513567e29644fa485dff5feb3: Debug build -warnaserror succeeded;
+full TraceMap.Tests Debug -warnaserror: 6037 passed, 3 skipped, 0 failed
+(6040 total; 14.0561 minutes; public remote Linux runner). Closing edits change
+only qualification docs/spec status and the separately executed diagnostic
+memory sampler, not src/dotnet. Both 8 GiB probes completed successfully; final
+probe uses await-disposed timer and reports sampled peak independently from the
+unavailable OS peak counter. Whitespace and private-path guards pass.
+
+Reproduction commands:
+- dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --nologo
+  --filter 'FullyQualifiedName~SqlStreamedLocalDefinitionsTests|FullyQualifiedName~SqlServerLocalDefinitionsTests|FullyQualifiedName~SqlLocal|FullyQualifiedName~SqlServerDdl|FullyQualifiedName~WebFormsWizard|FullyQualifiedName~Workspace' (578 passed).
+- python3 scripts/tests/Test-WorkspaceWizardLauncher.py --output-root <fresh-public-folder>
+  --legacy-layout --sql-export-bytes 6671580 (all stages/SQLite checks passed).
+- dotnet run --project scripts/diagnostics/StreamedSqlStress -c Release
+  --no-launch-profile (8589934592 actual bytes consumed/hashed, PASS).
+- dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug
+  -warnaserror --nologo; dotnet test same project --no-build -c Debug
+  -warnaserror --logger 'console;verbosity=normal' (full gate above).
+
+Work-machine continuation must use tm.ps1 -Build once after fetching to replace
+the old published tool; continue existing output-root answers, choose workspace
+and stream. No source/DLL/SQL setup restart. No PR/merge/ACK policy change.
+8 GiB is a source-container limit; independent parser/evidence limits remain.

@@ -24,6 +24,16 @@ Existing SQLCMD, GO repetition, executable top-level statement and result-shape
 refusals remain. Existing v1 and explicit selected-definition contracts are not
 silently expanded.
 
+After updating this branch, rebuild the launcher tool once to avoid reusing its
+previous published DLL, then continue the saved setup. For the example layout:
+
+```powershell
+pwsh -NoProfile -File ./scripts/tm.ps1 -Build webforms-review wizard --root C:/tracemap-output --continue
+```
+
+Use your existing output root in place of the example. Select workspace and
+choose `stream` at the SQL size refusal. Saved source/DLL/SQL selections remain.
+
 ## Independent work/evidence limits
 
 The 8 GiB cap is a source-container limit, not permission to build an 8 GiB AST.
@@ -69,3 +79,17 @@ dotnet run --project scripts/diagnostics/StreamedSqlStress -c Release
 That stress input is mostly comment batches. It verifies byte-volume handling,
 not support for arbitrary 8 GiB SQL grammar or unlimited objects. Run normal-sized
 fixtures separately; the generic full test suite does not run the 8 GiB probe.
+
+## Local qualification (2026-11-05)
+
+Core/CLI touched lanes passed 578 tests. Both normal and sibling-repo/net20
+launcher replays completed with an exact 6,671,580-byte SQL export; the latter
+indexed 552 SQL objects and passed three SQLite integrity checks. A separate
+8,589,934,592-byte virtual-stream run consumed and hashed every byte, found the
+final definition with its original line coordinate, and completed in 372,581 ms
+with 261,373,952 bytes sampled peak resident memory on macOS. That measurement
+is for the mostly-comment stress input, not an arbitrary 8 GiB definition set.
+
+The full Debug `-warnaserror` gate on the Core/CLI implementation checkpoint
+`807b2b0fd1843ed513567e29644fa485dff5feb3` passed: 6,037 passed, 3 skipped,
+zero failed (6,040 total). No private-input or runtime acceptance claim.
