@@ -1192,3 +1192,18 @@ Initial focused SQL/DDL/wizard lane: 200 passed (52 sec). Rich modern UTF16 LE
 BOM/context-repair/large-byte replay passed through all three SQLite checks.
 Final wizard transition pin/focused rerun and full legacy/all-tests coverage
 pending. No private source inspected or copied, no SQL values/hashes changed.
+
+Safety completion before final qualification: widening flat control constructs
+requires protecting recursive evidence visitors as well as the parser stack.
+Added iterative trusted ScriptDom-child-property AST preflight: depth <=256,
+work/pending nodes <=200000, bounded reference-identity/depth tracking. Wide
+sibling lists do not increase depth. Child token streams/string properties are
+excluded. A 512-deep IF tree now refuses as ast-depth257 before recursive
+evidence visitors; the 512 sequential-block fixture still passes.
+
+The initial 25b97b7bc compatibility run was stopped as outdated, with only its
+public testhost and descendants targeted. It is not a completed gate. Final
+Core checkpoint will get full Debug coverage after focused safety checks.
+Existing readable rich-layout replica and its successful first run are retained;
+will update its clean tool checkout and exercise saved verification/collection
+with final Core, preserving original inputs, configuration and earlier run.

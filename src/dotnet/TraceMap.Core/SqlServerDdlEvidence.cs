@@ -29,6 +29,7 @@ public static class SqlServerDdlEvidence
     public const int MaxFiles = 32;
     public const int MaxTokens = 100000;
     public const int ParserStackBytes = 64 * 1024 * 1024;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, System.Reflection.PropertyInfo[]> SyntaxChildProperties = new();
     private static readonly Regex SqlCmdDirective = new(
         @":(?:r|setvar|connect|on\s+error|out|error|perftrace|list|reset|ed|listvar|xml|help|quit|exit|serverlist)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
@@ -241,6 +242,41 @@ public static class SqlServerDdlEvidence
         var (fragment, errors) = OnParserStack(() => (parser.Parse(tokens, out var parseErrors), parseErrors));
         var script = fragment as TSqlScript;
         Require(errors.Count == 0 && script is not null, "malformed-sql");
+        if (streamedComplexity)
+        {
+            // Inspect iteratively before recursive evidence visitors run on the caller's
+            // stack. Wide sibling lists do not increase depth; hostile deep trees refuse.
+            var pending = new Stack<(TSqlFragment Node, int Depth)>();
+            var depths = new Dictionary<TSqlFragment, int>(ReferenceEqualityComparer.Instance);
+            pending.Push((script!, 1));
+            var work = 0;
+            while (pending.TryPop(out var item))
+            {
+                CheckComplexity("ast-node-work", ++work, MaxTokens * 2, item.Node.StartLine - lineOffset);
+                CheckComplexity("ast-depth", item.Depth, 256, item.Node.StartLine - lineOffset);
+                if (depths.TryGetValue(item.Node, out var visitedDepth) && visitedDepth >= item.Depth) continue;
+                depths[item.Node] = item.Depth;
+                var properties = SyntaxChildProperties.GetOrAdd(item.Node.GetType(), type => type.GetProperties()
+                    .Where(property => property.CanRead && property.GetIndexParameters().Length == 0
+                        && property.Name != "ScriptTokenStream" && property.PropertyType != typeof(string)
+                        && (typeof(TSqlFragment).IsAssignableFrom(property.PropertyType)
+                            || typeof(System.Collections.IEnumerable).IsAssignableFrom(property.PropertyType)))
+                    .ToArray());
+                foreach (var property in properties)
+                {
+                    var value = property.GetValue(item.Node);
+                    if (value is TSqlFragment child) Add(child);
+                    else if (value is System.Collections.IEnumerable children)
+                        foreach (var candidate in children)
+                            if (candidate is TSqlFragment element) Add(element);
+                }
+                void Add(TSqlFragment child)
+                {
+                    CheckComplexity("ast-pending-nodes", pending.Count + 1, MaxTokens * 2, child.StartLine - lineOffset);
+                    pending.Push((child, item.Depth + 1));
+                }
+            }
+        }
         return script!;
     }
 

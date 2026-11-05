@@ -14,6 +14,17 @@ public sealed class SqlStreamedLocalDefinitionsTests
     private static SqlLocalExport Produce(string text) => SqlServerLocalDefinitions.ProduceStreamed(Input(text), _ => new MemoryStream(Encoding.UTF8.GetBytes(text)));
 
     [Fact]
+    public void Deep_control_tree_is_refused_before_recursive_evidence_visitors()
+    {
+        var text = "CREATE PROC dbo.ReadItems AS " + string.Concat(Enumerable.Repeat("IF 1=1 ", 512)) + "SELECT 1 AS Id;\nGO\n";
+        var failure = Assert.Throws<ArgumentException>(() => Produce(text));
+        var guard = Assert.IsType<SqlSyntaxComplexityLimit>(failure.Data["sqlSyntaxComplexityLimit"]);
+        Assert.Equal("ast-depth", guard.Metric);
+        Assert.Equal(257, guard.Observed); Assert.Equal(256, guard.Limit);
+        Assert.Equal("export.sql", guard.FilePath);
+    }
+
+    [Fact]
     public void Flat_wide_table_and_repeated_type_facets_are_not_nested_complexity()
     {
         var columns = string.Join(",\n", Enumerable.Range(0, 512).Select(i => $"C{i} nvarchar(50) NULL"));

@@ -251,7 +251,7 @@ public static partial class SqlServerLocalDefinitions
              "Dependency references are syntax observations, not execution, reachability or deployed resolution. No source call is automatically bound.",
              "Partial local evidence only; no aggregate clean verdict, SQL execution, database connection or runtime observation."]);
         if (streamed) export = export with { Limitations = [.. export.Limitations,
-            "Streamed input admits at most 8 GiB/file and total; verified GO batches are bounded to 4 MiB and 100000 tokens, with 128 active parentheses, 4096 control openers and the existing 64 MiB parser stack.",
+            "Streamed input admits at most 8 GiB/file and total; verified GO batches are bounded to 4 MiB and 100000 tokens, with 128 active parentheses, 4096 control openers, AST depth 256, 200000 AST work/pending nodes and the existing 64 MiB parser stack.",
             "Retained definition ASTs are bounded to 64 MiB of batch text and 1000000 tokens; 8192 objects, 65536 dependencies/gaps, 65536 batches and 32 MiB exported metadata are separate refusal limits."] };
         Require(Encoding.UTF8.GetByteCount(SqlServerSchemaEvidence.Json(export)) <= (streamed ? MaxStreamExportBytes : SqlServerSchemaEvidence.MaxBytes), "export-size-limit");
         return export;

@@ -52,6 +52,7 @@ The stream profile refuses admission when any other budget is exceeded:
 | UTF-8 batch | 4 MiB |
 | Tokens per batch | 100,000; 64 MiB parser stack |
 | Streamed syntax profile /4 | 128 active parentheses; 4,096 control openers per batch |
+| Streamed AST walk | Depth 256; 200,000 inspected/pending nodes |
 | Batches | 65,536 |
 | Retained definition-batch text | 64 MiB |
 | Retained tokens | 1,000,000 |
@@ -173,13 +174,17 @@ Independent type facets such as hundreds of `varchar(50)` or `decimal(18,2)`
 columns no longer consume a cumulative pseudo-nesting budget. It allows at most
 128 concurrent parentheses and 4,096 `BEGIN`/`CASE`/`IF`/`WHILE` tokens per batch.
 The latter is an explicit control-work budget, not a claim to infer block scopes.
-The 100,000-token cap, 64 MiB parser stack and retained-AST/output limits remain.
+An iterative AST preflight caps actual tree depth at 256 and node work/pending
+entries at 200,000 before recursive evidence visitors run. This admits wide
+sibling lists while refusing deep control/statement trees. The 100,000-token
+cap, 64 MiB parser stack and retained-AST/output limits remain.
 Strings/comments do not contribute grammar tokens. Malformed SQL still refuses.
 
 Existing ordinary/selected-definition contracts retain their conservative total
 open-construct guard. If an ordinary manifest hits it, the wizard now shows the
 metric/count/file/line and offers the explicit stream profile. Genuine streamed
-refusals identify `parenthesis-depth` or `control-construct-count`, observed
+refusals identify `parenthesis-depth`, `control-construct-count`, `ast-depth`
+or AST work/pending budgets, observed
 value, limit and original file/line. No more generic "complexity" guessing.
 Already selected streamed manifests use `/4` after rebuilding the tool; no
 manifest rewrite, source edit, value retyping or hash change is required.
