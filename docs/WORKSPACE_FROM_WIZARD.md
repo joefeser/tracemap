@@ -36,8 +36,12 @@ Each answer is saved immediately in the existing website folder. Type `later` to
 pause; run the same command and choose `workspace` to resume without re-entering
 saved choices. At the summary, `change` corrects one choice and `create` validates
 and creates `workspace.local.json` in **that same root**. An existing workspace is
-preserved and offered verification. Setup does not start a scan or rerun native
-reports. Choose `reports` separately to verify/resume the retained native attempt.
+preserved and offers `verify`, `collect`, or `later`. After creation, choose
+`collect` to run the workspace and produce SQLite/report outputs, or `later` to
+finish configuration only. Configuration alone does not produce SQLite evidence.
+Collection uses a fresh `runs/workspace-<id>` folder in the same root and prints
+the exact `START-HERE.md` and `combined.sqlite` paths. Choose `reports` separately
+to verify/resume the retained native attempt.
 
 `workspace-answers.local.json` is local-only selection state: exact generator and
 bounded-answer SHA-256 values detect ordinary drift, not authenticity. Keep it
@@ -119,3 +123,22 @@ This setup helper removes manual configuration copying, not that existing reuse
 boundary. SQL remains a separate sidecar and calls are not automatically bound.
 See [workspace configuration](WORKSPACE_CONFIGURATION.md) and
 [SQL collection](WORKSPACE_SQL_GETTING_STARTED.md) for the retained limitations.
+
+## Repeatable public terminal proof
+
+From the TraceMap checkout, choose a fresh disposable folder:
+
+```powershell
+python scripts/tests/Test-WorkspaceWizardLauncher.py --output-root "C:/reviews/synthetic-wizard-proof"
+```
+
+Use `python3` on systems where Python is installed under that name. Add
+`--with-source` in a second fresh folder to include the dependency source repo.
+The replay authors public synthetic web/dependency source and loose SQL, builds
+only that fixture, runs the actual PowerShell launcher/wizard using terminal
+answers, pauses/resumes SQL setup, creates and verifies the workspace, chooses
+collect in the wizard, and opens the combined, native and SQL SQLite outputs
+read-only with `PRAGMA quick_check`. It checks SQL inventory and report paths.
+Logs remain under the replay root. Existing roots are refused and preserved.
+This is a managed synthetic static-evidence proof, not IIS/Windows publication,
+application runtime, private input or migration acceptance.

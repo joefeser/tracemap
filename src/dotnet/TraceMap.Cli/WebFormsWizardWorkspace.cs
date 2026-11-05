@@ -28,9 +28,10 @@ internal static class WebFormsWizardWorkspace
         var root = store.DirectoryPath;
         if (File.Exists(Path.Combine(root, "workspace.local.json")))
         {
-            await output.WriteLineAsync("Workspace configuration already exists in this root. Verify the saved configuration without collecting? [verify/later]");
+            await output.WriteLineAsync("Workspace configuration already exists in this root. Verify the saved configuration, collect evidence now, or pause? [verify/collect/later]");
             var choice = await input.ReadLineAsync(token);
             if (choice is null || choice.Trim() == "later") return 2;
+            if (choice.Trim() == "collect") { store.Dispose(); return await Collect(); }
             if (choice.Trim() != "verify") throw Fail("CHOICE_INVALID");
             store.Dispose();
             return await WorkspaceCommand.RunAsync(["verify", "--root", root], output, error, token);
@@ -129,9 +130,30 @@ internal static class WebFormsWizardWorkspace
             if (action.Trim() != "create") throw Fail("CHOICE_INVALID");
             store.VerifyUnchanged();
             store.Dispose(); // The initializer independently opens and verifies the saved wizard.
-            return await WorkspaceCommand.RunAsync(["init-from-wizard", "--root", root, "--wizard-root", root,
+            var created = await WorkspaceCommand.RunAsync(["init-from-wizard", "--root", root, "--wizard-root", root,
                 "--website-id", id, .. (answers.FrameworkRoot == "" ? Array.Empty<string>() : new[] { "--framework-repo", answers.FrameworkRoot!, "--framework-target", answers.FrameworkTarget! }),
                 "--sql-manifest", answers.SqlManifest!, "--sql-source-root", answers.SqlRoot!], output, error, token);
+            if (created != 0) return created;
+            await output.WriteLineAsync("Workspace configuration is saved at: " + Path.Combine(root, "workspace.local.json"));
+            await output.WriteLineAsync("SQLite evidence is created by collection, not configuration. Collect source, compiled and SQL evidence now, or finish setup for later? [collect/later]");
+            var next = await input.ReadLineAsync(token);
+            if (next is null || next.Trim() == "later") return 0;
+            if (next.Trim() != "collect") throw Fail("CHOICE_INVALID");
+            return await Collect();
+        }
+
+        async Task<int> Collect()
+        {
+            var run = Path.Combine(root, "runs", "workspace-" + Guid.NewGuid().ToString("N"));
+            await output.WriteLineAsync("Collecting into a fresh output folder: " + run);
+            var result = await WorkspaceCommand.RunAsync(["collect", "--root", root, "--out", run], output, error, token);
+            if (result == 0)
+            {
+                await output.WriteLineAsync("Open the workspace results: " + Path.Combine(run, "START-HERE.md"));
+                await output.WriteLineAsync("Combined SQLite evidence: " + Path.Combine(run, "combined.sqlite"));
+                await output.WriteLineAsync("SQL evidence remains a separate sidecar; see START-HERE.md for coverage and channel paths.");
+            }
+            return result;
         }
 
         async Task<string?> Existing(string prompt, bool file, bool allowSkip = false)

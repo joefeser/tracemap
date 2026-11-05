@@ -11,7 +11,7 @@ rules:
       - WorkspaceWizardAnswerFile
     limitations:
       - Local-only answers bind the website and original native configuration hash; exact CLI generator and bounded-answer hashes detect ordinary drift, not authenticity or source correspondence.
-      - Setup does not scan, build, execute SQL, attest publication correspondence or import completed results. Existing native receipt and SQL admission policies remain authoritative.
+      - Configuration does not scan, build, execute SQL, attest publication correspondence or import completed results. An explicit collect choice dispatches the existing workspace collector to a fresh output; existing native receipt and SQL admission policies remain authoritative.
       - Additional dependency source is optional; skip retains existing compiled DLL selection without claiming dependency-source coverage. Framework project previews inspect at most 256 immediate root files, never nested membership; discovery requires explicit selection.
       - Existing workspace configuration is preserved and offered verification. Saved paths must remain available; invalid inputs require correction before initialization.
   - id: workflow.workspace.compiled-collection.v1

@@ -62,3 +62,9 @@
 - [ ] Owner validates the continued wizard on the work machine; no PR or merge.
 
 - [x] Remove mandatory additional-source setup: explicit skip preserves compiled DLL selection and proceeds to SQL, persists across pauses, and refuses half-specified source options.
+
+## Full guided wizard terminal replay — 2026-11-05
+
+- [x] Add a fresh-root public synthetic replay through the actual PowerShell launcher: native wizard, pause/resume, SQL configuration, workspace verification and collection, SQLite integrity and positive evidence-row checks.
+- [x] Offer explicit collect/later after workspace creation, and collect from an existing workspace; print exact report/SQLite paths instead of silently returning after config creation.
+- [x] Exercise skipped and included dependency source, preserve failed replay outputs, and retain partial/static-evidence limits.

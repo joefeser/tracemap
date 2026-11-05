@@ -739,3 +739,48 @@ Final validation: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaser
 existing-workspace verification passed. Private-path and whitespace guards passed.
 No full-suite claim for this CLI-only head; final pre-merge full gate remains
 required under AGENTS.md.
+
+### Full guided terminal replay — 2026-11-05
+
+Owner reported no workspace/SQLite outputs after continuation. Prior proof had
+covered configuration and collection separately, not the full wizard-to-SQLite
+terminal journey. Added scripts/tests/Test-WorkspaceWizardLauncher.py: authors
+independent public synthetic web/dependency repos and SQL, builds only that
+fixture, drives actual scripts/tm.ps1 with terminal input, pauses/resumes SQL
+setup, creates config, chooses collection, verifies SQL inventory, opens combined,
+native and SQL SQLite read-only with quick_check and positive evidence row counts,
+then re-enters the existing workspace verification menu. SQL manifest records the
+exact replay script SHA-256 and bounded public input SHA-256. Logs/failed roots
+are preserved; an existing output root is refused.
+
+Concrete usability fix: configuration alone produces no SQLite. The wizard now
+explains this, offers explicit collect/later after creation, offers collect on an
+existing config, uses a fresh run under the same root, and prints START-HERE.md
+and combined.sqlite paths. It still does not silently dispatch collection.
+No source-extractor/Core schema changes; existing collection and admission
+policies remain in force. Exact cause of the owner's missing config remains
+unverified without their terminal output; local success is not private proof.
+
+Replay 001 refused duplicate primary/dependency selection in the new fixture;
+corrected only fixture answers and preserved failure. Replay 002 proved separate
+configuration/collection. Replays 003/004 proved guided collection without/with
+additional source. Final replay adds positive SQLite row checks and existing
+workspace continuation; final results below. Synthetic managed publication is
+not IIS/runtime/private or migration acceptance. No PR or merge.
+
+Final public replay commands (fresh roots):
+- python3 scripts/tests/Test-WorkspaceWizardLauncher.py --output-root /tmp/tracemap-wizard-full-20261105-005
+- python3 scripts/tests/Test-WorkspaceWizardLauncher.py --output-root /tmp/tracemap-wizard-full-20261105-006 --with-source
+Both passed all terminal stages. Skip-source run: one configured repo, 74 combined
+facts, one SQL object, 74 native facts. Included-source run: two configured repos,
+88 combined facts, one SQL object, 74 native facts. Both report explicit partial
+coverage and no established SQL call binding. All three SQLite files passed
+read-only quick_check and contained evidence rows. Existing-root replay refusal
+was checked with unchanged workspace-config SHA-256. Docs branch 9ce144408 now
+explains collect and output locations.
+
+Final touched-lane validation: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug
+-warnaserror --nologo --filter 'FullyQualifiedName~WebFormsWizard|FullyQualifiedName~Workspace':
+281 passed, 0 failed/skipped, 3 minutes. Private-path and whitespace guards pass.
+No full-suite or private-machine success claim for this CLI-only head; final
+pre-merge full Debug gate remains required.

@@ -70,6 +70,8 @@ public sealed class WebFormsWizardWorkspaceTests
         Assert.DoesNotContain("Framework project/solution: choose", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.True(File.Exists(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
         Assert.False(Directory.Exists(Path.Combine(fixture.WizardRoot, "sources")));
+        Assert.Contains("SQLite evidence is created by collection, not configuration", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("[collect/later]", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Equal(projectBefore, File.ReadAllBytes(Path.Combine(fixture.WizardRoot, "site", "project.config.json")));
     }
 
