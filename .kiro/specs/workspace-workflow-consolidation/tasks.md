@@ -128,3 +128,7 @@
 - [x] Keep 128 active parentheses, 4096 control-openers, 100000 tokens and fixed 64 MiB parser stack; surface exact guard metric/count/limit/location.
 - [x] Prove a 512-column table, 512 sequential conditional blocks, actual nested/work overflows and literal/comment separation.
 - [x] Finish wizard transition pin, rich UTF16/context/net20 replay and full Debug coverage (6060 passed, 3 skipped across same-binary lanes); push without PR/merge.
+
+## Completed-run review handoff — 2026-11-05
+
+- [x] Add a one-folder, read-only completed-run review prompt covering artifact commitments, SQLite, separate source/native/SQL channels, scope warning and sanitized findings without rescanning.

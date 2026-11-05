@@ -1252,3 +1252,17 @@ conditional result unknown, exact original raw SQL hash and retained prior run.
 
 Whitespace/private-path guards pass. Closing edits are docs/spec only, not
 application code. No private acceptance, SQL execution, PR, merge or ACK change.
+
+### Completed work-machine run review handoff — 2026-11-05
+
+Owner reports the scan reached the end, with the page-scope warning and a csproj
+selection because sln-root selection failed. This is an owner report, not yet
+an independently verified work-machine artifact review. Added
+prompts/review-completed-workspace-run-once.md. Worker asks for only the completed
+workspace run folder, reviews recorded bytes/commitments and read-only SQLite,
+keeps source/native/SQL channels and current versus recorded identities distinct,
+and returns <=35 sanitized lines. No scan/verify/collect, config changes, builds,
+SQL execution, re-attestation, publishing or PR authorized by that prompt.
+Solution-root failure is a separate unverified follow-up, not reproduced.
+Docs-only handoff; whitespace/private-path checks and synthetic retained-output
+read-only sanity check used, no new full-suite run required.
