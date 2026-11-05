@@ -107,6 +107,7 @@ rules:
     emits:
       - Local target and tool-family candidate
     limitations:
+      - A folder containing a build-helper project stays ambiguous by default. Explicit website selection permits projectless manual publication and is retained on continuation; it does not attest a build, execute the helper, or suppress source-workspace project evaluation.
       - MSBuild imports and conditions are not evaluated; a tool-family candidate is not a successful build or compatible Web Forms runtime.
       - Solutions require an explicit local website selection; other projects are not independently registered.
   - id: workflow.webforms.wizard-build.v1

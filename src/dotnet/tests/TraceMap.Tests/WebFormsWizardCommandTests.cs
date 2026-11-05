@@ -7,6 +7,25 @@ namespace TraceMap.Tests;
 [Collection("Git metadata sensitive")]
 public sealed class WebFormsWizardCommandTests
 {
+    [Theory]
+    [InlineData("website", "projectless")]
+    [InlineData("project", "project")]
+    public async Task Folder_with_build_helper_requires_and_remembers_explicit_mode(string choice, string expectedMode)
+    {
+        using var temp = new TempDirectory();
+        var site = Site(temp.Path);
+        File.WriteAllText(Path.Combine(site, "BuildHelper.csproj"), "<Project><PropertyGroup><TargetFrameworkVersion>v2.0</TargetFrameworkVersion></PropertyGroup></Project>");
+        var root = Path.Combine(temp.Path, "config");
+        var projectAnswer = choice == "project" ? "BuildHelper.csproj\n" : "";
+        var result = await Run(["wizard", "--root", root], $"site\n{site}\n{choice}\n{projectAnswer}all\nlater\n");
+        Assert.True(result.Code == 2, result.Error + result.Output);
+        using (var store = WebFormsWizardStore.Open(root, true))
+            Assert.Equal(expectedMode, store.ReadProject("site").ProjectMode);
+        var resumed = await Run(["wizard", "--root", root, "--continue"], "later\n");
+        Assert.True(resumed.Code == 2, resumed.Error + resumed.Output);
+        Assert.DoesNotContain("[website/project]", resumed.Output, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Full_terminal_replay_survives_subset_restart_and_adds_second_project_without_changing_first()
     {

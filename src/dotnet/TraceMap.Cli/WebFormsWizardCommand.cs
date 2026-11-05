@@ -56,7 +56,7 @@ public static class WebFormsWizardCommand
                 var path = await Ask("Replacement website folder, .sln, .csproj or .vbproj:");
                 var webRoot = Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase)
                     ? await Ask("Local website root in this solution:") : null;
-                var target = WebFormsWizardTarget.Inspect(path, webRoot);
+                var target = await InspectSelectedTarget(path, webRoot);
                 var mode = await Ask("Use all forms or select a subset? [all/selected]");
                 if (mode is not ("all" or "selected")) throw Invalid("CHOICE_INVALID");
                 await output.WriteLineAsync($"Type '{repair}' to confirm this repair; any other answer leaves it unchanged:");
@@ -99,7 +99,7 @@ public static class WebFormsWizardCommand
             await output.WriteLineAsync($"Project {id}: saved step '{selection.Step}'. Setup is incomplete.");
             if (current.Step == "build")
             {
-                var target = WebFormsWizardTarget.Inspect(current.InputPath, current.WebRoot);
+                var target = WebFormsWizardTarget.Inspect(current.InputPath, current.WebRoot, current.ProjectMode == "projectless");
                 if (target.ProjectMode == "projectless")
                 {
                     await output.WriteLineAsync("Compile this website externally with the appropriate Windows ASP.NET compiler. TraceMap will not launch it. Have you prepared a separate compiled publication? [ready/later]");
@@ -211,13 +211,27 @@ public static class WebFormsWizardCommand
                 return justVerified ? 0 : await WebFormsWizardExecution.RunAsync(store, id, null, output, error, cancellationToken, nativeRunner);
             }
 
+            async Task<WebFormsWizardTargetInfo> InspectSelectedTarget(string path, string? webRoot)
+            {
+                try { return WebFormsWizardTarget.Inspect(path, webRoot); }
+                catch (InvalidOperationException exception) when (exception.Message == "WEBFORMS_WIZARD_SELECT_PROJECT_FILE")
+                {
+                    await output.WriteLineAsync("This website folder contains a project file. A project may be only a build helper for an ASP.NET Website; TraceMap will not infer which mode you intend.");
+                    var choice = await Ask("Use the folder as a projectless website with a separately compiled publication, or configure a project build? [website/project]");
+                    if (choice == "website") return WebFormsWizardTarget.Inspect(path, webRoot, allowProjectlessWithBuildProject: true);
+                    if (choice != "project") throw Invalid("CHOICE_INVALID");
+                    var selected = await Ask("Project file inside that website folder (.csproj or .vbproj):");
+                    return WebFormsWizardTarget.Inspect(Path.GetFullPath(selected.Replace('\\', '/'), WebFormsWizardStore.Physical(path)), WebFormsWizardStore.Physical(path));
+                }
+            }
+
             async Task<WebFormsWizardProject> GatherProject()
             {
                 var projectId = await Ask("Project ID (lowercase letters, numbers and hyphens; start with a letter):");
                 var path = await Ask("Point me to your website folder, .sln, .csproj or .vbproj:");
                 var webRoot = Path.GetExtension(path).Equals(".sln", StringComparison.OrdinalIgnoreCase)
                     ? await Ask("Which local website root in this solution should be configured?") : null;
-                var target = WebFormsWizardTarget.Inspect(path, webRoot);
+                var target = await InspectSelectedTarget(path, webRoot);
                 await output.WriteLineAsync($"Detected {target.ProjectMode}; build tool candidate: {target.BuildTool}. This is not build validation.");
                 foreach (var limitation in target.Limitations) await output.WriteLineAsync(limitation);
                 var mode = await Ask("Use all forms or select a subset? [all/selected]");

@@ -25,6 +25,21 @@ public sealed class WebFormsWizardTargetTests
         Assert.Equal("WEBFORMS_WIZARD_SELECT_PROJECT_FILE", Assert.Throws<InvalidOperationException>(() => WebFormsWizardTarget.Inspect(site)).Message);
     }
 
+    [Fact]
+    public void Explicit_website_selection_keeps_build_helper_projectless_without_weakening_default_refusal()
+    {
+        using var temp = new TempDirectory();
+        var site = Site(temp.Path);
+        File.WriteAllText(Path.Combine(site, "BuildHelper.csproj"), "<Project><PropertyGroup><TargetFrameworkVersion>v2.0</TargetFrameworkVersion></PropertyGroup></Project>");
+        Assert.Equal("WEBFORMS_WIZARD_SELECT_PROJECT_FILE", Assert.Throws<InvalidOperationException>(() => WebFormsWizardTarget.Inspect(site)).Message);
+        var target = WebFormsWizardTarget.Inspect(site, selectedWebRoot: null, allowProjectlessWithBuildProject: true);
+        Assert.Equal("projectless", target.ProjectMode);
+        Assert.Null(target.SelectedProject);
+        Assert.NotNull(typeof(WebFormsWizardTarget).GetMethod("Inspect", [typeof(string), typeof(string)]));
+        Assert.Equal("manual-aspnet-compiler", target.BuildTool);
+        Assert.True(target.RequiresWindows);
+    }
+
     [Theory]
     [InlineData("csproj", "<Project><PropertyGroup><TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion></PropertyGroup></Project>", "windows-msbuild", true)]
     [InlineData("vbproj", "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net48</TargetFramework></PropertyGroup></Project>", "windows-msbuild", true)]

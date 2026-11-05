@@ -24,6 +24,9 @@ public static class WebFormsWizardTarget
         RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(2));
 
     public static WebFormsWizardTargetInfo Inspect(string input, string? selectedWebRoot = null)
+        => Inspect(input, selectedWebRoot, allowProjectlessWithBuildProject: false);
+
+    public static WebFormsWizardTargetInfo Inspect(string input, string? selectedWebRoot, bool allowProjectlessWithBuildProject)
     {
         var path = WebFormsWizardStore.Physical(input);
         if (Directory.Exists(path))
@@ -32,7 +35,7 @@ public static class WebFormsWizardTarget
                 throw Fail("WEB_ROOT_MISMATCH");
             var files = Directory.EnumerateFiles(path).Take(WebFormsWizardForms.MaxInventoryEntries + 1).ToArray();
             if (files.Length > WebFormsWizardForms.MaxInventoryEntries) throw Fail("INPUT_LIMIT");
-            if (files.Any(IsProject))
+            if (files.Any(IsProject) && !allowProjectlessWithBuildProject)
                 throw Fail("SELECT_PROJECT_FILE");
             ValidateWebRoot(path);
             return new(path, path, "projectless", null, "manual-aspnet-compiler", [], true,

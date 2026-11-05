@@ -889,3 +889,35 @@ the existing folder without replacement. Persistent owner lab is approximately
 This change is a standard-library fixture/PowerShell-documentation lane only;
 production C# and its previous 287-case gate at 12eff6392 are unchanged. No PR or
 merge.
+
+### User-shaped .NET 2 layout — 2026-11-05
+
+Owner supplied concrete sibling web/DLL source repos, web helper csproj referencing
+..\dll repo, dependency targeting .NET 2, separate publication, commands from a
+TraceMap checkout, and tracemap-output root/SQL/project/runs layout. Extended the
+public terminal replay with --legacy-layout: genuine net20 DLL built with pinned
+.NET Framework reference assemblies; web build target explicitly net472 by default
+because owner did not specify it, configurable separately. It clones a local
+public TraceMap checkout and executes commands there, retaining actual source Git
+identity and spaces in path names. CLR2 metadata is checked in the dependency.
+
+First replica compiled both net20 projects, then failed before wizard registration
+with WEBFORMS_WIZARD_SELECT_PROJECT_FILE. This exposed a real topology gap: folder
+selection was refused whenever a csproj existed, including a projectless website
+with a helper used only for external publication. Original failure/logs preserved.
+Core inspection now has a default-false explicit website-with-helper admission;
+CLI asks website/project and stored projectless mode drives subsequent inspection.
+Default ambiguity refusal, native receipt/commit checks and Windows build consent
+remain. No project file is hidden, removed or silently reinterpreted.
+
+This is a Core change: focused and full Debug -warnaserror gates required. The
+first replica failure is not a success claim. Full scan and final gate pending
+at this checkpoint; no PR/merge. Authored .compiled maps are not actual IIS or
+Windows aspnet_compiler acceptance. SQL remains synthetic and does not replicate
+unknown private export content/size.
+
+Focused wizard/workspace gate: 290 passed, 0 failed/skipped, Debug -warnaserror
+(3m04s). Final API/default-refusal/mode-retention pins: 11 passed, 0 failed/skipped.
+The original public two-argument Inspect signature is retained; new explicit-mode
+inspection is an overload. Full exact-head Debug gate and actual-layout scan are
+pending at this code checkpoint.

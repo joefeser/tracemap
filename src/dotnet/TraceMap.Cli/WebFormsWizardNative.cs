@@ -18,7 +18,7 @@ public static class WebFormsWizardNative
         WebFormsWizardPublication.ValidateRetained(project);
         var retainedInputs = project.Inputs ?? throw Fail("INPUT_SNAPSHOT_MISSING");
         store.VerifyUnchanged();
-        var target = WebFormsWizardTarget.Inspect(project.InputPath, project.WebRoot);
+        var target = WebFormsWizardTarget.Inspect(project.InputPath, project.WebRoot, project.ProjectMode == "projectless");
         var git = GitMetadataProvider.Detect(project.WebRoot);
         if (git.CommitSha.Length != 40 || !git.CommitSha.All(Uri.IsHexDigit) || string.IsNullOrWhiteSpace(git.RemoteUrl))
             throw Fail("COMMITTED_SOURCE_WITH_REMOTE_REQUIRED");

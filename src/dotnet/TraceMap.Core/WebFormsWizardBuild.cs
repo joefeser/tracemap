@@ -21,7 +21,7 @@ public static class WebFormsWizardBuild
 
     public static WebFormsWizardBuildPlan Plan(WebFormsWizardProject project, string executable)
     {
-        var target = WebFormsWizardTarget.Inspect(project.InputPath, project.WebRoot);
+        var target = WebFormsWizardTarget.Inspect(project.InputPath, project.WebRoot, project.ProjectMode == "projectless");
         if (target.ProjectMode == "projectless") throw Fail("MANUAL_PUBLICATION_REQUIRED");
         if (target.BuildTool == "unknown") throw Fail("TOOLCHAIN_UNRESOLVED");
         if (target.RequiresWindows && !OperatingSystem.IsWindows()) throw Fail("WINDOWS_BUILD_REQUIRED");

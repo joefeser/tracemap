@@ -11,7 +11,7 @@ public static class WebFormsWizardSelection
     {
         var project = store.ReadProject(projectId);
         // Reclassify on every continuation; a saved cursor does not bypass target validation.
-        var target = WebFormsWizardTarget.Inspect(project.InputPath, project.WebRoot);
+        var target = WebFormsWizardTarget.Inspect(project.InputPath, project.WebRoot, project.ProjectMode == "projectless");
         if (target.ProjectMode != project.ProjectMode) throw new InvalidOperationException("WEBFORMS_WIZARD_TARGET_CHANGED");
         if (project.Step != "forms")
         {

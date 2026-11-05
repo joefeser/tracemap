@@ -35,3 +35,23 @@ The inspector prints local paths, existence and byte counts, not SQL contents or
 hashes. It does not replace scanner validation and does not send anything. Public
 lab success does not diagnose the owner's private file or establish Windows/IIS,
 runtime, SQL binding or migration acceptance. Evidence remains explicitly partial.
+
+## Sibling repos and a .NET 2 dependency
+
+The terminal replay also supports this explicit topology:
+
+```powershell
+python scripts/tests/Test-WorkspaceWizardLauncher.py --output-root C:/reviews/tracemap-layout-copy --legacy-layout
+```
+
+It creates sibling `source code/web project repo` and `source code/dll project repo`,
+a relative `..\dll project repo\Dependency.csproj` reference, a genuine net20
+dependency, separate `publish/web project compiled`, a local TraceMap checkout
+where commands execute, and `tracemap-output` with manifest/SQL/project/runs.
+The web build target defaults explicitly to net472; use `--legacy-web-target` for
+a different supported synthetic target. The owner's web target was not specified.
+The web folder is selected as a projectless website despite its build helper.
+The .NET Framework reference assemblies enable synthetic compilation on this host;
+this remains a managed publication with authored maps, not aspnet_compiler/IIS
+acceptance. The local tool checkout shares public Git objects with its source
+checkout; regenerate the copy on another host instead of relocating its configs.

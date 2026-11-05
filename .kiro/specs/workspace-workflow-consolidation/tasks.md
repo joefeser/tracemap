@@ -88,3 +88,10 @@
 - [x] Build a complete local public-only folder with actual wizard/SQL/workspace configs, source/DLL inputs, completed reports/SQLite and frozen tool.
 - [x] Include readable continuation, regeneration, size-boundary and read-only inspection scripts.
 - [x] Measure exact per-file and total SQL boundaries with actual CLI pass/refusal outcomes; preserve existing limits and work inputs.
+
+## User-shaped legacy layout — 2026-11-05
+
+- [x] Author sibling web/DLL repos with a relative project reference, genuine net20 dependency, separate publication, command checkout and one output-root SQL layout.
+- [x] Reproduce initial folder-with-project refusal instead of substituting a modern project layout.
+- [x] Add explicit website/project selection; preserve default ambiguous-folder refusal and retain the selected mode across continuation/native configuration.
+- [ ] Finish full user-shaped scan, metadata/SQLite checks and full Debug -warnaserror gate for the Core change.

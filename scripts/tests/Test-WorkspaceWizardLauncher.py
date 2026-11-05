@@ -17,7 +17,12 @@ def main():
     parser.add_argument("--sql-beside-workspace", action="store_true", help="Manifest beside root.config.json lists sql/schema.sql; infer its base without another folder question")
     parser.add_argument("--bad-manifest-first", action="store_true", help="Pause on an invalid SQL selection, then recover through the same wizard without website repair")
     parser.add_argument("--stale-answers-first", action="store_true", help="Recover a stale workspace/native binding using scoped answer restart")
+    parser.add_argument("--legacy-layout", action="store_true", help="Mirror sibling web/DLL repos, a net20 project reference, separate publication, local TraceMap checkout and one output root")
+    parser.add_argument("--legacy-web-target", choices=["net20", "net472", "net48"], default="net472", help="Explicit synthetic web build target; dependency remains net20")
     args = parser.parse_args()
+    if args.legacy_layout:
+        args.with_source = True
+        args.sql_beside_workspace = True
     root = Path(args.output_root).resolve()
     if root.exists():
         raise RuntimeError("Existing replay preserved; choose a fresh output root")
@@ -42,14 +47,22 @@ def main():
     def git(path, *command):
         return run("git-" + path.name + "-" + command[0], ["git", "-C", str(path), *command]).strip()
 
-    web = root / "web"
-    dependency = root / "dependency"
-    build = root / "fixture-build"
-    published = root / "published"
+    if args.legacy_layout:
+        checkout = root / "tracemap"
+        source_head = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()
+        run("copy-tracemap-checkout", ["git", "clone", "--shared", "--no-checkout", str(repo), str(checkout)])
+        run("checkout-tracemap", ["git", "-C", str(checkout), "checkout", "--detach", source_head])
+        repo = checkout
+        launcher = repo / "scripts/tm.ps1"
+    project_id = "project" if args.legacy_layout else "web"
+    web = root / "source code/web project repo" if args.legacy_layout else root / "web"
+    dependency = root / "source code/dll project repo" if args.legacy_layout else root / "dependency"
+    build = web if args.legacy_layout else root / "fixture-build"
+    published = root / "publish/web project compiled" if args.legacy_layout else root / "published"
     sql = root / "sql"
-    workspace = root / "workspace"
+    workspace = root / "tracemap-output" if args.legacy_layout else root / "workspace"
     for folder in (web, dependency, build, published / "bin", sql):
-        folder.mkdir(parents=True)
+        folder.mkdir(parents=True, exist_ok=True)
     target = run("target-framework", ["dotnet", "msbuild", str(repo / "src/dotnet/TraceMap.Cli/TraceMap.Cli.csproj"), "-nologo", "-getProperty:TargetFramework"]).strip()
     (web / "web.config").write_text("<configuration />", encoding="utf-8")
     (web / "Default.aspx").write_text('<%@ Page Language="C#" CodeFile="Default.aspx.cs" Inherits="Example.Page" %>', encoding="utf-8")
@@ -59,6 +72,14 @@ def main():
     (dependency / "Dependency.csproj").write_text(f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>{target}</TargetFramework></PropertyGroup></Project>', encoding="utf-8")
     from xml.sax.saxutils import escape
     (build / "SyntheticWeb.csproj").write_text(f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>{target}</TargetFramework></PropertyGroup><ItemGroup><Compile Include="{escape(str(web / "Default.aspx.cs"))}" /><ProjectReference Include="{escape(str(dependency / "Dependency.csproj"))}" /></ItemGroup></Project>', encoding="utf-8")
+    if args.legacy_layout:
+        legacy_properties = '<TargetFramework>net20</TargetFramework><LangVersion>latest</LangVersion><Nullable>disable</Nullable><Deterministic>true</Deterministic>'
+        references = '<PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />'
+        (web / ".gitignore").write_text("bin/\nobj/\n", encoding="utf-8")
+        (web / "Default.aspx.cs").write_text("namespace Example { public class Page : System.Web.UI.Page { public int Read() { return new ExampleDependency.Service().Read(); } } }", encoding="utf-8")
+        (dependency / "Service.cs").write_text("namespace ExampleDependency { public class Service { public int Read() { return 1; } } }", encoding="utf-8")
+        (dependency / "Dependency.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>' + legacy_properties + '</PropertyGroup><ItemGroup>' + references + '</ItemGroup></Project>', encoding="utf-8")
+        (web / "SyntheticWeb.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>' + legacy_properties.replace("<TargetFramework>net20</TargetFramework>", "<TargetFramework>" + args.legacy_web_target + "</TargetFramework>") + '</PropertyGroup><ItemGroup><ProjectReference Include="..\\dll project repo\\Dependency.csproj" /><Reference Include="System.Web" />' + references + '</ItemGroup></Project>', encoding="utf-8")
     for folder in (web, dependency):
         git(folder, "init", "-q")
         git(folder, "config", "core.autocrlf", "false")
@@ -67,6 +88,11 @@ def main():
         git(folder, "-c", "user.name=Public Synthetic Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "public synthetic fixture")
     head = git(web, "rev-parse", "HEAD")
     run("build-public-fixture", ["dotnet", "publish", str(build / "SyntheticWeb.csproj"), "-c", "Release", "-o", str(published / "bin"), "--nologo"])
+    if args.legacy_layout:
+        if b"v2.0.50727" not in (published / "bin/Dependency.dll").read_bytes():
+            raise RuntimeError("Dependency was not emitted with CLR2 metadata")
+        if '..\\dll project repo\\Dependency.csproj' not in (web / "SyntheticWeb.csproj").read_text():
+            raise RuntimeError("Sibling relative project reference missing")
     (published / "web.config").write_text("<configuration />", encoding="utf-8")
     (published / "PrecompiledApp.config").write_text('<precompiledApp version="2" />', encoding="utf-8")
     (published / "bin/Default.aspx.compiled").write_text('<preserve virtualPath="/Default.aspx" assembly="SyntheticWeb" type="Example.Page" />', encoding="utf-8")
@@ -81,7 +107,7 @@ def main():
     manifest_path = root / "sql.local.json"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     tool("prepare-tool", ["-Build", "version"])
-    answers = "\n".join(["web", str(web), "all", "ready", str(published), "2", str(published / "bin/Dependency.dll"), "prepare", head, "later", ""])
+    answers = "\n".join([project_id, str(web), *(["website"] if args.legacy_layout else []), "all", "ready", str(published), "2", str(published / "bin/Dependency.dll"), "prepare", head, "later", ""])
     tool("wizard-native", ["webforms-review", "wizard", "--root", str(workspace)], answers, expected=2)
     if (workspace / "workspace.local.json").exists():
         raise RuntimeError("Workspace appeared before its setup")
@@ -95,25 +121,29 @@ def main():
                                   "boundedInputSha256": hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()}
         manifest_path = workspace / "sql-definitions.local.json"
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        if args.legacy_layout:
+            sql_file.unlink()
+            sql_file.parent.rmdir()
+            (root / "sql.local.json").unlink()
     source_answers = [str(dependency), "Dependency.csproj"] if args.with_source else ["skip"]
     tool("wizard-pause-before-sql", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
          "\n".join(["workspace", *source_answers, "later", ""]), expected=2)
     if (workspace / "workspace.local.json").exists():
         raise RuntimeError("Paused SQL setup unexpectedly created a workspace")
     if args.stale_answers_first:
-        answers_path = workspace / "web/workspace-answers.local.json"
+        answers_path = workspace / project_id / "workspace-answers.local.json"
         envelope = json.loads(answers_path.read_text())
         envelope["answers"]["nativeConfigurationSha256"] = "f" * 64
         envelope["boundedInputSha256"] = hashlib.sha256(json.dumps(envelope["answers"], indent=2).encode()).hexdigest()
         answers_path.write_text(json.dumps(envelope, indent=2), encoding="utf-8")
         stale_bytes = answers_path.read_bytes()
-        project_bytes = (workspace / "web/project.config.json").read_bytes()
+        project_bytes = (workspace / project_id / "project.config.json").read_bytes()
         recovered = tool("wizard-stale-answers-restart", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
                          "\n".join(["workspace", "restart", *source_answers, "later", ""]), expected=2)
-        archives = list((workspace / "web").glob("workspace-answers.local.json.retained-*"))
+        archives = list((workspace / project_id).glob("workspace-answers.local.json.retained-*"))
         if "ANSWERS_STALE_NATIVE_SELECTION" not in recovered or len(archives) != 1 or archives[0].read_bytes() != stale_bytes:
             raise RuntimeError("Stale workspace answers were not diagnosed and preserved")
-        if (workspace / "web/project.config.json").read_bytes() != project_bytes:
+        if (workspace / project_id / "project.config.json").read_bytes() != project_bytes:
             raise RuntimeError("Workspace answer recovery changed website setup")
     if args.bad_manifest_first:
         bad = json.loads(json.dumps(manifest))

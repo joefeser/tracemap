@@ -443,3 +443,15 @@ removing dependencies.
 
 Historical detail and failed experiments are preserved in the
 [implementation notes](history/WEBFORMS_NATIVE_IMPLEMENTATION_NOTES_2026-09-29.md).
+
+### Website folder with a build-helper project
+
+A website folder containing a .csproj/.vbproj now requires an explicit
+`website` or `project` choice. Choose `website` for a projectless ASP.NET Website
+whose helper project is only used to produce the separately supplied publication.
+The wizard persists projectless mode and does not launch that helper. Choose
+`project` to select the actual project file and retain the existing explicit build
+consent/toolchain path. Presence of a project file does not decide this intent.
+Default Core inspection still refuses ambiguous folder input without that explicit
+choice. Source workspace collection can independently discover/evaluate the helper
+project; the choice controls native wizard build/publication scope.
