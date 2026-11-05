@@ -1308,3 +1308,52 @@ facts through combined source-label joins, and checked old run file hashes plus
 old config backup/native/SQL/answers preservation. Latest application root/cleanup
 guards now need final legacy/net20 replay at committed head and full coverage.
 No Core/schema-output or ACK change; no PR/merge or private acceptance claim.
+
+### Final late-add replay checkpoint (2026-11-05)
+
+Implementation `ec5b3cb967ec18329e40ab00eb60a4b26a51063c` pushed to
+`codex/workspace-scope-preflight`; no PR/merge. Last provenance rule addition:
+AddSource focused tests 10/10 pass, Debug -warnaserror. Earlier combined
+AddSource/Wizard/FromWizard lane 52/52 pass.
+
+Committed-head replay command:
+
+```text
+python3 scripts/tests/Test-WorkspaceWizardLauncher.py --output-root <new-public-root> --legacy-layout --sql-export-bytes 3335789 --sql-encoding utf16-le --sql-context-repair --sql-rich-export --add-framework-after-first-run
+```
+
+PASS: .NET 2 framework, .NET 4.7.2 synthetic web publication helper, sibling
+project reference, projectless website source, separate publication, rich UTF16
+LE BOM loose SQL and explicit context repair. Completed a one-source run, then
+continued the existing wizard/add-framework and completed a fresh two-source run.
+Exact original run file hashes, native/SQL choices, original answer bytes and
+prior-config backup preserved. New combined source joins show web 110 facts
+(Level3SyntaxAnalysis/NotRun) and framework 19 (Level1SemanticAnalysis/Succeeded),
+including 4 Service.cs facts. Combined, native and SQL SQLite checks pass; final
+replay handoff points to the NEW run. Readable working copy and convenience
+scripts created outside Git. Its Verify.ps1 also passed.
+
+Private continuation prompt: `prompts/add-framework-source-to-existing-workspace-once.md`.
+One fresh collection, established guard/caps, preserve old run and setup, report
+actual implementation source evidence; no retries or correspondence inference.
+Full same-binary Debug coverage is in progress on this implementation head,
+partitioning the existing global-listener SelfDiagnosticsTests lane as before.
+
+Final Debug coverage PASS at exact implementation head ec5b3cb967ec18329e40ab00eb60a4b26a51063c:
+
+```text
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --nologo
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --filter 'FullyQualifiedName!~TraceMap.Tests.SelfDiagnosticsTests'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --filter 'FullyQualifiedName~TraceMap.Tests.SelfDiagnosticsTests'
+```
+
+Build: 0 warnings/errors. Main lane: 6067 passed, 3 skipped, 0 failed,
+14.2091 min. Isolated same-binary diagnostics: 4 passed, 0 skipped/failed,
+1.6898 sec. All 6074 tests included: 6071 passed, 3 skipped, 0 failed.
+This is full coverage partitioned for the previously documented global-listener
+race, not a claim that an unfiltered single invocation/race is fixed.
+Focused exact-head AddSource: 10 passed, 0 failed. Combined focused lane:
+52 passed before the final rule-provenance-only addition. Both modern and
+legacy rich late-add replays passed; legacy replay used exact final app code.
+Private path guard and git diff --check passed. No PR/merge, no private scan or
+runtime acceptance; work-machine continuation remains the owner's next run.
