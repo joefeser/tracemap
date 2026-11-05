@@ -122,8 +122,8 @@ remain distinct evidence. Combining them does not prove every call resolves.
 Completed compiled collections remain **partial** static reviews: source/build
 correspondence is an integrity/declaration boundary, not authenticated compilation,
 source-line identity, deployment or runtime proof. Native gaps remain visible.
-SQL contracts, workspace retained-source attach, caching and legacy-output parity
-remain separate work. All real inputs, outputs and fingerprints are local-only.
+The V3 SQL sidecar uses a separate admission contract, linked below. Workspace
+retained-source attach, caching and legacy-output parity remain follow-up work. All real inputs, outputs and fingerprints are local-only.
 
 For the opt-in offline SQL sidecar and the combined synthetic trial, see
 [SQL collection getting started](WORKSPACE_SQL_GETTING_STARTED.md).

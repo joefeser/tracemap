@@ -15,6 +15,12 @@ For bounded offline SQL definitions, use the [V3 workspace guide](WORKSPACE_SQL_
 It adds a separate local SQL sidecar and links it from the same start page.
 Arbitrary full dumps and automatic application-to-procedure binding remain
 unsupported. Supplying DDL to an agent does not by itself add admitted contracts.
+For a larger original SQL install template, the separate
+[definition selection guide](SQL_DEFINITION_SELECTION.md) admits explicit whole
+batches with declared template settings and original line mapping. The
+[source-to-SQL guide](SQL_SOURCE_BINDING.md) adds a separate conditional syntax
+candidate for one supported DNN reader-wrapper profile; compiler binding and
+runtime execution remain unknown.
 
 ## Current capabilities
 
@@ -24,6 +30,8 @@ unsupported. Supplying DDL to an agent does not by itself add admitted contracts
 | Existing compiled ASP.NET site | Native `webforms-review` supports fresh collection or attachment to a retained source scan, with explicit assemblies and binding/publication evidence. | Build correspondence must be supplied and checked; missing evidence remains a gap. |
 | Source and compiled combination | Native attach scans compiled inputs separately and combines the retained source and compiled indexes with explicit attachment bindings. | The original source scan stays immutable. |
 | Ordinary `.sql` files | The scanner inventories SQL text and supported query shapes. | This is not a complete database catalog or stored-procedure result contract. |
+| Local offline SQL definitions | `sqlserver-definitions verify/collect`, optionally through workspace V3, creates separate local JSON, SQLite and report sidecars. Whole-batch selection supports larger originals. | Bounded definitions only; selected procedure results remain unknown, and context is not deployed database identity. |
+| Conditional source-to-procedure candidate | `sqlserver-source-binding compare` checks five source method selectors against admitted SQL selection. | DNN reader-wrapper syntax profile only; compiler-resolved dispatch, external transport and runtime binding remain unavailable. |
 | Bounded SQL Server DDL contracts | Separate producers compare supported procedure parameters, constant result projections, and restricted table-backed result projections against source evidence. | The documented routes admit public synthetic inputs. They are not a general private catalog importer or an automatic third input to native Web Forms review. |
 
 ## Files to locate
@@ -194,9 +202,10 @@ for offline definition admission or source-call binding.
 
 Keep any agent-inferred shape in the human interpretation section, citing the
 relevant local SQL file and line spans. Do not insert it as a native fact or claim
-that three channels are already joined in one database. A private importer or
-versioned workflow extension is a separately scoped implementation task, using
-synthetic regression fixtures and explicit source-call-to-contract bindings.
+that three channels are already joined in one database. Broader import
+compatibility or compiler-resolved source-call binding requires a separately
+scoped extension with synthetic regression fixtures and explicit admission rules.
+The conditional candidate command above does not establish a terminal database binding.
 
 ## Deliver the collection to the work agent
 

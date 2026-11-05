@@ -8,8 +8,8 @@ until your authorized Windows comparison passes.
 For a collection handoff covering repository source, an existing compiled site,
 and an offline database schema export, start with the
 [source, compiled-site and SQL collection runbook](SOURCE_COMPILED_SQL_COLLECTION_RUNBOOK.md).
-It distinguishes existing collection capabilities from the remaining private SQL
-admission and integration work.
+It distinguishes native attachment from workspace collection, local SQL admission
+and the remaining integration work.
 
 This is static, potentially partial, review-only evidence—not SQL execution,
 page activation, authenticated compilation, source-line identity, complete

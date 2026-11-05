@@ -5445,7 +5445,7 @@ two WWI procedures with parameter declarations and unknown complex result shapes
 plus two explicitly selected DNN definitions under review-scenario owner/qualifier values;
 DNN unchanged template slice refused as malformed, full DNN install over the file
 limit refused, and WWI table setup with top-level EXEC refused. No SQL execution,
-placeholder substitution, source-call binding or DNN/runtime acceptance. Default
+implicit placeholder substitution, source-call binding or DNN/runtime acceptance. Default
 tests do not fetch these inputs.
 
 

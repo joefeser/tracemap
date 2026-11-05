@@ -14,7 +14,7 @@ TraceMap can also combine multiple indexes into one provenance-preserving SQLite
 
 Start here:
 
-- [Collection workspace](docs/WORKSPACE_GETTING_STARTED.md): configure source repositories once, verify, then collect and report; includes a guide for adding an existing compiled Web Forms publication.
+- [Collection workspace](docs/WORKSPACE_GETTING_STARTED.md): configure source repositories once, verify, then collect and report; links to compiled Web Forms publication and offline SQL guides.
 - [Product requirements](docs/PRD.md)
 - [Acceptance plan](docs/ACCEPTANCE.md)
 - [Validation guide](docs/VALIDATION.md)

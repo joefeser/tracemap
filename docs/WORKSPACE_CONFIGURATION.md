@@ -8,12 +8,13 @@ the explicit `--root`. Unknown and duplicate properties fail. Begin with
 
 | Field | Meaning |
 | --- | --- |
-| `schemaVersion` | Required: `tracemap-workspace.v1` for source-only, or `tracemap-workspace.v2` for prepared native fresh collection |
+| `schemaVersion` | Required: `tracemap-workspace.v1` for source-only, or `tracemap-workspace.v2` for prepared native fresh collection, or `tracemap-workspace.v3` for SQL definitions with optional compiled collection |
 | `repositories` | Required: 1–64 configured source repositories for verify/collect; init creates an empty template |
 | `scopeFile` | Optional repository-ID filter file; resolved relative to the workspace |
 | `webFormsReport` | Optional, default `false`; render a Web Forms modernization packet after the combined report |
 | `templateProvenance` | Optional init-template generator/input SHA-256 values; does not attest subsequent edits |
-| `compiledReview` | V2 only and required in v2: `{ "repositoryId": "web", "nativeConfigPath": "native-evidence/review-config.local.json" }`; see the [compiled guide](WORKSPACE_COMPILED_GETTING_STARTED.md) |
+| `compiledReview` | Required in V2, optional in V3, unavailable in V1: `{ "repositoryId": "web", "nativeConfigPath": "native-evidence/review-config.local.json" }`; see the [compiled guide](WORKSPACE_COMPILED_GETTING_STARTED.md) |
+| `sqlEvidence` | Required in V3, unavailable in V1/V2: `{ "repositoryId": "web", "manifestPath": "sql-input.local.json", "sourceRoot": "sql-inputs" }`; see the [SQL guide](WORKSPACE_SQL_GETTING_STARTED.md) |
 
 `schemaVersion: tracemap-workspace.v1` remains source-only. V2 requires one prepared
 native fresh config and its selected web repository. Native configuration owns
@@ -91,7 +92,7 @@ artifacts and runtime identity; native and framework inputs are rechecked after
 combination and before completion. The combined index itself is also rechecked.
 V2 remains partial because static/native correspondence gaps remain authoritative.
 
-Private SQL admission, application build/publish orchestration, workspace
+Broader SQL dump compatibility, application build/publish orchestration, workspace
 retained-source attachment, retained-scan reuse and resume are follow-up
 contracts. The workspace rejects
 invented fields for those capabilities instead of silently ignoring them.

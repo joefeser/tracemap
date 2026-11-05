@@ -30,4 +30,6 @@
 - [x] Design explicit provenance-tracked SQL template/definition projection from large originals, including required owner/qualifier settings.
 - [x] Implement local-only whole-batch SQL definition selection, original/projected hashes, safe template values and original line mapping.
 - [x] Verify selection boundaries, drift/privacy/refusal controls, workspace integration, retained routes and bounded DNN trial03: 40 new cases, 76 focused, five public corpus cases, four retained smokes, and full Debug `-warnaserror` passed 5,939 with 3 skips and 0 failures.
-- [ ] Full real application/compiled/SQL trial, final validation, story/PR publication when authorized.
+- [ ] Complete a full real application/compiled/SQL trial (separate from the bounded DNN source/SQL trial).
+- [x] Complete milestone validation and reconcile getting-started/configuration guidance.
+- [ ] Publish the bounded consolidation story and PR; record review status without claiming full application parity.

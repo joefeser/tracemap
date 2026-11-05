@@ -510,3 +510,17 @@ implicit global scanner changes. New local CLI sidecar; full Debug gate required
 - No C# edits after the full gate, no source/SQL execution, no private input,
   no rewritten original/index, no push, PR or public message. Save a local feature
   commit only; owner can inspect docs/SQL_SOURCE_BINDING.md and trial02 report.
+
+
+## Story and PR packaging (2026-11-04)
+
+- Owner authorized the consolidation story/PR after the local candidate milestone.
+- Created public story https://github.com/joefeser/tracemap/issues/937.
+- Reconciled V3 config fields, completed owner-trial status, SQL selection/candidate
+  links and remaining follow-ups. Added milestone.md as the bounded review scope.
+- Read back the final implementation gate log: 5,968 passed, three skipped, zero
+  failed on 42bbccbe4; packaging edits are documentation only.
+- Verified 132 relative documentation links, workspace CLI help and diff whitespace.
+- Fetched origin/dev; it remains the branch ancestor with no target-only commits.
+- ACK 0.5.9 stable has the lane-required version/capabilities; PR review state
+  will be recorded separately after publication. No merge is authorized.

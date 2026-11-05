@@ -12,7 +12,7 @@ Compiled-site and database evidence must retain explicit admission boundaries.
 | Use case | Owning entry point | Configuration and outputs | Consolidation status |
 | --- | --- | --- | --- |
 | Multi-repository source workspace | `workspace init/verify/collect` v1 | `workspace.local.json`, repository filter, fresh raw scans, combined reports | Implemented; source owner trial completed |
-| Source plus existing publication workspace | `workspace verify/collect` v2 | Unchanged prepared native fresh config, checkpoint-owned raw web scan, separate framework scan, combined reports and retained native bundle | Implemented; built synthetic replays and full Debug gate passed; owner trial pending |
+| Source plus existing publication workspace | `workspace verify/collect` v2 | Unchanged prepared native fresh config, checkpoint-owned raw web scan, separate framework scan, combined reports and retained native bundle | Implemented; built synthetic replays and full Debug gate passed; owner trial completed |
 | Single source review | `local-review run` | Existing CLI options; retained scan plus optional packet/explorer | Reuse implementation |
 | Legacy source pipeline | `Invoke-FocusedWebFormsPipeline.ps1` | `config/webforms-review.jsonc`, run receipt, scan, packet, evidence docs, workbench | Preserve pending parity |
 | Two source reviews | `Merge-FocusedWebFormsReview.ps1` | Verified web/backend scan receipts; combine then packet/docs/workbench | Establish simpler source entry point; not yet output parity |
@@ -21,7 +21,8 @@ Compiled-site and database evidence must retain explicit admission boundaries.
 | Historical compiled config | Owner reports `webforms-compile-web-config.v1` | Original local file not inspected; exact schema string not found in current scripts/CLI/docs | Investigate explicit migration; do not guess |
 | Page/method inspection | Show/compare/diagnose/requery commands | Existing indexes, packets and run state | Distinguish query from collection; inventory incrementally |
 | Legacy agent launchers | Start/continue Claude review wrappers | Still reference previously purged templates | Not a working starting path; author clean replacements from verified workflows, never restore private historical text |
-| SQL definition evidence | `sqlserver-definitions verify/collect`; workspace V3 `sqlEvidence` | Separate bounded local-only manifest and sidecar; old public synthetic routes preserved | No arbitrary dump execution, source-call join or deployed identity |
+| Conditional source-to-procedure candidate | `sqlserver-source-binding compare` | Five explicit source selectors plus admitted SQL selection; separate local JSON/SQLite/report | Implemented DNN reader-wrapper syntax profile; compiler/dispatch/transport/runtime remain unknown |
+| SQL definition evidence | `sqlserver-definitions verify/collect`; workspace V3 `sqlEvidence` | Separate bounded local-only manifest and sidecar; old public synthetic routes preserved | Separate local sidecar; explicit whole-batch selection available; no database execution or deployed identity |
 
 Hardcoded tool paths are confirmed in `wverify.ps1`, `wrefresh.ps1`,
 `wstatus.ps1`, `Invoke-FocusedWebFormsPipeline.ps1` and
@@ -54,12 +55,12 @@ Keep native attachment joins distinct from generic multi-index combination.
 
 The first local-only definition-set collector and V3 workspace sidecar are implemented;
 see `docs/WORKSPACE_SQL_GETTING_STARTED.md`. Remaining work includes broader dump
-compatibility and explicit application-call bindings. Investigate how the work
-agent rendered the existing dump: tool importer, custom
-parser or human/agent interpretation. Do not transfer private data into public
-fixtures. Specify offline SQL Server definition admission for parameters, result
-projections and dependent tables/views/types, identity bindings to application
-calls, exact generator/input hashes and explicit unsupported/ambiguous shapes.
+compatibility and compiler-resolved application-call bindings. Explicit selection
+from large originals and one conditional DNN reader-wrapper syntax profile are
+implemented; see `docs/SQL_DEFINITION_SELECTION.md` and
+`docs/SQL_SOURCE_BINDING.md`. They do not establish runtime binding or deployment.
+Keep private data outside public fixtures. Broader import and binding extensions
+need exact generator/input hashes and explicit unsupported/ambiguous shapes.
 Dynamic SQL and runtime-selected branches remain unknown unless separately
 supported. An agent-rendered diagram alone is not admitted scanner evidence.
 Future agent instructions should name the selected SQL admission status and the
