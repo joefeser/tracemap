@@ -547,3 +547,13 @@ implicit global scanner changes. New local CLI sidecar; full Debug gate required
   which catches stale local-only objects even when cat-file can still read them.
 - All 28 public acceptance Python guards pass; private-path and whitespace guards
   pass. Replay the actual native compatibility command from this clean commit.
+
+- Native compatibility replay PASSED all four parameter/reader/helper/field
+  producer-and-consumer gates from clean commit 45529bf69; no SQL execution.
+  Log: `/tmp/tracemap-pr938-native-sha-fix.log`; outputs:
+  `/tmp/tracemap-pr938-native-sha-fix-01`.
+- The added ancestry regression exposed a shallow checkout in the separate DNN
+  offline-guards workflow. Configured full history there, matching the existing
+  SQL compatibility workflow, and pinned both lane prerequisites with a test.
+- Final Python validation: 29 acceptance guards and 20 DNN harness guards pass;
+  private-path and whitespace checks pass. No C# or runtime changes in this repair.
