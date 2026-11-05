@@ -72,7 +72,8 @@ To add SQL to a workspace, change its schema to `tracemap-workspace.v3` and add:
 ```
 
 Paths resolve from the workspace configuration folder. The `.sql` paths inside
-the manifest resolve from `sourceRoot`. V3 permits the existing `compiledReview`
+the manifest resolve from `sourceRoot`. Choose a dedicated SQL input directory;
+do not set `sourceRoot` to the workspace configuration folder itself. V3 permits the existing `compiledReview`
 section or source plus SQL alone. V1 remains source-only; V2 retains its compiled
 contract. A repository filter must include the SQL context repository. Changed
 hashes, stale context commits, duplicate definitions and overlapping output/input
@@ -135,3 +136,6 @@ application, database or SQL is executed. DNN templates and WWI setup statements
 must remain refusals, while selected WWI procedure declarations produce partial
 inventories with unknown complex result shapes. This is compatibility evidence,
 not full DNN route binding or runtime acceptance.
+
+For the actual bounded public DNN workspace trial and its SQL admission gaps, see
+[DNN trial results](validation/DNN_WORKSPACE_TRIAL.md).

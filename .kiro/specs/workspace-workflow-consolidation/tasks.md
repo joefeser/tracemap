@@ -24,4 +24,6 @@
 - [ ] Design retained-scan reuse, run status and retention inventory so investigation does not create unnecessary rescans or ambiguous folders.
 - [ ] Replace broken legacy agent-template dependencies with freshly authored instructions tied to verified workflows and explicit SQL admission status.
 - [ ] Compare replacement workflows, then retire or redirect redundant scripts.
-- [ ] Real application/compiled trial, final validation, story/PR publication when authorized.
+- [x] Run a bounded real public DNN source workspace trial and document actual SQL admission refusals; source/independent checks passed, compiled/event/reader join remain unavailable.
+- [ ] Design explicit provenance-tracked SQL template/definition projection from large originals, including required owner/qualifier settings.
+- [ ] Full real application/compiled/SQL trial, final validation, story/PR publication when authorized.

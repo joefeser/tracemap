@@ -213,3 +213,44 @@ a separate follow-up; owner synthetic execution is complete.
   application-call-to-SQL bindings, retained native attachment orchestration and
   scan reuse/retention. The bounded offline collector is implemented, not a full
   database migration engine or an application/runtime acceptance claim.
+
+
+## Real application trial preparation (2026-11-04)
+
+Owner authorized the next bounded real-application trial after the synthetic SQL
+trial passed. Input selection is pending: existing workspace configuration, or
+web/framework repository roots, prepared native review config (or publication
+folder) and schema-only SQL definition folder. The repository has no root
+`configuration/` folder. No broader filesystem search, private source/SQL read,
+collection, compilation, database connection or attestation has been performed
+for this trial. If inputs live only in the work environment, prepare a handoff
+for its authorized local agent rather than transferring their contents here.
+
+
+## Bounded public DNN application trial (2026-11-04)
+
+Owner chose DNN or TraceMap; selected public DNN because it covers the relevant
+Web Forms/SQL Server combination. The prior pending input selection is resolved
+for this bounded public trial; no private application paths are needed.
+
+- Used retained pin 33b8fbe440ab665b8423599789db1f34d2a500fc via the existing
+  public_slice.py helper. No full DNN project evaluation/build or runtime.
+- Actual trial root `/Users/josephfeser/tracemap-reviews/dnn-trial-01/`.
+  Source workspace collection completed partial: 6,031 facts, Level3SyntaxAnalysis,
+  build NotRun. The unchanged independent DNN check passed twice (initial and
+  retained-source recheck). Three incidental Tier3 ExecuteNonQuery candidates;
+  the selected GetRoleGroups reader join remains unavailable.
+- Actual V3 verification refused the 759,795-byte install file (input-size-limit)
+  and unchanged bounded table/procedure projection (ddl-malformed-sql). No owner/
+  qualifier substitution. No SQL collection, SQL connection or execution.
+- Initial SQL config/input folder overlap was refused. Preserved first log/config;
+  corrected to a dedicated input subfolder and reused the source scan. No rescan.
+- No compiled publication was supplied or attested; no page event is in this slice.
+  This does not satisfy full source/compiled/SQL DNN acceptance. Record the bounded
+  trial as completed with explicit gaps, not the broader real-application gate.
+- Public-safe results and next capability concept are in
+  docs/validation/DNN_WORKSPACE_TRIAL.md; exact local generator/input/tool hashes
+  and outputs are in trial-receipt.local.json. No Core/CLI implementation changed.
+- Prioritize a provenance-tracked, explicit template/definition projection contract
+  before DNN source-to-procedure binding. Do not silently strip statements, guess
+  deployment qualifiers or turn syntax admission into a complete result claim.
