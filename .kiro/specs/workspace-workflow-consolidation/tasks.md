@@ -32,4 +32,4 @@
 - [x] Verify selection boundaries, drift/privacy/refusal controls, workspace integration, retained routes and bounded DNN trial03: 40 new cases, 76 focused, five public corpus cases, four retained smokes, and full Debug `-warnaserror` passed 5,939 with 3 skips and 0 failures.
 - [ ] Complete a full real application/compiled/SQL trial (separate from the bounded DNN source/SQL trial).
 - [x] Complete milestone validation and reconcile getting-started/configuration guidance.
-- [ ] Publish the bounded consolidation story and PR; record review status without claiming full application parity.
+- [x] Publish the bounded consolidation story #937 and PR #938; inspect review gates separately from full application parity.

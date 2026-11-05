@@ -524,3 +524,8 @@ implicit global scanner changes. New local CLI sidecar; full Debug gate required
 - Fetched origin/dev; it remains the branch ancestor with no target-only commits.
 - ACK 0.5.9 stable has the lane-required version/capabilities; PR review state
   will be recorded separately after publication. No merge is authorized.
+
+- Published PR https://github.com/joefeser/tracemap/pull/938 against dev, linked to
+  story #937. Publication is complete; review/CI readiness remains pending a live
+  ACK gate. No merge performed. PR-loop receipts live under the ignored local
+  `.agent-control/pr-loop-handoffs/` path to avoid review-only commit churn.
