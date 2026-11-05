@@ -575,3 +575,18 @@ bounds/nested-scope controls were then added. Initial workspace lane: 53 passed,
 0 failed. Final expanded lane, public rehearsal and exact-head full Debug gate
 are pending; do not treat this checkpoint as completed validation or merge readiness.
 No private inputs used. No PR or merge requested.
+
+
+### Scope hardening validation completed
+
+Exact code/test head: 9d189373ff6ed0c84520c79e810ad9145006df81.
+Final workspace lane: 55 passed, 0 failed/skipped, Debug -warnaserror.
+Release launcher preparation succeeded. Public Test-WorkspaceLauncher -WithSql
+rehearsal passed full and filtered source/compiled/SQL collection with scope preview.
+Isolated remote full Debug -warnaserror: 5,979 passed, 3 skipped, 0 failed;
+5,982 total, 14.4429 minutes, successful process exit. No private inputs used.
+Final follow-up changes are documentation/prompt only; code/tests match that head.
+Private-path and whitespace guards passed. The verification-only owner prompt is
+prompts/verify-workspace-scope-before-collection.md. It does not authorize collection.
+Windows work-configuration validation remains pending. No PR opened or merge done;
+the separate codex/work-scan-setup-guide branch remains unchanged.

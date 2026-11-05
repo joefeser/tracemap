@@ -117,7 +117,7 @@ include/exclude globs and target framework. For native collection it shows the
 native source folders, page mode/list, publication root, primary/dependency DLLs,
 PDBs and maps. Native configuration remains the sole authority for web selection.
 
-A project selection requires `.csproj`, `.vbproj` or `.fsproj`; a solution selection
+A workspace source project selection requires `.csproj`, `.vbproj` or `.fsproj`; a solution selection
 requires `.sln` or `.slnx`. Putting a solution in `projects`, a project in `solution`,
 or an unrelated file in either field refuses with `WORKSPACE_SELECTION_FILE_KIND`
 before scanning. File-kind validation does not parse project contents or guarantee
@@ -148,3 +148,6 @@ new evidence facts or a completeness verdict. The preview writes no new artifact
 all paths remain local. Existing run records, receipt admission, source discovery,
 semantic fallback and failure/partial policies are unchanged. No automatic repair,
 project-type conversion or widening of configured scope occurs.
+
+For a bounded work-machine check of an existing config without collection, use
+[the verification-only prompt](../prompts/verify-workspace-scope-before-collection.md).

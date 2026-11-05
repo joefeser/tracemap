@@ -39,5 +39,5 @@
 - [x] Pin wrong project/solution file kinds and missing scope visibility before implementation (nine intended failures).
 - [x] Add local selected/excluded repository and native source/page/assembly preview with root-only bounded hints; keep configuration authority unchanged.
 - [x] Reject obvious project/solution file-kind mismatches before collection; warnings do not silently expand or rewrite scope.
-- [ ] Complete focused workspace regression tests, public rehearsal and full Debug warnings-as-errors gate on the final code head.
+- [x] Focused workspace lane 55/55; public source/compiled/SQL rehearsal; exact-code-head full Debug -warnaserror: 5,979 passed, 3 skipped, 0 failed at 9d189373f.
 - [ ] Owner tests work configuration; no PR or merge until requested.
