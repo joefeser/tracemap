@@ -174,8 +174,11 @@ public static class SqlServerDdlEvidence
 
     // Parsing/limits are shared; caller admission contracts remain separate.
     internal static TSqlScript ParseBoundedSql(string text)
+        => ParseBoundedSql(text, MaxFileBytes, 0);
+
+    internal static TSqlScript ParseBoundedSql(string text, int maxBytes, int lineOffset)
     {
-        Require(new UTF8Encoding(false, true).GetByteCount(text) <= MaxFileBytes, "input-size-limit");
+        Require(new UTF8Encoding(false, true).GetByteCount(text) <= maxBytes, "input-size-limit");
         // Refuse unresolved SQLCMD anywhere, including strings/comments; never substitute.
         Require(!text!.Contains("$(", StringComparison.Ordinal)
             && !text.Contains("!!", StringComparison.Ordinal) && !SqlCmdDirective.IsMatch(text)
@@ -209,6 +212,8 @@ public static class SqlServerDdlEvidence
                 while (next < tokens.Count && tokens[next].TokenType == TSqlTokenType.WhiteSpace) next++;
                 Require(next == tokens.Count || tokens[next].TokenType != TSqlTokenType.Integer, "batch-repeat-unsupported");
             }
+        if (lineOffset != 0)
+            foreach (var token in tokens) token.Line = checked(token.Line + lineOffset);
         var (fragment, errors) = OnParserStack(() => (parser.Parse(tokens, out var parseErrors), parseErrors));
         var script = fragment as TSqlScript;
         Require(errors.Count == 0 && script is not null, "malformed-sql");

@@ -101,3 +101,10 @@
 - [x] Report measured manifest/file/aggregate size and actual admitted limit without changing existing caps.
 - [x] Remove retry from size refusal; pause same blocked selection and repeated identical validation failures.
 - [x] Prove size and ordinary-invalid retry/change pauses, then select a different valid manifest and collect through SQLite locally.
+
+## Stream ordinary-size SQL exports — 2026-11-05
+
+- [x] Preserve v1/selection refusals and add an explicit 8 GiB sequential input contract with bounded batches/retained AST/evidence.
+- [x] Verify true GO boundaries, exact original digests/line spans, global context and duplicate handling across batches.
+- [x] Add wizard stream opt-in without editing originals; exact 667158/6671580-byte fixtures and full 7 MB SQLite replay pass.
+- [ ] Finish 8 GiB byte-volume stress, exact-head full Debug gate and user-shaped large-export copy.

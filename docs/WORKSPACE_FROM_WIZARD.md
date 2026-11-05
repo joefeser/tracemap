@@ -200,3 +200,9 @@ truncation or a budget raise. Other validation errors permit one requested retry
 or change; if the same failure remains, setup pauses rather than looping. A retry
 after a real correction can still succeed. Native setup/runs and failed inputs
 are preserved. Replay `--size-limit-first --same-failure-first` covers these cases.
+
+For ordinary exports larger than 256 KiB, the size-refusal prompt now offers
+`stream`. It preserves the original and creates a versioned streaming manifest
+with an 8 GiB source limit and independent bounded parser/evidence budgets. See
+[streamed local definitions](SQL_STREAMED_DEFINITIONS.md) before interpreting that
+limit as unrestricted SQL support.

@@ -53,6 +53,24 @@ internal static class SqlServerLocalDefinitionsCommand
         return 0;
     }
 
+    internal static string CreateStreamedManifest(string original, string sourceRoot)
+    {
+        var text = SqlServerDdlCommand.ReadBounded(original, SqlServerSchemaEvidence.MaxBytes);
+        var input = SqlServerLocalDefinitions.ReadInput(text);
+        var bounded = SqlServerSchemaEvidence.Hash(JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            originalManifestSha256 = SqlServerSchemaEvidence.Hash(Encoding.UTF8.GetBytes(text)),
+            sourceRoot = Path.GetFullPath(sourceRoot), mode = SqlServerLocalDefinitions.StreamInputVersion
+        }));
+        var changed = input with { Version = SqlServerLocalDefinitions.StreamInputVersion,
+            Provenance = new(SqlServerSchemaEvidence.Hash(File.ReadAllBytes(typeof(SqlServerLocalDefinitionsCommand).Assembly.Location)), bounded) };
+        var path = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(original))!, "sql-streamed-" + Guid.NewGuid().ToString("N") + ".local.json");
+        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(changed, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+        stream.Write(bytes); stream.Flush(true);
+        return path;
+    }
+
     internal static SqlLocalCollectionInput Inspect(string manifestPath, string sourceRoot, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
@@ -65,7 +83,24 @@ internal static class SqlServerLocalDefinitionsCommand
         using var document = JsonDocument.Parse(json);
         SqlLocalExport export;
         IReadOnlyList<SqlServerDdlFile> files;
-        if (document.RootElement.GetProperty("version").GetString() == SqlServerDefinitionSelection.InputVersion)
+        if (document.RootElement.GetProperty("version").GetString() == SqlServerLocalDefinitions.StreamInputVersion)
+        {
+            var input = SqlServerLocalDefinitions.ReadStreamInput(json);
+            files = input.Files;
+            var root = sourceRoot;
+            export = SqlServerLocalDefinitions.ProduceStreamed(json, relative =>
+            {
+                var path = root;
+                if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new ArgumentException("ddl-source-link-refused");
+                foreach (var part in relative.Split('/'))
+                {
+                    path = Path.Combine(path, part);
+                    if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new ArgumentException("ddl-source-link-refused");
+                }
+                return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65_536, FileOptions.SequentialScan);
+            }, token);
+        }
+        else if (document.RootElement.GetProperty("version").GetString() == SqlServerDefinitionSelection.InputVersion)
         {
             var input = SqlServerDefinitionSelection.ReadInput(json);
             files = input.Files;

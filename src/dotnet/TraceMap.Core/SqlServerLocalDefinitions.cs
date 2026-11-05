@@ -21,7 +21,7 @@ public sealed record SqlLocalExport(string Version, string Visibility, string Cl
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlDefinitionSelectionEvidence? Selection = null);
 
 /// <summary>Local-only AST definition inventory. No database access, execution, source-call binding or public projection.</summary>
-public static class SqlServerLocalDefinitions
+public static partial class SqlServerLocalDefinitions
 {
     public const string InputVersion = "sqlserver-local-definitions-input/1";
     public const string ExportVersion = "sqlserver-local-definitions/1";
@@ -57,24 +57,48 @@ public static class SqlServerLocalDefinitions
         var input = ReadInput(inputJson);
         Require(sources.Count == input.Files.Count && sources.Keys.Order(StringComparer.Ordinal).SequenceEqual(
             input.Files.Select(file => file.Path).Order(StringComparer.Ordinal), StringComparer.Ordinal), "source-set-mismatch");
+        return ProduceParts(input, SourceParts(), SqlServerDdlEvidence.MaxFileBytes, false, token);
+
+        IEnumerable<SqlLocalPart> SourceParts()
+        {
+            var total = 0;
+            foreach (var file in input.Files.OrderBy(file => file.Path, StringComparer.Ordinal))
+            {
+                Require(sources.TryGetValue(file.Path, out var text) && text is not null, "source-missing");
+                var bytes = new UTF8Encoding(false, true).GetBytes(text!);
+                total += bytes.Length;
+                Require(bytes.Length <= SqlServerDdlEvidence.MaxFileBytes && total <= SqlServerDdlEvidence.MaxTotalBytes, "input-size-limit");
+                Require(SqlServerSchemaEvidence.Hash(bytes) == file.Sha256, "source-digest-mismatch");
+                yield return new(file.Path, text!, 1);
+            }
+        }
+    }
+
+    private sealed record SqlLocalPart(string Path, string Text, int StartLine);
+
+    private static SqlLocalExport ProduceParts(SqlLocalInput input, IEnumerable<SqlLocalPart> parts,
+        int maxBatchBytes, bool streamed, CancellationToken token)
+    {
+        var maxObjects = streamed ? MaxStreamObjects : MaxObjects;
+        var maxReferences = streamed ? MaxStreamReferences : MaxDependencies;
+        var maxGaps = streamed ? MaxStreamGaps : 8192;
         var definitions = new List<(string Kind, string Schema, string Name, string Path, TSqlStatement Statement)>();
         var gaps = new List<SqlLocalGap>();
         var identities = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var total = 0;
+        long retainedBytes = 0;
+        long retainedTokens = 0;
         var shapeMutation = false;
-        foreach (var file in input.Files.OrderBy(file => file.Path, StringComparer.Ordinal))
+        foreach (var part in parts)
         {
             token.ThrowIfCancellationRequested();
-            Require(sources.TryGetValue(file.Path, out var text) && text is not null, "source-missing");
-            var bytes = new UTF8Encoding(false, true).GetBytes(text!);
-            total += bytes.Length;
-            Require(bytes.Length <= SqlServerDdlEvidence.MaxFileBytes && total <= SqlServerDdlEvidence.MaxTotalBytes, "input-size-limit");
-            Require(SqlServerSchemaEvidence.Hash(bytes) == file.Sha256, "source-digest-mismatch");
-            // Shared bounded lexer/parser only; no publicSynthetic manifest is manufactured.
-            var script = SqlServerDdlEvidence.ParseBoundedSql(text!);
+            var file = new SqlServerDdlFile(part.Path, "");
+            if (streamed && part.StartLine != 1) Require(!part.Text.StartsWith('\uFEFF'), "embedded-bom-not-admitted");
+            var script = SqlServerDdlEvidence.ParseBoundedSql(part.Text, maxBatchBytes, part.StartLine - 1);
+            var countBefore = definitions.Count;
             foreach (var statement in script.Batches.SelectMany(batch => batch.Statements))
             {
                 token.ThrowIfCancellationRequested();
+                if (streamed) Require(gaps.Count < maxGaps, "evidence-limit");
                 string? kind = null;
                 SchemaObjectName? name = null;
                 switch (statement)
@@ -105,8 +129,14 @@ public static class SqlServerLocalDefinitions
                     "explicit-schema-object-required");
                 var schema = name!.SchemaIdentifier!.Value; var objectName = name.BaseIdentifier!.Value;
                 Require(identities.Add(SqlServerSchemaEvidence.Json(new[] { schema, objectName })), "ambiguous-definition-set");
-                Require(definitions.Count < MaxObjects, "object-limit");
+                Require(definitions.Count < maxObjects, "object-limit");
                 definitions.Add((kind!, schema, objectName, file.Path, statement));
+            }
+            if (streamed && definitions.Count != countBefore)
+            {
+                retainedBytes += Encoding.UTF8.GetByteCount(part.Text);
+                retainedTokens += script.ScriptTokenStream.Count;
+                Require(retainedBytes <= 64L * 1024 * 1024 && retainedTokens <= 1_000_000, "retained-parser-budget");
             }
         }
         Require(definitions.Count > 0, "no-definitions");
@@ -164,22 +194,22 @@ public static class SqlServerLocalDefinitions
             var tableDefinition = tables.SingleOrDefault(table => table.Identity.Schema == definition.Schema && table.Identity.Table == definition.Name);
             objects.Add(new(id, definition.Kind, definition.Schema, definition.Name, RuleId, EvidenceTiers.Tier2Structural,
                 Span(definition.Path, definition.Statement), parameters, tableDefinition, shape));
-            definition.Statement.Accept(new ReferenceVisitor(id, definition.Path, references, gaps));
-            Require(references.Count <= MaxDependencies && gaps.Count <= 8192, "evidence-limit");
+            definition.Statement.Accept(new ReferenceVisitor(id, definition.Path, references, gaps, maxReferences, maxGaps));
+            Require(references.Count <= maxReferences && gaps.Count <= maxGaps, "evidence-limit");
         }
+        var declared = objects.ToDictionary(item => (item.Schema, item.Name, item.Kind is "table" or "view" ? "relation" : item.Kind));
         var linked = references.Select(reference =>
         {
-            var targets = objects.Where(item => reference.Schema == item.Schema && reference.Name == item.Name
-                && (reference.Kind == "relation" ? item.Kind is "table" or "view" : item.Kind == reference.Kind)).ToArray();
+            var target = reference.Schema is not null && declared.TryGetValue((reference.Schema, reference.Name, reference.Kind), out var match) ? match : null;
             return reference with
             {
-                Resolution = reference.Schema is null ? "unqualified-or-external-unknown" : targets.Length == 1 ? "declared-definition-only" : "definition-not-admitted-unknown",
-                TargetId = targets.Length == 1 ? targets[0].Id : null
+                Resolution = reference.Schema is null ? "unqualified-or-external-unknown" : target is not null ? "declared-definition-only" : "definition-not-admitted-unknown",
+                TargetId = target?.Id
             };
         }).ToArray();
-        var export = new SqlLocalExport(ExportVersion, "local-only", "offline-definitions-not-deployment-or-call-binding", "partial", "no-aggregate-clean-verdict",
+        var export = new SqlLocalExport(streamed ? StreamExportVersion : ExportVersion, "local-only", "offline-definitions-not-deployment-or-call-binding", "partial", "no-aggregate-clean-verdict",
             SqlServerSchemaEvidence.GeneratorSha256, SqlServerSchemaEvidence.Digest(input), SqlServerDdlEvidence.ParserVersion,
-            SqlServerDdlEvidence.ParserDigest.Value, ExtractorVersion, RuleId, input, objects, linked, gaps,
+            SqlServerDdlEvidence.ParserDigest.Value, streamed ? StreamExtractorVersion : ExtractorVersion, RuleId, input, objects, linked, gaps,
             ["Input fingerprints and object identities are local-only; no public privacy projection is provided.",
              "Context repository/commit identifies application context only, not the database export revision or deployed database.",
              "Definitions are an unordered set. Duplicate/case-only identities refuse admission; no migration ordering is inferred.",
@@ -187,7 +217,10 @@ public static class SqlServerLocalDefinitions
              "Complete result shapes use the bounded single-SELECT subset only; joins, filters, branches, dynamic SQL, views/functions and schema mutations stay unknown.",
              "Dependency references are syntax observations, not execution, reachability or deployed resolution. No source call is automatically bound.",
              "Partial local evidence only; no aggregate clean verdict, SQL execution, database connection or runtime observation."]);
-        Require(Encoding.UTF8.GetByteCount(SqlServerSchemaEvidence.Json(export)) <= SqlServerSchemaEvidence.MaxBytes, "export-size-limit");
+        if (streamed) export = export with { Limitations = [.. export.Limitations,
+            "Streamed input admits at most 8 GiB/file and total; verified GO batches are bounded to 4 MiB and 100000 tokens, with unchanged syntax/stack guards.",
+            "Retained definition ASTs are bounded to 64 MiB of batch text and 1000000 tokens; 8192 objects, 65536 dependencies/gaps, 65536 batches and 32 MiB exported metadata are separate refusal limits."] };
+        Require(Encoding.UTF8.GetByteCount(SqlServerSchemaEvidence.Json(export)) <= (streamed ? MaxStreamExportBytes : SqlServerSchemaEvidence.MaxBytes), "export-size-limit");
         return export;
 
         SqlServerObjectIdentity Identity(string schema, string name) => new(input.Server, input.Database, schema, name);
@@ -225,7 +258,7 @@ public static class SqlServerLocalDefinitions
     private static SqlLocalSpan Span(string path, TSqlFragment at) => new(path, at.StartLine, SqlServerDdlEvidence.EndLine(at));
     private static SqlLocalGap Gap(string kind, string path, TSqlFragment at) => new(kind, RuleId, EvidenceTiers.Tier4Unknown, Span(path, at));
 
-    private sealed class ReferenceVisitor(string source, string path, List<SqlLocalDependency> references, List<SqlLocalGap> gaps) : TSqlFragmentVisitor
+    private sealed class ReferenceVisitor(string source, string path, List<SqlLocalDependency> references, List<SqlLocalGap> gaps, int maxReferences, int maxGaps) : TSqlFragmentVisitor
     {
         public override void ExplicitVisit(NamedTableReference node)
         { Add("relation", node.SchemaObject, node); base.ExplicitVisit(node); }
@@ -253,7 +286,7 @@ public static class SqlServerLocalDefinitions
             AddRow(kind, name.Identifiers.Count == 2 ? name.SchemaIdentifier?.Value : null, name.BaseIdentifier.Value, at);
         private void AddRow(string kind, string? schema, string name, TSqlFragment at)
         {
-            Require(references.Count < MaxDependencies && gaps.Count < 8192, "evidence-limit");
+            Require(references.Count < maxReferences && gaps.Count < maxGaps, "evidence-limit");
             Require(Name(name) && (schema is null || Name(schema)), "reference-name-invalid");
             references.Add(new(source, kind, schema, name, "unresolved", null, DependencyRule, EvidenceTiers.Tier2Structural, Span(path, at)));
         }

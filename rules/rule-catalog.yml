@@ -12,7 +12,7 @@ rules:
     limitations:
       - Local-only answers bind the website and original native configuration hash; exact CLI generator and bounded-answer hashes detect ordinary drift, not authenticity or source correspondence.
       - Configuration does not scan, build, execute SQL, attest publication correspondence or import completed results. An explicit collect choice dispatches the existing workspace collector to a fresh output; existing native receipt and SQL admission policies remain authoritative.
-      - SQL size refusals report measured bytes and admitted limits, do not offer retry as a repair, and preserve all caps. A repeated identical validation failure pauses instead of looping; a different admitted input is required for unsupported scope.
+      - SQL size refusals report measured bytes and admitted limits, do not offer retry as a repair, and preserve original-contract caps. Explicit stream choice creates a separate 8 GiB-container input with bounded parser/evidence budgets; original files and manifest are preserved. A repeated identical validation failure pauses instead of looping; a different admitted input is required for unsupported scope.
       - Invalid or stale workspace answer recovery requires an explicit restart choice, archives exact previous bytes after a drift check, and preserves website/native state. SQL validation offers change/retry/pause without bypassing admission.
       - SQL files are resolved relative to the manifest directory first and admitted only after existing path and digest checks. An alternate base is requested only for missing files; no recursive search or manifest rewriting is performed.
       - Additional dependency source is optional; skip retains existing compiled DLL selection without claiming dependency-source coverage. Framework project previews inspect at most 256 immediate root files, never nested membership; discovery requires explicit selection.
@@ -8198,6 +8198,18 @@ rules:
       - Workspace output must not overlap any selected SQL file directory or contain the input manifest. The manifest base may be a parent of separate SQL and run directories; standalone SQL collection retains its whole-root overlap refusal.
       - SQL evidence stays in sql/definitions.local.json and sql/sql-evidence.sqlite and is never passed to generic combine. No automatic application-to-procedure join, database connection, restore, fetch or SQL execution.
       - Exact CLI generator and bounded-input SHA-256, input manifests and file digests, output hashes and rechecks precede completion. Local-only partial evidence; failed outputs are retained as failed and existing runs are preserved. V1 source and V2 compiled contracts remain separate.
+  - id: database.sqlserver.streamed-local-definitions.v1
+    name: Bounded sequential SQL definition containers
+    description: Consumes exact hashed UTF-8 originals through lexically verified GO batches and applies the existing structural definition analysis across the whole admitted set.
+    evidenceTier: Tier2Structural or Tier4Unknown
+    emits:
+      - sqlserver-streamed-local-definitions/1
+    limitations:
+      - Opt-in sqlserver-streamed-local-definitions-input/1 admits 8 GiB per file and total, at most 32 files; original ordinary/selection input contracts retain their own limits.
+      - Batches are at most 4 MiB and 100000 tokens, with existing syntax and parser-stack guards; standalone GO candidates require pinned lexer agreement. Original line spans and full-source digests are checked before export.
+      - Separate limits are 65536 batches, 64 MiB retained definition text, 1000000 retained tokens, 8192 objects, 65536 references/gaps and 32 MiB metadata. Over-budget inputs refuse, not truncate or pretend complete.
+      - Object/dependency observations retain existing structural rules. Global duplicate, schema/session mutation, SQLCMD, repeated GO, executable top-level and unsupported result-shape refusals remain; no migration order, deployment, runtime or application binding is inferred.
+      - Local-only export has exact Core generator and bounded manifest fingerprints. Wizard-created stream manifests record exact CLI generator and bounded original-manifest/base/mode hashes; integrity is not authentication and SQL bodies are not emitted.
   - id: database.sqlserver.selected-definitions.v1
     name: Explicit local SQL definition selection and template projection
     description: Selects whole batches from exact hashed originals, applies explicit owner and qualifier values, verifies one expected definition per selection and maps evidence to original source lines.

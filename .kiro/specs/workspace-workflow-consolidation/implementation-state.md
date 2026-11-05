@@ -983,3 +983,29 @@ unchanged-error pauses followed by valid-manifest collection and three SQLite
 checks. Whitespace/private-path guards pass. Core implementation and its f7f058434
 6,021-pass full gate are unchanged; this is a CLI diagnostic/recovery change.
 No PR/merge and no claim that unsupported private SQL is admitted.
+
+### Streamed SQL source containers — 2026-11-05
+
+Owner measured 667158 bytes and requested an 8 GB limit, with another project
+about ten times larger. A numeric raise in the old whole-file loader/parser
+would be unsafe. Added a separate explicit stream input/export version: exact
+original bytes are hashed sequentially, candidate GO boundaries require the
+pinned lexer to agree, batches retain original line coordinates, and the existing
+whole-definition-set analysis runs after bounded AST collection. V1/selection
+contracts and defaults remain. Global shape mutation, duplicate identities,
+table/reference resolution and unsupported SQL refusals remain. No raw SQL body
+enters output. Definition-set byte volume is not arbitrary SQL grammar support.
+
+New caps: 8 GiB/file and total; 4 MiB/100000-token batches, 65536 batches,
+64 MiB retained text/1000000 tokens, 8192 objects, 65536 references/gaps, 32 MiB
+metadata. Original parser syntax/stack controls remain. Wizard stream opt-in
+writes a new provenance-bound manifest, preserves all original files/fields/hashes
+and stores its path; no private selection/truncation or automatic cap change.
+
+Focused Core/CLI tests reached 58 passes, including original v1 cases, exact
+667158/6671580 bytes, line coordinates, GO inside comments/strings, whole-source
+digest drift, global mutation, cross-batch table references, legacy refusals and
+above-8GiB pre-read refusal. Actual full launcher/wizard/SQLite replay with exact
+6671580 bytes passed. Full 8 GiB virtual byte-volume stress and broad/exact-head
+gates pending at this checkpoint. Core change requires full Debug -warnaserror.
+No PR/merge or private-input success claim.

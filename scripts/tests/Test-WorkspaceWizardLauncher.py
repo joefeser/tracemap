@@ -21,6 +21,7 @@ def main():
     parser.add_argument("--legacy-web-target", choices=["net20", "net472", "net48"], default="net472", help="Explicit synthetic web build target; dependency remains net20")
     parser.add_argument("--size-limit-first", action="store_true", help="Prove oversized SQL gives measured limits and pauses instead of looping")
     parser.add_argument("--same-failure-first", action="store_true", help="Prove an unchanged SQL validation retry pauses rather than re-asking forever")
+    parser.add_argument("--sql-export-bytes", type=int, default=44, help="Author an exact-size public SQL export and opt into streamed mode when needed")
     args = parser.parse_args()
     if args.same_failure_first:
         args.bad_manifest_first = True
@@ -101,7 +102,23 @@ def main():
     (published / "PrecompiledApp.config").write_text('<precompiledApp version="2" />', encoding="utf-8")
     (published / "bin/Default.aspx.compiled").write_text('<preserve virtualPath="/Default.aspx" assembly="SyntheticWeb" type="Example.Page" />', encoding="utf-8")
     sql_file = sql / "schema.sql"
-    sql_file.write_text("CREATE PROC dbo.ReadItems AS SELECT 1 AS Id;", encoding="utf-8")
+    statement = "CREATE PROC dbo.ReadItems AS SELECT 1 AS Id;"
+    if args.sql_export_bytes < 44: raise RuntimeError("SQL fixture size must be at least 44")
+    if args.sql_export_bytes == 44:
+        sql_file.write_text(statement, encoding="utf-8")
+    else:
+        text = []
+        count = 0
+        remaining = args.sql_export_bytes
+        while remaining > 24_200:
+            name = "ReadItems" if count == 0 else "ReadItems" + str(count)
+            batch = "/*" + "x" * 12000 + "*/\nCREATE PROC dbo." + name + " AS SELECT 1 AS Id;\nGO\n"
+            text.append(batch); remaining -= len(batch); count += 1
+        if count == 0:
+            text.append(statement + "\nGO\n"); remaining -= len(text[-1])
+        text.append("--" + "x" * (remaining - 2))
+        sql_file.write_text("".join(text), encoding="utf-8")
+        if sql_file.stat().st_size != args.sql_export_bytes: raise RuntimeError("SQL fixture size mismatch")
     manifest = {"version": "sqlserver-local-definitions-input/1", "visibility": "local-only",
                 "contextRepository": "web", "contextCommitSha": head, "definitionSet": "synthetic-wizard-replay",
                 "server": "ExampleServer", "database": "ExampleDatabase",
@@ -185,7 +202,7 @@ def main():
         if args.same_failure_first and "same SQL validation failure" not in invalid:
             raise RuntimeError("Unchanged validation retry did not stop the loop")
     output = tool("wizard-create-workspace", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
-                  "\n".join(["workspace", *(["change"] if args.bad_manifest_first else []), str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), "create", "collect", ""]))
+                  "\n".join(["workspace", *(["change"] if args.bad_manifest_first else []), str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), *(["stream"] if args.sql_export_bytes > 262144 else []), "create", "collect", ""]))
     config_path = workspace / "workspace.local.json"
     config = json.loads(config_path.read_text())
     if len(config["repositories"]) != (2 if args.with_source else 1):

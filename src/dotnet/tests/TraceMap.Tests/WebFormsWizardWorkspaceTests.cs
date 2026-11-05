@@ -7,6 +7,30 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsWizardWorkspaceTests
 {
+    [Fact]
+    public async Task Actual_667158_byte_export_can_opt_into_streaming_without_editing_the_original_manifest()
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture();
+        await fixture.Prepare();
+        var sql = Path.Combine(fixture.WizardRoot, "sql"); Directory.CreateDirectory(sql);
+        var suffix = "\nCREATE PROC dbo.ReadItems AS SELECT 1 AS Id;\nGO\n";
+        var text = "--" + new string('x', 667158 - suffix.Length - 2) + suffix;
+        var file = Path.Combine(sql, "export.sql"); File.WriteAllText(file, text);
+        var manifest = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
+        manifest["files"]![0]!["path"] = "sql/export.sql";
+        manifest["files"]![0]!["sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(text)));
+        var path = Path.Combine(fixture.WizardRoot, "sql.local.json"); File.WriteAllText(path, manifest.ToJsonString());
+        var before = File.ReadAllBytes(path);
+        using var input = new StringReader($"workspace\nskip\n{path}\nstream\ncreate\nlater\n");
+        Assert.True(await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error) == 0, fixture.Error.ToString() + fixture.Output);
+        Assert.Equal(before, File.ReadAllBytes(path));
+        Assert.Equal(667158, new FileInfo(file).Length);
+        var changed = Assert.Single(Directory.GetFiles(fixture.WizardRoot, "sql-streamed-*.local.json"));
+        using var json = JsonDocument.Parse(File.ReadAllText(changed));
+        Assert.Equal(SqlServerLocalDefinitions.StreamInputVersion, json.RootElement.GetProperty("version").GetString());
+        Assert.Equal(0, await WorkspaceCommand.RunAsync(["verify", "--root", fixture.WizardRoot], fixture.Output, fixture.Error));
+    }
+
     [Theory]
     [InlineData("retry")]
     [InlineData("same")]

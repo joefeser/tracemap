@@ -134,10 +134,11 @@ internal static class WebFormsWizardWorkspace
             // repair a missing-file base only when the manifest-relative bytes verify.
             var manifestBase = Path.GetDirectoryName(answers.SqlManifest!)!;
             SqlLocalCollectionInput? sqlPlan;
+            var sqlBase = answers.SqlRoot ?? manifestBase;
             try
             {
-                sqlPlan = TrySql(answers.SqlRoot ?? manifestBase);
-                if (sqlPlan is null && answers.SqlRoot is not null) sqlPlan = TrySql(manifestBase);
+                sqlPlan = TrySql(sqlBase);
+                if (sqlPlan is null && answers.SqlRoot is not null) { sqlBase = manifestBase; sqlPlan = TrySql(sqlBase); }
             }
             catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException or IOException or UnauthorizedAccessException)
             {
@@ -154,11 +155,24 @@ internal static class WebFormsWizardWorkspace
                 {
                     sizeBlockedManifest = answers.SqlManifest;
                     await output.WriteLineAsync("SQL setup is blocked by an admission limit. Retry cannot change that limit; no workspace was created.");
-                    if (size.Scope == "SQL-file" && size.LimitBytes == SqlServerDdlEvidence.MaxFileBytes)
-                        await output.WriteLineAsync("Ordinary definitions allow 262144 bytes per file. Larger originals require an explicit bounded definition-selection manifest; this wizard does not select, truncate, or raise limits automatically.");
-                    await output.WriteLineAsync("Select a DIFFERENT prepared SQL manifest or pause? [select/later]");
+                    var canStream = size.Scope == "SQL-file" && size.LimitBytes == SqlServerDdlEvidence.MaxFileBytes
+                        || size.Scope == "SQL-total" && size.LimitBytes == SqlServerDdlEvidence.MaxTotalBytes;
+                    if (canStream)
+                    {
+                        await output.WriteLineAsync("Streamed definitions can read up to 8 GiB per file/total, using bounded GO batches. All listed files are retained; no SQL is executed or truncated. Parser/evidence limits still apply.");
+                        await output.WriteLineAsync("Use streamed mode, select a different prepared manifest, or pause? [stream/select/later]");
+                    }
+                    else await output.WriteLineAsync("Select a DIFFERENT prepared SQL manifest or pause? [select/later]");
                     var selection = await input.ReadLineAsync(token);
                     if (selection is null || selection.Trim() is "later" or "retry") return 2;
+                    if (selection.Trim() == "stream" && canStream)
+                    {
+                        var changed = SqlServerLocalDefinitionsCommand.CreateStreamedManifest(answers.SqlManifest!, sqlBase);
+                        await output.WriteLineAsync("Streamed manifest created; original preserved: " + changed);
+                        answers = answers with { SqlManifest = changed, SqlRoot = sqlBase };
+                        await Save();
+                        continue;
+                    }
                     if (selection.Trim() is not ("select" or "change")) throw Fail("CHOICE_INVALID");
                     answers = answers with { SqlManifest = null, SqlRoot = null };
                     await Save();
