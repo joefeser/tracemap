@@ -127,4 +127,4 @@
 - [x] Separate independent parentheses/type facets from active nesting in streamed profile /4, preserving legacy guard contracts.
 - [x] Keep 128 active parentheses, 4096 control-openers, 100000 tokens and fixed 64 MiB parser stack; surface exact guard metric/count/limit/location.
 - [x] Prove a 512-column table, 512 sequential conditional blocks, actual nested/work overflows and literal/comment separation.
-- [ ] Finish wizard transition pin, rich UTF16/context/net20 replay and full Debug coverage; push without PR/merge.
+- [x] Finish wizard transition pin, rich UTF16/context/net20 replay and full Debug coverage (6060 passed, 3 skipped across same-binary lanes); push without PR/merge.

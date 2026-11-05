@@ -199,3 +199,13 @@ python scripts/tests/Test-WorkspaceWizardLauncher.py --output-root C:/reviews/ri
 
 This exercises actual SQL width/control structure in addition to byte volume.
 The metadata input and original SQL bytes/hashes are preserved throughout.
+
+Final `/4` qualification at application checkpoint `cc2c8c078`: 202 focused
+SQL/DDL/wizard tests passed. Full Debug `-warnaserror` inventory passed across
+the same-binary main/isolated-diagnostics invocations: 6,060 passed, 3 skipped,
+zero failed (6,063 total). The previously documented unfiltered diagnostics race
+is not claimed fixed. The rich replica also passed a rebuild and saved-workspace
+collection with the final code, preserving inputs/configuration/previous run;
+latest SQL evidence confirms `/4`, all 512 table columns and an explicitly
+unknown result shape for the 512-conditional procedure. No private-input success
+or application/database execution claim is added.

@@ -1207,3 +1207,48 @@ Core checkpoint will get full Debug coverage after focused safety checks.
 Existing readable rich-layout replica and its successful first run are retained;
 will update its clean tool checkout and exercise saved verification/collection
 with final Core, preserving original inputs, configuration and earlier run.
+
+Final focused safety/profile lane: 202 passed, 0 failed/skipped, Debug
+-warnaserror (1m16s). Final application checkpoint
+cc2c8c078db3bcab4873c975663eb7e2105d32ee is pushed and running full Debug
+coverage (same documented two-invocation diagnostics isolation). No more
+application edits are pending.
+
+The rich legacy/net20/UTF16/context fixture passed its initial wizard collection
+at 25b97b7bc. Its CLEAN tool checkout was updated to final cc2c8c078 (no reset or
+input changes), rebuilt with tm.ps1 -Build, and existing saved wizard continuation
+collected a NEW workspace run successfully. Earlier run/input/config stayed
+intact. Latest SQL export proves profile /4; 512-column table is complete, the
+512-conditional procedure result stays unknown. 273 SQL objects, 129 combined
+facts, 110 native facts; all three SQLite quick_check=ok. Exact original
+6671580-byte FF FE SQL hash and manifest file rows are unchanged. A public
+readable replica includes README, actual terminal logs, Verify/Continue/Recreate
+scripts. Native review retains its prepared tool's exact provenance rather than
+being relabeled to the new SQL collector.
+
+Final /4 qualification completed at exact application checkpoint
+cc2c8c078db3bcab4873c975663eb7e2105d32ee. Debug build -warnaserror passed.
+Full test inventory, same binary, with known diagnostics-listener isolation:
+- Main lane excluding SelfDiagnosticsTests: 6056 passed, 3 skipped, 0 failed
+  (6059 total; 14.2914 min).
+- Isolated SelfDiagnosticsTests: 4 passed, 0 skipped/failed (1.5926 sec).
+All 6063 tests included: 6060 passed, 3 skipped, 0 failed. This is partitioned
+full coverage, not a claim the old unfiltered listener race was fixed.
+
+Focused command: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug
+-warnaserror --nologo --no-restore --filter
+'FullyQualifiedName~SqlStreamedLocalDefinitionsTests|FullyQualifiedName~SqlServerDdlEvidenceTests|FullyQualifiedName~SqlServerLocalDefinitionsTests|FullyQualifiedName~WebFormsWizardWorkspaceTests'
+202 passed (1m16s); width, sequential/deep control, measured guard diagnostics,
+legacy contracts and wizard stream transition included.
+
+Full initial rich replay: scripts/tests/Test-WorkspaceWizardLauncher.py with
+--legacy-layout --sql-export-bytes 3335789 --sql-encoding utf16-le
+--sql-context-repair --sql-rich-export, fresh public output root. Final
+saved-config continuation after clean tool update to cc2c8c078 used tm.ps1
+-Build webforms-review wizard --root <same-output> --continue, inputs
+workspace/collect. Exit 0, new workspace run, no setup reset. Direct Verify.ps1
+also passed. Latest JSON and three SQLite checks confirm /4, 512 table columns,
+conditional result unknown, exact original raw SQL hash and retained prior run.
+
+Whitespace/private-path guards pass. Closing edits are docs/spec only, not
+application code. No private acceptance, SQL execution, PR, merge or ACK change.
