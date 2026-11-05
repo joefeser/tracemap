@@ -1369,3 +1369,15 @@ changes authorized; 30-tool-call/15-minute bound, private evidence references an
 sanitized public response. Does not certify the private report or equate source
 presence with compiled correspondence. Existing application validation remains
 unchanged; documentation-only validation is private-path guard and diff check.
+
+### Existing conversion compile dispatch — 2026-11-05
+
+Added `prompts/check-existing-v46-conversion-compile-once.md` at owner request
+for a later work-machine run. Separate from the completed scanner investigation:
+bind/review current v46-final bytes, determine authentic enclosing/dependency
+context, and attempt one safe bounded isolated compile if prerequisites exist.
+No stubs, behavior edits, source/project modernization, targeting-pack installs,
+rescans, conversion generation or runtime/database execution. Explicit NOT VERIFIED
+for missing context/tooling/guard; preserve original inputs and private diagnostics.
+This public change is a prompt and task/state notes only. No application code
+changed or compile result asserted. Validation: diff check and private-path guard.

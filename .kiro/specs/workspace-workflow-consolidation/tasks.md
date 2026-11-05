@@ -147,3 +147,7 @@
 ## Single-sample evidence review after two-source collection — 2026-11-05
 
 - [x] Add bounded read-only prompt relating existing standalone lifecycle proof to new two-source evidence, separating sample-path blockers from unrelated gaps without rescans, source/DLL assumptions or conversion changes.
+
+## Existing annotated conversion compile handoff — 2026-11-05
+
+- [x] Add separate bounded prompt to inspect the existing v46-final artifact and attempt one isolated compile with authentic dependencies, preserving inputs and stopping on missing context without rescans, fabricated stubs or conversion rewrites.
