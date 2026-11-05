@@ -8,6 +8,61 @@ namespace TraceMap.Tests;
 public sealed class WebFormsWizardWorkspaceTests
 {
     [Fact]
+    public async Task Invalid_manifest_entry_is_reported_before_requesting_another_folder()
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture();
+        await fixture.Prepare();
+        var manifest = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
+        manifest["files"]![0]!["path"] = "../schema.sql";
+        File.WriteAllText(fixture.Manifest, manifest.ToJsonString());
+        using var store = WebFormsWizardStore.Open(fixture.WizardRoot, true);
+        using var input = new StringReader($"skip\n{fixture.Manifest}\n");
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => WebFormsWizardWorkspace.RunAsync(store, "site", input, fixture.Output, fixture.Error, default));
+        Assert.Contains("WEBFORMS_WORKSPACE_SQL_MANIFEST_ENTRY_INVALID", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Enter an alternate BASE folder", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Manifest_beside_root_resolves_nested_sql_and_repairs_an_old_doubled_base(bool oldSavedBase)
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture();
+        await fixture.Prepare();
+        var sqlFolder = Path.Combine(fixture.WizardRoot, "sql");
+        Directory.CreateDirectory(sqlFolder);
+        File.Copy(Path.Combine(fixture.SqlRoot, "schema.sql"), Path.Combine(sqlFolder, "schema.sql"));
+        var manifest = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
+        manifest["files"]![0]!["path"] = "sql/schema.sql";
+        var manifestPath = Path.Combine(fixture.WizardRoot, "sql-definitions.local.json");
+        File.WriteAllText(manifestPath, manifest.ToJsonString());
+        if (oldSavedBase)
+        {
+            using var store = WebFormsWizardStore.Open(fixture.WizardRoot, true);
+            var answers = new WorkspaceWizardAnswers("site", store.ReadProject("site").Native!.Sha256, "", "",
+                WebFormsWizardStore.Physical(manifestPath), WebFormsWizardStore.Physical(sqlFolder));
+            var json = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
+            var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(answers, json)));
+            var envelope = new WorkspaceWizardAnswerFile("tracemap-workspace-wizard-answers.v1", WebFormsWizardWorkspace.RuleId,
+                "local-only", new string('a', 64), hash, answers);
+            File.WriteAllText(Path.Combine(fixture.WizardRoot, "site", "workspace-answers.local.json"), JsonSerializer.Serialize(envelope, json));
+        }
+        using (var store = WebFormsWizardStore.Open(fixture.WizardRoot, true))
+        using (var input = new StringReader(oldSavedBase ? "create\nlater\n" : $"skip\n{manifestPath}\ncreate\nlater\n"))
+            Assert.True(await WebFormsWizardWorkspace.RunAsync(store, "site", input, fixture.Output, fixture.Error, default) == 0, fixture.Error.ToString());
+        using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
+        Assert.Equal(WebFormsWizardStore.Physical(fixture.WizardRoot), config.RootElement.GetProperty("sqlEvidence").GetProperty("sourceRoot").GetString());
+        Assert.Contains("sql/schema.sql ->", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Enter an alternate BASE folder", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Equal(0, await WorkspaceCommand.RunAsync(["verify", "--root", fixture.WizardRoot], fixture.Output, fixture.Error));
+        var forbidden = Path.Combine(sqlFolder, "output");
+        Assert.Equal(1, await WorkspaceCommand.RunAsync(["collect", "--root", fixture.WizardRoot, "--out", forbidden], fixture.Output, fixture.Error));
+        Assert.Contains("WORKSPACE_SQL_OUTPUT_OVERLAPS_INPUT", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(forbidden));
+    }
+
+    [Fact]
     public async Task Dependency_source_can_be_skipped_and_sql_setup_resumed_without_an_invented_repository()
     {
         using var fixture = new WorkspaceFromWizardTests.Fixture();

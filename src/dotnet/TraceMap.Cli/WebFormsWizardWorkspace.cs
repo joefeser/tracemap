@@ -99,9 +99,24 @@ internal static class WebFormsWizardWorkspace
                 if (value is null) return 2;
                 answers = answers with { SqlManifest = value }; await Save();
             }
+            // Prefer the manifest's own directory. Recheck an older saved base first;
+            // repair a missing-file base only when the manifest-relative bytes verify.
+            var manifestBase = Path.GetDirectoryName(answers.SqlManifest!)!;
+            var sqlPlan = TrySql(answers.SqlRoot ?? manifestBase);
+            if (sqlPlan is null && answers.SqlRoot is not null) sqlPlan = TrySql(manifestBase);
+            if (sqlPlan is not null)
+            {
+                if (answers.SqlRoot != sqlPlan.SourceRoot)
+                {
+                    if (answers.SqlRoot is not null) await output.WriteLineAsync("The saved SQL base did not resolve the listed files; using verified paths relative to the manifest instead.");
+                    answers = answers with { SqlRoot = sqlPlan.SourceRoot }; await Save();
+                }
+                await output.WriteLineAsync("SQL files verified. Base directory: " + sqlPlan.SourceRoot);
+                foreach (var file in sqlPlan.SourceFiles) await output.WriteLineAsync("  " + file.Path + " -> " + Path.GetFullPath(file.Path, sqlPlan.SourceRoot));
+            }
             if (answers.SqlRoot is null)
             {
-                var value = await Existing("Folder containing the loose SQL definition files (no Git repository needed), or later:", false);
+                var value = await Existing("Files were not found relative to the manifest. Enter an alternate BASE folder for its listed paths (for sql/file.sql choose the parent of sql, not sql itself), or later:", false);
                 if (value is null) return 2;
                 answers = answers with { SqlRoot = value }; await Save();
             }
@@ -140,6 +155,17 @@ internal static class WebFormsWizardWorkspace
             if (next is null || next.Trim() == "later") return 0;
             if (next.Trim() != "collect") throw Fail("CHOICE_INVALID");
             return await Collect();
+        }
+
+        SqlLocalCollectionInput? TrySql(string baseFolder)
+        {
+            try { return SqlServerLocalDefinitionsCommand.Inspect(answers.SqlManifest!, baseFolder, token); }
+            catch (FileNotFoundException) { return null; }
+            catch (DirectoryNotFoundException) { return null; }
+            catch (ArgumentException exception) when (exception.Message is "sql-local-file-invalid-or-duplicate" or "sql-selection-original-file-invalid-or-duplicate")
+            {
+                throw new InvalidOperationException("WEBFORMS_WORKSPACE_SQL_MANIFEST_ENTRY_INVALID: the manifest file list is invalid before folder resolution. Each path must be unique, relative, slash-separated, end in lowercase .sql, and use supported path characters; each SHA-256 must be 64 lowercase hexadecimal characters. Changing the base folder cannot repair an invalid manifest entry.", exception);
+            }
         }
 
         async Task<int> Collect()

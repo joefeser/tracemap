@@ -14,6 +14,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", required=True)
     parser.add_argument("--with-source", action="store_true", help="Also select the synthetic dependency source repository")
+    parser.add_argument("--sql-beside-workspace", action="store_true", help="Manifest beside root.config.json lists sql/schema.sql; infer its base without another folder question")
     args = parser.parse_args()
     root = Path(args.output_root).resolve()
     if root.exists():
@@ -82,13 +83,23 @@ def main():
     tool("wizard-native", ["webforms-review", "wizard", "--root", str(workspace)], answers, expected=2)
     if (workspace / "workspace.local.json").exists():
         raise RuntimeError("Workspace appeared before its setup")
+    if args.sql_beside_workspace:
+        sql = workspace / "sql"
+        sql.mkdir()
+        (sql / "schema.sql").write_bytes(sql_file.read_bytes())
+        manifest["files"][0]["path"] = "sql/schema.sql"
+        del manifest["provenance"]
+        manifest["provenance"] = {"generatorSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                                  "boundedInputSha256": hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()}
+        manifest_path = workspace / "sql-definitions.local.json"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
     source_answers = [str(dependency), "Dependency.csproj"] if args.with_source else ["skip"]
     tool("wizard-pause-before-sql", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
          "\n".join(["workspace", *source_answers, "later", ""]), expected=2)
     if (workspace / "workspace.local.json").exists():
         raise RuntimeError("Paused SQL setup unexpectedly created a workspace")
     output = tool("wizard-create-workspace", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
-                  "\n".join(["workspace", str(manifest_path), str(sql), "create", "collect", ""]))
+                  "\n".join(["workspace", str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), "create", "collect", ""]))
     config_path = workspace / "workspace.local.json"
     config = json.loads(config_path.read_text())
     if len(config["repositories"]) != (2 if args.with_source else 1):

@@ -68,3 +68,10 @@
 - [x] Add a fresh-root public synthetic replay through the actual PowerShell launcher: native wizard, pause/resume, SQL configuration, workspace verification and collection, SQLite integrity and positive evidence-row checks.
 - [x] Offer explicit collect/later after workspace creation, and collect from an existing workspace; print exact report/SQLite paths instead of silently returning after config creation.
 - [x] Exercise skipped and included dependency source, preserve failed replay outputs, and retain partial/static-evidence limits.
+
+## Manifest-relative SQL setup — 2026-11-05
+
+- [x] Resolve listed SQL paths against the manifest directory first and show verified paths; request an alternate base only when files are absent.
+- [x] Recover saved doubled SQL bases only after manifest-relative file/digest admission; explain invalid manifest entries separately from folder resolution.
+- [x] Protect selected SQL file directories and manifest from output overlap while allowing unrelated sibling runs beneath a manifest base.
+- [x] Add nested-layout and saved-base recovery tests, retain overlap refusal, and replay the full one-root SQL workflow through SQLite.

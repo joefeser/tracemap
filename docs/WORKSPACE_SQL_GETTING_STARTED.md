@@ -77,8 +77,14 @@ To add SQL to a workspace, change its schema to `tracemap-workspace.v3` and add:
 ```
 
 Paths resolve from the workspace configuration folder. The `.sql` paths inside
-the manifest resolve from `sourceRoot`. Choose a dedicated SQL input directory;
-do not set `sourceRoot` to the workspace configuration folder itself. V3 permits the existing `compiledReview`
+the manifest resolve from `sourceRoot`. Keep SQL files in a dedicated input
+subdirectory. For a manifest beside `root.config.json` listing `sql/schema.sql`,
+workspace setup can use the manifest directory as `sourceRoot` and keep output
+under sibling `runs/`. The wizard verifies and displays those resolved files
+without asking for the SQL folder again. Outputs inside any selected SQL file's
+directory, or containing the manifest, remain refused. The standalone
+`sqlserver-definitions collect` command retains its stricter whole-root overlap
+check; this nested-base behavior applies to workspace collection. V3 permits the existing `compiledReview`
 section or source plus SQL alone. V1 remains source-only; V2 retains its compiled
 contract. A repository filter must include the SQL context repository. Changed
 hashes, stale context commits, duplicate definitions and overlapping output/input

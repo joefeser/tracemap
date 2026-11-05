@@ -784,3 +784,40 @@ Final touched-lane validation: dotnet test src/dotnet/tests/TraceMap.Tests -c De
 281 passed, 0 failed/skipped, 3 minutes. Private-path and whitespace guards pass.
 No full-suite or private-machine success claim for this CLI-only head; final
 pre-merge full Debug gate remains required.
+
+### Manifest-relative SQL resolution — 2026-11-05
+
+Owner described a manifest beside root.config.json listing sql/file.sql, an SQL
+subfolder, and an inner per-website configuration folder. This is a valid desired
+layout; SQL configuration need not move into the inner website folder. Prior UI
+asked for a containing folder even though the manifest already carried a prefix,
+which could save a doubled sql/sql base. Wizard now first checks an existing
+saved base, then the manifest directory for missing-file recovery, uses only
+paths admitted by existing bounded manifest/digest policies, prints resolved
+files, and asks for an alternate base only if manifest-relative files are absent.
+No recursive file search, rewriting of manifests, hashing of assumed bytes, or
+file relocation. Invalid/duplicate entry errors are explained as manifest format
+validation before folder resolution; the exact earlier private error is still
+not independently reproduced from private inputs.
+
+Workspace SQL overlap protection previously rejected every output below the
+manifest base, including sibling runs unrelated to the selected SQL subfolder.
+It now protects each selected SQL file directory and the manifest. Flat input
+roots, outputs inside SQL directories, and outputs containing inputs still fail;
+a nested SQL directory with sibling runs is admitted. Standalone SQL collection
+keeps its original whole-root overlap policy. No Core schema/extractor changes.
+
+New tests exercise manifest-root/sql/schema.sql, legacy saved sql/sql recovery,
+invalid path diagnostics, and output refusal inside SQL input. Initial focused
+UI/SQL lane 22 passed. Public replay --sql-beside-workspace passed without an
+alternate folder answer and verified combined/native/SQL SQLite. Additional
+source and broader touched-lane results follow. No PR or merge.
+
+Final results: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror
+--nologo --filter 'FullyQualifiedName~WebFormsWizard|FullyQualifiedName~Workspace':
+284 passed, 0 failed/skipped, 2m45s. Full actual-launcher replays with
+--sql-beside-workspace and with --sql-beside-workspace --with-source both passed,
+including configuration, guided collection, SQL inventory, positive SQLite rows
+and quick_check for all three databases. Docs branch 95124a103 clarifies the
+one-root layout. Whitespace/private-path guards passed. No PR/merge or full-suite
+claim for this CLI-only head; final pre-merge full gate still required.

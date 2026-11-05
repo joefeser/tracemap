@@ -30,7 +30,13 @@ commit, primary/dependency DLL selection and prepared receipts. It asks only for
 2. If adding source, its project/solution: choose a displayed number, paste a path inside the repo,
    or explicitly choose `discovery`. The preview lists root-level files only.
 3. The existing SQL manifest file from step 4.
-4. The folder containing the loose SQL files; this folder needs no Git repo.
+4. SQL paths are first resolved relative to that manifest's folder and the resolved
+   files are shown. If all files and hashes verify, no folder question is asked.
+   Only when those files are absent does setup ask for an alternate **base** for
+   the paths listed in the manifest. For `sql/schema.sql`, choose the parent of
+   `sql`; for `schema.sql`, choose the directory containing that file. No Git repo
+   is required for SQL. A previously saved doubled base is corrected only when
+   the manifest-relative files and hashes verify.
 
 Each answer is saved immediately in the existing website folder. Type `later` to
 pause; run the same command and choose `workspace` to resume without re-entering
@@ -142,3 +148,24 @@ read-only with `PRAGMA quick_check`. It checks SQL inventory and report paths.
 Logs remain under the replay root. Existing roots are refused and preserved.
 This is a managed synthetic static-evidence proof, not IIS/Windows publication,
 application runtime, private input or migration acceptance.
+
+### One-root SQL layout
+
+The manifest does not belong inside the per-website folder. This layout is supported:
+
+```text
+Application/
+  root.config.json
+  sql-definitions.local.json    # files[].path = "sql/schema.sql"
+  sql/schema.sql
+  website/project.config.json
+  website/workspace-answers.local.json
+  workspace.local.json          # created after setup
+  runs/                        # generated outputs
+```
+
+The manifest directory is the base, so `sql` is not added twice. The wizard shows
+resolved paths and verifies hashes. Collection refuses outputs inside any selected
+SQL file's directory or containing the manifest; sibling run folders are allowed.
+To replay this layout locally, add `--sql-beside-workspace` to the synthetic replay
+command above. The alternate layout with a separate SQL directory remains supported.

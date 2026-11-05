@@ -20,9 +20,14 @@ public static partial class WorkspaceCommand
         var source = SqlServerLocalDefinitionsCommand.PhysicalPath(Full(sql.SourceRoot, root));
         prospectiveRun = SqlServerLocalDefinitionsCommand.PhysicalPath(prospectiveRun);
         Unlinked(manifest); Unlinked(source);
-        if (Within(prospectiveRun, source) || Within(source, prospectiveRun) || Within(manifest, prospectiveRun))
-            throw new ArgumentException("WORKSPACE_SQL_OUTPUT_OVERLAPS_INPUT");
         var plan = SqlServerLocalDefinitionsCommand.Inspect(manifest, source, token);
+        // The manifest base can be the workspace root. Protect each admitted SQL
+        // file's directory rather than unrelated sibling runs under that base.
+        if (Within(manifest, prospectiveRun) || plan.SourceFiles.Any(file =>
+        {
+            var directory = Path.GetDirectoryName(SqlServerLocalDefinitionsCommand.PhysicalPath(Full(file.Path, source)))!;
+            return Within(prospectiveRun, directory) || Within(directory, prospectiveRun);
+        })) throw new ArgumentException("WORKSPACE_SQL_OUTPUT_OVERLAPS_INPUT");
         if (plan.Export.Input.ContextRepository != context.Config.Id || plan.Export.Input.ContextCommitSha != context.Head)
             throw new ArgumentException("WORKSPACE_SQL_APPLICATION_CONTEXT_MISMATCH");
         inputs.Add("sql:manifest", plan.ManifestSha256);
