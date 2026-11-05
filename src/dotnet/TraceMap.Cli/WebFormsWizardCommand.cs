@@ -151,11 +151,11 @@ public static class WebFormsWizardCommand
             current = store.ReadProject(id);
             if (current.Step == "dependencies")
             {
-                await output.WriteLineAsync("Additional managed dependency DLL paths, separated by semicolons (relative to publication root or absolute); type none or later:");
+                await output.WriteLineAsync("Additional managed dependency DLL paths, separated by commas or semicolons (relative to publication root or absolute); type none or later:");
+                await output.WriteLineAsync("Enter file paths, not primary-assembly selection numbers. Put paths containing commas or semicolons in double quotes. Each selected file is checked for existence and managed metadata before setup advances.");
                 var answer = await input.ReadLineAsync(cancellationToken);
                 if (answer is null || answer.Trim() == "later") return 2;
-                var dependencies = answer.Trim() == "none" ? [] : answer.Split(';', StringSplitOptions.TrimEntries);
-                if (dependencies.Any(string.IsNullOrWhiteSpace)) throw Invalid("ASSEMBLY_SELECTION_INVALID");
+                var dependencies = answer.Trim() == "none" ? [] : DependencyPaths(answer, current.PublishedRoot!);
                 WebFormsWizardPublication.Configure(store, id, current.PublishedRoot!, current.PrimaryAssemblies, dependencies);
                 store.SaveProject(store.ReadProject(id) with { Step = "configuration" });
             }
@@ -249,6 +249,63 @@ public static class WebFormsWizardCommand
             await error.WriteLineAsync("If the root config is valid, use --continue --repair-project <id> for a previewed, confirmed per-project restart. Invalid root configs require manual correction or a new config folder; they are not auto-repaired.");
             return 1;
         }
+    }
+
+    private static string[] DependencyPaths(string answer, string publicationRoot)
+    {
+        var paths = new List<string>();
+        var position = 0;
+        while (true)
+        {
+            while (position < answer.Length && char.IsWhiteSpace(answer[position])) position++;
+            if (position == answer.Length) throw Invalid("DEPENDENCY_LIST_INVALID: empty path or trailing separator.");
+            string path;
+            if (answer[position] == '"')
+            {
+                position++;
+                var value = new System.Text.StringBuilder();
+                var closed = false;
+                while (position < answer.Length)
+                {
+                    var next = answer[position++];
+                    if (next != '"') { value.Append(next); continue; }
+                    if (position < answer.Length && answer[position] == '"')
+                    { value.Append('"'); position++; continue; }
+                    closed = true;
+                    break;
+                }
+                if (!closed) throw Invalid("DEPENDENCY_LIST_INVALID: unclosed double quote.");
+                path = value.ToString();
+                while (position < answer.Length && char.IsWhiteSpace(answer[position])) position++;
+                if (position < answer.Length && answer[position] is not (',' or ';'))
+                    throw Invalid("DEPENDENCY_LIST_INVALID: expected a separator after a quoted path.");
+            }
+            else
+            {
+                var start = position;
+                while (position < answer.Length && answer[position] is not (',' or ';'))
+                {
+                    if (answer[position++] == '"') throw Invalid("DEPENDENCY_LIST_INVALID: quote the entire path.");
+                }
+                path = answer[start..position].Trim();
+            }
+            if (string.IsNullOrWhiteSpace(path)) throw Invalid("DEPENDENCY_LIST_INVALID: empty path.");
+            paths.Add(path);
+            // Match the existing dependency-selection ceiling before filesystem checks.
+            if (paths.Count > 128) throw Invalid("ASSEMBLY_SELECTION_LIMIT");
+            if (position == answer.Length) break;
+            position++;
+        }
+        foreach (var path in paths)
+        {
+            var full = Path.GetFullPath(path.Replace('\\', '/'), publicationRoot);
+            if (!File.Exists(full))
+                throw Invalid("DEPENDENCY_DLL_MISSING: " + System.Text.Json.JsonSerializer.Serialize(full)
+                    + "; use an existing managed file; relative paths resolve from the publication root.");
+        }
+        // Core still checks links, duplicates, managed metadata and input hashes atomically
+        // before persisting any part of this dependency selection.
+        return paths.ToArray();
     }
 
     private static InvalidOperationException Invalid(string code) => new("WEBFORMS_WIZARD_" + code);

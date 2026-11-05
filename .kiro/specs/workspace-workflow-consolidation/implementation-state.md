@@ -605,3 +605,25 @@ The added wording pin failed on the previous prompt; all 18 WizardCommand/Execut
 cases pass Debug -warnaserror. This is a leaf prompt-text follow-up; the prior
 full-suite result above applies to 9d189373f, not a fresh full run of this wording
 change. No private scan, application build or PR performed.
+
+
+### Wizard dependency path list — 2026-11-04
+
+Dependency input now accepts comma or semicolon separators, spaces in unquoted
+paths, and double-quoted paths containing separators (doubled internal quotes).
+Malformed/empty entries refuse; the existing 128-dependency ceiling is enforced
+before filesystem checks. Each normalized relative/absolute path must exist;
+a specific DEPENDENCY_DLL_MISSING diagnostic names the failed path. Core's existing
+link, duplicate, managed-metadata, byte/hash and state-save checks remain unchanged.
+No assembly loading or application execution added. The native workflow docs now
+explain list grammar, publication-relative resolution and --continue correction.
+Existing stored configuration paths are unchanged; newly typed separator-bearing
+paths must be quoted under the new terminal grammar.
+
+Before implementation, comma cases failed while the semicolon control passed.
+New terminal cases cover comma/semicolon lists, quoted separator paths, a mixed
+valid/missing list with no partial save and successful correction, and malformed
+lists. Final entire WebFormsWizard lane: 123 passed, 0 failed/skipped, Debug
+-warnaserror. This CLI input-adapter follow-up did not change shared Core; no fresh
+full-suite result is claimed for this follow-up. Prior exact-head full gate above
+remains historical. No private input, scan, PR or merge performed.

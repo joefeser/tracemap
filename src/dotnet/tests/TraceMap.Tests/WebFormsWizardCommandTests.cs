@@ -160,6 +160,92 @@ public sealed class WebFormsWizardCommandTests
         Assert.Single(store.ReadProject("site").PrimaryAssemblies);
     }
 
+    [Theory]
+    [InlineData(",")]
+    [InlineData(";")]
+    [InlineData(", ")]
+    public async Task Dependency_lists_accept_both_separators_and_verify_each_file(string separator)
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
+        var first = Path.Combine(published, "bin", "ZZ Dependency A.dll");
+        var second = Path.Combine(temp.Path, "Dependency B.dll");
+        File.Copy(typeof(FactAttribute).Assembly.Location, first);
+        File.Copy(typeof(WebFormsWizardCommand).Assembly.Location, second);
+        var root = Path.Combine(temp.Path, "config");
+        var result = await Run(["wizard", "--root", root],
+            $"site\n{site}\nall\nready\n{published}\n1\nbin/ZZ Dependency A.dll{separator}{second}\nlater\n");
+        Assert.True(result.Code == 2, result.Error);
+        Assert.Empty(result.Error);
+        using var store = WebFormsWizardStore.Open(root, true);
+        var saved = store.ReadProject("site");
+        Assert.Equal("configuration", saved.Step);
+        Assert.Equal(2, saved.Dependencies.Length);
+        Assert.Contains(WebFormsWizardStore.Physical(first), saved.Dependencies);
+        Assert.Contains(WebFormsWizardStore.Physical(second), saved.Dependencies);
+        Assert.Equal(2, saved.Inputs!.Count(item => item.Role == "dependency-assembly"));
+    }
+
+    [Fact]
+    public async Task Quoted_dependency_paths_preserve_commas_and_semicolons()
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
+        var dependency = Path.Combine(temp.Path, "Shared, Library; v1.dll");
+        File.Copy(typeof(FactAttribute).Assembly.Location, dependency);
+        var root = Path.Combine(temp.Path, "config");
+        var result = await Run(["wizard", "--root", root],
+            $"site\n{site}\nall\nready\n{published}\nall\n\"{dependency}\"\nlater\n");
+        Assert.True(result.Code == 2, result.Error);
+        Assert.Empty(result.Error);
+        using var store = WebFormsWizardStore.Open(root, true);
+        Assert.Equal(WebFormsWizardStore.Physical(dependency), Assert.Single(store.ReadProject("site").Dependencies));
+    }
+
+    [Fact]
+    public async Task Missing_dependency_names_the_bad_path_and_preserves_dependency_step_for_correction()
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
+        var good = Path.Combine(temp.Path, "Good.dll");
+        var missing = Path.Combine(temp.Path, "Missing.dll");
+        File.Copy(typeof(FactAttribute).Assembly.Location, good);
+        var root = Path.Combine(temp.Path, "config");
+        var result = await Run(["wizard", "--root", root],
+            $"site\n{site}\nall\nready\n{published}\nall\n{good},{missing}\n");
+        Assert.Equal(1, result.Code);
+        Assert.Contains("WEBFORMS_WIZARD_DEPENDENCY_DLL_MISSING", result.Error);
+        Assert.Contains("Missing.dll", result.Error);
+        using (var store = WebFormsWizardStore.Open(root, true))
+        {
+            var saved = store.ReadProject("site");
+            Assert.Equal("dependencies", saved.Step);
+            Assert.Empty(saved.Dependencies);
+            Assert.DoesNotContain(saved.Inputs!, item => item.Role == "dependency-assembly");
+        }
+        var corrected = await Run(["wizard", "--root", root, "--continue"], $"{good}\nlater\n");
+        Assert.Equal(2, corrected.Code);
+        Assert.Empty(corrected.Error);
+    }
+
+    [Theory]
+    [InlineData("a.dll,,b.dll")]
+    [InlineData("a.dll;")]
+    [InlineData("\"unclosed.dll")]
+    [InlineData("\"a.dll\"garbage")]
+    public async Task Malformed_dependency_lists_do_not_advance_setup(string answer)
+    {
+        using var temp = new TempDirectory();
+        var (site, published) = WebFormsWizardPublicationTests.Fixture(temp.Path);
+        var root = Path.Combine(temp.Path, "config");
+        var result = await Run(["wizard", "--root", root],
+            $"site\n{site}\nall\nready\n{published}\nall\n{answer}\n");
+        Assert.Equal(1, result.Code);
+        Assert.Contains("WEBFORMS_WIZARD_DEPENDENCY_LIST_INVALID", result.Error);
+        using var store = WebFormsWizardStore.Open(root, true);
+        Assert.Equal("dependencies", store.ReadProject("site").Step);
+    }
+
     [Fact]
     public async Task Terminal_build_preview_precedes_explicit_consent()
     {

@@ -43,3 +43,4 @@
 - [ ] Owner tests work configuration; no PR or merge until requested.
 
 - [x] Clarify wizard attestation hash as application source Git HEAD, show source folder and read-only verification command; wording pin failed before change, 18 command/execution cases passed with warnings as errors.
+- [x] Accept comma/semicolon dependency lists with quoted separator paths; name missing DLLs before advancing, preserve correction/resume state and existing Core validation; all 123 wizard regressions pass Debug -warnaserror.

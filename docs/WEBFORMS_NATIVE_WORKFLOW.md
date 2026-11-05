@@ -77,8 +77,17 @@ TraceMap never launches the website or executes its SQL methods.
 Point publication setup at the site root containing `bin`, not `bin` itself.
 Projectless publication also requires PrecompiledApp.config. Select primary
 managed assemblies by displayed numbers (or explicitly `all`), then supply extra
-dependency DLL paths separated by semicolons, or `none`. Dependencies can be
-outside publication; verified copies are staged under the configuration folder.
+dependency DLL paths separated by commas or semicolons, or `none`. Enter paths,
+not the primary DLL selection numbers. Paths may be absolute or relative to the
+publication root, for example `bin/Shared.dll`. Put a path containing a comma or
+semicolon in double quotes, for example `"C:/libraries/Shared, Version 1.dll"`.
+Double a literal double quote inside a quoted path. Empty entries, trailing
+separators and unmatched quotes are refused. Each path must exist; the error names
+a missing file. Every selected input must also pass managed-metadata, link,
+duplicate, size and hash checks before the dependency selection is saved. A bad
+list leaves the saved dependency step intact: correct it with `--continue`.
+Dependencies can be outside publication; verified copies are staged under the
+configuration folder.
 Byte-identical dependency selections share one native binary input; every original
 selected path is still revalidated on resume.
 Customer source/publication files are not overwritten. Native assembly admission
