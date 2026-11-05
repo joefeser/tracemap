@@ -208,7 +208,7 @@ def main():
         if args.same_failure_first and "same SQL validation failure" not in invalid:
             raise RuntimeError("Unchanged validation retry did not stop the loop")
     output = tool("wizard-create-workspace", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
-                  "\n".join(["workspace", *(["change"] if args.bad_manifest_first else []), str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), *(["stream"] if sql_file.stat().st_size > 262144 or args.sql_encoding != "utf8" else []), *(["use-sql"] if args.sql_context_repair else []), "create", "collect", ""]))
+                  "\n".join(["workspace", *(["change"] if args.bad_manifest_first else []), str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), *(["stream"] if (sql / "schema.sql").stat().st_size > 262144 or args.sql_encoding != "utf8" else []), *(["use-sql"] if args.sql_context_repair else []), "create", "collect", ""]))
     config_path = workspace / "workspace.local.json"
     config = json.loads(config_path.read_text())
     if len(config["repositories"]) != (2 if args.with_source else 1):
