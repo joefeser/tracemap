@@ -33,3 +33,9 @@
 - [ ] Complete a full real application/compiled/SQL trial (separate from the bounded DNN source/SQL trial).
 - [x] Complete milestone validation and reconcile getting-started/configuration guidance.
 - [x] Publish the bounded consolidation story #937 and PR #938; inspect review gates separately from full application parity.
+
+## Work-machine setup walkthrough — 2026-11-04
+
+- [x] Consolidate two-repository, prepared native publication and local offline SQL setup into one Windows walkthrough; link existing strict contracts and lifecycle evidence reuse.
+- [x] Verify launcher preparation and public two-repository/compiled/SQL rehearsal, including filtered collection; JSON/PowerShell examples and local links checked.
+- [ ] Owner verifies the walkthrough on the work machine before a PR to dev; main promotion follows separately.

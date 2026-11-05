@@ -557,3 +557,22 @@ implicit global scanner changes. New local CLI sidecar; full Debug gate required
   SQL compatibility workflow, and pinned both lane prerequisites with a test.
 - Final Python validation: 29 acceptance guards and 20 DNN harness guards pass;
   private-path and whitespace checks pass. No C# or runtime changes in this repair.
+
+
+## Work-machine walkthrough — 2026-11-04
+
+Branch: codex/work-scan-setup-guide, cut fresh from dev at 57e204dee (#938).
+Docs only: WORK_MACHINE_SCAN_SETUP.md consolidates source selection for two repos,
+prepared native fresh publication configuration, V3 local SQL manifest/admission,
+verify/collect commands, output interpretation and owner test handoff. Links from
+README and the existing collection runbook. Native configuration preparation can
+perform its own run; workspace does not reuse that run. Lifecycle-only guarded
+scans and their completed evidence remain separate. No automatic SQL call binding,
+synthetic DDL admission for private exports or Windows resource-cap claim added.
+
+Validation: Release launcher preparation succeeded; public Test-WorkspaceLauncher
+-WithSql rehearsal passed both full two-repository and filtered collections.
+This is synthetic managed/public SQL evidence on macOS, not a Windows ASP.NET or
+private application trial. Markdown links, JSON/PowerShell examples, whitespace
+and private-path checks passed. No .NET suite rerun for this docs-only change.
+Owner work-machine walkthrough test remains pending; no PR requested or opened.

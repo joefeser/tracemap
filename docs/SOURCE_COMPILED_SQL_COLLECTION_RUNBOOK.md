@@ -1,5 +1,8 @@
 # Collect source compiled site and SQL evidence
 
+For one ordered Windows setup covering two repositories, a compiled publication
+and offline SQL, use [Work-machine scan setup](WORK_MACHINE_SCAN_SETUP.md).
+
 Use this handoff with an authorized agent inside the environment that owns the
 application and database exports. Collect repository source, the existing compiled
 ASP.NET publication, and an offline SQL schema script. Keep their provenance and

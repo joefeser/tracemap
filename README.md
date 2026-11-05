@@ -140,6 +140,9 @@ a design or release.
 
 ### SQL evidence runway
 
+For two repositories, an existing compiled ASP.NET publication and offline SQL,
+start with the [work-machine setup walkthrough](docs/WORK_MACHINE_SCAN_SETUP.md).
+
 The .NET scanner includes a PostgreSQL-first static SQL evidence runway for
 execution-context declarations and transitions, protected-material candidates,
 permission prerequisites, archive-link boundaries, and explicit coverage gaps.
