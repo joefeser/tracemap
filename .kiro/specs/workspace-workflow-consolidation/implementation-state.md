@@ -1127,3 +1127,44 @@ focused rerun after adding multi-database location display is in progress. Full
 Debug coverage will isolate the existing SelfDiagnosticsTests global-listener
 race into a second invocation on the identical built binary; every test remains
 in scope. Prior unfiltered failure remains documented, not relabeled green.
+
+Final focused lane: 74 passed, 0 failed/skipped, Debug -warnaserror (40 sec).
+Modern large UTF-16/mismatched-USE replay passed. The first legacy replay hit a
+Python harness-only stat of the pre-relocation SQL path (not an application
+failure); b1e6e2c8 corrects the size check to the retained SQL directory. A fresh
+legacy replay at that head passed every stage: verified owner-confirmed context
+copy, 275 SQL objects, 129 combined facts, 110 native facts, three SQLite checks
+and saved-copy Verify.ps1. Direct check confirms active ExampleCatalog versus
+preserved original ExampleDatabase, identical file rows/raw SHA, FF FE BOM and
+6671580 original source bytes. No real/private database identifier is retained
+in synthetic fixtures.
+
+Full Debug coverage at application checkpoint
+46108d24050361010c0afc30468e7ea954dba019 is running in two explicit same-binary
+invocations: all tests except SelfDiagnosticsTests, then all four of those in
+isolation. This avoids the documented cross-test global-listener contamination
+without dropping tests, changing application behavior or claiming the old
+unfiltered failure passed. Replay harness-only child does not change Core/CLI.
+
+Final database-repair validation: full Debug build -warnaserror passed at
+46108d24050361010c0afc30468e7ea954dba019. All-tests coverage passed in the
+documented two invocations on that identical built binary:
+- --filter 'FullyQualifiedName!~TraceMap.Tests.SelfDiagnosticsTests':
+  6049 passed, 3 skipped, 0 failed (6052 total; 14.0984 min).
+- --filter 'FullyQualifiedName~TraceMap.Tests.SelfDiagnosticsTests':
+  4 passed, 0 skipped/failed (1.6484 sec).
+Total: 6053 passed, 3 skipped, 0 failed; all 6056 tests included. This is
+partitioned full-suite coverage, not a claim that the known prior unfiltered
+global-listener race has been repaired. The previous failed run stays recorded.
+
+Focused command: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug
+-warnaserror --nologo --no-restore --filter
+'FullyQualifiedName~SqlStreamedLocalDefinitionsTests|FullyQualifiedName~WebFormsWizardWorkspaceTests|FullyQualifiedName~SqlServerLocalDefinitionsTests'
+(74/74 passed, 40 sec). Legacy replay command adds --legacy-layout
+--sql-export-bytes 3335789 --sql-encoding utf16-le --sql-context-repair to
+scripts/tests/Test-WorkspaceWizardLauncher.py with a fresh output root.
+
+Whitespace/private-path guards pass. Leaf b1e6e2c8 corrects only the replay
+harness relocated-file stat; closing qualification edits are docs/spec only.
+Core/CLI application source remains identical to 46108d240. No private SQL,
+manifest or names added to repository; no PR/merge/ACK policy change.

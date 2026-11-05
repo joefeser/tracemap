@@ -146,3 +146,21 @@ Multiple distinct `USE` values (including case-only differences) are shown with
 file/line and pause setup; the wizard never aliases databases, guesses collation,
 ignores a mismatch or rewrites SQL. Database identity remains a declared static
 context, not a live database or connection observation.
+
+The recovery fixture intentionally uses different public manifest/USE names in
+a 6,671,580-byte UTF-16 LE BOM export. Reproduce the complete sibling-repo/net20
+workflow in a fresh folder with:
+
+```powershell
+python scripts/tests/Test-WorkspaceWizardLauncher.py --output-root C:/reviews/sql-context-repair --legacy-layout --sql-export-bytes 3335789 --sql-encoding utf16-le --sql-context-repair
+```
+
+The fixture verifies the new active database, preserved original manifest/source
+hashes, complete collection and all three SQLite integrity checks.
+
+Database-repair qualification: 74 focused tests passed. Full Debug `-warnaserror`
+coverage at application checkpoint `46108d240` passed all 6,056 tests in two
+same-binary invocations: 6,049 passed/3 skipped in the main invocation and all
+four diagnostics tests passed in isolation. Total 6,053 passed, 3 skipped, zero
+failed. This isolates the previously documented listener race; it does not claim
+that the old unfiltered concurrency failure was fixed.

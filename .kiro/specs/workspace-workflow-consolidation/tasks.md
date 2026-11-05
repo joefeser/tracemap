@@ -120,4 +120,4 @@
 - [x] Surface parsed USE and configured database with original file/line, without weakening exact matching.
 - [x] Inventory bounded whole streamed input and preserve source-hash validation before offering a single-database correction.
 - [x] Add owner-confirmed use-sql manifest-copy repair and refuse/display multi-database inputs.
-- [ ] Finish focused/legacy replay and full Debug coverage; publish branch without PR/merge.
+- [x] Finish focused/legacy replay and full Debug coverage (6053 passed, 3 skipped across two same-binary invocations); publish branch without PR/merge.
