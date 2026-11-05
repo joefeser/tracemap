@@ -100,3 +100,28 @@ is for the mostly-comment stress input, not an arbitrary 8 GiB definition set.
 The full Debug `-warnaserror` gate on the Core/CLI implementation checkpoint
 `807b2b0fd1843ed513567e29644fa485dff5feb3` passed: 6,037 passed, 3 skipped,
 zero failed (6,040 total). No private-input or runtime acceptance claim.
+
+### UTF-16 qualification
+
+The `/2` streamed extractor additionally passed 42 focused tests covering
+UTF-16 LE/BE BOM, non-ASCII/supplementary characters, CRLF line coordinates,
+raw-byte digest drift, malformed/truncated code units and unpaired surrogates
+(including inside otherwise valid SQL string literals),
+UTF-32 refusal, and small/large ordinary-to-stream wizard recovery. Both modern
+and sibling-repo/net20 launcher replays completed with an exact 6,671,580-byte
+UTF-16 LE BOM file. The latter indexed 275 SQL objects, retained the original
+FF FE bytes/hash and passed all three SQLite checks. Reproduce in a fresh folder:
+
+```powershell
+python scripts/tests/Test-WorkspaceWizardLauncher.py --output-root C:/reviews/utf16-sql --legacy-layout --sql-export-bytes 3335789 --sql-encoding utf16-le
+```
+
+The byte argument describes the authored UTF-8/ASCII content before optional
+encoding: UTF-16 BOM makes this fixture `2 * 3335789 + 2 = 6671580` raw bytes.
+
+The `/2` full Debug `-warnaserror` run on `a3257c4d1` completed with 6,045 passed,
+3 skipped and one unchanged cancellation-diagnostics test failure caused by a
+listener capturing a different concurrent trace. All four diagnostics tests
+passed in an isolated same-build rerun. This full run is not a green gate; the
+listener-isolation follow-up remains. The final 42-test encoding/wizard lane
+and both complete UTF-16 workspace replays passed.

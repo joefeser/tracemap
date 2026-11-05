@@ -35,6 +35,18 @@ public sealed class SqlStreamedLocalDefinitionsTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Malformed_utf16_inside_otherwise_valid_SQL_is_not_replacement_decoded(bool bigEndian)
+    {
+        var encoding = new UnicodeEncoding(bigEndian, true, true);
+        var bytes = encoding.GetPreamble().Concat(encoding.GetBytes("CREATE PROC dbo.ReadItems AS SELECT N'"))
+            .Concat(bigEndian ? new byte[] { 0xd8, 0 } : new byte[] { 0, 0xd8 })
+            .Concat(encoding.GetBytes("' AS Value;\nGO\n")).ToArray();
+        Assert.Throws<DecoderFallbackException>(() => SqlServerLocalDefinitions.ProduceStreamed(Input(""), _ => new MemoryStream(bytes)));
+    }
+
+    [Theory]
     [InlineData(new byte[] { 0xff, 0xfe, 0x00, 0xd8 })] // unpaired surrogate
     [InlineData(new byte[] { 0xfe, 0xff, 0xd8, 0x00 })]
     [InlineData(new byte[] { 0xff, 0xfe, 0x61 })] // truncated code unit

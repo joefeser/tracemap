@@ -1059,3 +1059,46 @@ Streamed extractor becomes /2; input/export shape stable. Ordinary v1/JSON
 decoding remains UTF-8; ordinary decoder failures now offer explicit stream
 conversion of the manifest when that manifest is valid. Tests/qualification
 pending before publication. No PR/merge or private source change.
+
+UTF-16 focused qualification: 40/40 passed, Debug -warnaserror (51 sec), including
+small 1000-byte ordinary-decoder recovery and exact 667158-byte UTF-16/UTF-8
+wizard cases. Modern and committed-head legacy/net20 full launcher replays both
+passed with raw 6671580-byte UTF-16 LE BOM source; whole raw hash preserved.
+Legacy output: 275 SQL objects, 129 combined facts, 110 native facts, three SQLite
+quick_check=ok indexes; saved-copy Verify.ps1 succeeded. Public-only local
+readable copy includes README/Continue/Verify/Recreate scripts. Full Debug
+-warnaserror gate running at a3257c4d1e5d35c13247455073d8f5903cb1b7d1.
+Implementation already pushed on owner's branch; no PR/merge.
+
+Final leaf test addition pins strict decoder refusal for an unpaired surrogate
+inside otherwise-valid SQL string literals in both UTF-16 byte orders, avoiding
+a false pass caused only by later SQL syntax rejection. Focused Core/wizard lane
+now 42/42 passed, Debug -warnaserror, 51 sec. src/dotnet application code remains
+identical to the running/pushed a3257c4d1 gate; closing edits are tests/docs only.
+
+Final full Debug -warnaserror run at a3257c4d1 completed: 6045 passed, 3 skipped,
+1 failed (6049 total; 14.0292 minutes). This is NOT a green full gate. Failure:
+SelfDiagnosticsTests.Cancelled_scan_stops_before_discovery_and_records_cancelled_operations,
+line 134: global ActivityListener captured a discovery activity with a DIFFERENT
+trace ID from the cancelled scan. Existing listener observes all provider
+activities and does not filter to the test's own trace. Application/test code for
+that lane is unchanged by this branch. Isolated same-build SelfDiagnosticsTests
+rerun passed 4/4 (297 ms). Record as an unresolved parallel-listener test
+contamination follow-up; no unrelated diagnostics/test-isolation fix included.
+
+Commands/results:
+- dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --nologo
+  --no-restore --filter 'FullyQualifiedName~SqlStreamedLocalDefinitionsTests|FullyQualifiedName~WebFormsWizardWorkspaceTests': 42 passed (51 sec), including final leaf strict-surrogate checks.
+- python3 scripts/tests/Test-WorkspaceWizardLauncher.py --output-root <fresh>
+  --legacy-layout --sql-export-bytes 3335789 --sql-encoding utf16-le: PASS
+  (actual 6671580 UTF-16 LE BOM bytes, raw digest unchanged, 275 SQL objects,
+  all wizard/workspace/three SQLite checks passed). Modern replay also passed.
+- Full public remote Debug build -warnaserror, then dotnet test TraceMap.Tests
+  --no-build -c Debug -warnaserror: result above, not relabeled green.
+- Same built test project --filter FullyQualifiedName~SelfDiagnosticsTests:
+  4 passed, 0 failed/skipped.
+- git diff --check and scripts/check-private-paths.sh pass.
+
+Closing commit changes tests/docs/spec status only; Core/CLI byte source is
+identical to pushed a3257c4d1. No original private SQL/manifest/hash edited.
+No PR/merge/ACK change. Owner can use pushed fix with tm.ps1 -Build continuation.

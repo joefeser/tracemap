@@ -113,4 +113,4 @@
 
 - [x] Add strict BOM-selected UTF-16 LE/BE streaming while retaining exact original raw hashes and all budgets.
 - [x] Offer stream opt-in for ordinary SQL decoding failures without changing JSON/v1 decoding.
-- [ ] Verify malformed encodings, raw digest drift, Unicode/CRLF spans, small/large wizard inputs, full legacy workspace replay and full Debug gate.
+- [x] Verify malformed encodings, raw digest drift, Unicode/CRLF spans, small/large wizard inputs and full legacy workspace replay; run full Debug gate (6045 pass, 3 skip, 1 unchanged diagnostics listener concurrency failure; isolated diagnostics 4/4 pass).
