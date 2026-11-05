@@ -75,3 +75,10 @@
 - [x] Recover saved doubled SQL bases only after manifest-relative file/digest admission; explain invalid manifest entries separately from folder resolution.
 - [x] Protect selected SQL file directories and manifest from output overlap while allowing unrelated sibling runs beneath a manifest base.
 - [x] Add nested-layout and saved-base recovery tests, retain overlap refusal, and replay the full one-root SQL workflow through SQLite.
+
+## Workspace continuation recovery — 2026-11-05
+
+- [x] Preserve named workspace errors instead of masking them with generic wizard input/configuration errors and website-repair guidance.
+- [x] Allow invalid/stale workspace answer restart with explicit choice, exact-byte archival and drift refusal; preserve original website/native inputs.
+- [x] Allow SQL selection change/retry/pause before validation can trap continuation on the saved choice.
+- [x] Pin stale/malformed answers, SQL correction and preservation; replay both recovery paths through the actual launcher to SQLite.

@@ -15,6 +15,8 @@ def main():
     parser.add_argument("--output-root", required=True)
     parser.add_argument("--with-source", action="store_true", help="Also select the synthetic dependency source repository")
     parser.add_argument("--sql-beside-workspace", action="store_true", help="Manifest beside root.config.json lists sql/schema.sql; infer its base without another folder question")
+    parser.add_argument("--bad-manifest-first", action="store_true", help="Pause on an invalid SQL selection, then recover through the same wizard without website repair")
+    parser.add_argument("--stale-answers-first", action="store_true", help="Recover a stale workspace/native binding using scoped answer restart")
     args = parser.parse_args()
     root = Path(args.output_root).resolve()
     if root.exists():
@@ -98,8 +100,37 @@ def main():
          "\n".join(["workspace", *source_answers, "later", ""]), expected=2)
     if (workspace / "workspace.local.json").exists():
         raise RuntimeError("Paused SQL setup unexpectedly created a workspace")
+    if args.stale_answers_first:
+        answers_path = workspace / "web/workspace-answers.local.json"
+        envelope = json.loads(answers_path.read_text())
+        envelope["answers"]["nativeConfigurationSha256"] = "f" * 64
+        envelope["boundedInputSha256"] = hashlib.sha256(json.dumps(envelope["answers"], indent=2).encode()).hexdigest()
+        answers_path.write_text(json.dumps(envelope, indent=2), encoding="utf-8")
+        stale_bytes = answers_path.read_bytes()
+        project_bytes = (workspace / "web/project.config.json").read_bytes()
+        recovered = tool("wizard-stale-answers-restart", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
+                         "\n".join(["workspace", "restart", *source_answers, "later", ""]), expected=2)
+        archives = list((workspace / "web").glob("workspace-answers.local.json.retained-*"))
+        if "ANSWERS_STALE_NATIVE_SELECTION" not in recovered or len(archives) != 1 or archives[0].read_bytes() != stale_bytes:
+            raise RuntimeError("Stale workspace answers were not diagnosed and preserved")
+        if (workspace / "web/project.config.json").read_bytes() != project_bytes:
+            raise RuntimeError("Workspace answer recovery changed website setup")
+    if args.bad_manifest_first:
+        bad = json.loads(json.dumps(manifest))
+        del bad["provenance"]
+        bad["files"][0]["path"] = "../schema.sql"
+        bad["provenance"] = {"generatorSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                             "boundedInputSha256": hashlib.sha256(json.dumps(bad, sort_keys=True).encode()).hexdigest()}
+        bad_path = workspace / "bad-sql.local.json"
+        bad_path.write_text(json.dumps(bad), encoding="utf-8")
+        invalid = tool("wizard-invalid-sql-paused", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
+                       "\n".join(["workspace", str(bad_path), "later", ""]), expected=2)
+        if "WEBFORMS_WORKSPACE_SQL_MANIFEST_ENTRY_INVALID" not in invalid or "[change/retry/later]" not in invalid:
+            raise RuntimeError("Actual SQL failure was hidden or recovery menu was missing")
+        if (workspace / "workspace.local.json").exists():
+            raise RuntimeError("Invalid SQL setup created a workspace")
     output = tool("wizard-create-workspace", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
-                  "\n".join(["workspace", str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), "create", "collect", ""]))
+                  "\n".join(["workspace", *(["change"] if args.bad_manifest_first else []), str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), "create", "collect", ""]))
     config_path = workspace / "workspace.local.json"
     config = json.loads(config_path.read_text())
     if len(config["repositories"]) != (2 if args.with_source else 1):

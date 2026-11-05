@@ -256,10 +256,12 @@ public static class WebFormsWizardCommand
         catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException
             or ArgumentException or System.Xml.XmlException or System.Text.Json.JsonException or System.ComponentModel.Win32Exception or BadImageFormatException)
         {
-            var code = exception is InvalidOperationException && exception.Message.StartsWith("WEBFORMS_WIZARD_", StringComparison.Ordinal)
+            var code = exception is InvalidOperationException && (exception.Message.StartsWith("WEBFORMS_WIZARD_", StringComparison.Ordinal) || exception.Message.StartsWith("WEBFORMS_WORKSPACE_", StringComparison.Ordinal))
                 ? exception.Message : "WEBFORMS_WIZARD_INPUT_OR_CONFIGURATION_INVALID";
             await error.WriteLineAsync("error: " + code + ". Existing saved projects and runs were not reset.");
-            await error.WriteLineAsync("If the root config is valid, use --continue --repair-project <id> for a previewed, confirmed per-project restart. Invalid root configs require manual correction or a new config folder; they are not auto-repaired.");
+            if (code.StartsWith("WEBFORMS_WORKSPACE_", StringComparison.Ordinal))
+                await error.WriteLineAsync("Workspace setup failed; website repair is not the recovery action. Existing website setup and native runs are preserved.");
+            else await error.WriteLineAsync("If the root config is valid, use --continue --repair-project <id> for a previewed, confirmed per-project restart. Invalid root configs require manual correction or a new config folder; they are not auto-repaired.");
             return 1;
         }
     }

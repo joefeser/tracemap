@@ -169,3 +169,18 @@ resolved paths and verifies hashes. Collection refuses outputs inside any select
 SQL file's directory or containing the manifest; sibling run folders are allowed.
 To replay this layout locally, add `--sql-beside-workspace` to the synthetic replay
 command above. The alternate layout with a separate SQL directory remains supported.
+
+### Recover workspace setup without website repair
+
+Workspace continuation reports its own named reason rather than replacing it with
+`WEBFORMS_WIZARD_INPUT_OR_CONFIGURATION_INVALID`. If saved workspace answers are
+invalid, malformed or refer to a prior native configuration, choose `restart` at
+`[restart/later]` to archive only that answer file and re-enter workspace choices.
+The archive is retained beside it; website project/configuration, receipts, SQL
+inputs and native runs are preserved. An unchanged-byte check precedes archival.
+
+If SQL validation fails, the wizard prints the reason and offers
+`[change/retry/later]`: select another manifest, retry after correcting that file
+locally, or pause. It does not require website repair or delete the old manifest.
+No failed evidence is promoted. The synthetic replay options `--stale-answers-first`
+and `--bad-manifest-first` exercise both recovery paths through completed SQLite.

@@ -7,6 +7,34 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsWizardWorkspaceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Stale_or_malformed_workspace_answers_can_restart_without_website_repair(bool malformed)
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture();
+        await fixture.Prepare();
+        var original = File.ReadAllBytes(Path.Combine(fixture.WizardRoot, "site", "project.config.json"));
+        var path = Path.Combine(fixture.WizardRoot, "site", "workspace-answers.local.json");
+        var answers = new WorkspaceWizardAnswers("site", new string('f', 64), null, null, null, null);
+        var json = new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true };
+        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(answers, json)));
+        var envelope = new WorkspaceWizardAnswerFile("tracemap-workspace-wizard-answers.v1", WebFormsWizardWorkspace.RuleId,
+            "local-only", new string('a', 64), hash, answers);
+        File.WriteAllText(path, malformed ? "{broken" : JsonSerializer.Serialize(envelope, json));
+        var retainedBytes = File.ReadAllBytes(path);
+        using var input = new StringReader("workspace\nrestart\nskip\nlater\n");
+        Assert.Equal(2, await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error));
+        Assert.Contains("[restart/later]", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("INPUT_OR_CONFIGURATION_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+        var retained = Assert.Single(Directory.GetFiles(Path.GetDirectoryName(path)!, "workspace-answers.local.json.retained-*"));
+        Assert.Equal(retainedBytes, File.ReadAllBytes(retained));
+        Assert.Equal(original, File.ReadAllBytes(Path.Combine(fixture.WizardRoot, "site", "project.config.json")));
+        using var saved = JsonDocument.Parse(File.ReadAllText(path));
+        Assert.Null(saved.RootElement.GetProperty("answers").GetProperty("sqlManifest").GetString());
+        Assert.False(File.Exists(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
+    }
+
     [Fact]
     public async Task Invalid_manifest_entry_is_reported_before_requesting_another_folder()
     {
@@ -17,10 +45,31 @@ public sealed class WebFormsWizardWorkspaceTests
         File.WriteAllText(fixture.Manifest, manifest.ToJsonString());
         using var store = WebFormsWizardStore.Open(fixture.WizardRoot, true);
         using var input = new StringReader($"skip\n{fixture.Manifest}\n");
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => WebFormsWizardWorkspace.RunAsync(store, "site", input, fixture.Output, fixture.Error, default));
-        Assert.Contains("WEBFORMS_WORKSPACE_SQL_MANIFEST_ENTRY_INVALID", error.Message, StringComparison.Ordinal);
+        Assert.Equal(2, await WebFormsWizardWorkspace.RunAsync(store, "site", input, fixture.Output, fixture.Error, default));
+        Assert.Contains("WEBFORMS_WORKSPACE_SQL_MANIFEST_ENTRY_INVALID", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("[change/retry/later]", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain("Enter an alternate BASE folder", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.False(File.Exists(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
+    }
+
+    [Fact]
+    public async Task Full_wizard_can_change_an_invalid_saved_sql_manifest_without_website_repair()
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture();
+        await fixture.Prepare();
+        var bad = Path.Combine(fixture.WizardRoot, "bad-sql.json");
+        var json = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
+        json["files"]![0]!["path"] = "../schema.sql";
+        File.WriteAllText(bad, json.ToJsonString());
+        using (var input = new StringReader($"workspace\nskip\n{bad}\nlater\n"))
+            Assert.Equal(2, await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error));
+        var original = File.ReadAllBytes(Path.Combine(fixture.WizardRoot, "site", "project.config.json"));
+        using (var input = new StringReader($"workspace\nchange\n{fixture.Manifest}\n{fixture.SqlRoot}\ncreate\nlater\n"))
+            Assert.True(await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error) == 0, fixture.Error.ToString());
+        Assert.DoesNotContain("INPUT_OR_CONFIGURATION_INVALID", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
+        Assert.Equal(original, File.ReadAllBytes(Path.Combine(fixture.WizardRoot, "site", "project.config.json")));
+        Assert.True(File.Exists(bad));
     }
 
     [Theory]
@@ -169,8 +218,8 @@ public sealed class WebFormsWizardWorkspaceTests
         var bytes = File.ReadAllBytes(path);
         using var resumed = WebFormsWizardStore.Open(fixture.WizardRoot, true);
         using var empty = new StringReader("");
-        Assert.Contains("ANSWERS_INVALID", (await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            WebFormsWizardWorkspace.RunAsync(resumed, "site", empty, fixture.Output, fixture.Error, default))).Message, StringComparison.Ordinal);
+        Assert.Equal(2, await WebFormsWizardWorkspace.RunAsync(resumed, "site", empty, fixture.Output, fixture.Error, default));
+        Assert.Contains("ANSWERS_INVALID", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Equal(bytes, File.ReadAllBytes(path));
     }
 

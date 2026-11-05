@@ -821,3 +821,36 @@ including configuration, guided collection, SQL inventory, positive SQLite rows
 and quick_check for all three databases. Docs branch 95124a103 clarifies the
 one-root layout. Whitespace/private-path guards passed. No PR/merge or full-suite
 claim for this CLI-only head; final pre-merge full gate still required.
+
+### Workspace continuation recovery — 2026-11-05
+
+Owner reported generic input/configuration invalid immediately after choosing
+workspace. Code inspection proved the outer wizard preserved only the
+WEBFORMS_WIZARD_ prefix while new workspace errors use WEBFORMS_WORKSPACE_; it
+therefore erased the actual reason and suggested unrelated website repair.
+Saved workspace answers also bind native config SHA, so website repair could
+leave workspace answers stale; automatic SQL validation before the change menu
+could similarly trap an invalid saved SQL selection. Exact private reason remains
+unverified, but both failure mechanisms are now independently pinned.
+
+The outer handler preserves workspace codes and avoids website-repair guidance.
+Invalid/stale/malformed answer state offers explicit restart/later; restart moves
+only the observed answer bytes to a unique retained sibling after a hash drift
+check, then starts workspace questions. Unreadable/oversize/linked state is not
+implicitly accepted. SQL admission errors print the local reason and offer
+change/retry/later, preserving failed manifest and native state. No admission
+condition, attestation or hash refusal is bypassed. No Core/schema changes.
+
+Focused tests: 35 initially, 37 after stale/malformed recovery additions, all
+passed Debug -warnaserror. Full actual-launcher replay with --sql-beside-workspace
+--bad-manifest-first --stale-answers-first passed: specific stale binding shown,
+old answer bytes archived, website config unchanged, invalid SQL paused, next
+continuation changed SQL selection without repair, then configuration/collection
+and all three nonempty SQLite integrity checks passed. Separate bad-manifest-only
+replay also passed. Final broader results follow. No PR or merge.
+
+Final touched-lane command: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug
+-warnaserror --nologo --filter 'FullyQualifiedName~WebFormsWizard|FullyQualifiedName~Workspace':
+287 passed, 0 failed/skipped, 2m45s. Whitespace/private-path guards pass. Docs branch
+6629c3eec explains workspace-only recovery. Final pre-merge full Debug gate remains
+required; no full-suite/private-input success claim for this CLI-only head.

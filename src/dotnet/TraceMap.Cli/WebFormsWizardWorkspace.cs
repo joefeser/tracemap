@@ -42,18 +42,41 @@ internal static class WebFormsWizardWorkspace
         var answers = new WorkspaceWizardAnswers(id, native.Sha256, null, null, null, null);
         if (File.Exists(path))
         {
-            var bytes = Read(path);
-            previousHash = Hash(bytes);
-            using var document = JsonDocument.Parse(bytes);
-            Unique(document.RootElement);
-            if (document.RootElement.TryGetProperty("answers", out var payload)) Unique(payload);
-            var saved = JsonSerializer.Deserialize<WorkspaceWizardAnswerFile>(bytes, Json) ?? throw Fail("ANSWERS_INVALID");
-            if (saved.Answers is null || saved.SchemaVersion != Schema || saved.RuleId != RuleId || saved.Visibility != "local-only"
-                || saved.GeneratorSha256 is null || !Regex.IsMatch(saved.GeneratorSha256, "\\A[0-9a-f]{64}\\z", RegexOptions.CultureInvariant)
-                || saved.BoundedInputSha256 != Hash(JsonSerializer.SerializeToUtf8Bytes(saved.Answers, Json))) throw Fail("ANSWERS_INVALID");
-            answers = saved.Answers;
-            if (answers.WebsiteId != id || answers.NativeConfigurationSha256 != native.Sha256) throw Fail("ANSWERS_STALE_NATIVE_SELECTION");
-            await output.WriteLineAsync("Reusing saved workspace answers. Existing website, DLL selection and SQL manifest are not recreated.");
+            try
+            {
+                var bytes = Read(path);
+                previousHash = Hash(bytes);
+                JsonDocument document;
+                try { document = JsonDocument.Parse(bytes); }
+                catch (JsonException exception) { throw Fail("ANSWERS_JSON_INVALID: " + path + "; " + exception.Message); }
+                using var ownedDocument = document;
+                Unique(document.RootElement);
+                if (document.RootElement.TryGetProperty("answers", out var payload)) Unique(payload);
+                var saved = JsonSerializer.Deserialize<WorkspaceWizardAnswerFile>(bytes, Json) ?? throw Fail("ANSWERS_INVALID");
+                if (saved.Answers is null || saved.SchemaVersion != Schema || saved.RuleId != RuleId || saved.Visibility != "local-only"
+                    || saved.GeneratorSha256 is null || !Regex.IsMatch(saved.GeneratorSha256, "\\A[0-9a-f]{64}\\z", RegexOptions.CultureInvariant)
+                    || saved.BoundedInputSha256 != Hash(JsonSerializer.SerializeToUtf8Bytes(saved.Answers, Json))) throw Fail("ANSWERS_INVALID");
+                answers = saved.Answers;
+                if (answers.WebsiteId != id || answers.NativeConfigurationSha256 != native.Sha256) throw Fail("ANSWERS_STALE_NATIVE_SELECTION");
+                await output.WriteLineAsync("Reusing saved workspace answers. Existing website, DLL selection and SQL manifest are not recreated.");
+            }
+            catch (Exception exception) when (previousHash is not null && (exception is JsonException
+                || exception is InvalidOperationException && exception.Message.StartsWith("WEBFORMS_WORKSPACE_WIZARD_ANSWERS_", StringComparison.Ordinal)))
+            {
+                await output.WriteLineAsync("Saved workspace answers cannot be reused: " + path);
+                await output.WriteLineAsync("Reason: " + exception.Message);
+                await output.WriteLineAsync("Archive only these workspace answers and answer workspace setup again, or pause? Website setup, SQL files and native runs stay unchanged. [restart/later]");
+                var correction = await input.ReadLineAsync(token);
+                if (correction is null || correction.Trim() == "later") return 2;
+                if (correction.Trim() != "restart") throw Fail("CHOICE_INVALID");
+                store.VerifyUnchanged();
+                if (Hash(Read(path)) != previousHash) throw Fail("ANSWERS_CHANGED");
+                var retained = path + ".retained-" + Guid.NewGuid().ToString("N");
+                File.Move(path, retained, overwrite: false);
+                await output.WriteLineAsync("Previous workspace answers retained at: " + retained);
+                answers = new(id, native.Sha256, null, null, null, null);
+                previousHash = null;
+            }
         }
         await output.WriteLineAsync("Continue workspace setup in your existing root: " + root + ". No scan will start.");
         while (true)
@@ -102,8 +125,25 @@ internal static class WebFormsWizardWorkspace
             // Prefer the manifest's own directory. Recheck an older saved base first;
             // repair a missing-file base only when the manifest-relative bytes verify.
             var manifestBase = Path.GetDirectoryName(answers.SqlManifest!)!;
-            var sqlPlan = TrySql(answers.SqlRoot ?? manifestBase);
-            if (sqlPlan is null && answers.SqlRoot is not null) sqlPlan = TrySql(manifestBase);
+            SqlLocalCollectionInput? sqlPlan;
+            try
+            {
+                sqlPlan = TrySql(answers.SqlRoot ?? manifestBase);
+                if (sqlPlan is null && answers.SqlRoot is not null) sqlPlan = TrySql(manifestBase);
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or JsonException or IOException or UnauthorizedAccessException)
+            {
+                await output.WriteLineAsync("Workspace SQL setup could not verify the selected manifest: " + answers.SqlManifest);
+                await output.WriteLineAsync("Reason: " + exception.Message);
+                await output.WriteLineAsync("Website setup and completed native scans are preserved. Change the SQL manifest selection, retry after editing that file locally, or pause? [change/retry/later]");
+                var correction = await input.ReadLineAsync(token);
+                if (correction is null || correction.Trim() == "later") return 2;
+                if (correction.Trim() == "retry") continue;
+                if (correction.Trim() != "change") throw Fail("CHOICE_INVALID");
+                answers = answers with { SqlManifest = null, SqlRoot = null };
+                await Save();
+                continue;
+            }
             if (sqlPlan is not null)
             {
                 if (answers.SqlRoot != sqlPlan.SourceRoot)
