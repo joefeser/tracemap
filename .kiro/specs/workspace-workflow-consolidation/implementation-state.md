@@ -952,3 +952,34 @@ Independent exact-head full Debug -warnaserror build/test gate: 6,021 passed,
 verified. Focused wizard/workspace 290/290 plus final API/mode pins 11/11 passed.
 This closing checkpoint changes documentation only. No PR, merge, ACK policy,
 application runtime, IIS or private acceptance claim.
+
+### SQL refusal loop correction — 2026-11-05
+
+Owner reported retry doing nothing and change repeating the manifest prompt.
+Those actions revalidated/selected input but could not repair unsupported data.
+Added CLI-local typed size diagnostics for manifest, SQL-file and SQL-total limits
+with observed bytes and limits; shared DDL reader keeps original behavior unless
+the local-definitions caller opts into explanation. No Core/parser/budget/schema
+change. Existing ordinary and selected-input caps remain exactly in force.
+
+Size refusal offers select/later, not retry; choosing the same blocked manifest
+pauses. Other repeated identical failures after one requested retry/change pause
+instead of re-asking indefinitely. Valid edits still pass fresh admission.
+Failed inputs and native state are preserved; no file editing, trimming, scope
+selection or budget increase is automated. This does not admit an oversized export.
+
+Focused initial size lane 44/44 passed; expanded pre-final UI guard lane 564/564
+passed Debug -warnaserror. Final touched-lane result follows. Actual launcher
+replay --sql-beside-workspace --size-limit-first --same-failure-first passed: exact
+262145/262144 file measurement, same size-blocked selection paused, unchanged
+invalid path retry paused, different valid manifest admitted, all three SQLite
+checks passed. Transcripts and SQL-REFUSAL.md were added to the existing local
+working-copy folder. Private failure's precise current reason remains unknown.
+No PR/merge, no claim that this fixes unsupported private SQL admission.
+
+Final touched lane (wizard/workspace/local SQL/DDL) with Debug -warnaserror:
+566 passed, 0 failed/skipped, 3m18s. Terminal replay covers both size and generic
+unchanged-error pauses followed by valid-manifest collection and three SQLite
+checks. Whitespace/private-path guards pass. Core implementation and its f7f058434
+6,021-pass full gate are unchanged; this is a CLI diagnostic/recovery change.
+No PR/merge and no claim that unsupported private SQL is admitted.

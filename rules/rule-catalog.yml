@@ -12,6 +12,7 @@ rules:
     limitations:
       - Local-only answers bind the website and original native configuration hash; exact CLI generator and bounded-answer hashes detect ordinary drift, not authenticity or source correspondence.
       - Configuration does not scan, build, execute SQL, attest publication correspondence or import completed results. An explicit collect choice dispatches the existing workspace collector to a fresh output; existing native receipt and SQL admission policies remain authoritative.
+      - SQL size refusals report measured bytes and admitted limits, do not offer retry as a repair, and preserve all caps. A repeated identical validation failure pauses instead of looping; a different admitted input is required for unsupported scope.
       - Invalid or stale workspace answer recovery requires an explicit restart choice, archives exact previous bytes after a drift check, and preserves website/native state. SQL validation offers change/retry/pause without bypassing admission.
       - SQL files are resolved relative to the manifest directory first and admitted only after existing path and digest checks. An alternate base is requested only for missing files; no recursive search or manifest rewriting is performed.
       - Additional dependency source is optional; skip retains existing compiled DLL selection without claiming dependency-source coverage. Framework project previews inspect at most 256 immediate root files, never nested membership; discovery requires explicit selection.

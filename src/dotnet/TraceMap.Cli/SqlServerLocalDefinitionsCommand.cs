@@ -9,6 +9,13 @@ namespace TraceMap.Cli;
 internal sealed record SqlLocalCollectionInput(string ManifestPath, string SourceRoot, string ManifestSha256,
     SqlLocalExport Export, IReadOnlyList<SqlServerDdlFile> SourceFiles);
 
+internal sealed class SqlLocalSizeLimitException(string code, string scope, string path, long observedBytes, long limitBytes)
+    : ArgumentException($"{code}: scope={scope}; file={JsonSerializer.Serialize(path)}; observedBytes={observedBytes}; limitBytes={limitBytes}")
+{
+    internal string Scope { get; } = scope;
+    internal long LimitBytes { get; } = limitBytes;
+}
+
 internal static class SqlServerLocalDefinitionsCommand
 {
     internal const string Help = """
@@ -51,7 +58,10 @@ internal static class SqlServerLocalDefinitionsCommand
         token.ThrowIfCancellationRequested();
         manifestPath = Path.GetFullPath(manifestPath); sourceRoot = Path.GetFullPath(sourceRoot);
         if ((File.GetAttributes(manifestPath) & FileAttributes.ReparsePoint) != 0) throw new ArgumentException("sql-local-input-link-refused");
-        var json = SqlServerDdlCommand.ReadBounded(manifestPath, SqlServerSchemaEvidence.MaxBytes);
+        string json;
+        try { json = SqlServerDdlCommand.ReadBounded(manifestPath, SqlServerSchemaEvidence.MaxBytes); }
+        catch (ArgumentException exception) when (exception.Message == "input-size-limit")
+        { throw new SqlLocalSizeLimitException("input-size-limit", "manifest", manifestPath, new FileInfo(manifestPath).Length, SqlServerSchemaEvidence.MaxBytes); }
         using var document = JsonDocument.Parse(json);
         SqlLocalExport export;
         IReadOnlyList<SqlServerDdlFile> files;
@@ -60,14 +70,14 @@ internal static class SqlServerLocalDefinitionsCommand
             var input = SqlServerDefinitionSelection.ReadInput(json);
             files = input.Files;
             var sources = SqlServerDdlCommand.ReadSourceFiles(sourceRoot, files,
-                SqlServerDefinitionSelection.MaxFileBytes, SqlServerDefinitionSelection.MaxTotalBytes);
+                SqlServerDefinitionSelection.MaxFileBytes, SqlServerDefinitionSelection.MaxTotalBytes, explainSizeLimits: true);
             export = SqlServerDefinitionSelection.Produce(json, sources, token);
         }
         else
         {
             var input = SqlServerLocalDefinitions.ReadInput(json);
             files = input.Files;
-            var sources = SqlServerDdlCommand.ReadSourceFiles(sourceRoot, files);
+            var sources = SqlServerDdlCommand.ReadSourceFiles(sourceRoot, files, explainSizeLimits: true);
             export = SqlServerLocalDefinitions.Produce(json, sources, token);
         }
         return new(manifestPath, sourceRoot, SqlServerSchemaEvidence.Hash(Encoding.UTF8.GetBytes(json)), export, files);

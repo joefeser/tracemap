@@ -60,7 +60,7 @@ internal static class SqlServerDdlCommand
         => ReadSourceFiles(sourceRoot, input.Files);
 
     internal static Dictionary<string, string> ReadSourceFiles(string sourceRoot, IReadOnlyList<SqlServerDdlFile> files,
-        int maxFileBytes = SqlServerDdlEvidence.MaxFileBytes, int maxTotalBytes = SqlServerDdlEvidence.MaxTotalBytes)
+        int maxFileBytes = SqlServerDdlEvidence.MaxFileBytes, int maxTotalBytes = SqlServerDdlEvidence.MaxTotalBytes, bool explainSizeLimits = false)
     {
         var root = Path.GetFullPath(sourceRoot);
         // The explicitly supplied root is trusted; reject links at that root and
@@ -76,9 +76,16 @@ internal static class SqlServerDdlCommand
                 path = Path.Combine(path, component);
                 if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new ArgumentException("ddl-source-link-refused");
             }
-            var text = ReadBounded(path, maxFileBytes);
+            string text;
+            try { text = ReadBounded(path, maxFileBytes); }
+            catch (ArgumentException exception) when (explainSizeLimits && exception.Message == "input-size-limit")
+            { throw new SqlLocalSizeLimitException("input-size-limit", "SQL-file", path, new FileInfo(path).Length, maxFileBytes); }
             total += Encoding.UTF8.GetByteCount(text);
-            if (total > maxTotalBytes) throw new ArgumentException("ddl-input-size-limit");
+            if (total > maxTotalBytes)
+            {
+                if (explainSizeLimits) throw new SqlLocalSizeLimitException("ddl-input-size-limit", "SQL-total", root, total, maxTotalBytes);
+                throw new ArgumentException("ddl-input-size-limit");
+            }
             sources.Add(file.Path, text);
         }
         return sources;

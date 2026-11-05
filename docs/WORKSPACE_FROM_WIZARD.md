@@ -188,3 +188,15 @@ and `--bad-manifest-first` exercise both recovery paths through completed SQLite
 For a persistent folder containing all generated inputs, configs, a frozen tool,
 readable PowerShell scripts, completed SQLite outputs and measured size-limit
 cases, use [the complete local lab](WORKSPACE_LOCAL_LAB.md).
+
+### A refused input is not repaired by retry
+
+For size-limit errors the wizard reports manifest/file/aggregate scope, path,
+observed bytes and the admitted byte limit. It offers a different prepared manifest
+or pause, not retry. Re-entering the same blocked manifest pauses instead of
+repeating the question. Ordinary SQL limits remain 256 KiB/file and 1 MiB total;
+larger originals need an explicit bounded definition-selection input, not silent
+truncation or a budget raise. Other validation errors permit one requested retry
+or change; if the same failure remains, setup pauses rather than looping. A retry
+after a real correction can still succeed. Native setup/runs and failed inputs
+are preserved. Replay `--size-limit-first --same-failure-first` covers these cases.

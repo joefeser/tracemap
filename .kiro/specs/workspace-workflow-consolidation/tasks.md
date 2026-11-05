@@ -95,3 +95,9 @@
 - [x] Reproduce initial folder-with-project refusal instead of substituting a modern project layout.
 - [x] Add explicit website/project selection; preserve default ambiguous-folder refusal and retain the selected mode across continuation/native configuration.
 - [x] Finish full user-shaped scan, metadata/SQLite checks and full Debug -warnaserror gate: 6,021 passed, 3 skipped, 0 failed at f7f058434.
+
+## Stop unchanged SQL refusal loops — 2026-11-05
+
+- [x] Report measured manifest/file/aggregate size and actual admitted limit without changing existing caps.
+- [x] Remove retry from size refusal; pause same blocked selection and repeated identical validation failures.
+- [x] Prove size and ordinary-invalid retry/change pauses, then select a different valid manifest and collect through SQLite locally.

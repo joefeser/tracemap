@@ -8,6 +8,50 @@ namespace TraceMap.Tests;
 public sealed class WebFormsWizardWorkspaceTests
 {
     [Theory]
+    [InlineData("retry")]
+    [InlineData("same")]
+    public async Task Unchanged_SQL_validation_failure_pauses_after_one_requested_action(string action)
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture();
+        await fixture.Prepare();
+        var manifest = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
+        manifest["files"]![0]!["path"] = "../schema.sql";
+        File.WriteAllText(fixture.Manifest, manifest.ToJsonString());
+        var correction = action == "same" ? $"change\n{fixture.Manifest}\n" : "retry\n";
+        using var input = new StringReader($"workspace\nskip\n{fixture.Manifest}\n{correction}");
+        Assert.Equal(2, await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error));
+        Assert.Contains("same SQL validation failure", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Equal(1, fixture.Output.ToString().Split("[change/retry/later]", StringSplitOptions.None).Length - 1);
+        Assert.False(File.Exists(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
+    }
+
+    [Theory]
+    [InlineData("retry")]
+    [InlineData("same")]
+    public async Task Oversize_SQL_reports_file_and_limit_and_pauses_instead_of_looping(string action)
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture();
+        await fixture.Prepare();
+        var sql = Path.Combine(fixture.WizardRoot, "sql");
+        Directory.CreateDirectory(sql);
+        var file = Path.Combine(sql, "oversize.sql");
+        File.WriteAllBytes(file, new byte[262145]);
+        var manifest = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
+        manifest["files"]![0]!["path"] = "sql/oversize.sql";
+        var path = Path.Combine(fixture.WizardRoot, "sql-limit.local.json");
+        File.WriteAllText(path, manifest.ToJsonString());
+        var correction = action == "same" ? $"select\n{path}\n" : "retry\n";
+        using var input = new StringReader($"workspace\nskip\n{path}\n{correction}");
+        Assert.Equal(2, await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error));
+        Assert.Contains("observedBytes=262145", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("limitBytes=262144", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("oversize.sql", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("[change/retry/later]", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
+        Assert.Equal(262145, new FileInfo(file).Length);
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Stale_or_malformed_workspace_answers_can_restart_without_website_repair(bool malformed)

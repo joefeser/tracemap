@@ -19,7 +19,11 @@ def main():
     parser.add_argument("--stale-answers-first", action="store_true", help="Recover a stale workspace/native binding using scoped answer restart")
     parser.add_argument("--legacy-layout", action="store_true", help="Mirror sibling web/DLL repos, a net20 project reference, separate publication, local TraceMap checkout and one output root")
     parser.add_argument("--legacy-web-target", choices=["net20", "net472", "net48"], default="net472", help="Explicit synthetic web build target; dependency remains net20")
+    parser.add_argument("--size-limit-first", action="store_true", help="Prove oversized SQL gives measured limits and pauses instead of looping")
+    parser.add_argument("--same-failure-first", action="store_true", help="Prove an unchanged SQL validation retry pauses rather than re-asking forever")
     args = parser.parse_args()
+    if args.same_failure_first:
+        args.bad_manifest_first = True
     if args.legacy_layout:
         args.with_source = True
         args.sql_beside_workspace = True
@@ -145,6 +149,25 @@ def main():
             raise RuntimeError("Stale workspace answers were not diagnosed and preserved")
         if (workspace / project_id / "project.config.json").read_bytes() != project_bytes:
             raise RuntimeError("Workspace answer recovery changed website setup")
+    if args.size_limit_first:
+        too_big = workspace / "sql/oversize.sql"
+        too_big.parent.mkdir(exist_ok=True)
+        too_big.write_bytes(b" " * 262145)
+        limit_manifest = json.loads(json.dumps(manifest))
+        del limit_manifest["provenance"]
+        limit_manifest["files"] = [{"path": "sql/oversize.sql", "sha256": hashlib.sha256(too_big.read_bytes()).hexdigest()}]
+        limit_manifest["provenance"] = {"generatorSha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                                        "boundedInputSha256": hashlib.sha256(json.dumps(limit_manifest, sort_keys=True).encode()).hexdigest()}
+        limit_path = workspace / "oversize-sql.local.json"
+        limit_path.write_text(json.dumps(limit_manifest), encoding="utf-8")
+        blocked = tool("wizard-size-limit-paused", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
+                       "\n".join(["workspace", str(limit_path), "retry", ""]), expected=2)
+        if "observedBytes=262145" not in blocked or "limitBytes=262144" not in blocked or "[change/retry/later]" in blocked:
+            raise RuntimeError("Size refusal did not measure the file and avoid the retry loop")
+        same = tool("wizard-same-size-manifest-paused", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
+                    "\n".join(["workspace", "select", str(limit_path), ""]), expected=2)
+        if "same size-blocked manifest" not in same or (workspace / "workspace.local.json").exists():
+            raise RuntimeError("Same-manifest selection loop was not stopped")
     if args.bad_manifest_first:
         bad = json.loads(json.dumps(manifest))
         del bad["provenance"]
@@ -154,11 +177,13 @@ def main():
         bad_path = workspace / "bad-sql.local.json"
         bad_path.write_text(json.dumps(bad), encoding="utf-8")
         invalid = tool("wizard-invalid-sql-paused", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
-                       "\n".join(["workspace", str(bad_path), "later", ""]), expected=2)
+                       "\n".join(["workspace", str(bad_path), "retry" if args.same_failure_first else "later", ""]), expected=2)
         if "WEBFORMS_WORKSPACE_SQL_MANIFEST_ENTRY_INVALID" not in invalid or "[change/retry/later]" not in invalid:
             raise RuntimeError("Actual SQL failure was hidden or recovery menu was missing")
         if (workspace / "workspace.local.json").exists():
             raise RuntimeError("Invalid SQL setup created a workspace")
+        if args.same_failure_first and "same SQL validation failure" not in invalid:
+            raise RuntimeError("Unchanged validation retry did not stop the loop")
     output = tool("wizard-create-workspace", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
                   "\n".join(["workspace", *(["change"] if args.bad_manifest_first else []), str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), "create", "collect", ""]))
     config_path = workspace / "workspace.local.json"

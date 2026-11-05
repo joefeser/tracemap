@@ -79,6 +79,9 @@ internal static class WebFormsWizardWorkspace
             }
         }
         await output.WriteLineAsync("Continue workspace setup in your existing root: " + root + ". No scan will start.");
+        string? sizeBlockedManifest = null;
+        string? lastSqlFailureManifest = null;
+        string? lastSqlFailureReason = null;
         while (true)
         {
             if (answers.FrameworkRoot is null)
@@ -120,6 +123,11 @@ internal static class WebFormsWizardWorkspace
             {
                 var value = await Existing("Existing SQL manifest FILE from step 4 (not the SQL file itself), or later:", true);
                 if (value is null) return 2;
+                if (value == sizeBlockedManifest)
+                {
+                    await output.WriteLineAsync("That is the same size-blocked manifest. Re-entering its path cannot change the input limit. Setup paused; no scan or input was reset.");
+                    return 2;
+                }
                 answers = answers with { SqlManifest = value }; await Save();
             }
             // Prefer the manifest's own directory. Recheck an older saved base first;
@@ -135,6 +143,27 @@ internal static class WebFormsWizardWorkspace
             {
                 await output.WriteLineAsync("Workspace SQL setup could not verify the selected manifest: " + answers.SqlManifest);
                 await output.WriteLineAsync("Reason: " + exception.Message);
+                if (answers.SqlManifest == lastSqlFailureManifest && exception.Message == lastSqlFailureReason)
+                {
+                    await output.WriteLineAsync("The same SQL validation failure remains after that action. No input is edited automatically. Setup paused instead of repeating the question; website setup and runs are preserved.");
+                    return 2;
+                }
+                lastSqlFailureManifest = answers.SqlManifest;
+                lastSqlFailureReason = exception.Message;
+                if (exception is SqlLocalSizeLimitException size)
+                {
+                    sizeBlockedManifest = answers.SqlManifest;
+                    await output.WriteLineAsync("SQL setup is blocked by an admission limit. Retry cannot change that limit; no workspace was created.");
+                    if (size.Scope == "SQL-file" && size.LimitBytes == SqlServerDdlEvidence.MaxFileBytes)
+                        await output.WriteLineAsync("Ordinary definitions allow 262144 bytes per file. Larger originals require an explicit bounded definition-selection manifest; this wizard does not select, truncate, or raise limits automatically.");
+                    await output.WriteLineAsync("Select a DIFFERENT prepared SQL manifest or pause? [select/later]");
+                    var selection = await input.ReadLineAsync(token);
+                    if (selection is null || selection.Trim() is "later" or "retry") return 2;
+                    if (selection.Trim() is not ("select" or "change")) throw Fail("CHOICE_INVALID");
+                    answers = answers with { SqlManifest = null, SqlRoot = null };
+                    await Save();
+                    continue;
+                }
                 await output.WriteLineAsync("Website setup and completed native scans are preserved. Change the SQL manifest selection, retry after editing that file locally, or pause? [change/retry/later]");
                 var correction = await input.ReadLineAsync(token);
                 if (correction is null || correction.Trim() == "later") return 2;
