@@ -176,8 +176,12 @@ public static class WebFormsWizardCommand
             current = store.ReadProject(id);
             if (current.Step == "ready")
             {
-                await output.WriteLineAsync("To attest that the selected compiled publication corresponds to this exact source commit and run TraceMap scan/reports, type the full commit below. This is your declaration, not build authenticity proof. Type later to pause:");
+                await output.WriteLineAsync("Selected application source folder: " + System.Text.Json.JsonSerializer.Serialize(current.WebRoot));
+                await output.WriteLineAsync("Application source Git commit (HEAD), read from that folder; not the TraceMap tool commit or a DLL SHA-256:");
                 await output.WriteLineAsync(current.Native!.SourceCommitSha);
+                await output.WriteLineAsync("To check it yourself in PowerShell (read-only):");
+                await output.WriteLineAsync("git -C '" + current.WebRoot.Replace("'", "''", StringComparison.Ordinal) + "' rev-parse HEAD");
+                await output.WriteLineAsync("Copy the full 40-character application source commit displayed above ONLY if you can confirm the selected publication was built from that revision. Entering it declares that correspondence and starts TraceMap scan/reports; it is not build authenticity proof. If it differs or you cannot confirm, type later to pause:");
                 var answer = await input.ReadLineAsync(cancellationToken);
                 if (answer is null || answer.Trim() == "later") return 2;
                 return await WebFormsWizardExecution.RunAsync(store, id, answer.Trim(), output, error, cancellationToken, nativeRunner);

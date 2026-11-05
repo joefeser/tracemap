@@ -107,9 +107,14 @@ configuration-root/
   runs/website-id-<id>/          # native evidence, checkpoints and reports
 ```
 
-Before execution, type the displayed full source commit to attest that the
-selected publication corresponds to it. This declaration is not authenticated
-build provenance. Native preparation checks committed source membership and
+Before execution, the wizard labels the displayed 40-character hash as the
+**application source Git commit (HEAD)** and shows the selected source folder.
+It is not the TraceMap tool commit, a DLL SHA-256 or a value to memorize. The
+wizard reads it from Git and prints a read-only `git -C '<source-folder>' rev-parse HEAD`
+command so you can verify it. Type the displayed full source commit only to attest
+that the selected publication corresponds to it. If the values differ or you do
+not know the publication's source revision, type `later` to pause. This declaration
+is not authenticated build provenance. Native preparation checks committed source membership and
 receipts; failures remain failures. Sources need a Git commit and origin remote.
 Successful completed continuation verifies retained reports without creating a
 new scan. Failed attempts resume only through their pinned native manifest.

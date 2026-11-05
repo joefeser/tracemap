@@ -41,3 +41,5 @@
 - [x] Reject obvious project/solution file-kind mismatches before collection; warnings do not silently expand or rewrite scope.
 - [x] Focused workspace lane 55/55; public source/compiled/SQL rehearsal; exact-code-head full Debug -warnaserror: 5,979 passed, 3 skipped, 0 failed at 9d189373f.
 - [ ] Owner tests work configuration; no PR or merge until requested.
+
+- [x] Clarify wizard attestation hash as application source Git HEAD, show source folder and read-only verification command; wording pin failed before change, 18 command/execution cases passed with warnings as errors.

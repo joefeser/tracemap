@@ -590,3 +590,18 @@ Private-path and whitespace guards passed. The verification-only owner prompt is
 prompts/verify-workspace-scope-before-collection.md. It does not authorize collection.
 Windows work-configuration validation remains pending. No PR opened or merge done;
 the separate codex/work-scan-setup-guide branch remains unchanged.
+
+
+### Wizard source-commit prompt clarification — 2026-11-04
+
+Owner testing exposed confusion between application source Git HEAD, the TraceMap
+build commit and DLL/configuration SHA-256 values. The ready-step prompt now names
+the 40-character application source Git commit, displays its selected source folder,
+and prints a single-quoted PowerShell git -C ... rev-parse HEAD command (embedded
+single quotes escaped). It explains what entering the value attests and offers
+later if correspondence is uncertain. Attestation validation, preparation, scan
+execution and all stored contracts are unchanged. Native workflow docs updated.
+The added wording pin failed on the previous prompt; all 18 WizardCommand/Execution
+cases pass Debug -warnaserror. This is a leaf prompt-text follow-up; the prior
+full-suite result above applies to 9d189373f, not a fresh full run of this wording
+change. No private scan, application build or PR performed.

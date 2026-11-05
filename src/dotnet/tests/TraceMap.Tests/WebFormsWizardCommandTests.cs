@@ -132,6 +132,11 @@ public sealed class WebFormsWizardCommandTests
         Assert.Equal(2, result.Code);
         Assert.Empty(result.Error);
         Assert.Contains("Native configuration:", result.Output);
+        Assert.Contains("Application source Git commit (HEAD)", result.Output);
+        Assert.Contains("not the TraceMap tool commit or a DLL SHA-256", result.Output);
+        Assert.Contains("git -C '", result.Output);
+        Assert.Contains("rev-parse HEAD", result.Output);
+        Assert.Contains("Copy the full 40-character application source commit", result.Output);
         Assert.False(Directory.Exists(Path.Combine(root, "runs")));
         using var store = WebFormsWizardStore.Open(root, true);
         Assert.Equal("ready", store.ReadProject("site").Step);
