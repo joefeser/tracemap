@@ -94,4 +94,4 @@
 - [x] Author sibling web/DLL repos with a relative project reference, genuine net20 dependency, separate publication, command checkout and one output-root SQL layout.
 - [x] Reproduce initial folder-with-project refusal instead of substituting a modern project layout.
 - [x] Add explicit website/project selection; preserve default ambiguous-folder refusal and retain the selected mode across continuation/native configuration.
-- [ ] Finish full user-shaped scan, metadata/SQLite checks and full Debug -warnaserror gate for the Core change.
+- [x] Finish full user-shaped scan, metadata/SQLite checks and full Debug -warnaserror gate: 6,021 passed, 3 skipped, 0 failed at f7f058434.

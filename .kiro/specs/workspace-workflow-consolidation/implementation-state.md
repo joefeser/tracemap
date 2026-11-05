@@ -921,3 +921,34 @@ Focused wizard/workspace gate: 290 passed, 0 failed/skipped, Debug -warnaserror
 The original public two-argument Inspect signature is retained; new explicit-mode
 inspection is an overload. Full exact-head Debug gate and actual-layout scan are
 pending at this code checkpoint.
+
+### User-layout validation complete — 2026-11-05
+
+Exact Core/code head f7f058434c6f2d216a628926cfd4ed487d784169. Actual launcher
+--legacy-layout completed from a local clone under its own tracemap directory.
+Sibling source repos and relative project reference retained; dependency built
+net20 with CLR2 metadata and web helper built explicitly net472. The folder was
+selected as website despite the helper. Output root holds root config, SQL
+manifest listing sql/schema.sql, one SQL file, per-project state, workspace config
+and runs. No extra SQL base question was supplied. Source repos remain clean.
+
+Local full pipeline produced 129 combined facts, 110 native facts and one SQL
+object. Combined/native/SQL SQLite passed read-only quick_check with nonzero rows;
+both raw scan channels include manifest, facts, index, report and analyzer log.
+Web source is Level3SyntaxAnalysis/NotRun in projectless scope, DLL source is
+Level1SemanticAnalysis/Succeeded. Native dependency runtime floor clr-2.x observed;
+web metadata target .NETFramework,Version=v4.7.2. Unbound dependency, framework
+reference and IL modeling gaps remain; no private/runtime or SQL-binding proof.
+SQL is a 44-byte authored fixture, not a replica of unknown private export size.
+
+A readable persistent working copy includes complete sources/configs/output plus
+Continue, Verify, Recreate-Fresh and Build-Publication PowerShell scripts. Each
+script parsed and executed; recreation completed a second full local public copy.
+Publication rebuild was tested on that separate copy with unchanged DLL bytes.
+The earlier ambiguous-folder failure remains preserved and labeled separately.
+
+Independent exact-head full Debug -warnaserror build/test gate: 6,021 passed,
+3 skipped, 0 failed; 6,024 total; 14.1046 minutes; exit=0. Log head f7f058434 was
+verified. Focused wizard/workspace 290/290 plus final API/mode pins 11/11 passed.
+This closing checkpoint changes documentation only. No PR, merge, ACK policy,
+application runtime, IIS or private acceptance claim.
