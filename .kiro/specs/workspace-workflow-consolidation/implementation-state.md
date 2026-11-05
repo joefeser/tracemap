@@ -1168,3 +1168,27 @@ Whitespace/private-path guards pass. Leaf b1e6e2c8 corrects only the replay
 harness relocated-file stat; closing qualification edits are docs/spec only.
 Core/CLI application source remains identical to 46108d240. No private SQL,
 manifest or names added to repository; no PR/merge/ACK policy change.
+
+### Syntax-profile width recovery — 2026-11-05
+
+Owner reported ddl-syntax-complexity-limit after six hours of setup failures.
+Inspection found the inherited guard accumulates every '(' and control opener
+without decrementing; e.g. a flat 129-facet table exceeds 128 despite nesting
+only two deep. The legacy profile was intentionally conservative, but reusing
+it for the large-export route made normal width look like unsafe nesting.
+
+Streamed extractor /4 uses 128 active parentheses (closes decrement) and an
+explicit 4096-control-token work budget per batch. No guessed IF/WHILE scoping.
+100000 tokens, fixed 64 MiB parser stack, 4 MiB batch/retained/evidence budgets
+remain. V1 and selected contracts keep their previous conservative guard. New
+error data retains the same ArgumentException/reason while exposing bounded
+metric/observed/limit/original file/line. Wizard offers ordinary-to-stream
+transition for the legacy guard; existing stream manifests use /4 on rebuild.
+
+New public fixtures include a 512-column table, a procedure with 512 sequential
+conditional blocks, true depth129 refusal, control4097 refusal, strings/comments
+and legacy refusal preservation. Conditional result shape remains unknown.
+Initial focused SQL/DDL/wizard lane: 200 passed (52 sec). Rich modern UTF16 LE
+BOM/context-repair/large-byte replay passed through all three SQLite checks.
+Final wizard transition pin/focused rerun and full legacy/all-tests coverage
+pending. No private source inspected or copied, no SQL values/hashes changed.

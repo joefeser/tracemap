@@ -14,6 +14,49 @@ public sealed class SqlStreamedLocalDefinitionsTests
     private static SqlLocalExport Produce(string text) => SqlServerLocalDefinitions.ProduceStreamed(Input(text), _ => new MemoryStream(Encoding.UTF8.GetBytes(text)));
 
     [Fact]
+    public void Flat_wide_table_and_repeated_type_facets_are_not_nested_complexity()
+    {
+        var columns = string.Join(",\n", Enumerable.Range(0, 512).Select(i => $"C{i} nvarchar(50) NULL"));
+        var text = "CREATE TABLE dbo.WideItems (\n" + columns + ");\nGO\nCREATE PROC dbo.ReadItems AS SELECT C0 AS Id FROM dbo.WideItems;\nGO\n";
+        var export = Produce(text);
+        Assert.Equal(512, export.Objects.Single(item => item.Kind == "table").Table!.Columns.Count);
+        Assert.Equal("complete", export.Objects.Single(item => item.Kind == "procedure").ResultShape!.Completeness);
+        var legacy = JsonSerializer.Deserialize<SqlLocalInput>(Input(text), new JsonSerializerOptions(JsonSerializerDefaults.Web))! with { Version = SqlServerLocalDefinitions.InputVersion };
+        Assert.Contains("syntax-complexity-limit", Assert.Throws<ArgumentException>(() => SqlServerLocalDefinitions.Produce(
+            JsonSerializer.Serialize(legacy, new JsonSerializerOptions(JsonSerializerDefaults.Web)), new Dictionary<string, string> { ["export.sql"] = text })).Message);
+    }
+
+    [Fact]
+    public void Sequential_conditionals_parse_but_do_not_invent_complete_result_shapes()
+    {
+        var text = "CREATE PROC dbo.ReadItems AS BEGIN\n" + string.Concat(Enumerable.Repeat("IF (1=1) BEGIN SELECT 1 AS Id; END;\n", 512)) + "END;\nGO\n";
+        var export = Produce(text);
+        Assert.Equal("unknown", Assert.Single(export.Objects).ResultShape!.Completeness);
+    }
+
+    [Theory]
+    [InlineData("parenthesis-depth")]
+    [InlineData("control-construct-count")]
+    public void Streamed_syntax_budgets_still_fail_closed_with_measured_guard_location(string metric)
+    {
+        var text = metric == "parenthesis-depth"
+            ? "CREATE PROC dbo.ReadItems AS SELECT " + new string('(', 129) + "1" + new string(')', 129) + " AS Id;\nGO\n"
+            : "CREATE PROC dbo.ReadItems AS BEGIN " + string.Concat(Enumerable.Repeat("IF (1=1) SELECT 1;", 4096)) + " END;\nGO\n";
+        var failure = Assert.Throws<ArgumentException>(() => Produce(text));
+        var guard = Assert.IsType<SqlSyntaxComplexityLimit>(failure.Data["sqlSyntaxComplexityLimit"]);
+        Assert.Equal(metric, guard.Metric); Assert.Equal("export.sql", guard.FilePath);
+        Assert.Equal(1, guard.Line); Assert.Equal(guard.Limit + 1, guard.Observed);
+        Assert.Contains("syntax-complexity-limit", failure.Message);
+    }
+
+    [Fact]
+    public void Literal_and_comment_parentheses_do_not_count_as_syntax_depth()
+    {
+        var text = "/*" + new string('(', 2048) + "*/\nCREATE PROC dbo.ReadItems AS SELECT N'" + new string('(', 2048) + "' AS Value;\nGO\n";
+        Assert.Single(Produce(text).Objects);
+    }
+
+    [Fact]
     public void Database_mismatch_diagnostic_uses_verified_whole_input_and_exact_source_location()
     {
         var text = "USE [ExampleCatalog];\nGO\nCREATE PROC dbo.ReadItems AS SELECT 1 AS Id;\nGO\n";

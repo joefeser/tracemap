@@ -7,6 +7,26 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsWizardWorkspaceTests
 {
+    [Fact]
+    public async Task Ordinary_flat_width_guard_offers_stream_profile_without_editing_SQL()
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture(); await fixture.Prepare();
+        var text = "CREATE TABLE dbo.WideItems (" + string.Join(",", Enumerable.Range(0, 256).Select(i => $"C{i} varchar(50) NULL")) + ");\nGO\n";
+        var sql = Path.Combine(fixture.WizardRoot, "sql"); Directory.CreateDirectory(sql);
+        var file = Path.Combine(sql, "export.sql"); File.WriteAllText(file, text); var bytes = File.ReadAllBytes(file);
+        var manifest = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
+        manifest["files"]![0]!["path"] = "sql/export.sql";
+        manifest["files"]![0]!["sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+        var path = Path.Combine(fixture.WizardRoot, "wide.local.json"); File.WriteAllText(path, manifest.ToJsonString());
+        var original = File.ReadAllBytes(path);
+        using var input = new StringReader($"workspace\nskip\n{path}\nstream\ncreate\nlater\n");
+        Assert.True(await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error) == 0, fixture.Error.ToString() + fixture.Output);
+        Assert.Contains("legacy-total-open-constructs", fixture.Output.ToString());
+        Assert.Contains("observed=129", fixture.Output.ToString());
+        Assert.Equal(original, File.ReadAllBytes(path)); Assert.Equal(bytes, File.ReadAllBytes(file));
+        Assert.Equal(0, await WorkspaceCommand.RunAsync(["verify", "--root", fixture.WizardRoot], fixture.Output, fixture.Error));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

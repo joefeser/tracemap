@@ -144,6 +144,10 @@ internal static class WebFormsWizardWorkspace
             {
                 await output.WriteLineAsync("Workspace SQL setup could not verify the selected manifest: " + answers.SqlManifest);
                 await output.WriteLineAsync("Reason: " + exception.Message);
+                var syntaxLimit = exception.Data["sqlSyntaxComplexityLimit"] as SqlSyntaxComplexityLimit;
+                if (syntaxLimit is not null)
+                    await output.WriteLineAsync("SQL parser guard: " + syntaxLimit.Metric + "; observed=" + syntaxLimit.Observed
+                        + "; limit=" + syntaxLimit.Limit + "; file " + syntaxLimit.FilePath + ":" + syntaxLimit.Line);
                 if (answers.SqlManifest == lastSqlFailureManifest && exception.Message == lastSqlFailureReason)
                 {
                     await output.WriteLineAsync("The same SQL validation failure remains after that action. No input is edited automatically. Setup paused instead of repeating the question; website setup and runs are preserved.");
@@ -181,11 +185,13 @@ internal static class WebFormsWizardWorkspace
                 }
                 var encodingCanStream = exception is System.Text.DecoderFallbackException
                     && SqlServerLocalDefinitionsCommand.IsOrdinaryManifest(answers.SqlManifest!);
-                if (exception is SqlLocalSizeLimitException || encodingCanStream)
+                var syntaxCanStream = syntaxLimit?.Metric == "legacy-total-open-constructs"
+                    && SqlServerLocalDefinitionsCommand.IsOrdinaryManifest(answers.SqlManifest!);
+                if (exception is SqlLocalSizeLimitException || encodingCanStream || syntaxCanStream)
                 {
                     sizeBlockedManifest = answers.SqlManifest;
-                    await output.WriteLineAsync("SQL setup is blocked by an admission limit or source encoding. Retry cannot change that; no workspace was created.");
-                    var canStream = encodingCanStream || exception is SqlLocalSizeLimitException size
+                    await output.WriteLineAsync("SQL setup is blocked by an admission limit, parser profile or source encoding. Retry cannot change that; no workspace was created.");
+                    var canStream = encodingCanStream || syntaxCanStream || exception is SqlLocalSizeLimitException size
                         && (size.Scope == "SQL-file" && size.LimitBytes == SqlServerDdlEvidence.MaxFileBytes
                         || size.Scope == "SQL-total" && size.LimitBytes == SqlServerDdlEvidence.MaxTotalBytes);
                     if (canStream)

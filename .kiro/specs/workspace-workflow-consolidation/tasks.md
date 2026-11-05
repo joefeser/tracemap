@@ -121,3 +121,10 @@
 - [x] Inventory bounded whole streamed input and preserve source-hash validation before offering a single-database correction.
 - [x] Add owner-confirmed use-sql manifest-copy repair and refuse/display multi-database inputs.
 - [x] Finish focused/legacy replay and full Debug coverage (6053 passed, 3 skipped across two same-binary invocations); publish branch without PR/merge.
+
+## Streamed SQL width and measured syntax guards — 2026-11-05
+
+- [x] Separate independent parentheses/type facets from active nesting in streamed profile /4, preserving legacy guard contracts.
+- [x] Keep 128 active parentheses, 4096 control-openers, 100000 tokens and fixed 64 MiB parser stack; surface exact guard metric/count/limit/location.
+- [x] Prove a 512-column table, 512 sequential conditional blocks, actual nested/work overflows and literal/comment separation.
+- [ ] Finish wizard transition pin, rich UTF16/context/net20 replay and full Debug coverage; push without PR/merge.

@@ -24,6 +24,7 @@ def main():
     parser.add_argument("--sql-export-bytes", type=int, default=44, help="Author this many UTF-8 bytes before optional BOM/UTF16 encoding; opt into streamed mode when needed")
     parser.add_argument("--sql-encoding", choices=["utf8", "utf16-le", "utf16-be"], default="utf8", help="Original SQL byte encoding; UTF16 fixtures include BOM and retain exact raw hashes")
     parser.add_argument("--sql-context-repair", action="store_true", help="Author a mismatching public USE declaration, then accept its verified database through the wizard")
+    parser.add_argument("--sql-rich-export", action="store_true", help="Include a 512-column table and 512 sequential conditionals to exercise real export width rather than comment padding only")
     args = parser.parse_args()
     if args.same_failure_first:
         args.bad_manifest_first = True
@@ -106,6 +107,11 @@ def main():
     sql_file = sql / "schema.sql"
     statement = "CREATE PROC dbo.ReadItems AS SELECT 1 AS Id;"
     sql_prefix = "USE [ExampleCatalog];\nGO\n" if args.sql_context_repair else ""
+    if args.sql_rich_export:
+        if args.sql_export_bytes < 100000: raise RuntimeError("Rich SQL fixture requires at least 100000 authored UTF-8 bytes")
+        columns = ",\n".join(f"C{i} nvarchar(50) NULL" for i in range(512))
+        sql_prefix += "CREATE TABLE dbo.WideItems (\n" + columns + ");\nGO\n"
+    rich_body = "BEGIN\n" + "IF (1=1) BEGIN SELECT C0 AS Id FROM dbo.WideItems; END;\n" * 512 + "END;" if args.sql_rich_export else None
     if args.sql_export_bytes < 44 + len(sql_prefix): raise RuntimeError("SQL fixture size must be at least 44")
     if args.sql_export_bytes == 44:
         sql_file.write_text(statement, encoding="utf-8")
@@ -115,7 +121,8 @@ def main():
         remaining = args.sql_export_bytes - len(sql_prefix)
         while remaining > 24_200:
             name = "ReadItems" if count == 0 else "ReadItems" + str(count)
-            batch = "/*" + "x" * 12000 + "*/\nCREATE PROC dbo." + name + " AS SELECT 1 AS Id;\nGO\n"
+            body = rich_body if count == 0 and rich_body else "SELECT 1 AS Id;"
+            batch = "/*" + "x" * 12000 + "*/\nCREATE PROC dbo." + name + " AS " + body + "\nGO\n"
             text.append(batch); remaining -= len(batch); count += 1
         if count == 0:
             text.append(statement + "\nGO\n"); remaining -= len(text[-1])

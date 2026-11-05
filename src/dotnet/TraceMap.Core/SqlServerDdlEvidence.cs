@@ -6,6 +6,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 namespace TraceMap.Core;
 
 public sealed record SqlServerDdlFile(string Path, string Sha256);
+public sealed record SqlSyntaxComplexityLimit(string Metric, int Observed, int Limit, int Line, string? FilePath = null);
 public sealed record SqlServerDdlInput(string Version, string Repo, string Revision, string Server, string Database,
     bool PublicSynthetic, IReadOnlyList<SqlServerDdlFile> Files, SqlServerInputProvenance? Provenance = null);
 public sealed record SqlServerDdlParameterSpan(SqlServerObjectIdentity Identity, string Parameter, string FilePath, int StartLine, int EndLine);
@@ -176,7 +177,7 @@ public static class SqlServerDdlEvidence
     internal static TSqlScript ParseBoundedSql(string text)
         => ParseBoundedSql(text, MaxFileBytes, 0);
 
-    internal static TSqlScript ParseBoundedSql(string text, int maxBytes, int lineOffset)
+    internal static TSqlScript ParseBoundedSql(string text, int maxBytes, int lineOffset, bool streamedComplexity = false)
     {
         Require(new UTF8Encoding(false, true).GetByteCount(text) <= maxBytes, "input-size-limit");
         // Refuse unresolved SQLCMD anywhere, including strings/comments; never substitute.
@@ -196,13 +197,36 @@ public static class SqlServerDdlEvidence
         });
         Require(tokenErrors.Count == 0, "malformed-sql");
         Require(tokens.Count <= MaxTokens, "token-limit");
-        var nestingBudget = 0;
+        var legacyOpenCount = 0;
+        var parenthesisDepth = 0;
+        var controlCount = 0;
         foreach (var token in tokens)
         {
-            // Token kinds separate strings/comments from grammar. Conservatively bound
-            // total open constructs, including BEGIN TRANSACTION, rather than infer flow.
-            if (token.Text is "(" || token.TokenType.ToString() is "Begin" or "Case" or "If" or "While") nestingBudget++;
-            Require(nestingBudget <= 128, "syntax-complexity-limit");
+            var control = token.TokenType.ToString() is "Begin" or "Case" or "If" or "While";
+            if (!streamedComplexity)
+            {
+                // Preserve the original conservative profile for existing admission contracts.
+                if (token.Text is "(" || control) legacyOpenCount++;
+                CheckComplexity("legacy-total-open-constructs", legacyOpenCount, 128, token.Line);
+                continue;
+            }
+            // Width is not depth: varchar(50), decimal(18,2), calls and sequential
+            // predicates may contain many independent pairs. Strings/comments remain tokens.
+            if (token.Text == "(") parenthesisDepth++;
+            else if (token.Text == ")") parenthesisDepth--;
+            Require(parenthesisDepth >= 0, "malformed-sql");
+            CheckComplexity("parenthesis-depth", parenthesisDepth, 128, token.Line);
+            if (control) controlCount++;
+            // This is an explicit work budget, not an attempt to infer IF/WHILE scopes.
+            CheckComplexity("control-construct-count", controlCount, 4096, token.Line);
+        }
+
+        void CheckComplexity(string metric, int observed, int limit, int line)
+        {
+            if (observed <= limit) return;
+            var failure = new ArgumentException("ddl-syntax-complexity-limit");
+            failure.Data["sqlSyntaxComplexityLimit"] = new SqlSyntaxComplexityLimit(metric, observed, limit, checked(line + lineOffset));
+            throw failure;
         }
         // Repetition of GO would imply execution ordering/repetition; reject it.
         for (var i = 0; i < tokens.Count; i++)
