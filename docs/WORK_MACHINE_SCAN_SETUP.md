@@ -159,8 +159,10 @@ pwsh -NoProfile -File ./scripts/tm.ps1 webforms-review wizard --root "C:/reviews
 ```
 
 Choose `workspace`. Existing website/source/DLL selections and prepared receipts
-are reused. It asks only for the framework source repo/project and existing SQL
-manifest/folder, saving each answer. `later` pauses; the same command resumes;
+are reused. Additional dependency source is optional: type `skip` if you only
+have the DLL or do not want another source checkout scanned. This retains the
+existing compiled DLL selection and continues to the SQL manifest/folder, saving
+each answer. `later` pauses; the same command resumes;
 `change` corrects one choice; `create` validates and creates the workspace in that
 same root without scanning. No second wizard root or long switch list is needed.
 See [interactive continuation](https://github.com/joefeser/tracemap/blob/codex/workspace-scope-preflight/docs/WORKSPACE_FROM_WIZARD.md).
