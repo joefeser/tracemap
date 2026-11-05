@@ -114,3 +114,10 @@
 - [x] Add strict BOM-selected UTF-16 LE/BE streaming while retaining exact original raw hashes and all budgets.
 - [x] Offer stream opt-in for ordinary SQL decoding failures without changing JSON/v1 decoding.
 - [x] Verify malformed encodings, raw digest drift, Unicode/CRLF spans, small/large wizard inputs and full legacy workspace replay; run full Debug gate (6045 pass, 3 skip, 1 unchanged diagnostics listener concurrency failure; isolated diagnostics 4/4 pass).
+
+## Guided SQL database-context repair — 2026-11-05
+
+- [x] Surface parsed USE and configured database with original file/line, without weakening exact matching.
+- [x] Inventory bounded whole streamed input and preserve source-hash validation before offering a single-database correction.
+- [x] Add owner-confirmed use-sql manifest-copy repair and refuse/display multi-database inputs.
+- [ ] Finish focused/legacy replay and full Debug coverage; publish branch without PR/merge.

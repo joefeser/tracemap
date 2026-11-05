@@ -125,3 +125,24 @@ listener capturing a different concurrent trace. All four diagnostics tests
 passed in an isolated same-build rerun. This full run is not a green gate; the
 listener-isolation follow-up remains. The final 42-test encoding/wizard lane
 and both complete UTF-16 workspace replays passed.
+
+## Repair a database-context mismatch
+
+The wizard shows the manifest database and the parsed SQL `USE` value with its
+file/line. The `/3` streamed extractor inventories up to 16 distinct exact
+database declarations across the complete, digest-verified input before offering
+a correction. For a single declared database, choose **use-sql**. The wizard
+writes and selects a new manifest copy with that database and exact generator/
+bounded-input provenance, preserving all original SQL bytes/hashes and manifests.
+It validates the complete corrected input before creating the workspace. No
+manual database-name lookup, JSON edit or hash recalculation is needed.
+
+For an ordinary UTF-8 manifest mismatch, choose **inspect** first to use streamed
+whole-input inspection. An ordinary UTF-16 decoding failure first offers
+**stream**, then the same database repair. An already saved streaming manifest
+uses the repair directly. Continue the existing root with `-Build` after updating.
+
+Multiple distinct `USE` values (including case-only differences) are shown with
+file/line and pause setup; the wizard never aliases databases, guesses collation,
+ignores a mismatch or rewrites SQL. Database identity remains a declared static
+context, not a live database or connection observation.

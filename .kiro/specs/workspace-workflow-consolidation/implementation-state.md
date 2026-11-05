@@ -1102,3 +1102,28 @@ Commands/results:
 Closing commit changes tests/docs/spec status only; Core/CLI byte source is
 identical to pushed a3257c4d1. No original private SQL/manifest/hash edited.
 No PR/merge/ACK change. Owner can use pushed fix with tm.ps1 -Build continuation.
+
+### Guided database-context recovery — 2026-11-05
+
+Owner reported database-context-mismatch and retry; provided the USE declaration
+locally. No private database identifier enters repo fixtures/docs. The prior UI
+required owner to locate/compare manifest fields manually. Added structured local
+error metadata (same ArgumentException and reason), file/line/value display and
+use-sql confirmation. A new generated manifest changes only the database/context
+profile/provenance, retains all original file rows/digests and original manifest,
+and becomes the saved active selection before full revalidation.
+
+Streamed extractor /3 inventories at most 16 distinct ordinal USE names across
+all parts/files and verifies raw source hashes before context repair metadata is
+returned. Multiple databases pause, showing names/file/line; no equivalence,
+collation, deployment or runtime claims. V1's existing immediate refusal remains;
+its mismatch can explicitly inspect through the stream profile first. UTF-16
+ordinary input first takes existing stream opt-in. Recheck/copy provenance binds
+original manifest SHA, source root, profile and chosen database to exact CLI SHA.
+
+Initial focused lane 74 passed; modern full pipeline with 6671580-byte UTF-16 LE
+BOM and deliberately wrong metadata passed to three valid SQLite indexes. Final
+focused rerun after adding multi-database location display is in progress. Full
+Debug coverage will isolate the existing SelfDiagnosticsTests global-listener
+race into a second invocation on the identical built binary; every test remains
+in scope. Prior unfiltered failure remains documented, not relabeled green.

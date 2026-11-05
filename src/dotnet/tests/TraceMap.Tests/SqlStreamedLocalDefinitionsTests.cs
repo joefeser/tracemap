@@ -13,6 +13,32 @@ public sealed class SqlStreamedLocalDefinitionsTests
         new JsonSerializerOptions(JsonSerializerDefaults.Web));
     private static SqlLocalExport Produce(string text) => SqlServerLocalDefinitions.ProduceStreamed(Input(text), _ => new MemoryStream(Encoding.UTF8.GetBytes(text)));
 
+    [Fact]
+    public void Database_mismatch_diagnostic_uses_verified_whole_input_and_exact_source_location()
+    {
+        var text = "USE [ExampleCatalog];\nGO\nCREATE PROC dbo.ReadItems AS SELECT 1 AS Id;\nGO\n";
+        var failure = Assert.Throws<ArgumentException>(() => Produce(text));
+        var context = Assert.IsType<SqlLocalDatabaseContext>(failure.Data["sqlLocalDatabaseContext"]);
+        Assert.Equal("sql-local-database-context-mismatch", failure.Message);
+        Assert.Equal("ExampleDatabase", context.ManifestDatabase);
+        Assert.Equal("ExampleCatalog", context.SqlDatabase);
+        Assert.Equal(new SqlLocalSpan("export.sql", 1, 1), context.Span);
+        Assert.True(context.WholeInputInspected);
+        Assert.Equal(1, context.DistinctDatabaseCount);
+        Assert.Contains("source-digest-mismatch", Assert.Throws<ArgumentException>(() =>
+            SqlServerLocalDefinitions.ProduceStreamed(Input(text), _ => new MemoryStream(Encoding.UTF8.GetBytes(text + "-- drift")))).Message);
+    }
+
+    [Fact]
+    public void Multiple_database_declarations_are_not_a_single_database_repair()
+    {
+        var text = "USE [ExampleCatalog];\nGO\nCREATE PROC dbo.ReadItems AS SELECT 1 AS Id;\nGO\nUSE [OtherCatalog];\nGO\n";
+        var context = Assert.IsType<SqlLocalDatabaseContext>(Assert.Throws<ArgumentException>(() => Produce(text)).Data["sqlLocalDatabaseContext"]);
+        Assert.True(context.WholeInputInspected);
+        Assert.Equal(2, context.DistinctDatabaseCount);
+        Assert.Null(context.SqlDatabase);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

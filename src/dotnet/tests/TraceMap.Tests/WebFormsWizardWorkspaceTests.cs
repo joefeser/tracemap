@@ -8,6 +8,55 @@ namespace TraceMap.Tests;
 public sealed class WebFormsWizardWorkspaceTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Database_context_can_be_repaired_from_verified_SQL_without_editing_originals(bool ordinary)
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture();
+        await fixture.Prepare();
+        var text = "USE [ExampleCatalog];\nGO\nCREATE PROC dbo.ReadItems AS SELECT 1 AS Id;\nGO\n";
+        var sqlFolder = Path.Combine(fixture.WizardRoot, "sql"); Directory.CreateDirectory(sqlFolder);
+        var file = Path.Combine(sqlFolder, "export.sql");
+        File.WriteAllText(file, text, new System.Text.UnicodeEncoding(false, true, true));
+        var bytes = File.ReadAllBytes(file);
+        var manifest = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
+        manifest["version"] = ordinary ? SqlServerLocalDefinitions.InputVersion : SqlServerLocalDefinitions.StreamInputVersion;
+        manifest["files"]![0]!["path"] = "sql/export.sql";
+        manifest["files"]![0]!["sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+        var path = Path.Combine(fixture.WizardRoot, "context.local.json"); File.WriteAllText(path, manifest.ToJsonString());
+        var original = File.ReadAllBytes(path);
+        using var input = new StringReader($"workspace\nskip\n{path}\n{(ordinary ? "stream\n" : "")}use-sql\ncreate\nlater\n");
+        Assert.True(await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error) == 0, fixture.Error.ToString() + fixture.Output);
+        Assert.Equal(original, File.ReadAllBytes(path)); Assert.Equal(bytes, File.ReadAllBytes(file));
+        var copies = Directory.GetFiles(fixture.WizardRoot, "sql-streamed-*.local.json").Select(copy => JsonNode.Parse(File.ReadAllText(copy))!).ToArray();
+        var repaired = Assert.Single(copies, copy => copy["database"]!.GetValue<string>() == "ExampleCatalog");
+        Assert.Equal(manifest["files"]!.ToJsonString(), repaired["files"]!.ToJsonString());
+        Assert.Contains("Database context corrected", fixture.Output.ToString());
+        Assert.Equal(0, await WorkspaceCommand.RunAsync(["verify", "--root", fixture.WizardRoot], fixture.Output, fixture.Error));
+    }
+
+    [Fact]
+    public async Task Multiple_SQL_databases_pause_without_offering_single_database_repair()
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture(); await fixture.Prepare();
+        var text = "USE [ExampleCatalog];\nGO\nCREATE PROC dbo.ReadItems AS SELECT 1 AS Id;\nGO\nUSE [OtherCatalog];\nGO\n";
+        var sqlFolder = Path.Combine(fixture.WizardRoot, "sql"); Directory.CreateDirectory(sqlFolder);
+        var file = Path.Combine(sqlFolder, "export.sql"); File.WriteAllText(file, text);
+        var manifest = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
+        manifest["version"] = SqlServerLocalDefinitions.StreamInputVersion;
+        manifest["files"]![0]!["path"] = "sql/export.sql";
+        manifest["files"]![0]!["sha256"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(file)));
+        var path = Path.Combine(fixture.WizardRoot, "context.local.json"); File.WriteAllText(path, manifest.ToJsonString());
+        using var input = new StringReader($"workspace\nskip\n{path}\n");
+        Assert.Equal(2, await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error));
+        Assert.Contains("multiple databases", fixture.Output.ToString());
+        Assert.Contains("OtherCatalog", fixture.Output.ToString());
+        Assert.DoesNotContain("[use-sql/later]", fixture.Output.ToString());
+        Assert.False(File.Exists(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
+        Assert.Empty(Directory.GetFiles(fixture.WizardRoot, "sql-streamed-*.local.json"));
+    }
+
+    [Theory]
     [InlineData("utf8", 667158)]
     [InlineData("utf16", 667158)]
     [InlineData("utf16", 1000)]

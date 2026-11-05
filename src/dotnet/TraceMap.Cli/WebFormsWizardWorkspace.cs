@@ -151,6 +151,34 @@ internal static class WebFormsWizardWorkspace
                 }
                 lastSqlFailureManifest = answers.SqlManifest;
                 lastSqlFailureReason = exception.Message;
+                if (exception.Data["sqlLocalDatabaseContext"] is SqlLocalDatabaseContext databaseContext)
+                {
+                    await output.WriteLineAsync("SQL database context: manifest " + JsonSerializer.Serialize(databaseContext.ManifestDatabase)
+                        + "; declaration " + (databaseContext.SqlDatabase is null ? "multiple distinct databases" : JsonSerializer.Serialize(databaseContext.SqlDatabase))
+                        + "; file " + databaseContext.Span.FilePath + ":" + databaseContext.Span.StartLine);
+                    if (!databaseContext.WholeInputInspected)
+                    {
+                        await output.WriteLineAsync("Inspect the whole SQL input in streamed mode before offering a database repair? [inspect/later]");
+                        if ((await input.ReadLineAsync(token))?.Trim() != "inspect") return 2;
+                        var inspected = SqlServerLocalDefinitionsCommand.CreateStreamedManifest(answers.SqlManifest!, sqlBase);
+                        answers = answers with { SqlManifest = inspected, SqlRoot = sqlBase }; await Save();
+                        continue;
+                    }
+                    if (databaseContext.DistinctDatabaseCount != 1 || databaseContext.SqlDatabase is null)
+                    {
+                        foreach (var declaration in databaseContext.Declarations ?? [])
+                            await output.WriteLineAsync("SQL USE " + JsonSerializer.Serialize(declaration.Database) + "; file "
+                                + declaration.Span.FilePath + ":" + declaration.Span.StartLine);
+                        await output.WriteLineAsync("The complete input declares multiple databases. One manifest cannot relabel them as one database. Setup paused; source files and existing runs are preserved.");
+                        return 2;
+                    }
+                    await output.WriteLineAsync("Use the single SQL-declared database in a NEW manifest copy? Original SQL, hashes and manifest stay unchanged. [use-sql/later]");
+                    if ((await input.ReadLineAsync(token))?.Trim() != "use-sql") return 2;
+                    var repaired = SqlServerLocalDefinitionsCommand.CreateStreamedManifest(answers.SqlManifest!, sqlBase, databaseContext.SqlDatabase);
+                    answers = answers with { SqlManifest = repaired, SqlRoot = sqlBase }; await Save();
+                    await output.WriteLineAsync("Database context corrected in manifest copy: " + repaired);
+                    continue;
+                }
                 var encodingCanStream = exception is System.Text.DecoderFallbackException
                     && SqlServerLocalDefinitionsCommand.IsOrdinaryManifest(answers.SqlManifest!);
                 if (exception is SqlLocalSizeLimitException || encodingCanStream)

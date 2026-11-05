@@ -59,17 +59,21 @@ internal static class SqlServerLocalDefinitionsCommand
         catch (Exception exception) when (exception is ArgumentException or JsonException or IOException or UnauthorizedAccessException) { return false; }
     }
 
-    internal static string CreateStreamedManifest(string original, string sourceRoot)
+    internal static string CreateStreamedManifest(string original, string sourceRoot, string? database = null)
     {
         var text = SqlServerDdlCommand.ReadBounded(original, SqlServerSchemaEvidence.MaxBytes);
-        var input = SqlServerLocalDefinitions.ReadInput(text);
+        using var document = JsonDocument.Parse(text);
+        var input = document.RootElement.GetProperty("version").GetString() == SqlServerLocalDefinitions.StreamInputVersion
+            ? SqlServerLocalDefinitions.ReadStreamInput(text) : SqlServerLocalDefinitions.ReadInput(text);
         var bounded = SqlServerSchemaEvidence.Hash(JsonSerializer.SerializeToUtf8Bytes(new
         {
             originalManifestSha256 = SqlServerSchemaEvidence.Hash(Encoding.UTF8.GetBytes(text)),
-            sourceRoot = Path.GetFullPath(sourceRoot), mode = SqlServerLocalDefinitions.StreamInputVersion
+            sourceRoot = Path.GetFullPath(sourceRoot), mode = SqlServerLocalDefinitions.StreamInputVersion,
+            database = database ?? input.Database
         }));
-        var changed = input with { Version = SqlServerLocalDefinitions.StreamInputVersion,
+        var changed = input with { Version = SqlServerLocalDefinitions.StreamInputVersion, Database = database ?? input.Database,
             Provenance = new(SqlServerSchemaEvidence.Hash(File.ReadAllBytes(typeof(SqlServerLocalDefinitionsCommand).Assembly.Location)), bounded) };
+        _ = SqlServerLocalDefinitions.ReadStreamInput(JsonSerializer.Serialize(changed, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         var path = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(original))!, "sql-streamed-" + Guid.NewGuid().ToString("N") + ".local.json");
         using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(changed, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });

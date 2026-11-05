@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--same-failure-first", action="store_true", help="Prove an unchanged SQL validation retry pauses rather than re-asking forever")
     parser.add_argument("--sql-export-bytes", type=int, default=44, help="Author this many UTF-8 bytes before optional BOM/UTF16 encoding; opt into streamed mode when needed")
     parser.add_argument("--sql-encoding", choices=["utf8", "utf16-le", "utf16-be"], default="utf8", help="Original SQL byte encoding; UTF16 fixtures include BOM and retain exact raw hashes")
+    parser.add_argument("--sql-context-repair", action="store_true", help="Author a mismatching public USE declaration, then accept its verified database through the wizard")
     args = parser.parse_args()
     if args.same_failure_first:
         args.bad_manifest_first = True
@@ -104,13 +105,14 @@ def main():
     (published / "bin/Default.aspx.compiled").write_text('<preserve virtualPath="/Default.aspx" assembly="SyntheticWeb" type="Example.Page" />', encoding="utf-8")
     sql_file = sql / "schema.sql"
     statement = "CREATE PROC dbo.ReadItems AS SELECT 1 AS Id;"
-    if args.sql_export_bytes < 44: raise RuntimeError("SQL fixture size must be at least 44")
+    sql_prefix = "USE [ExampleCatalog];\nGO\n" if args.sql_context_repair else ""
+    if args.sql_export_bytes < 44 + len(sql_prefix): raise RuntimeError("SQL fixture size must be at least 44")
     if args.sql_export_bytes == 44:
         sql_file.write_text(statement, encoding="utf-8")
     else:
-        text = []
+        text = [sql_prefix] if sql_prefix else []
         count = 0
-        remaining = args.sql_export_bytes
+        remaining = args.sql_export_bytes - len(sql_prefix)
         while remaining > 24_200:
             name = "ReadItems" if count == 0 else "ReadItems" + str(count)
             batch = "/*" + "x" * 12000 + "*/\nCREATE PROC dbo." + name + " AS SELECT 1 AS Id;\nGO\n"
@@ -206,7 +208,7 @@ def main():
         if args.same_failure_first and "same SQL validation failure" not in invalid:
             raise RuntimeError("Unchanged validation retry did not stop the loop")
     output = tool("wizard-create-workspace", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
-                  "\n".join(["workspace", *(["change"] if args.bad_manifest_first else []), str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), *(["stream"] if args.sql_export_bytes > 262144 else []), "create", "collect", ""]))
+                  "\n".join(["workspace", *(["change"] if args.bad_manifest_first else []), str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), *(["stream"] if sql_file.stat().st_size > 262144 or args.sql_encoding != "utf8" else []), *(["use-sql"] if args.sql_context_repair else []), "create", "collect", ""]))
     config_path = workspace / "workspace.local.json"
     config = json.loads(config_path.read_text())
     if len(config["repositories"]) != (2 if args.with_source else 1):

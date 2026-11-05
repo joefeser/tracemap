@@ -9,7 +9,7 @@ public static partial class SqlServerLocalDefinitions
 {
     public const string StreamInputVersion = "sqlserver-streamed-local-definitions-input/1";
     public const string StreamExportVersion = "sqlserver-streamed-local-definitions/1";
-    public const string StreamExtractorVersion = "sqlserver-streamed-local-definitions/2";
+    public const string StreamExtractorVersion = "sqlserver-streamed-local-definitions/3";
     public const long MaxStreamFileBytes = 8L * 1024 * 1024 * 1024;
     public const long MaxStreamTotalBytes = MaxStreamFileBytes;
     public const int MaxStreamBatchBytes = 4 * 1024 * 1024;

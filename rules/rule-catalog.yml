@@ -8205,6 +8205,7 @@ rules:
     emits:
       - sqlserver-streamed-local-definitions/1
     limitations:
+      - Streamed extractor /3 retains /2 strict encoding and inventories at most 16 exact USE database declarations across the complete hash-verified source set; a single mismatch provides bounded local repair metadata. Multiple distinct databases remain refused; no runtime identity or case/collation equivalence is inferred. Wizard correction is owner-confirmed and creates a new provenance-bound manifest, never altering original SQL/hashes.
       - Streamed extractor /2 selects strict UTF-8 or BOM-marked UTF-16 LE/BE from raw prefix bytes; invalid sequences, unpaired surrogates and UTF-32 refuse. Original raw hashes and size caps include BOM; decoded batches use the UTF-8 byte cap. JSON manifests and ordinary v1 decoding remain unchanged.
       - Opt-in sqlserver-streamed-local-definitions-input/1 admits 8 GiB per file and total, at most 32 files; original ordinary/selection input contracts retain their own limits.
       - Batches are at most 4 MiB and 100000 tokens, with existing syntax and parser-stack guards; standalone GO candidates require pinned lexer agreement. Original line spans and full-source digests are checked before export.

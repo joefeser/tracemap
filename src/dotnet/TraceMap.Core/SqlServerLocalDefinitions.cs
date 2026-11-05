@@ -8,6 +8,9 @@ public sealed record SqlLocalInput(string Version, string Visibility, string Con
     string DefinitionSet, string Server, string Database, IReadOnlyList<SqlServerDdlFile> Files,
     SqlServerInputProvenance? Provenance = null);
 public sealed record SqlLocalSpan(string FilePath, int StartLine, int EndLine);
+public sealed record SqlLocalDatabaseDeclaration(string Database, SqlLocalSpan Span);
+public sealed record SqlLocalDatabaseContext(string ManifestDatabase, string? SqlDatabase, SqlLocalSpan Span,
+    int DistinctDatabaseCount, bool WholeInputInspected, IReadOnlyList<SqlLocalDatabaseDeclaration>? Declarations = null);
 public sealed record SqlLocalGap(string Kind, string RuleId, string Tier, SqlLocalSpan Span);
 public sealed record SqlLocalParameter(string Name, string? DeclaredType, string Direction, bool HasDefault, SqlLocalSpan Span);
 public sealed record SqlLocalObject(string Id, string Kind, string Schema, string Name, string RuleId, string Tier,
@@ -74,6 +77,14 @@ public static partial class SqlServerLocalDefinitions
         }
     }
 
+    private static ArgumentException DatabaseContextFailure(string expected, string? observed,
+        SqlLocalSpan span, int count, bool inspected, IReadOnlyList<SqlLocalDatabaseDeclaration>? declarations = null)
+    {
+        var failure = new ArgumentException("sql-local-database-context-mismatch");
+        failure.Data["sqlLocalDatabaseContext"] = new SqlLocalDatabaseContext(expected, observed, span, count, inspected, declarations);
+        return failure;
+    }
+
     private sealed record SqlLocalPart(string Path, string Text, int StartLine);
 
     private static SqlLocalExport ProduceParts(SqlLocalInput input, IEnumerable<SqlLocalPart> parts,
@@ -88,6 +99,7 @@ public static partial class SqlServerLocalDefinitions
         long retainedBytes = 0;
         long retainedTokens = 0;
         var shapeMutation = false;
+        var databaseUses = new Dictionary<string, SqlLocalSpan>(StringComparer.Ordinal);
         foreach (var part in parts)
         {
             token.ThrowIfCancellationRequested();
@@ -110,7 +122,15 @@ public static partial class SqlServerLocalDefinitions
                     case ViewStatementBody view: kind = "view"; name = view.SchemaObjectName; break;
                     case FunctionStatementBody function: kind = "function"; name = function.Name; break;
                     case UseStatement use:
-                        Require(use.DatabaseName?.Value == input.Database, "database-context-mismatch");
+                        var database = use.DatabaseName?.Value;
+                        Require(database is not null && Name(database), "database-context-invalid");
+                        if (!streamed && database != input.Database)
+                            throw DatabaseContextFailure(input.Database, database, Span(file.Path, use), 1, false);
+                        if (streamed)
+                        {
+                            databaseUses.TryAdd(database!, Span(file.Path, use));
+                            Require(databaseUses.Count <= 16, "database-context-count-limit");
+                        }
                         continue;
                     case PredicateSetStatement setting when setting.Options is SetOptions.AnsiNulls or SetOptions.QuotedIdentifier:
                         // OFF changes interpretation; ON agrees with the pinned parser settings.
@@ -138,6 +158,12 @@ public static partial class SqlServerLocalDefinitions
                 retainedTokens += script.ScriptTokenStream.Count;
                 Require(retainedBytes <= 64L * 1024 * 1024 && retainedTokens <= 1_000_000, "retained-parser-budget");
             }
+        }
+        if (streamed && databaseUses.Any(item => item.Key != input.Database))
+        {
+            var mismatch = databaseUses.First(item => item.Key != input.Database);
+            throw DatabaseContextFailure(input.Database, databaseUses.Count == 1 ? mismatch.Key : null,
+                mismatch.Value, databaseUses.Count, true, databaseUses.Select(item => new SqlLocalDatabaseDeclaration(item.Key, item.Value)).ToArray());
         }
         Require(definitions.Count > 0, "no-definitions");
         var tables = new List<SqlServerDdlTable>();
