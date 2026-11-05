@@ -9,6 +9,21 @@ namespace TraceMap.Tests;
 public sealed class WorkspaceFromWizardTests
 {
     [Theory]
+    [InlineData("--framework-repo")]
+    [InlineData("--framework-target")]
+    public async Task Partial_additional_source_selection_is_refused(string omitted)
+    {
+        using var fixture = new Fixture();
+        await fixture.Prepare();
+        var args = fixture.Arguments("Framework.csproj");
+        var index = Array.IndexOf(args, omitted);
+        args = [.. args[..index], .. args[(index + 2)..]];
+        Assert.Equal(1, await WorkspaceCommand.RunAsync(args, fixture.Output, fixture.Error));
+        Assert.Contains("WORKSPACE_SETUP_FRAMEWORK_PAIR_REQUIRED", fixture.Error.ToString(), StringComparison.Ordinal);
+        Assert.False(File.Exists(fixture.Destination));
+    }
+
+    [Theory]
     [InlineData("Framework.csproj", "projects")]
     [InlineData("Framework.sln", "solution")]
     [InlineData("discovery", "discovery")]

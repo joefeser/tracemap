@@ -12,7 +12,7 @@ rules:
     limitations:
       - Local-only answers bind the website and original native configuration hash; exact CLI generator and bounded-answer hashes detect ordinary drift, not authenticity or source correspondence.
       - Setup does not scan, build, execute SQL, attest publication correspondence or import completed results. Existing native receipt and SQL admission policies remain authoritative.
-      - Framework project previews inspect at most 256 immediate root files, never nested membership; discovery requires explicit selection.
+      - Additional dependency source is optional; skip retains existing compiled DLL selection without claiming dependency-source coverage. Framework project previews inspect at most 256 immediate root files, never nested membership; discovery requires explicit selection.
       - Existing workspace configuration is preserved and offered verification. Saved paths must remain available; invalid inputs require correction before initialization.
   - id: workflow.workspace.compiled-collection.v1
     name: Local source workspace with native fresh compiled review

@@ -8,6 +8,30 @@ namespace TraceMap.Tests;
 public sealed class WebFormsWizardWorkspaceTests
 {
     [Fact]
+    public async Task Dependency_source_can_be_skipped_and_sql_setup_resumed_without_an_invented_repository()
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture();
+        await fixture.Prepare();
+        var nativeBefore = File.ReadAllBytes(Path.Combine(fixture.WizardRoot, "site", "project.config.json"));
+        using (var store = WebFormsWizardStore.Open(fixture.WizardRoot, true))
+        using (var input = new StringReader("skip\nlater\n"))
+            Assert.Equal(2, await WebFormsWizardWorkspace.RunAsync(store, "site", input, fixture.Output, fixture.Error, default));
+        Assert.Contains("Existing SQL manifest FILE", fixture.Output.ToString(), StringComparison.Ordinal);
+        fixture.Output.GetStringBuilder().Clear();
+        using (var store = WebFormsWizardStore.Open(fixture.WizardRoot, true))
+        using (var input = new StringReader($"{fixture.Manifest}\n{fixture.SqlRoot}\ncreate\n"))
+            Assert.True(await WebFormsWizardWorkspace.RunAsync(store, "site", input, fixture.Output, fixture.Error, default) == 0, fixture.Error.ToString());
+        using var config = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.WizardRoot, "workspace.local.json")));
+        Assert.Equal(1, config.RootElement.GetProperty("repositories").GetArrayLength());
+        Assert.Equal(fixture.Site, config.RootElement.GetProperty("repositories")[0].GetProperty("path").GetString());
+        Assert.Equal(WebFormsWizardStore.Physical(fixture.Manifest), config.RootElement.GetProperty("sqlEvidence").GetProperty("manifestPath").GetString());
+        Assert.Contains("dependency-source coverage is not added", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Framework SOURCE repository folder", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Equal(nativeBefore, File.ReadAllBytes(Path.Combine(fixture.WizardRoot, "site", "project.config.json")));
+        Assert.Equal(0, await WorkspaceCommand.RunAsync(["verify", "--root", fixture.WizardRoot], fixture.Output, fixture.Error));
+    }
+
+    [Fact]
     public async Task Existing_wizard_continuation_offers_workspace_without_a_switch_list_or_report_resume()
     {
         using var fixture = new WorkspaceFromWizardTests.Fixture();

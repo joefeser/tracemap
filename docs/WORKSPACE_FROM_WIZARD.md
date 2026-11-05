@@ -26,8 +26,8 @@ pwsh -NoProfile -File ./scripts/tm.ps1 webforms-review wizard --root "C:/reviews
 Choose `workspace` when prompted. The wizard reuses the saved website, source
 commit, primary/dependency DLL selection and prepared receipts. It asks only for:
 
-1. The framework **source repository folder** (the dependency DLL does not identify this folder).
-2. Its project/solution: choose a displayed number, paste a path inside the repo,
+1. An **optional additional source repository folder**. If you only have the dependency DLL, or do not want its source scanned, type `skip`. The saved DLL selection stays intact.
+2. If adding source, its project/solution: choose a displayed number, paste a path inside the repo,
    or explicitly choose `discovery`. The preview lists root-level files only.
 3. The existing SQL manifest file from step 4.
 4. The folder containing the loose SQL files; this folder needs no Git repo.
@@ -47,7 +47,7 @@ answers do not override missing files, stale receipts or source/hash mismatches.
 ## Advanced noninteractive setup
 
 The following switches are available for scripting; the interactive wizard above
-assembles them internally. For the same-root layout, use the same path for both
+assembles them internally. Omit both framework options to keep only the saved website source and compiled dependency evidence; providing only one is refused. For the same-root layout, use the same path for both
 root arguments.
 
 From PowerShell 7 in the TraceMap checkout, substitute the actual private paths.
@@ -69,8 +69,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Workspace setup failed; preserve the diagnosti
 | `--root` | Private workspace folder outside Git; must not contain an existing `workspace.local.json` |
 | `--wizard-root` | Saved wizard configuration root containing `root.config.json`; not a native run or publication folder |
 | `--website-id` (optional) | Required if the wizard holds more than one website; otherwise its one saved website is used |
-| `--framework-repo` | Second source repository, not the framework DLL path |
-| `--framework-target` | Repository-relative project or solution; use the explicit word `discovery` only when discovery/fallback is intended |
+| `--framework-repo` (optional pair) | Additional source repository, not the dependency DLL path |
+| `--framework-target` (optional pair) | Repository-relative project or solution; use the explicit word `discovery` only when discovery/fallback is intended |
 | `--sql-manifest` | The local manifest already created for the offline SQL file(s) |
 | `--sql-source-root` | Directory containing those loose `.sql` files; SQL needs no Git repo |
 

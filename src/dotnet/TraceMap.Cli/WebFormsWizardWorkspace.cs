@@ -59,9 +59,10 @@ internal static class WebFormsWizardWorkspace
         {
             if (answers.FrameworkRoot is null)
             {
-                var value = await Existing("Framework SOURCE repository folder (not the dependency DLL), or later:", false);
+                await output.WriteLineAsync("Your website and compiled dependency DLLs are already selected. An additional source-code repository is optional; it is not the DLL or bin folder.");
+                var value = await Existing("Framework SOURCE repository folder if you have its checkout; type skip if you only have the DLL or do not want additional source, or later:", false, allowSkip: true);
                 if (value is null) return 2;
-                answers = answers with { FrameworkRoot = value }; await Save();
+                answers = answers with { FrameworkRoot = value, FrameworkTarget = value == "" ? "" : null }; await Save();
             }
             if (answers.FrameworkTarget is null)
             {
@@ -104,7 +105,7 @@ internal static class WebFormsWizardWorkspace
                 answers = answers with { SqlRoot = value }; await Save();
             }
             await output.WriteLineAsync("Saved choices (same destination and wizard root): " + root);
-            await output.WriteLineAsync("Framework source: " + answers.FrameworkRoot + "; target: " + answers.FrameworkTarget);
+            await output.WriteLineAsync(answers.FrameworkRoot == "" ? "Additional dependency source: skipped; existing compiled DLL evidence retained." : "Framework source: " + answers.FrameworkRoot + "; target: " + answers.FrameworkTarget);
             await output.WriteLineAsync("SQL manifest: " + answers.SqlManifest + "; SQL folder: " + answers.SqlRoot);
             await output.WriteLineAsync("Create and verify the workspace configuration without scanning, change one answer, or pause? [create/change/later]");
             var action = await input.ReadLineAsync(token);
@@ -117,7 +118,7 @@ internal static class WebFormsWizardWorkspace
                 answers = field.Trim() switch
                 {
                     "1" => answers with { FrameworkRoot = null, FrameworkTarget = null },
-                    "2" => answers with { FrameworkTarget = null },
+                    "2" => answers with { FrameworkRoot = answers.FrameworkRoot == "" ? null : answers.FrameworkRoot, FrameworkTarget = null },
                     "3" => answers with { SqlManifest = null },
                     "4" => answers with { SqlRoot = null },
                     _ => throw Fail("CHOICE_INVALID")
@@ -129,11 +130,11 @@ internal static class WebFormsWizardWorkspace
             store.VerifyUnchanged();
             store.Dispose(); // The initializer independently opens and verifies the saved wizard.
             return await WorkspaceCommand.RunAsync(["init-from-wizard", "--root", root, "--wizard-root", root,
-                "--website-id", id, "--framework-repo", answers.FrameworkRoot!, "--framework-target", answers.FrameworkTarget!,
+                "--website-id", id, .. (answers.FrameworkRoot == "" ? Array.Empty<string>() : new[] { "--framework-repo", answers.FrameworkRoot!, "--framework-target", answers.FrameworkTarget! }),
                 "--sql-manifest", answers.SqlManifest!, "--sql-source-root", answers.SqlRoot!], output, error, token);
         }
 
-        async Task<string?> Existing(string prompt, bool file)
+        async Task<string?> Existing(string prompt, bool file, bool allowSkip = false)
         {
             while (true)
             {
@@ -141,6 +142,7 @@ internal static class WebFormsWizardWorkspace
                 var value = await input.ReadLineAsync(token);
                 if (value is null || value.Trim() == "later") return null;
                 value = Unquote(value);
+                if (allowSkip && value == "skip") return "";
                 if (string.IsNullOrWhiteSpace(value)) { await output.WriteLineAsync("Enter a path or later."); continue; }
                 var full = WebFormsWizardStore.Physical(value);
                 if (file ? File.Exists(full) : Directory.Exists(full)) return full;

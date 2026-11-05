@@ -713,3 +713,29 @@ Final touched-lane command: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug
 -warnaserror --nologo --filter 'FullyQualifiedName~WebFormsWizard|FullyQualifiedName~Workspace'.
 Result: 278 passed, 0 failed, 0 skipped (2m54s). Whitespace and private-path
 guards passed. Work-machine guide branch dae854eca now leads with continuation.
+
+### Optional dependency source — 2026-11-05
+
+Owner reached the command prompt after the framework-source question could not
+be answered from a dependency DLL. This was a setup assumption, not missing native
+evidence: V3 already accepts one source repository. The initializer now accepts
+both framework options together or neither, refusing half-specified selections.
+The wizard explains the saved DLL selection, accepts explicit skip, saves that
+choice, and proceeds to existing SQL inputs. Skip adds no dependency-source repo
+and makes no coverage claim; it does not remove the selected compiled dependency.
+Changing a skipped target prompts for source again instead of treating an empty
+path as a directory. No Core schema or extractor changes.
+
+Added an end-to-end adapter test for skip/pause/resume/create/verify with one repo
+and unchanged original native config, plus two refusal cases for half-specified
+source options. First focused run: 23 passed, one assertion failed on macOS
+/var versus canonical /private/var spelling; corrected the expected physical
+manifest path without changing production path validation. Final touched-lane
+results recorded below. No PR or merge; docs branch 77c6789ce explains skip.
+
+Final validation: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror
+--nologo --filter 'FullyQualifiedName~WebFormsWizard|FullyQualifiedName~Workspace':
+281 passed, 0 failed, 0 skipped (2m17s). Public CLI saved-wizard continuation plus
+existing-workspace verification passed. Private-path and whitespace guards passed.
+No full-suite claim for this CLI-only head; final pre-merge full gate remains
+required under AGENTS.md.

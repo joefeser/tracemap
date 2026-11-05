@@ -22,7 +22,7 @@ public static partial class WorkspaceCommand
     public const string RuleId = "workflow.workspace.source-collection.v1";
     public const string Help = """
         tracemap workspace init --root <workspace-folder>
-        tracemap workspace init-from-wizard --root <workspace-folder> --wizard-root <saved-wizard-folder> [--website-id <id>] --framework-repo <path> --framework-target <repo-relative-project-or-solution|discovery> --sql-manifest <path> --sql-source-root <folder>
+        tracemap workspace init-from-wizard --root <workspace-folder> --wizard-root <saved-wizard-folder> [--website-id <id>] [--framework-repo <path> --framework-target <repo-relative-project-or-solution|discovery>] --sql-manifest <path> --sql-source-root <folder>
         tracemap workspace verify --root <workspace-folder> [--scope <repository-ids.txt>]
         tracemap workspace collect --root <workspace-folder> --out <new-run-folder> [--scope <repository-ids.txt>]
 

@@ -12,7 +12,7 @@ public static partial class WorkspaceCommand
     private static async Task<int> InitializeFromWizardAsync(string root, Dictionary<string, string> options,
         TextWriter output, CancellationToken token)
     {
-        foreach (var name in FromWizardOptions.Where(name => name != "--website-id"))
+        foreach (var name in FromWizardOptions.Where(name => name is "--wizard-root" or "--sql-manifest" or "--sql-source-root"))
             if (!options.ContainsKey(name)) throw new ArgumentException("WORKSPACE_SETUP_OPTION_REQUIRED: " + name);
         var destination = Path.Combine(root, "workspace.local.json");
         if (File.Exists(destination) || Directory.Exists(destination))
@@ -63,16 +63,26 @@ public static partial class WorkspaceCommand
         var sql = SqlServerLocalDefinitionsCommand.Inspect(sqlManifest, sqlRoot, token);
         var webId = sql.Export.Input.ContextRepository;
         if (webId == "framework") throw new ArgumentException("WORKSPACE_SETUP_REPOSITORY_ID_CONFLICT: SQL context repository cannot use the reserved framework ID.");
-        var frameworkRoot = Full(options["--framework-repo"]);
-        Unlinked(frameworkRoot);
-        if (!Directory.Exists(frameworkRoot)) throw new ArgumentException("WORKSPACE_REPOSITORY_MISSING: framework");
-        var target = options["--framework-target"];
-        var framework = target == "discovery" ? new WorkspaceRepository("framework", frameworkRoot, [])
-            : IsProject(target) ? new WorkspaceRepository("framework", frameworkRoot, [target])
-            : IsSolution(target) ? new WorkspaceRepository("framework", frameworkRoot, [], Solution: target)
-            : throw new ArgumentException("WORKSPACE_SELECTION_FILE_KIND: --framework-target requires a project, solution or the explicit word discovery.");
+        WorkspaceRepository? framework = null;
+        if (options.ContainsKey("--framework-repo") != options.ContainsKey("--framework-target"))
+            throw new ArgumentException("WORKSPACE_SETUP_FRAMEWORK_PAIR_REQUIRED: provide both framework repo and target, or omit both to retain compiled dependency evidence only.");
+        if (options.TryGetValue("--framework-repo", out var frameworkPath))
+        {
+            var frameworkRoot = Full(frameworkPath);
+            Unlinked(frameworkRoot);
+            if (!Directory.Exists(frameworkRoot)) throw new ArgumentException("WORKSPACE_REPOSITORY_MISSING: framework");
+            var target = options["--framework-target"];
+            framework = target == "discovery" ? new WorkspaceRepository("framework", frameworkRoot, [])
+                : IsProject(target) ? new WorkspaceRepository("framework", frameworkRoot, [target])
+                : IsSolution(target) ? new WorkspaceRepository("framework", frameworkRoot, [], Solution: target)
+                : throw new ArgumentException("WORKSPACE_SELECTION_FILE_KIND: --framework-target requires a project, solution or the explicit word discovery.");
+        }
+        else await output.WriteLineAsync("No additional dependency source selected. Existing compiled DLL selection is retained; dependency-source coverage is not added.");
+        WorkspaceRepository[] configuredRepositories = framework is null
+            ? [new(webId, original.Configuration.SourceRoot, [])]
+            : [new(webId, original.Configuration.SourceRoot, []), framework];
         var config = new WorkspaceConfiguration(SqlSchemaVersion,
-            [new(webId, original.Configuration.SourceRoot, []), framework], WebFormsReport: true,
+            configuredRepositories, WebFormsReport: true,
             CompiledReview: new(webId, preparedPath), SqlEvidence: new(webId, sqlManifest, sqlRoot));
         Validate(config);
         var repositories = new List<(WorkspaceRepository Config, string Root, string Head)>();

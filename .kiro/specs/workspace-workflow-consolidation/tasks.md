@@ -60,3 +60,5 @@
 - [x] Save each missing framework/SQL answer, support pause/resume and individual correction, and delegate validation to init-from-wizard without scanning.
 - [x] Pin entry routing, persistence, same-root creation, correction, tamper refusal and existing-config verification; initial focused lane 48/48 and final wizard/workspace lane 278/278 pass Debug -warnaserror; older-tool saved-state pause/resume rehearsal passes.
 - [ ] Owner validates the continued wizard on the work machine; no PR or merge.
+
+- [x] Remove mandatory additional-source setup: explicit skip preserves compiled DLL selection and proceeds to SQL, persists across pauses, and refuses half-specified source options.
