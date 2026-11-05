@@ -132,3 +132,7 @@
 ## Completed-run review handoff — 2026-11-05
 
 - [x] Add a one-folder, read-only completed-run review prompt covering artifact commitments, SQLite, separate source/native/SQL channels, scope warning and sanitized findings without rescanning.
+
+## Framework-source inclusion audit handoff — 2026-11-05
+
+- [x] Add read-only targeted prompt distinguishing configured/selected/scanned second source, transitive evidence and compiled DLL admission; investigate missing wizard question from saved state/logs without assuming owner skip.

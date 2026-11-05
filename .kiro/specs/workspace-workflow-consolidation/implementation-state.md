@@ -1266,3 +1266,18 @@ SQL execution, re-attestation, publishing or PR authorized by that prompt.
 Solution-root failure is a separate unverified follow-up, not reproduced.
 Docs-only handoff; whitespace/private-path checks and synthetic retained-output
 read-only sanity check used, no new full-suite run required.
+
+### Targeted second-source audit — 2026-11-05
+
+Owner reports the wizard did not ask for the framework source folder and asks
+Claude to verify configuration and whether the second repo or only its DLL was
+considered. Added prompts/check-framework-source-versus-dll-once.md. Intended
+scope is explicitly two source repos; completed report's one-source count does
+not establish that intent was met. Prompt checks current versus recorded config,
+source rosters/manifests/contributions, transitive-reference limits, compiled
+role/admission, FrameworkRoot null/skip/path state and existing-workspace early
+return. Saved skip does not prove an owner decision; no transcript means unknown.
+Read-only, bounded, no rescans/solution load/edits or receipt changes; proposes
+smallest preserving correction and flags missing post-create extension UX if
+found. No claim of work-machine root cause until local evidence returns.
+Docs-only; whitespace/private-path guards used. No new application test run.
