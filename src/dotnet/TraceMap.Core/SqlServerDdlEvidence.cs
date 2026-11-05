@@ -223,7 +223,7 @@ public static class SqlServerDdlEvidence
     /// Measured worst uncapped cost is about 200 bytes of stack per token; MaxTokens therefore
     /// needs about 20 MiB, and this fixed size leaves a margin of more than 3x.
     /// </summary>
-    private static T OnParserStack<T>(Func<T> work)
+    internal static T OnParserStack<T>(Func<T> work)
     {
         T result = default!;
         System.Runtime.ExceptionServices.ExceptionDispatchInfo? failure = null;

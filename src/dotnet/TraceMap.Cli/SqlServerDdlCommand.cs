@@ -59,7 +59,8 @@ internal static class SqlServerDdlCommand
     internal static Dictionary<string, string> ReadSources(string sourceRoot, SqlServerDdlInput input)
         => ReadSourceFiles(sourceRoot, input.Files);
 
-    internal static Dictionary<string, string> ReadSourceFiles(string sourceRoot, IReadOnlyList<SqlServerDdlFile> files)
+    internal static Dictionary<string, string> ReadSourceFiles(string sourceRoot, IReadOnlyList<SqlServerDdlFile> files,
+        int maxFileBytes = SqlServerDdlEvidence.MaxFileBytes, int maxTotalBytes = SqlServerDdlEvidence.MaxTotalBytes)
     {
         var root = Path.GetFullPath(sourceRoot);
         // The explicitly supplied root is trusted; reject links at that root and
@@ -75,9 +76,9 @@ internal static class SqlServerDdlCommand
                 path = Path.Combine(path, component);
                 if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) throw new ArgumentException("ddl-source-link-refused");
             }
-            var text = ReadBounded(path, SqlServerDdlEvidence.MaxFileBytes);
+            var text = ReadBounded(path, maxFileBytes);
             total += Encoding.UTF8.GetByteCount(text);
-            if (total > SqlServerDdlEvidence.MaxTotalBytes) throw new ArgumentException("ddl-input-size-limit");
+            if (total > maxTotalBytes) throw new ArgumentException("ddl-input-size-limit");
             sources.Add(file.Path, text);
         }
         return sources;

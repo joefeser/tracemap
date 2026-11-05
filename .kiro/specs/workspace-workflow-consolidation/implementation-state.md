@@ -254,3 +254,169 @@ for this bounded public trial; no private application paths are needed.
 - Prioritize a provenance-tracked, explicit template/definition projection contract
   before DNN source-to-procedure binding. Do not silently strip statements, guess
   deployment qualifiers or turn syntax admission into a complete result claim.
+
+
+## SQL definition selection implementation (2026-11-04, complete; final results below)
+
+Owner authorized the next implementation after the bounded DNN trial. Add a
+separate local-only selection-input contract to the existing sqlserver-definitions
+verify/collect route. Whole-batch line ranges, expected object identities and
+explicit DNN owner/qualifier settings are required; no guessed defaults. Source
+originals are read-only, bounded separately from selected parser inputs, and
+original/projected hashes plus exact generator/parser identities are retained.
+Map output evidence back to original file lines; do not persist SQL bodies.
+Selection omits script/session/migration context, so selected procedure result
+shapes remain unknown. Table columns describe the selected declaration only.
+Review-scenario values are distinguished from owner-supplied values; neither is
+proof of deployment. No source-call binding, compiled attestation or SQL execution.
+Preserve v1 local and all public-synthetic contracts; full Debug gate required.
+
+
+### Selection implementation status (source frozen for final gate)
+
+- Implemented SqlServerDefinitionSelection with separate input
+  sqlserver-local-definition-selection-input/1 and output
+  sqlserver-local-selected-definitions/1. Whole-batch boundaries use the existing
+  pinned ScriptDom lexer; original limits 8 files/4 MiB each/16 MiB total/200000
+  lines/1000000 tokens per file, while selected parser limits remain unchanged.
+- Explicit ASCII owner, qualifier (including explicitly empty) and valuesOrigin;
+  refuse literal/comment/ambiguous quoted-token macros, unsafe settings, identity
+  mismatch, fragments, overlapping selections, extra definitions and inadmissible
+  top-level statements.
+  Keep originals read-only and projected SQL only in memory. Original lines,
+  hashes, settings and replacement counts retained in Selection evidence.
+- CLI verify/collect dispatches on the separate manifest version. Workspace V3
+  now records actual SourceFiles hashes, not the virtual selected parser paths.
+  Existing public/v1 local contracts remain separate. No application binding.
+- Added 32 tests (30 selection plus two workspace cases). New/workspace lane
+  passed 41/41; broad retained SQL/local/DNN/workspace selection lane passed
+  475/475; Debug/Release builds passed with zero warnings/errors.
+- Actual Release DNN selection trial at
+  `/Users/josephfeser/tracemap-reviews/dnn-selection-trial-01` passed V3 verify and
+  fresh collect. Reused the original pinned public source bytes from dnn-trial-01;
+  one fresh source scan exercised the new selection route. Source 6031 facts,
+  syntax-only/NotRun; independent source validator passed. SQL SQLite readback
+  2 objects/1 parameter/1 unknown shape/1 declared-table reference/4 gaps.
+  Review settings dbo + DnnTrial_, not a deployment assertion. Table has eight
+  declared columns; proc @PortalID; original spans 7127 and 19151. All SQL output
+  hashes matched run inputs. No compiled publication or runtime execution.
+- Public corpus v2 smoke PASSED all five cases at
+  `/tmp/tracemap-sql-selection-public-corpus-01`: added explicit DNN selection,
+  retained the first four outcomes and three expected refusals. No SQL execution.
+- First full Debug run (session 88134, log `/tmp/tracemap-sql-selection-full-suite.log`)
+  was deliberately interrupted before completion to fix a review finding: the
+  ScriptDom lexer recursively handles nested block comments, so the larger original
+  input bound also needs a pre-lexing depth ceiling. No pass is claimed for that
+  incomplete run. Added a quote/identifier-aware depth guard (128) and six regression
+  cases, including a 100000-depth input rejected before the lexer. Selection/local/
+  workspace lane passed 74/74. New total tests: 38 added (36 selection + two workspace).
+  Final runtime/trial and full gate are being rerun; final expected pass count 5937.
+- All four retained parameter/DDL/result/table CLI smokes PASSED in session
+  72157, log `/tmp/tracemap-sql-selection-retained.log`, outputs
+  `/tmp/tracemap-sql-selection-retained-01`. JSON/DDL parameters each 52 cases
+  (8/12/32); result JSON 36/10/36 and DDL 36/10/58 with 20 refusals; table totals
+  44/10/88 across 64 cases/language with 24 refusals. Current Debug runtime;
+  no public gate or retained denominator was weakened.
+- Current published Release runtime is pinned by the new DNN/native output and
+  public corpus receipts. Leave those bytes unchanged; commit only after gates.
+- Docs: SQL_DEFINITION_SELECTION.md, updated SQL guide/config/validation, new
+  rule catalog entry, and DNN_WORKSPACE_TRIAL.md follow-up results. Final doc links,
+  diff checks and gate results remain to record. No push or PR authorized.
+
+- Public v2 receipt generator/bounded-input hashes and all new documentation relative
+  links were verified. `git diff --check` passed. Only full-suite completion and
+  final local state/commit remain for this selection implementation milestone.
+
+
+### Final selection runtime and gate after depth fix
+
+- Final code is frozen. Full Debug -warnaserror runs in session 41221, log
+  `/tmp/tracemap-sql-selection-full-suite-final.log`. Expected 5937 passed plus
+  three retained skips. Session 88134 was interrupted for the depth fix; never
+  report its incomplete result as the final gate.
+- Final focused selection/local/workspace lane passed 74/74, zero warnings/errors;
+  38 newly added cases total (36 selection + two workspace). Review discovered
+  ScriptDom's recursive multiline-comment lexer rule in upstream TSql160.g;
+  the new original input bound now has a quote-aware depth guard at 128 before
+  lexing. Six regressions include 100000-depth rejection and escaped quoted text.
+- Final Release runtime published. Fresh actual DNN run now at
+  `/Users/josephfeser/tracemap-reviews/dnn-selection-trial-02/runs/first/` completed
+  partial with 6031 source facts and explicit SQL selection. Trial 01 is retained
+  as pre-depth-fix evidence, not the final runtime receipt.
+- Final public v2 corpus PASSED five cases at
+  `/tmp/tracemap-sql-selection-public-corpus-02`; log
+  `/tmp/tracemap-sql-selection-public-corpus-final.log`.
+- All four final retained CLI smokes PASSED at `/tmp/tracemap-sql-selection-retained-02`,
+  log `/tmp/tracemap-sql-selection-retained-final.log`; unchanged denominators and
+  refusals (parameter JSON/DDL 8/12/32 each; results 36/10/36 and 36/10/58 plus
+  20 refusals; table 44/10/88 plus 24 refusals). Do not rebuild Debug/Release
+  or commit until full gate finishes. Docs/state can be finalized meanwhile.
+- Final DNN SQL readback/hashes, source-check log and docs links verified: two
+  objects, one parameter, one unknown shape, one reference, four gaps; current
+  index generator matches the published CLI. Remaining: finish full gate, update
+  tasks/results and make a local commit. No push/PR.
+
+
+### Final line-format refusal regression
+
+- Found and closed one remaining line-map ambiguity: selection splitting uses LF
+  while ScriptDom also recognizes lone CR line breaks. The larger-original route
+  now explicitly accepts LF/CRLF and refuses lone CR before lexing. Two tests
+  cover CR-only and mixed-line input refusal; CRLF/BOM positive cases remain green.
+- Focused final selection/local/workspace lane PASSED 76/76, zero warnings/errors.
+  Total new cases now 40 (38 selection + two workspace), expected full 5939+3 skips.
+- Session 41221 was deliberately interrupted for this fix; its incomplete log is
+  `/tmp/tracemap-sql-selection-full-suite-final.log`. No pass claimed. Earlier
+  session 88134 was interrupted for the comment-depth fix. Both are preserved.
+- Final code is now frozen. Runtime publication, final DNN trial03 and final
+  public/retained/full gates are restarting. Use new log/session paths recorded
+  below; do not rely on prior trial01/02 generator hashes for this final code.
+
+
+### Authoritative final gate/run pointers (after both refusal regressions)
+
+- Full Debug -warnaserror PASSED in session 57292: 5,939 passed, three skipped,
+  zero failed; exit 0, 38.8664 minutes. Authoritative log
+  `/tmp/tracemap-sql-selection-full-suite-complete.log`. All 40 added cases passed;
+  C# and runtime bytes stayed frozen throughout this final gate. Earlier sessions 88134 and 41221 were interrupted for
+  comment-depth and CR-only line-format fixes; no final pass claimed for those.
+- Final focused lane 76/76 passed. Final Release published. Final DNN selection
+  trial is now `/Users/josephfeser/tracemap-reviews/dnn-selection-trial-03/runs/first`:
+  V3 verify/collect completed partial, source 6031 facts; final public v2 corpus
+  PASSED five cases at `/tmp/tracemap-sql-selection-public-corpus-03`, log
+  `/tmp/tracemap-sql-selection-public-corpus-complete.log`.
+- Final retained four smokes PASSED at `/tmp/tracemap-sql-selection-retained-03`,
+  log `/tmp/tracemap-sql-selection-retained-complete.log` (session 49509). All
+  original counts/refusals unchanged: parameter JSON/DDL each 8/12/32, results
+  JSON 36/10/36 and DDL 36/10/58 plus 20 refusals, table 44/10/88 plus 24 refusals.
+  Source-check log for trial03 is beside its config. Prior trial01/02 retained;
+  they pin earlier code bytes and are not the final trial for line-format guard.
+- Remaining: inspect final source-check and SQL readback/output hashes, finish
+  retained/full gates, update docs/state/tasks to final pointers and exact results,
+  run diff/doc checks, then commit locally. No push/PR or external messages.
+
+- Final trial03 source check, SQLite counts (2/1/1/1/4), original/output hashes,
+  index generator hash, public corpus v2 receipt and docs relative links verified.
+  Full suite 57292 completed successfully; implementation and validation complete.
+
+
+## Final selection milestone result (2026-11-04)
+
+- Completed 40 new tests (38 selection, two workspace). Focused final lane 76/76;
+  broader pre-guard retained SQL/local/DNN lane 475/475; final full Debug solution
+  `-warnaserror`: 5,939 passed / three skipped / zero failed, exit 0, 38.8664 minutes.
+- Three skips remain optional Oracle golden sweep, native HTTP receipt interop and
+  Windows ASP.NET publication acceptance. Neither interrupted earlier gate is
+  reported as a pass. Both fixes are pinned by regression tests in the final gate.
+- Final public corpus v2 five cases and all four retained CLI smokes passed with
+  original counts/refusals. Final DNN trial03 and its generator/output hashes are
+  the authoritative current runtime example; trials01/02 remain historical.
+- Canonical selection guide: docs/SQL_DEFINITION_SELECTION.md. Updated SQL
+  getting-started/configuration/validation, DNN trial results, rule catalog and
+  task checkboxes. Final links and diff checks passed. No Core/CLI changes after
+  final validation. Keep the published runtime bytes pinned by trial03 receipts.
+- This completes explicit bounded SQL definition selection and substitution only.
+  Application-call binding, full installed-schema interpretation, native compiled
+  DNN correspondence and full real-application acceptance remain separate work.
+  No SQL executed, private input inspected, original source rewritten, push or
+  PR/public message created.

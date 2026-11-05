@@ -115,8 +115,8 @@ are not modeled. Unapplied schema mutations invalidate complete table/result cla
 OFF prevents complete shape claims. SQLCMD substitutions/directives are refused.
 Top-level inserts, execution (including extended-property calls), schema creation
 and other unsupported setup statements are refused. Migration ordering is not
-inferred; duplicate/case-only definitions are rejected. DNN install templates need
-an explicit future preprocessing contract; qualifiers are never silently replaced.
+inferred; duplicate/case-only definitions are rejected. DNN install templates use the separate [explicit definition selection contract](SQL_DEFINITION_SELECTION.md);
+qualifiers are never silently replaced. The original definition-set contract above stays unchanged.
 
 Names, paths and fingerprints remain **local-only**. Bodies, default expressions
 and literal values are not copied into output. There is no public/shareable
@@ -133,7 +133,7 @@ PowerShell trial exercises all three evidence channels and filtering.
 The opt-in public corpus smoke is `scripts/tests/Test-SqlDefinitionCorpus.py`.
 It fetches exact pinned public bytes and license files; no upstream build,
 application, database or SQL is executed. DNN templates and WWI setup statements
-must remain refusals, while selected WWI procedure declarations produce partial
+must remain refusals on the original route, while explicit DNN selection and WWI procedure declarations produce partial
 inventories with unknown complex result shapes. This is compatibility evidence,
 not full DNN route binding or runtime acceptance.
 

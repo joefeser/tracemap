@@ -85,6 +85,37 @@ public sealed class WorkspaceSqlTests
         Assert.False(File.Exists(Path.Combine(fixture.Run, "START-HERE.md")));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Selection_workspace_records_original_hashes_and_refuses_unselected_original_drift(bool drift)
+    {
+        using var fixture = new Fixture();
+        var original = File.ReadAllText(fixture.SqlFile);
+        var digest = SqlServerSchemaEvidence.Hash(System.Text.Encoding.UTF8.GetBytes(original));
+        var input = new SqlDefinitionSelectionInput(SqlServerDefinitionSelection.InputVersion, "local-only", "web", fixture.Head,
+            "selected-workspace", "ExampleServer", "ExampleDatabase", [new("schema.sql", digest)],
+            [new("schema.sql", 1, 2, "table", "Items"), new("schema.sql", 3, 3, "procedure", "ReadItems")],
+            new("dbo", "", "review-scenario"));
+        File.WriteAllText(fixture.Manifest, SqlServerSchemaEvidence.Json(input));
+        async Task<int> Execute(string[] args, TextWriter output, TextWriter error, CancellationToken token)
+        {
+            var result = await TraceMapCommand.RunAsync(args, output, error, token);
+            if (drift && args[0] == "report") File.AppendAllText(fixture.SqlFile, "\n-- original drift");
+            return result;
+        }
+        Assert.Equal(drift ? 1 : 0, await fixture.Collect(Execute));
+        using var record = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixture.Run, "workspace-run.local.json")));
+        Assert.Equal(drift ? "failed" : "partial", record.RootElement.GetProperty("outcome").GetString());
+        Assert.Equal(digest, record.RootElement.GetProperty("inputs").GetProperty("sql-file:schema.sql").GetString());
+        Assert.False(record.RootElement.GetProperty("inputs").TryGetProperty("sql-file:selection-000.sql", out _));
+        Assert.Equal(!drift, File.Exists(Path.Combine(fixture.Run, "START-HERE.md")));
+        var export = SqlServerSchemaEvidence.Read<SqlLocalExport>(File.ReadAllText(Path.Combine(fixture.Run, "sql", "definitions.local.json")));
+        Assert.Equal(SqlServerDefinitionSelection.ExportVersion, export.Version);
+        Assert.NotNull(export.Selection);
+        Assert.Equal("unknown", export.Objects.Single(item => item.Kind == "procedure").ResultShape!.Completeness);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly TempDirectory temp = new();

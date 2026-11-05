@@ -88,3 +88,39 @@ Trial root: `/Users/josephfeser/tracemap-reviews/dnn-trial-01/`.
 
 No private work data was inspected. No scanner/Core implementation changed,
 repository history was rewritten, or public communication was sent for this trial.
+
+## Explicit selection follow-up (2026-11-04)
+
+The separate [definition-selection input](../SQL_DEFINITION_SELECTION.md) now
+admits the same original file and the two documented whole-batch ranges using
+explicit **review-scenario** values: owner `dbo`, qualifier `DnnTrial_`. These
+values are hypothetical settings, not a DNN deployment claim. The prior no-settings
+refusals above remain expected on the original input route.
+
+Fresh V3 run:
+`/Users/josephfeser/tracemap-reviews/dnn-selection-trial-03/runs/first/START-HERE.md`.
+
+| Check | Actual follow-up result |
+| --- | --- |
+| Source | Same pinned public slice; 6,031 facts, Level3SyntaxAnalysis, build NotRun; unchanged independent source check passed |
+| Selected table | `dbo.DnnTrial_RoleGroups`, original line 7127, eight declared columns |
+| Selected procedure | `dbo.DnnTrial_GetRoleGroups`, original line 19151, one `@PortalID` input |
+| Procedure result | Unknown; no result columns inferred |
+| SQL reference | One reference to the separately selected table declaration; no execution/reachability claim |
+| SQL SQLite readback | Two objects, one parameter, one result shape, one reference, four gaps |
+| Provenance | Original file hash and both projected hashes/settings retained; all three SQL artifact hashes matched the V3 run record |
+| Application-call binding | Not established |
+| Compiled publication/runtime | Not supplied or executed |
+
+The original file was read in place from the first pinned DNN slice. No original
+was modified or silently renamed for this route, and projected SQL bodies were
+not persisted. `prepare-selection.py` in the new trial root retains the exact
+local configuration generator; its output manifests carry generator/input hashes.
+One fresh source scan was explicitly performed to exercise the new V3 selection
+collection end to end. This resolves the bounded SQL admission gap, not the
+remaining reader binding, compiled correspondence or full application trial.
+
+The final run uses the quote-aware pre-lexing comment-depth guard. The earlier
+`dnn-selection-trial-01` remains available as pre-guard trial evidence; the new
+`dnn-selection-trial-02` is the depth-guard trial;
+`dnn-selection-trial-03` records the final runtime including LF/CRLF line-format validation.

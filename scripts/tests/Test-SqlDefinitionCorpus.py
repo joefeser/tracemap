@@ -75,7 +75,10 @@ def run(root, cli):
             name + '.sql': contents['wwi', WWI_BASE + 'Website/Stored Procedures/' + name + '.sql']
             for name in ('SearchForCustomers', 'SearchForSuppliers')}, 'partial', {'wholeFiles': True}),
         ('wwi-table-setup-execution', WWI_PIN, {'Colors.sql': contents['wwi', WWI_BASE + 'Warehouse/Tables/Colors.sql']},
-            'sql-local-top-level-statement-not-admitted', {'wholeFile': True})
+            'sql-local-top-level-statement-not-admitted', {'wholeFile': True}),
+        ('dnn-explicit-selection', DNN_PIN, {'Install.SqlDataProvider': dnn}, 'selected-partial',
+            {'source': 'dnn/' + DNN_SCHEMA, 'lineRanges': [[7127, 7138], [19151, 19158]],
+             'databaseOwner': 'dbo', 'objectQualifier': 'DnnTrial_', 'valuesOrigin': 'review-scenario'})
     ]
     results = []
     for name, revision, files, expected, selection in cases:
@@ -85,6 +88,12 @@ def run(root, cli):
             contextRepository='public-corpus', contextCommitSha=revision, definitionSet=name,
             server='ExampleServer', database='ExampleDatabase',
             files=[dict(path=path, sha256=digest(data)) for path, data in files.items()])
+        if expected == 'selected-partial':
+            manifest['version'] = 'sqlserver-local-definition-selection-input/1'
+            manifest['selections'] = [
+                dict(sourcePath='Install.SqlDataProvider', startLine=7127, endLine=7138, kind='table', name='RoleGroups'),
+                dict(sourcePath='Install.SqlDataProvider', startLine=19151, endLine=19158, kind='procedure', name='GetRoleGroups')]
+            manifest['template'] = dict(databaseOwner='dbo', objectQualifier='DnnTrial_', valuesOrigin='review-scenario')
         manifest['provenance'] = dict(generatorSha256=generator, boundedInputSha256=digest(encoded(manifest)))
         for path, data in files.items():
             (folder / path).write_bytes(data)
@@ -118,6 +127,41 @@ def run(root, cli):
             observation['outputFiles'] = {p.name: digest(p.read_bytes()) for p in (case / 'collected').iterdir()}
             observation['objects'] = len(objects)
             observation['unknownResultShapes'] = 2
+        elif expected == 'selected-partial':
+            if result.returncode != 0:
+                raise ValueError('Explicit DNN selection failed: ' + result.stderr)
+            export = json.loads((case / 'collected/definitions.local.json').read_text())
+            if export['version'] != 'sqlserver-local-selected-definitions/1' or export['coverage'] != 'partial':
+                raise ValueError('DNN selected origin/coverage mismatch')
+            objects = export['objects']
+            if len(objects) != 2 or {obj['name'] for obj in objects} != {'DnnTrial_RoleGroups', 'DnnTrial_GetRoleGroups'}:
+                raise ValueError('DNN selected object inventory mismatch')
+            table = next(obj for obj in objects if obj['kind'] == 'table')
+            proc = next(obj for obj in objects if obj['kind'] == 'procedure')
+            if table['span']['startLine'] != 7127 or len(table['table']['columns']) != 8:
+                raise ValueError('DNN original table span/declared columns mismatch')
+            if proc['span']['startLine'] != 19151 or [p['name'] for p in proc['parameters']] != ['@PortalID']:
+                raise ValueError('DNN original procedure span/parameters mismatch')
+            if proc['resultShape']['completeness'] != 'unknown' or proc['resultShape']['columns']:
+                raise ValueError('DNN selected result shape was overclaimed')
+            if len(export['dependencies']) != 1 or export['dependencies'][0]['targetId'] != table['id']:
+                raise ValueError('DNN declaration-only reference mismatch')
+            evidence = export['selection']
+            if evidence['input']['template'] != manifest['template'] or evidence['input']['files'] != manifest['files']:
+                raise ValueError('DNN original settings/hash provenance mismatch')
+            for projection, (start, end) in zip(evidence['projections'], ((7127, 7138), (19151, 19158))):
+                expected_sql = ''.join(lines[start-1:end]).replace('{databaseOwner}', '[dbo].').replace('{objectQualifier}', 'DnnTrial_')
+                if projection['projectedSha256'] != digest(expected_sql.encode()):
+                    raise ValueError('DNN projected bytes mismatch')
+                if projection['originalSpan'] != dict(filePath='Install.SqlDataProvider', startLine=start, endLine=end):
+                    raise ValueError('DNN original selection mapping mismatch')
+            if (folder / 'Install.SqlDataProvider').read_bytes() != dnn:
+                raise ValueError('DNN original was modified')
+            if list((case / 'collected').glob('*.sql')):
+                raise ValueError('Projected body output is not admitted')
+            observation['outputFiles'] = {p.name: digest(p.read_bytes()) for p in (case / 'collected').iterdir()}
+            observation['objects'] = 2
+            observation['unknownResultShapes'] = 1
         elif result.returncode == 0 or expected not in result.stderr or (case / 'collected').exists():
             raise ValueError(name + ': expected refusal did not hold: ' + result.stderr)
         results.append(observation)
@@ -125,10 +169,10 @@ def run(root, cli):
         coreSha256=digest((cli.parent / 'TraceMap.Core.dll').read_bytes()),
         parserSha256=digest((cli.parent / 'Microsoft.SqlServer.TransactSql.ScriptDom.dll').read_bytes()),
         cases=[dict(name=c[0], expected=c[3], selection=c[4]) for c in cases])
-    save(root / 'public-corpus-receipt.json', dict(version='sql-local-public-corpus-smoke/1', visibility='local-only',
+    save(root / 'public-corpus-receipt.json', dict(version='sql-local-public-corpus-smoke/2', visibility='local-only',
         generatorSha256=generator, boundedInputSha256=digest(encoded(bounded)), input=bounded,
         outcome='passed', coverage='bounded-static-only', sqlExecution='not-run', sourceCallBinding='not-established', cases=results))
-    print('Passed: 4 pinned public cases; 2 WWI procedure definitions with unknown result shapes; 3 expected refusals. No SQL executed.')
+    print('Passed: 5 pinned public cases; 2 WWI procedures and 2 explicitly selected DNN definitions; 3 expected refusals. Selected results remain unknown; no SQL executed.')
 
 
 def main():

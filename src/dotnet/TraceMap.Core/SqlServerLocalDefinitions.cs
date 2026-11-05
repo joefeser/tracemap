@@ -1,5 +1,5 @@
-using System.Globalization;
 using System.Text;
+using System.Text.Json.Serialization;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace TraceMap.Core;
@@ -17,7 +17,8 @@ public sealed record SqlLocalDependency(string SourceId, string Kind, string? Sc
 public sealed record SqlLocalExport(string Version, string Visibility, string ClaimLevel, string Coverage, string Verdict, string GeneratorSha256,
     string BoundedInputSha256, string ParserVersion, string ParserSha256, string ExtractorVersion, string RuleId,
     SqlLocalInput Input, IReadOnlyList<SqlLocalObject> Objects, IReadOnlyList<SqlLocalDependency> Dependencies,
-    IReadOnlyList<SqlLocalGap> Gaps, IReadOnlyList<string> Limitations);
+    IReadOnlyList<SqlLocalGap> Gaps, IReadOnlyList<string> Limitations,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] SqlDefinitionSelectionEvidence? Selection = null);
 
 /// <summary>Local-only AST definition inventory. No database access, execution, source-call binding or public projection.</summary>
 public static class SqlServerLocalDefinitions

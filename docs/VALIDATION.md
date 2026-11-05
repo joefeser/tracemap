@@ -5441,8 +5441,27 @@ python3 scripts/tests/Test-SqlDefinitionCorpus.py --fetch --cli artifacts/worksp
 The script pins DNN `33b8fbe440ab665b8423599789db1f34d2a500fc` and SQL Server
 samples `3c71696a3942879f0481f3bd65fe112a40023f18`, retains licenses and exact
 input digests, and records its generator plus CLI/Core/parser hashes. Expected:
-two WWI procedures with parameter declarations and unknown complex result shapes;
+two WWI procedures with parameter declarations and unknown complex result shapes,
+plus two explicitly selected DNN definitions under review-scenario owner/qualifier values;
 DNN unchanged template slice refused as malformed, full DNN install over the file
 limit refused, and WWI table setup with top-level EXEC refused. No SQL execution,
 placeholder substitution, source-call binding or DNN/runtime acceptance. Default
 tests do not fetch these inputs.
+
+
+## Explicit SQL definition selection
+
+[Definition selection](SQL_DEFINITION_SELECTION.md) owns the separate local-only
+selection input. Run `SqlServerDefinitionSelectionTests`, `WorkspaceSqlTests`,
+existing local/public SQL tests and the full Debug `-warnaserror` solution gate.
+The added cases require exact original/projected hashes, original line mapping,
+whole-batch boundaries, settings/identity checks, refusal of literal/comment
+macros, omission of body text and original drift detection. No fake GO boundary
+inside a multiline string/comment or guessed owner/empty qualifier is accepted.
+
+The opt-in `Test-SqlDefinitionCorpus.py` v2 receipt has five cases: the first four
+retain their prior expected outcomes, and explicit selection from the unchanged
+large DNN install file now admits one table and one procedure. Original DNN
+no-settings inputs still refuse. DNN selected results remain unknown; no database,
+application execution or compiled correspondence is established. The workspace
+trial uses a fresh run and records original file hashes in its input map.

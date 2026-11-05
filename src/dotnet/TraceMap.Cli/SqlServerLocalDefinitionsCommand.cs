@@ -1,12 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TraceMap.Core;
 
 namespace TraceMap.Cli;
 
 internal sealed record SqlLocalCollectionInput(string ManifestPath, string SourceRoot, string ManifestSha256,
-    SqlLocalExport Export);
+    SqlLocalExport Export, IReadOnlyList<SqlServerDdlFile> SourceFiles);
 
 internal static class SqlServerLocalDefinitionsCommand
 {
@@ -17,6 +18,7 @@ internal static class SqlServerLocalDefinitionsCommand
         Local-only schema-definition inventory, parameters, dependencies and bounded result shapes.
         No database connection or execution. No publicSynthetic assertion, body/literal output or automatic source-call binding.
         Input is an explicit hashed file list; context repository/commit is not the database export revision.
+        The separate local definition-selection input accepts whole batches from larger originals with explicit owner/qualifier values.
         """;
 
     internal static int Run(string[] args, TextWriter output, CancellationToken token)
@@ -50,10 +52,25 @@ internal static class SqlServerLocalDefinitionsCommand
         manifestPath = Path.GetFullPath(manifestPath); sourceRoot = Path.GetFullPath(sourceRoot);
         if ((File.GetAttributes(manifestPath) & FileAttributes.ReparsePoint) != 0) throw new ArgumentException("sql-local-input-link-refused");
         var json = SqlServerDdlCommand.ReadBounded(manifestPath, SqlServerSchemaEvidence.MaxBytes);
-        var input = SqlServerLocalDefinitions.ReadInput(json);
-        var sources = SqlServerDdlCommand.ReadSourceFiles(sourceRoot, input.Files);
-        var export = SqlServerLocalDefinitions.Produce(json, sources, token);
-        return new(manifestPath, sourceRoot, SqlServerSchemaEvidence.Hash(Encoding.UTF8.GetBytes(json)), export);
+        using var document = JsonDocument.Parse(json);
+        SqlLocalExport export;
+        IReadOnlyList<SqlServerDdlFile> files;
+        if (document.RootElement.GetProperty("version").GetString() == SqlServerDefinitionSelection.InputVersion)
+        {
+            var input = SqlServerDefinitionSelection.ReadInput(json);
+            files = input.Files;
+            var sources = SqlServerDdlCommand.ReadSourceFiles(sourceRoot, files,
+                SqlServerDefinitionSelection.MaxFileBytes, SqlServerDefinitionSelection.MaxTotalBytes);
+            export = SqlServerDefinitionSelection.Produce(json, sources, token);
+        }
+        else
+        {
+            var input = SqlServerLocalDefinitions.ReadInput(json);
+            files = input.Files;
+            var sources = SqlServerDdlCommand.ReadSourceFiles(sourceRoot, files);
+            export = SqlServerLocalDefinitions.Produce(json, sources, token);
+        }
+        return new(manifestPath, sourceRoot, SqlServerSchemaEvidence.Hash(Encoding.UTF8.GetBytes(json)), export, files);
     }
 
     internal static void Recheck(SqlLocalCollectionInput input, CancellationToken token)
@@ -127,6 +144,14 @@ internal static class SqlServerLocalDefinitionsCommand
     {
         var text = new StringBuilder("# Local SQL definition evidence\n\nCoverage: partial. No aggregate clean verdict. SQL was parsed, never executed.\n\n");
         text.AppendLine("Application context is not the database export revision. Source calls are not automatically bound.\n");
+        if (export.Selection is { } selection)
+        {
+            text.AppendLine("## Explicit definition selection\n");
+            text.AppendLine($"Settings origin: {Escape(selection.Input.Template.ValuesOrigin)}. These values do not establish deployment.\n");
+            foreach (var item in selection.Projections)
+                text.AppendLine($"- {Escape(item.OriginalSpan.FilePath)}:{item.OriginalSpan.StartLine}-{item.OriginalSpan.EndLine}: {Escape(item.Schema)}.{Escape(item.Name)}; projected SHA-256 {item.ProjectedSha256}.");
+            text.AppendLine("\nOriginal hashes and explicit settings are in definitions.local.json. Projected bodies are not stored.\n");
+        }
         text.AppendLine("| Kind | Object | Parameters | First result | Evidence |\n| --- | --- | --- | --- | --- |");
         foreach (var item in export.Objects)
         {

@@ -27,7 +27,7 @@ public static partial class WorkspaceCommand
             throw new ArgumentException("WORKSPACE_SQL_APPLICATION_CONTEXT_MISMATCH");
         inputs.Add("sql:manifest", plan.ManifestSha256);
         inputs.Add("sql:bounded-input", plan.Export.BoundedInputSha256);
-        foreach (var file in plan.Export.Input.Files) inputs.Add("sql-file:" + file.Path, file.Sha256);
+        foreach (var file in plan.SourceFiles) inputs.Add("sql-file:" + file.Path, file.Sha256);
         return plan;
     }
 }

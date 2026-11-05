@@ -103,3 +103,6 @@ and permits the existing optional `compiledReview`. SQL context must match a sel
 repository ID and HEAD. It produces a separate local SQL sidecar, never a raw scan
 merge or automatic source-call binding. See [SQL collection](WORKSPACE_SQL_GETTING_STARTED.md)
 for the exact manifest, bounds, supported subset and known refusals.
+
+The SQL manifest can also use the separate [whole-batch selection input](SQL_DEFINITION_SELECTION.md)
+for larger original install templates; workspace records bind the original file hashes.

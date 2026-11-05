@@ -25,5 +25,7 @@
 - [ ] Replace broken legacy agent-template dependencies with freshly authored instructions tied to verified workflows and explicit SQL admission status.
 - [ ] Compare replacement workflows, then retire or redirect redundant scripts.
 - [x] Run a bounded real public DNN source workspace trial and document actual SQL admission refusals; source/independent checks passed, compiled/event/reader join remain unavailable.
-- [ ] Design explicit provenance-tracked SQL template/definition projection from large originals, including required owner/qualifier settings.
+- [x] Design explicit provenance-tracked SQL template/definition projection from large originals, including required owner/qualifier settings.
+- [x] Implement local-only whole-batch SQL definition selection, original/projected hashes, safe template values and original line mapping.
+- [x] Verify selection boundaries, drift/privacy/refusal controls, workspace integration, retained routes and bounded DNN trial03: 40 new cases, 76 focused, five public corpus cases, four retained smokes, and full Debug `-warnaserror` passed 5,939 with 3 skips and 0 failures.
 - [ ] Full real application/compiled/SQL trial, final validation, story/PR publication when authorized.
