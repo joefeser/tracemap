@@ -149,13 +149,22 @@ contract producer as a private importer. No SQL connection or execution is neede
 
 ## 5. Configure all inputs in one V3 workspace
 
-**If the wizard is already complete and the SQL manifest exists, use the
-[one-command initialization helper](https://github.com/joefeser/tracemap/blob/codex/workspace-scope-preflight/docs/WORKSPACE_FROM_WIZARD.md)
-in branch `codex/workspace-scope-preflight` instead of manually copying this
-section.** It reads the saved wizard attempt and prepared receipts, derives the
-web source identity and validates the SQL manifest. It creates verified V3 config
-without starting a scan. Rebuild the tool from that branch before using the new
-command. Keep this docs branch for the walkthrough; no PR is implied.
+**If the wizard is already complete and the SQL manifest exists, continue that
+same wizard in your one existing root.** Update/build the tool from branch
+`codex/workspace-scope-preflight`, then run:
+
+```powershell
+pwsh -NoProfile -File ./scripts/tm.ps1 -Build version
+pwsh -NoProfile -File ./scripts/tm.ps1 webforms-review wizard --root "C:/reviews/Application" --continue
+```
+
+Choose `workspace`. Existing website/source/DLL selections and prepared receipts
+are reused. It asks only for the framework source repo/project and existing SQL
+manifest/folder, saving each answer. `later` pauses; the same command resumes;
+`change` corrects one choice; `create` validates and creates the workspace in that
+same root without scanning. No second wizard root or long switch list is needed.
+See [interactive continuation](https://github.com/joefeser/tracemap/blob/codex/workspace-scope-preflight/docs/WORKSPACE_FROM_WIZARD.md).
+Keep this docs branch for the walkthrough; no PR is implied.
 
 The manual fallback below requires the **prepared receipt config**. The wizard's
 initial project `native.config.json` may not contain receipts and is not
