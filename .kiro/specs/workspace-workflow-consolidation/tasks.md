@@ -82,3 +82,9 @@
 - [x] Allow invalid/stale workspace answer restart with explicit choice, exact-byte archival and drift refusal; preserve original website/native inputs.
 - [x] Allow SQL selection change/retry/pause before validation can trap continuation on the saved choice.
 - [x] Pin stale/malformed answers, SQL correction and preservation; replay both recovery paths through the actual launcher to SQLite.
+
+## Persistent readable local lab — 2026-11-05
+
+- [x] Build a complete local public-only folder with actual wizard/SQL/workspace configs, source/DLL inputs, completed reports/SQLite and frozen tool.
+- [x] Include readable continuation, regeneration, size-boundary and read-only inspection scripts.
+- [x] Measure exact per-file and total SQL boundaries with actual CLI pass/refusal outcomes; preserve existing limits and work inputs.

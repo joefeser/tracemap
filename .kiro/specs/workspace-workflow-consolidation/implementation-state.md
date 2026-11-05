@@ -854,3 +854,38 @@ Final touched-lane command: dotnet test src/dotnet/tests/TraceMap.Tests -c Debug
 287 passed, 0 failed/skipped, 2m45s. Whitespace/private-path guards pass. Docs branch
 6629c3eec explains workspace-only recovery. Final pre-merge full Debug gate remains
 required; no full-suite/private-input success claim for this CLI-only head.
+
+### Persistent readable local lab — 2026-11-05
+
+Owner requested a complete inspectable folder after an input-size-limit refusal,
+without another private-machine diagnostic round. Added standalone standard-lib
+New-WorkspaceLocalLab.py wrapping the actual-launcher public replay. It creates
+source/dependency/publication inputs, one-root SQL/wizard/workspace configuration,
+completed reports and verified nonempty combined/native/SQL SQLite. It copies a
+frozen tool and readable PowerShell continuation, size-case, inspection and
+regeneration scripts, with a README linking actual files. Existing output roots
+are refused. Generated wizard absolute paths are explicitly not portable; the
+regeneration script takes an explicit checkout and new output root. No employer
+input, production code/budget change, SQL execution or private acceptance.
+
+Measured CLI boundaries: SQL file 262144 bytes passes; 262145 bytes refuses with
+input-size-limit. Four 262144-byte files (1048576 total) pass; five refuse with
+ddl-input-size-limit. SQL manifests pin exact builder SHA-256 and bounded public
+input SHA-256. Frozen tool continuation/verification passes. Generated PowerShell
+continuation, all four size cases and size inspector were run, not only parsed;
+all four scripts also passed PowerShell parser checks. Inspector uses Format-List
+so resolved paths cannot hide the important byte counts in narrow terminals.
+Private refusal cause is still unverified; no claim that changing a budget or
+folder will fix it. The ordinary route's measured limits differ from the separate
+selected-definition contract. Final wrapper/pack checks follow.
+
+Final pack checks passed: generated Continue-Wizard.ps1 -> workspace verify;
+Run-Size-Cases.ps1 -> all four expected outcomes; Inspect-SqlInputs.ps1 -> visible
+44-byte working file measurement; Rebuild-Public-Example.ps1 -> complete second
+public lab, configs, SQLite and size cases. All size-case manifest generator and
+bounded-input hashes were independently rechecked. Repeated lab setup refused
+the existing folder without replacement. Persistent owner lab is approximately
+96 MiB including its frozen 90 MiB tool copy; no private artifacts included.
+This change is a standard-library fixture/PowerShell-documentation lane only;
+production C# and its previous 287-case gate at 12eff6392 are unchanged. No PR or
+merge.

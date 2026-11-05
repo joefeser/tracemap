@@ -184,3 +184,7 @@ If SQL validation fails, the wizard prints the reason and offers
 locally, or pause. It does not require website repair or delete the old manifest.
 No failed evidence is promoted. The synthetic replay options `--stale-answers-first`
 and `--bad-manifest-first` exercise both recovery paths through completed SQLite.
+
+For a persistent folder containing all generated inputs, configs, a frozen tool,
+readable PowerShell scripts, completed SQLite outputs and measured size-limit
+cases, use [the complete local lab](WORKSPACE_LOCAL_LAB.md).
