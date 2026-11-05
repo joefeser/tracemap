@@ -557,3 +557,21 @@ implicit global scanner changes. New local CLI sidecar; full Debug gate required
   SQL compatibility workflow, and pinned both lane prerequisites with a test.
 - Final Python validation: 29 acceptance guards and 20 DNN harness guards pass;
   private-path and whitespace checks pass. No C# or runtime changes in this repair.
+
+## Scope preflight hardening — 2026-11-04 (validation in progress)
+
+Branch: codex/workspace-scope-preflight, independent of the owner-test docs branch.
+Workspace verify/collect now print local operational scope: selected/excluded
+repository IDs, explicit selection mode/paths/globs/target, and admitted native
+source-folder/page/publication/assembly/PDB/map selection. Root-name hints examine
+at most 257 immediate entries, omit the list above 256 and do not recurse or infer
+semantic compilation. Warnings do not rewrite scope. Obvious project/solution
+extension mismatches refuse before collection; the native contract retains its own
+admission rules. Existing schemas, budgets, scanner semantics and receipt rules
+are unchanged; no new derived machine artifact is introduced.
+
+Nine new pins failed against the original implementation as expected. Two additional
+bounds/nested-scope controls were then added. Initial workspace lane: 53 passed,
+0 failed. Final expanded lane, public rehearsal and exact-head full Debug gate
+are pending; do not treat this checkpoint as completed validation or merge readiness.
+No private inputs used. No PR or merge requested.

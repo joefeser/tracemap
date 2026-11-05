@@ -107,3 +107,44 @@ for the exact manifest, bounds, supported subset and known refusals.
 
 The SQL manifest can also use the separate [whole-batch selection input](SQL_DEFINITION_SELECTION.md)
 for larger original install templates; workspace records bind the original file hashes.
+
+## Scope preview before collection
+
+`workspace verify` and `workspace collect` print a local scope preview after input
+admission and before any collection stage. It lists repositories omitted by the
+ID filter, each selected root and selection mode, explicit project/solution paths,
+include/exclude globs and target framework. For native collection it shows the
+native source folders, page mode/list, publication root, primary/dependency DLLs,
+PDBs and maps. Native configuration remains the sole authority for web selection.
+
+A project selection requires `.csproj`, `.vbproj` or `.fsproj`; a solution selection
+requires `.sln` or `.slnx`. Putting a solution in `projects`, a project in `solution`,
+or an unrelated file in either field refuses with `WORKSPACE_SELECTION_FILE_KIND`
+before scanning. File-kind validation does not parse project contents or guarantee
+MSBuild loading. Native solution admission retains its own stricter contract.
+
+The preview also looks at **at most 257 immediate names** under each selected
+source root; it never recurses, reads project files or follows child links. At
+more than 256 entries it reports `WORKSPACE_ROOT_PREVIEW_LIMIT` and omits that
+root-name list rather than displaying an arbitrary subset. This preview does not
+measure nested scope or decide what constitutes the complete application.
+
+Other warnings are advisory and never change selection automatically:
+
+- `WORKSPACE_DISCOVERY_SELECTION`: multiple root project/solution names with
+  discovery selected; consider making project/solution selection explicit.
+- `WORKSPACE_WEBSITE_WITHOUT_ROOT_PROJECT`: web.config without an immediate project
+  name in discovery mode; possible projectless website or nested projects. This
+  does not establish projectless semantic compilation.
+- `WORKSPACE_PROJECTLESS_WITH_ROOT_PROJECT`: native projectless mode coexists with
+  immediate project names; confirm the intended application type.
+- `WORKSPACE_SOLUTION_SCOPE`: source solution selection does not establish coverage
+  of projects outside that solution.
+- `WORKSPACE_PAGE_SCOPE_IS_NOT_REPOSITORY_SCOPE`: native all/selected pages remain
+  within declared scope, not a complete repo or historical compiler-input closure.
+
+Review this output before collecting. Warnings are configuration diagnostics, not
+new evidence facts or a completeness verdict. The preview writes no new artifact;
+all paths remain local. Existing run records, receipt admission, source discovery,
+semantic fallback and failure/partial policies are unchanged. No automatic repair,
+project-type conversion or widening of configured scope occurs.

@@ -33,3 +33,11 @@
 - [ ] Complete a full real application/compiled/SQL trial (separate from the bounded DNN source/SQL trial).
 - [x] Complete milestone validation and reconcile getting-started/configuration guidance.
 - [x] Publish the bounded consolidation story #937 and PR #938; inspect review gates separately from full application parity.
+
+## Scope preflight hardening — 2026-11-04
+
+- [x] Pin wrong project/solution file kinds and missing scope visibility before implementation (nine intended failures).
+- [x] Add local selected/excluded repository and native source/page/assembly preview with root-only bounded hints; keep configuration authority unchanged.
+- [x] Reject obvious project/solution file-kind mismatches before collection; warnings do not silently expand or rewrite scope.
+- [ ] Complete focused workspace regression tests, public rehearsal and full Debug warnings-as-errors gate on the final code head.
+- [ ] Owner tests work configuration; no PR or merge until requested.

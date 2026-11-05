@@ -11,6 +11,20 @@ namespace TraceMap.Tests;
 public sealed class WorkspaceCompiledTests
 {
     [Fact]
+    public async Task Verify_displays_native_authority_and_partial_page_scope_before_collection()
+    {
+        using var fixture = new Fixture();
+        await fixture.Prepare();
+        Assert.Equal(0, await fixture.Run("verify"));
+        Assert.Contains("Scope web: mode=native-projectless", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("sourceFolders=", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("pageMode=selected", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("primaryAssemblies=", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("WORKSPACE_PAGE_SCOPE_IS_NOT_REPOSITORY_SCOPE", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(fixture.RunRoot));
+    }
+
+    [Fact]
     public async Task Prepared_native_fresh_scan_combines_with_framework_and_keeps_the_verified_bundle()
     {
         using var fixture = new Fixture();

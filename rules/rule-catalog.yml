@@ -10,6 +10,7 @@ rules:
     emits:
       - WorkspaceCompiledRun
     limitations:
+      - Operational scope previews are root-only and bounded, not complete project inventories or compiler-input proofs. Advisory warnings do not alter configured selection.
       - Opt-in workspace v2; native configuration owns web scope and must match the selected source root and commit. Primary metadata and publish receipt bindings are checked by existing Core policies before collection.
       - No implicit source correspondence attestation, config projection, application build, restore, fetch, database execution or retained-source attachment; dependencies can remain unbound context with explicit native gaps.
       - The native completed-run verifier pins checkpoint history, artifacts and runtime. Raw indexes and manifests are rechecked after combination and before completion; local integrity hashes are not authenticated build or runtime proof.
@@ -21,6 +22,7 @@ rules:
     emits:
       - WorkspaceRun
     limitations:
+      - Verify and collect print operational scope diagnostics; these do not prove application completeness. Selection file extensions are checked before scanning; project contents and nested membership are not evaluated by the preview.
       - Local-only configuration and input fingerprints; exact CLI assembly hash and bounded orchestration input map are recorded, not an authenticated build or a shareable projection.
       - Verification checks selected paths, projects and Git HEADs; scanner project evaluation, analysis gaps and source coverage limits remain unchanged.
       - Completion can be partial and does not prove runtime behavior, full extraction, compiled publication correspondence, SQL contracts or migration readiness.

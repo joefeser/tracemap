@@ -28,7 +28,8 @@ public static partial class WorkspaceCommand
         Edit workspace.local.json after init. Paths in the config resolve from its folder.
         Scope is a nonempty list of configured repository IDs, one per line (# comments allowed).
         --scope resolves from the current shell and overrides the configured scopeFile.
-        Verify is read-only. Collect runs source scans, combine and a report; optional Web Forms packet.
+        Verify is read-only and prints a local scope preview with configuration warnings.
+        Collect prints the same preview before source scans, combine and optional Web Forms packet.
         V2 can reference one prepared native fresh config through compiledReview; v1 stays source-only.
         V3 adds explicit offline sqlEvidence; SQL is a separate local sidecar, with no database connection.
         No implicit restore, repository build, fetch or attestation.
@@ -137,6 +138,7 @@ public static partial class WorkspaceCommand
             var compiledPlan = await VerifyCompiledAsync(config, root, prospective, repositories, inputs, token);
             var sqlPlan = VerifySql(config, root, prospective, repositories, inputs, token);
             await output.WriteLineAsync($"Selected {repositories.Count} source repositories. Compiled publication: {(compiledPlan is null ? "not configured" : "prepared native fresh inputs verified")}. SQL: {(sqlPlan is null ? "not configured" : "local offline definitions verified; no source-call binding")}.");
+            await WriteScopePreviewAsync(config, repositories, compiledPlan, output, token);
             if (operation == "verify") return 0;
 
             run = Full(options.GetValueOrDefault("--out")
@@ -386,6 +388,10 @@ public static partial class WorkspaceCommand
                 || repository.TargetFramework is not null && string.IsNullOrWhiteSpace(repository.TargetFramework))
                 throw new ArgumentException("WORKSPACE_REPOSITORY_INVALID: use unique lowercase IDs, a path and projects array; select projects or one solution.");
         }
+        foreach (var repository in config.Repositories)
+            if (repository.Projects.Any(path => !IsProject(path))
+                || repository.Solution is { } solution && !IsSolution(solution))
+                throw new ArgumentException($"WORKSPACE_SELECTION_FILE_KIND: {repository.Id}; projects requires .csproj/.vbproj/.fsproj; solution requires .sln/.slnx.");
         if (config.CompiledReview is { } review && !ids.Contains(review.RepositoryId))
             throw new ArgumentException("WORKSPACE_COMPILED_WEB_ID_UNKNOWN");
         if (config.SqlEvidence is { } sqlReview && !ids.Contains(sqlReview.RepositoryId))

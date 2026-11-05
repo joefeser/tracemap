@@ -154,6 +154,97 @@ public sealed class WorkspaceCommandTests
         Assert.False(File.Exists(Path.Combine(temp.Path, "workspace.local.json")));
     }
 
+    [Theory]
+    [InlineData("project", "settings.json")]
+    [InlineData("project", "Application.sln")]
+    [InlineData("solution", "Application.csproj")]
+    [InlineData("solution", "settings.json")]
+    public async Task Wrong_selection_file_kind_is_refused_before_scanning(string kind, string name)
+    {
+        using var temp = new TempDirectory();
+        var repo = Repository(temp.Path, "web");
+        File.WriteAllText(Path.Combine(repo, name), "not a selection of the declared kind");
+        var root = Configure(temp.Path, Configuration(new
+        {
+            id = "web", path = repo, projects = kind == "project" ? new[] { name } : [],
+            solution = kind == "solution" ? name : null
+        }));
+        using var error = new StringWriter();
+        var calls = 0;
+        Task<int> Never(string[] args, TextWriter stdout, TextWriter stderr, CancellationToken token)
+        { calls++; return Task.FromResult(0); }
+        Assert.Equal(1, await WorkspaceCommand.RunAsync(["collect", "--root", root,
+            "--out", Path.Combine(temp.Path, "run")], TextWriter.Null, error, Never));
+        Assert.Contains("WORKSPACE_SELECTION_FILE_KIND", error.ToString(), StringComparison.Ordinal);
+        Assert.Equal(0, calls);
+        Assert.False(Directory.Exists(Path.Combine(temp.Path, "run")));
+    }
+
+    [Theory]
+    [InlineData("Application.csproj", "projects")]
+    [InlineData("Application.vbproj", "projects")]
+    [InlineData("Application.sln", "solution")]
+    public async Task Verify_explains_explicit_selection_and_displays_exclusions(string name, string mode)
+    {
+        using var temp = new TempDirectory();
+        var repo = Repository(temp.Path, "web");
+        File.WriteAllText(Path.Combine(repo, name), "selection is not evaluated during verification");
+        var root = Configure(temp.Path, Configuration(new
+        {
+            id = "web", path = repo, projects = mode == "projects" ? new[] { name } : [],
+            solution = mode == "solution" ? name : null, exclude = new[] { "generated/**" }
+        }, new { id = "framework", path = "../not-present", projects = Array.Empty<string>() }));
+        var scope = Path.Combine(root, "scope.txt"); File.WriteAllText(scope, "web\n");
+        using var output = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["workspace", "verify", "--root", root,
+            "--scope", scope], output, TextWriter.Null));
+        Assert.Contains("Scope web: mode=" + mode, output.ToString(), StringComparison.Ordinal);
+        Assert.Contains(name, output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("generated/**", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Excluded repositories: [\"framework\"]", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("selection is not a coverage proof", output.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Discovery_preview_does_not_claim_projectless_compilation_or_nested_inventory()
+    {
+        using var temp = new TempDirectory();
+        var repo = Repository(temp.Path, "web");
+        var root = Configure(temp.Path, Configuration(new { id = "web", path = repo, projects = Array.Empty<string>() }));
+        using var output = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["workspace", "verify", "--root", root], output, TextWriter.Null));
+        Assert.Contains("Scope web: mode=discovery", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("WORKSPACE_WEBSITE_WITHOUT_ROOT_PROJECT", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("root-only", output.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("mode=projectless", output.ToString(), StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Path.Combine(root, "sources")));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Root_name_preview_is_bounded_and_never_discovers_nested_projects(bool overLimit)
+    {
+        using var temp = new TempDirectory();
+        var repo = Repository(temp.Path, "web");
+        Directory.CreateDirectory(Path.Combine(repo, "nested"));
+        File.WriteAllText(Path.Combine(repo, "nested", "Hidden.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(repo, "First.csproj"), "<Project />");
+        File.WriteAllText(Path.Combine(repo, "Second.vbproj"), "<Project />");
+        if (overLimit)
+            for (var index = 0; index < 260; index++) File.WriteAllText(Path.Combine(repo, $"item-{index}.txt"), "");
+        var root = Configure(temp.Path, Configuration(new { id = "web", path = repo, projects = Array.Empty<string>() }));
+        using var output = new StringWriter();
+        Assert.Equal(0, await TraceMapCommand.RunAsync(["workspace", "verify", "--root", root], output, TextWriter.Null));
+        Assert.DoesNotContain("Hidden.csproj", output.ToString(), StringComparison.Ordinal);
+        if (overLimit)
+        {
+            Assert.Contains("WORKSPACE_ROOT_PREVIEW_LIMIT", output.ToString(), StringComparison.Ordinal);
+            Assert.DoesNotContain("First.csproj", output.ToString(), StringComparison.Ordinal);
+        }
+        else Assert.Contains("WORKSPACE_DISCOVERY_SELECTION", output.ToString(), StringComparison.Ordinal);
+    }
+
     private static Task<int> Run(string operation, string root, params string[] options) =>
         TraceMapCommand.RunAsync(["workspace", operation, "--root", root, .. options], TextWriter.Null, TextWriter.Null);
 
