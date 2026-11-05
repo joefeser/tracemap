@@ -534,3 +534,16 @@ implicit global scanner changes. New local CLI sidecar; full Debug gate required
   retained machine-specific home/checkout paths. Replaced evidence locations
   with home-relative references and executable examples with checkout-relative
   paths; local private-path guard passes. No implementation/runtime change.
+
+## PR #938 acceptance history pin repair
+
+- CI public-static-validation failed before native SQL gates because the public
+  acceptance script still required an ancestor from before the history rewrite.
+- Matched the original Phase 6 step 6.7 commit by subject and timestamp to its
+  sanitized reachable counterpart 34a7418d84a0e050745d33eb16e0592a7699cd17.
+  Updated only the acceptance parent; ancestry and exact committed-byte checks
+  remain enforced. Historical evidence documents retain their original identities.
+- Added a regression requiring the configured parent to be an ancestor of HEAD,
+  which catches stale local-only objects even when cat-file can still read them.
+- All 28 public acceptance Python guards pass; private-path and whitespace guards
+  pass. Replay the actual native compatibility command from this clean commit.

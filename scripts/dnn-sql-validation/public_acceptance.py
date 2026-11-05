@@ -15,7 +15,9 @@ import tempfile
 from contextlib import contextmanager
 
 ROOT = Path(__file__).resolve().parents[2]
-PARENT = '6aa8c40e975b9277418aa3bc4b561073887c7f3e'
+# Corresponding Phase 6 validation commit in the sanitized, rewritten history.
+# Keep this reachable: CI has only the history reachable from its checkout.
+PARENT = '34a7418d84a0e050745d33eb16e0592a7699cd17'
 M, X, U = 'bounded-match', 'mismatch', 'unknown'
 GATES = {
     'parameter': ('parameter', 'sqlserver-parameter-smoke/1', 52, (8, 12, 32), 0),

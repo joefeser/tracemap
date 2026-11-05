@@ -16,6 +16,11 @@ SPEC.loader.exec_module(A)
 
 class PublicAcceptanceTests(unittest.TestCase):
     """Small verifier unit tests; real reconstruction is covered separately below."""
+    def test_acceptance_parent_is_reachable_from_current_history(self):
+        # Object existence alone misses obsolete commits left locally after a
+        # rewrite: full-history CI checkouts contain only reachable ancestors.
+        A.command('git', 'merge-base', '--is-ancestor', A.PARENT, 'HEAD')
+
     def setUp(self):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
