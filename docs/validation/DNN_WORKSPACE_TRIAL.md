@@ -70,7 +70,7 @@ version label was treated as an exact-source attestation here.
 
 ## Retained local evidence
 
-Trial root: `/Users/josephfeser/tracemap-reviews/dnn-trial-01/`.
+Trial root: `~/tracemap-reviews/dnn-trial-01/`.
 
 - `START-HERE.md`: trial outcome and links to each result.
 - `workspace/runs/source-only/`: source workspace record, raw index, combined
@@ -98,7 +98,7 @@ values are hypothetical settings, not a DNN deployment claim. The prior no-setti
 refusals above remain expected on the original input route.
 
 Fresh V3 run:
-`/Users/josephfeser/tracemap-reviews/dnn-selection-trial-03/runs/first/START-HERE.md`.
+`~/tracemap-reviews/dnn-selection-trial-03/runs/first/START-HERE.md`.
 
 | Check | Actual follow-up result |
 | --- | --- |
@@ -132,7 +132,7 @@ five selected wrapper shapes from the pinned public files. It does not modify
 previous scan/SQL indexes or promote their missing reader terminal.
 
 Final local report:
-`/Users/josephfeser/tracemap-reviews/dnn-binding-trial-02/collected/report.md`.
+`~/tracemap-reviews/dnn-binding-trial-02/collected/report.md`.
 
 | Observation | Original source evidence |
 | --- | --- |

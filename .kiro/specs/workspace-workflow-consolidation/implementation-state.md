@@ -45,7 +45,7 @@ equivalent or retiring wrappers.
   full two-repository collection and one-repository filtered collection. Both
   correctly remain partial because the fixtures have syntax-only source.
 - Private local replay:
-  `/Users/josephfeser/.local/share/tracemap-workflow-trials/20261103-launcher-replay-01/`.
+  `~/.local/share/tracemap-workflow-trials/20261103-launcher-replay-01/`.
 - Full Debug `dotnet test src/dotnet/TraceMap.sln -c Debug -warnaserror` passed:
   **5,839 passed, 3 skipped, 0 failed**, duration 39m49s, exit 0. Includes the 14
   new workspace cases. Log: `/tmp/tracemap-workspace-full-suite.log`.
@@ -172,7 +172,7 @@ a separate follow-up; owner synthetic execution is complete.
   Log `/tmp/tracemap-workspace-sql-full-suite.log`.
 - Release launcher published successfully. Actual `-WithSql` trial ran from
   upgrade-authority cwd at
-  `/Users/josephfeser/.local/share/tracemap-workflow-trials/20261104-sql-replay-01/`.
+  `~/.local/share/tracemap-workflow-trials/20261104-sql-replay-01/`.
   Both two-repository and web-only runs completed partial. SQL readback: four
   objects, three parameters, three result shapes, two references, eight gaps;
   ReadItems has Label,Id; filtered/dynamic procedures stay unknown. All SQL output
@@ -201,7 +201,7 @@ a separate follow-up; owner synthetic execution is complete.
   native HTTP receipt interop and Windows ASP.NET publication acceptance; these
   are not established by the managed synthetic trial.
 - Owner SQL trial PASSED on 2026-11-04, launched from upgrade-authority:
-  `/Users/josephfeser/tracemap-reviews/sql-trial-01`. Both first (two sources,
+  `~/tracemap-reviews/sql-trial-01`. Both first (two sources,
   190 combined facts) and web-only (one source, 172 combined facts) reached
   stage completed with partial coverage. Read back both V3 run records and SQL
   SQLite indexes; all three SQL artifact hashes matched each run record. Each
@@ -235,7 +235,7 @@ for this bounded public trial; no private application paths are needed.
 
 - Used retained pin 33b8fbe440ab665b8423599789db1f34d2a500fc via the existing
   public_slice.py helper. No full DNN project evaluation/build or runtime.
-- Actual trial root `/Users/josephfeser/tracemap-reviews/dnn-trial-01/`.
+- Actual trial root `~/tracemap-reviews/dnn-trial-01/`.
   Source workspace collection completed partial: 6,031 facts, Level3SyntaxAnalysis,
   build NotRun. The unchanged independent DNN check passed twice (initial and
   retained-source recheck). Three incidental Tier3 ExecuteNonQuery candidates;
@@ -292,7 +292,7 @@ Preserve v1 local and all public-synthetic contracts; full Debug gate required.
   passed 41/41; broad retained SQL/local/DNN/workspace selection lane passed
   475/475; Debug/Release builds passed with zero warnings/errors.
 - Actual Release DNN selection trial at
-  `/Users/josephfeser/tracemap-reviews/dnn-selection-trial-01` passed V3 verify and
+  `~/tracemap-reviews/dnn-selection-trial-01` passed V3 verify and
   fresh collect. Reused the original pinned public source bytes from dnn-trial-01;
   one fresh source scan exercised the new selection route. Source 6031 facts,
   syntax-only/NotRun; independent source validator passed. SQL SQLite readback
@@ -340,7 +340,7 @@ Preserve v1 local and all public-synthetic contracts; full Debug gate required.
   the new original input bound now has a quote-aware depth guard at 128 before
   lexing. Six regressions include 100000-depth rejection and escaped quoted text.
 - Final Release runtime published. Fresh actual DNN run now at
-  `/Users/josephfeser/tracemap-reviews/dnn-selection-trial-02/runs/first/` completed
+  `~/tracemap-reviews/dnn-selection-trial-02/runs/first/` completed
   partial with 6031 source facts and explicit SQL selection. Trial 01 is retained
   as pre-depth-fix evidence, not the final runtime receipt.
 - Final public v2 corpus PASSED five cases at
@@ -381,7 +381,7 @@ Preserve v1 local and all public-synthetic contracts; full Debug gate required.
   C# and runtime bytes stayed frozen throughout this final gate. Earlier sessions 88134 and 41221 were interrupted for
   comment-depth and CR-only line-format fixes; no final pass claimed for those.
 - Final focused lane 76/76 passed. Final Release published. Final DNN selection
-  trial is now `/Users/josephfeser/tracemap-reviews/dnn-selection-trial-03/runs/first`:
+  trial is now `~/tracemap-reviews/dnn-selection-trial-03/runs/first`:
   V3 verify/collect completed partial, source 6031 facts; final public v2 corpus
   PASSED five cases at `/tmp/tracemap-sql-selection-public-corpus-03`, log
   `/tmp/tracemap-sql-selection-public-corpus-complete.log`.
@@ -459,7 +459,7 @@ implicit global scanner changes. New local CLI sidecar; full Debug gate required
   files and overlap refusal. Focused new/local/selection/workspace/DNN lane PASSED
   109/109 with zero warnings/errors. Earlier 25-case lane passed; final adds four.
 - Final Release published. Real DNN trial02 completed at
-  `/Users/josephfeser/tracemap-reviews/dnn-binding-trial-02/collected/`.
+  `~/tracemap-reviews/dnn-binding-trial-02/collected/`.
   All five profile shapes supported at original lines 1917,72,51,143,18; one
   conditional portalId -> @PortalID ordinal-zero row, nine gaps. Embedded SQL
   evidence digest, five observation/one parameter SQLite counts and commit flag
@@ -529,3 +529,8 @@ implicit global scanner changes. New local CLI sidecar; full Debug gate required
   story #937. Publication is complete; review/CI readiness remains pending a live
   ACK gate. No merge performed. PR-loop receipts live under the ignored local
   `.agent-control/pr-loop-handoffs/` path to avoid review-only commit churn.
+
+- Initial PR gate failed the private-path guard because tracked documentation
+  retained machine-specific home/checkout paths. Replaced evidence locations
+  with home-relative references and executable examples with checkout-relative
+  paths; local private-path guard passes. No implementation/runtime change.

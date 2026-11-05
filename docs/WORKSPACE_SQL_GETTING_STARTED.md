@@ -5,12 +5,12 @@ compiles their managed assemblies, prepares the native correspondence receipts,
 and adds authored SQL definitions. It never connects to SQL Server or executes
 SQL. The managed fixture is not an IIS/Windows ASP.NET publication test.
 
-From macOS **zsh**, prepare the launcher once, then run the trial using a fresh
+From the TraceMap checkout in macOS **zsh**, prepare the launcher once, then run the trial using a fresh
 output folder. These are single-line shell commands:
 
 ```sh
-pwsh -NoProfile -File /Users/josephfeser/src/gh-joe/tracemap/scripts/tm.ps1 -Build version
-pwsh -NoProfile -File /Users/josephfeser/src/gh-joe/tracemap/scripts/tests/Test-WorkspaceLauncher.ps1 -WithSql -OutputRoot "$HOME/tracemap-reviews/sql-trial-01"
+pwsh -NoProfile -File ./scripts/tm.ps1 -Build version
+pwsh -NoProfile -File ./scripts/tests/Test-WorkspaceLauncher.ps1 -WithSql -OutputRoot "$HOME/tracemap-reviews/sql-trial-01"
 ```
 
 Open `~/tracemap-reviews/sql-trial-01/workspace/runs/first/START-HERE.md`.
