@@ -1381,3 +1381,20 @@ rescans, conversion generation or runtime/database execution. Explicit NOT VERIF
 for missing context/tooling/guard; preserve original inputs and private diagnostics.
 This public change is a prompt and task/state notes only. No application code
 changed or compile result asserted. Validation: diff check and private-path guard.
+
+### Compile-harness imports follow-up — 2026-11-05
+
+Owner supplied a private photographed report of a bounded standalone compiler
+failure attributed to missing web-build global imports; diagnostic prefix reached
+the error limit. No compile success or absence of method defects is established.
+Added `prompts/repair-v46-compile-harness-imports-once.md` under fresh authorization
+for one later work-machine attempt. Recover applicable imports from actual local
+configuration/retained command (not guessed namespace lists or indiscriminate
+page-import copying), modify a new isolated response file, verify actual annotated
+method inclusion, compile once under the existing guard, and require exit/output
+proof. Keep old attempt and all original inputs; no source/scanner/config changes,
+rescan, conversion rewrite or runtime/database execution. Prior prompt links to
+this separate follow-up instead of encouraging replay of consumed instructions.
+Public changes are docs/prompts only; no private content included. Validation:
+private-path guard, diff check, and prompt boundary/link checks; no code tests
+needed or new application validation claimed.

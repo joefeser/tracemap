@@ -151,3 +151,7 @@
 ## Existing annotated conversion compile handoff — 2026-11-05
 
 - [x] Add separate bounded prompt to inspect the existing v46-final artifact and attempt one isolated compile with authentic dependencies, preserving inputs and stopping on missing context without rescans, fabricated stubs or conversion rewrites.
+
+## Evidence-backed compiler harness repair handoff — 2026-11-05
+
+- [x] Add fresh one-attempt dispatch to recover authentic VB global imports, change only an isolated response-file harness, verify annotated-method inclusion and fresh compiler output, retain prior failure and stop without rescans or source fixes.

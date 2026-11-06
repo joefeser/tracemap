@@ -35,3 +35,8 @@ Return:
 - Existing opaque-wrapper TODOs remain unresolved; no runtime/database execution performed.
 
 If compile prerequisites are missing, identify the smallest concrete next action for owner review, not a request to restart scanning. Do not implement it in this dispatch. Stop after the report.
+
+If this dispatch has already finished with the missing-global-imports harness
+failure, do not rerun it. The separately owner-authorized next dispatch is
+`prompts/repair-v46-compile-harness-imports-once.md`; it retains the old failure
+and permits one new attempt after an evidence-backed harness-only repair.
