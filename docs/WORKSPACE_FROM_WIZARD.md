@@ -293,3 +293,26 @@ This guidance changes neither evidence schemas nor coverage semantics. Partial
 coverage remains partial, and source, metadata, lifecycle and SQL observations do
 not become runtime or source-to-DLL proof by appearing in one workflow. Collection
 completion is not a request to rescan merely because gaps exist.
+
+### New project/solution path validation
+
+The CLI `--framework-target` and `workspace add-source --target` values must be
+repository-relative project/solution paths, or the explicit `discovery` choice.
+Absolute paths (including Windows drive and UNC forms), drive-relative paths such
+as `C:Library.csproj`, and any `..` path component are rejected. This includes
+`child/../Library.csproj`, even though normalization could stay inside the repo.
+Both slash styles are recognized; a valid new selection is saved with forward
+slashes. Dots inside a filename such as `Library..v2.csproj` are not parent traversal.
+
+The interactive wizard also rejects parent components and retains earlier answers
+while repeating only the project question. It still accepts a pasted absolute
+file path INSIDE the chosen source folder, then converts it to a relative selection
+before invoking the CLI. Missing files, outside-root paths and wrong file types
+remain refusals. These checks validate selection containment and syntax, not
+project build success or source-to-DLL correspondence.
+
+Existing saved workspace configurations are not rewritten or migrated. Their
+existing resolved-containment validation remains in force, including rejection
+of project/solution files outside their configured source root. Strict syntax
+applies when accepting NEW selections; historical inside-root paths do not force
+a working setup to be recreated.

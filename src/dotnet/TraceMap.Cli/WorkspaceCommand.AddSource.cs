@@ -49,8 +49,7 @@ public static partial class WorkspaceCommand
         if (!source.Equals(repositoryRoot, PathComparison))
             throw new ArgumentException("WORKSPACE_SOURCE_REPOSITORY_ROOT_REQUIRED: use " + repositoryRoot
                 + " with a repository-relative project/solution target; bin/publication subfolders do not select the framework source repository.");
-        var target = options["--target"].Replace('\\', '/');
-        if (Path.IsPathRooted(target)) throw new ArgumentException("WORKSPACE_SELECTION_RELATIVE_PATH_REQUIRED");
+        var target = ValidateNewSelectionPath(options["--target"]);
         var added = target == "discovery" ? new WorkspaceRepository(id, source, [])
             : IsProject(target) ? new WorkspaceRepository(id, source, [target])
             : IsSolution(target) ? new WorkspaceRepository(id, source, [], Solution: target)

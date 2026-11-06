@@ -1545,3 +1545,25 @@ fix is claimed. Python harness syntax, diff check and private-path guard passed.
 Closing changes are task/state notes only, with no src/dotnet or scripts delta
 from the tested application head. No PR/merge, private rescan or WITS/C#-app
 execution. Next owner continuation can use the new guidance with existing setup.
+
+### Strict new selection paths — 2026-11-06
+
+Owner agreed it is worth making new project/solution paths match the documented
+relative-path contract. Added one shared CLI validator for init-from-wizard and
+add-source: absolute/drive-relative/UNC forms and literal '..' components refuse
+before target admission, with normalized slash styles and actionable errors.
+Interactive selection keeps inside-root absolute-file convenience by canonicalizing
+to a relative path, but rejects parent components before normalization and retains
+previous answers. Existing saved configurations retain containment admission and
+are not migrated; escaping selections still refuse. No source/DLL identity claim.
+Tests pin prospective strictness and legacy behavior. Focused/full gates and replay
+remain pending; no Core, schema, SQL or ACK change.
+
+Focused Debug -warnaserror: 69/69 FromWizard/AddSource/Wizard tests passed,
+then the expanded AddSource lane passed 21/21 including legacy compatibility,
+normalized nested separators and dotted filenames. Public initial-source replay
+passed after rejecting a parent-containing target then accepting sole-project
+Enter, with rich UTF16 SQL/context repair and channel integrity checks. One replay
+assertion was initially placed before its local output variable was assigned;
+corrected the script ordering and retained the failed fresh replay. No product
+validation was weakened. Final committed late-add replay and full gate pending.

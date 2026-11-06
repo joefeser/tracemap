@@ -71,7 +71,7 @@ public static partial class WorkspaceCommand
             var frameworkRoot = Full(frameworkPath);
             Unlinked(frameworkRoot);
             if (!Directory.Exists(frameworkRoot)) throw new ArgumentException("WORKSPACE_REPOSITORY_MISSING: framework");
-            var target = options["--framework-target"];
+            var target = ValidateNewSelectionPath(options["--framework-target"]);
             framework = target == "discovery" ? new WorkspaceRepository("framework", frameworkRoot, [])
                 : IsProject(target) ? new WorkspaceRepository("framework", frameworkRoot, [target])
                 : IsSolution(target) ? new WorkspaceRepository("framework", frameworkRoot, [], Solution: target)

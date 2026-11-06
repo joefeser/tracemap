@@ -162,9 +162,11 @@ def main():
             sql_file.unlink()
             sql_file.parent.rmdir()
             (root / "sql.local.json").unlink()
-    source_answers = [str(dependency), ""] if args.with_source else ["skip"]
-    tool("wizard-pause-before-sql", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
+    source_answers = [str(dependency), "child/../Dependency.csproj", ""] if args.with_source else ["skip"]
+    selection_output = tool("wizard-pause-before-sql", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
          "\n".join(["workspace", *source_answers, "later", ""]), expected=2)
+    if args.with_source and "Do not use '..'" not in selection_output:
+        raise RuntimeError("Wizard did not reject parent components before accepting the unique project")
     if (workspace / "workspace.local.json").exists():
         raise RuntimeError("Paused SQL setup unexpectedly created a workspace")
     if args.stale_answers_first:
@@ -274,10 +276,14 @@ def main():
         original_answers = answers_path.read_bytes()
         original_sql = (sql / "schema.sql").read_bytes()
         extension = tool("wizard-add-framework-source", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
-                         "\n".join(["workspace", "add-framework", str(dependency), "Dependency.csproj", "add", "collect", ""]))
+                         "\n".join(["workspace", "add-framework", str(dependency), "child/../Dependency.csproj", str(dependency / "Dependency.csproj"), "add", "collect", ""]))
         updated_config = json.loads(config_path.read_text())
+        if "Do not use '..'" not in extension:
+            raise RuntimeError("Existing wizard did not reject parent components")
         if len(updated_config["repositories"]) != 2 or "Configured SOURCE repositories: 2" not in extension:
             raise RuntimeError("Framework source was not added to active configuration")
+        if updated_config["repositories"][1]["projects"] != ["Dependency.csproj"]:
+            raise RuntimeError("Wizard did not save the inside absolute input as relative")
         for key in ("compiledReview", "sqlEvidence", "webFormsReport"):
             if updated_config.get(key) != original_config_value.get(key): raise RuntimeError("Existing channel choice changed: " + key)
         if answers_path.read_bytes() != original_answers or (sql / "schema.sql").read_bytes() != original_sql:

@@ -68,6 +68,13 @@ public sealed class WorkspaceFromWizardTests
     [InlineData("sql-hash")]
     [InlineData("sql-context")]
     [InlineData("framework-missing")]
+    [InlineData("absolute-inside")]
+    [InlineData("windows-absolute")]
+    [InlineData("windows-drive-relative")]
+    [InlineData("unc-target")]
+    [InlineData("parent-inside")]
+    [InlineData("parent-backslash")]
+    [InlineData("parent-escape")]
     [InlineData("target-kind")]
     [InlineData("missing-option")]
     [InlineData("inside-source")]
@@ -90,6 +97,13 @@ public sealed class WorkspaceFromWizardTests
                 var sql = JsonNode.Parse(File.ReadAllText(fixture.Manifest))!;
                 sql["contextCommitSha"] = new string('f', 40);
                 File.WriteAllText(fixture.Manifest, sql.ToJsonString()); break;
+            case "absolute-inside": args[Array.IndexOf(args, "--framework-target") + 1] = Path.Combine(fixture.Framework, "Framework.csproj"); break;
+            case "windows-absolute": args[Array.IndexOf(args, "--framework-target") + 1] = "C:/other/src/Library.csproj"; break;
+            case "windows-drive-relative": args[Array.IndexOf(args, "--framework-target") + 1] = "C:Library.csproj"; break;
+            case "unc-target": args[Array.IndexOf(args, "--framework-target") + 1] = @"\\server\share\Library.csproj"; break;
+            case "parent-inside": args[Array.IndexOf(args, "--framework-target") + 1] = "child/../Framework.csproj"; break;
+            case "parent-backslash": args[Array.IndexOf(args, "--framework-target") + 1] = @"child\..\Library.csproj"; break;
+            case "parent-escape": args[Array.IndexOf(args, "--framework-target") + 1] = "../../Library.csproj"; break;
             case "framework-missing": args[Array.IndexOf(args, "--framework-repo") + 1] += "-absent"; break;
             case "target-kind": args[Array.IndexOf(args, "--framework-target") + 1] = "README.md"; break;
             case "missing-option": args = args[..^2]; break;
@@ -108,6 +122,8 @@ public sealed class WorkspaceFromWizardTests
             "prepared-scope" => "WORKSPACE_WIZARD_PREPARED_SCOPE_MISMATCH",
             "sql-hash" => "sql-local-source-digest-mismatch",
             "sql-context" => "WORKSPACE_SQL_APPLICATION_CONTEXT_MISMATCH",
+            "absolute-inside" or "windows-absolute" or "windows-drive-relative" or "unc-target" => "WORKSPACE_SELECTION_RELATIVE_PATH_REQUIRED",
+            "parent-inside" or "parent-backslash" or "parent-escape" => "WORKSPACE_SELECTION_PARENT_SEGMENT_UNSUPPORTED",
             "framework-missing" => "WORKSPACE_REPOSITORY_MISSING",
             "target-kind" => "WORKSPACE_SELECTION_FILE_KIND",
             "missing-option" => "WORKSPACE_SETUP_OPTION_REQUIRED",

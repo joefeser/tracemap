@@ -81,11 +81,13 @@ internal static class WebFormsWizardWorkspace
                         if (selectedTarget is null || selectedTarget.Trim() == "later") return 2;
                         target = Unquote(selectedTarget);
                         if (target.Length == 0 && detected is not null) target = detected;
+                        if (WorkspaceCommand.HasParentSegment(target))
+                        { await output.WriteLineAsync("Do not use '..' in the project path. Select a file inside the source folder; earlier choices are retained."); continue; }
                         if (target != "discovery")
                         {
                             var full = WebFormsWizardStore.Physical(Path.GetFullPath(target.Replace('\\', '/'), folder));
                             var relative = Path.GetRelativePath(folder, full);
-                            if (!File.Exists(full) || !Supported(full) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                            if (!File.Exists(full) || !Supported(full) || Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
                             { await output.WriteLineAsync("Select an existing supported project/solution inside the framework source folder. Folder and earlier choices are retained."); continue; }
                             target = relative.Replace('\\', '/');
                         }
@@ -178,6 +180,8 @@ internal static class WebFormsWizardWorkspace
                     if (value is null || value.Trim() == "later") return 2;
                     value = Unquote(value);
                     if (value.Length == 0 && detected is not null) value = detected;
+                    if (WorkspaceCommand.HasParentSegment(value))
+                    { await output.WriteLineAsync("Do not use '..' in the project path. Select a file inside the source folder; earlier choices are retained."); continue; }
                     if (value == "discovery") { answers = answers with { FrameworkTarget = value }; break; }
                     if (int.TryParse(value, out var number))
                     {

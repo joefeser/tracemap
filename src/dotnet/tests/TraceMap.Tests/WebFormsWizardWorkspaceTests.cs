@@ -7,6 +7,19 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsWizardWorkspaceTests
 {
+    [Fact]
+    public async Task Interactive_selection_rejects_parent_segments_then_canonicalizes_an_inside_absolute_file()
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture(); await fixture.Prepare();
+        var target = Path.Combine(fixture.Framework, "Framework.csproj");
+        using var input = new StringReader($"workspace\n{fixture.Framework}\nchild/../Framework.csproj\n{target}\n{fixture.Manifest}\n{fixture.SqlRoot}\ncreate\nlater\n");
+        Assert.True(await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error) == 0,
+            fixture.Error.ToString() + fixture.Output);
+        var config = JsonNode.Parse(File.ReadAllText(Path.Combine(fixture.WizardRoot, "workspace.local.json")))!;
+        Assert.Equal("Framework.csproj", config["repositories"]![1]!["projects"]![0]!.GetValue<string>());
+        Assert.Contains("Do not use '..'", fixture.Output.ToString());
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

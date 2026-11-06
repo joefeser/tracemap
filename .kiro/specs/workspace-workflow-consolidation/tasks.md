@@ -184,3 +184,9 @@
 - [x] Show planned/active source entries, skipped framework source, projectless-folder scope and collect's built-in verification.
 - [x] Explain source/native/SQL outputs and separate retained selected-root lifecycle evidence in the result guide and collection completion output.
 - [x] Complete focused tests, initial-source and late-add public replays, full required Debug gate, docs/guard checks and branch push without PR/merge.
+
+## Strict new project/solution selection paths — 2026-11-06
+
+- [x] Share portable absolute/drive/UNC and parent-segment rejection across both new-selection CLI routes; retain relative wizard normalization and previous answers on retry.
+- [x] Cover inside-normalizing traversal, outside paths, slash styles, valid dotted filenames and legacy containment/preservation behavior.
+- [ ] Finish focused/full validation, public replay, rule/docs checks and push without PR/merge.

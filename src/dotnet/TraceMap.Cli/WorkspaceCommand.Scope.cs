@@ -60,6 +60,21 @@ public static partial class WorkspaceCommand
         await output.WriteLineAsync($"SQL context: {Show(configuration.SqlEvidence?.RepositoryId)}; compiled context: {Show(configuration.CompiledReview?.RepositoryId)}; no automatic source/compiled/SQL call binding.");
     }
 
+    // New selections have a portable relative-path contract. Older saved
+    // configurations retain the existing resolved-containment admission checks.
+    private static string ValidateNewSelectionPath(string path)
+    {
+        var relative = path.Replace('\\', '/');
+        if (Path.IsPathRooted(path) || relative.StartsWith('/')
+            || relative.Length >= 2 && char.IsAsciiLetter(relative[0]) && relative[1] == ':')
+            throw new ArgumentException("WORKSPACE_SELECTION_RELATIVE_PATH_REQUIRED: use a project/solution path relative to the source repository, not an absolute or drive-relative path.");
+        if (HasParentSegment(relative))
+            throw new ArgumentException("WORKSPACE_SELECTION_PARENT_SEGMENT_UNSUPPORTED: '..' is not allowed in a new project/solution selection; select a file inside the source repository.");
+        return relative;
+    }
+
+    internal static bool HasParentSegment(string path) => path.Replace('\\', '/').Split('/').Contains("..", StringComparer.Ordinal);
+
     private static string Show<T>(T value) => JsonSerializer.Serialize(value);
     private static bool IsProject(string path) => Path.GetExtension(path).ToLowerInvariant() is ".csproj" or ".vbproj" or ".fsproj";
     private static bool IsSolution(string path) => Path.GetExtension(path).ToLowerInvariant() is ".sln" or ".slnx";

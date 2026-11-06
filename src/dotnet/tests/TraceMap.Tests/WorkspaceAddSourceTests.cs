@@ -7,6 +7,39 @@ namespace TraceMap.Tests;
 public sealed class WorkspaceAddSourceTests
 {
     [Fact]
+    public async Task New_nested_selection_normalizes_separators_and_allows_dots_inside_a_filename()
+    {
+        using var fixture = new SourceFixture();
+        Directory.CreateDirectory(Path.Combine(fixture.Framework, "src"));
+        File.WriteAllText(Path.Combine(fixture.Framework, "src", "Library..v2.csproj"), "<Project />");
+        var args = fixture.Args; args[Array.IndexOf(args, "--target") + 1] = @"src\Library..v2.csproj";
+        Assert.True(await WorkspaceCommand.RunAsync(args, fixture.Output, fixture.Error) == 0, fixture.Error.ToString());
+        var config = JsonNode.Parse(File.ReadAllText(fixture.Config))!;
+        Assert.Equal("src/Library..v2.csproj", config["repositories"]![1]!["projects"]![0]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("absolute-inside", true)]
+    [InlineData("parent-inside", true)]
+    [InlineData("outside", false)]
+    public async Task Legacy_saved_selection_keeps_containment_admission_without_rewriting(string kind, bool accepted)
+    {
+        using var fixture = new SourceFixture();
+        var project = Path.Combine(fixture.Web, "Web.csproj"); File.WriteAllText(project, "<Project />");
+        var config = JsonNode.Parse(File.ReadAllText(fixture.Config))!;
+        config["repositories"]![0]!["projects"] = new JsonArray(kind switch
+        {
+            "absolute-inside" => project,
+            "parent-inside" => "child/../Web.csproj",
+            _ => Path.Combine(fixture.Framework, "Library.csproj")
+        });
+        File.WriteAllText(fixture.Config, config.ToJsonString()); var before = File.ReadAllBytes(fixture.Config);
+        Assert.Equal(accepted ? 0 : 1, await WorkspaceCommand.RunAsync(["verify", "--root", fixture.Root], fixture.Output, fixture.Error));
+        Assert.Equal(before, File.ReadAllBytes(fixture.Config));
+        if (!accepted) Assert.Contains("WORKSPACE_PROJECT_MISSING_OR_OUTSIDE_REPOSITORY", fixture.Error.ToString());
+    }
+
+    [Fact]
     public async Task Add_source_preserves_v3_channels_and_completed_run_without_revalidating_or_scanning_them()
     {
         using var fixture = new WorkspaceFromWizardTests.Fixture(); await fixture.Prepare();
@@ -59,6 +92,13 @@ public sealed class WorkspaceAddSourceTests
     [InlineData("duplicate-id")]
     [InlineData("duplicate-root")]
     [InlineData("outside-target")]
+    [InlineData("absolute-inside")]
+    [InlineData("windows-absolute")]
+    [InlineData("windows-drive-relative")]
+    [InlineData("unc-target")]
+    [InlineData("parent-inside")]
+    [InlineData("parent-backslash")]
+    [InlineData("parent-escape")]
     [InlineData("missing-target")]
     [InlineData("wrong-kind")]
     [InlineData("non-git")]
@@ -70,6 +110,13 @@ public sealed class WorkspaceAddSourceTests
         {
             case "duplicate-id": args[Array.IndexOf(args, "--id") + 1] = "web"; break;
             case "duplicate-root": args[Array.IndexOf(args, "--repo") + 1] = fixture.Web; break;
+            case "absolute-inside": args[Array.IndexOf(args, "--target") + 1] = Path.Combine(fixture.Framework, "Library.csproj"); break;
+            case "windows-absolute": args[Array.IndexOf(args, "--target") + 1] = "C:/other/src/Library.csproj"; break;
+            case "windows-drive-relative": args[Array.IndexOf(args, "--target") + 1] = "C:Library.csproj"; break;
+            case "unc-target": args[Array.IndexOf(args, "--target") + 1] = @"\\server\share\Library.csproj"; break;
+            case "parent-inside": args[Array.IndexOf(args, "--target") + 1] = "child/../Library.csproj"; break;
+            case "parent-backslash": args[Array.IndexOf(args, "--target") + 1] = @"child\..\Library.csproj"; break;
+            case "parent-escape": args[Array.IndexOf(args, "--target") + 1] = "../../Library.csproj"; break;
             case "outside-target": args[Array.IndexOf(args, "--target") + 1] = "../outside.csproj"; break;
             case "missing-target": args[Array.IndexOf(args, "--target") + 1] = "missing.csproj"; break;
             case "wrong-kind": args[Array.IndexOf(args, "--target") + 1] = "file.dll"; break;
@@ -83,6 +130,10 @@ public sealed class WorkspaceAddSourceTests
         var before = File.ReadAllBytes(fixture.Config);
         Assert.Equal(1, await WorkspaceCommand.RunAsync(args, fixture.Output, fixture.Error));
         Assert.Equal(before, File.ReadAllBytes(fixture.Config));
+        if (mutation is "absolute-inside" or "windows-absolute" or "windows-drive-relative" or "unc-target")
+            Assert.Contains("WORKSPACE_SELECTION_RELATIVE_PATH_REQUIRED", fixture.Error.ToString());
+        if (mutation is "parent-inside" or "parent-backslash" or "parent-escape")
+            Assert.Contains("WORKSPACE_SELECTION_PARENT_SEGMENT_UNSUPPORTED", fixture.Error.ToString());
         Assert.Empty(Directory.GetFiles(fixture.Root, "workspace-before-add-*.local.json"));
     }
 
