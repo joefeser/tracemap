@@ -1398,3 +1398,10 @@ this separate follow-up instead of encouraging replay of consumed instructions.
 Public changes are docs/prompts only; no private content included. Validation:
 private-path guard, diff check, and prompt boundary/link checks; no code tests
 needed or new application validation claimed.
+
+Compiler-selection clarification: the same harness-repair dispatch now records
+resolved compiler path/version separately from website and dependency targets,
+and reports probe versus actual compilation counts automatically. No compiler
+hunt or assumption that a .NET 2 dependency selects VB 8. This clarification
+does not grant a second attempt if the dispatch already compiled. Prompt only;
+private-path guard and diff check are the applicable validation.
