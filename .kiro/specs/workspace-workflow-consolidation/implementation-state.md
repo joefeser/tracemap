@@ -1436,3 +1436,16 @@ isolated fixture hashes preserved. Input copying is restricted to nine known
 files, <=64KiB each; output hashing <=256 files/16MiB per file.
 No shared-core change; full .NET suite not rerun for public fixtures/PowerShell
 validation/docs. Private-path and diff checks are required before push. No PR/merge.
+
+### Post-POC compile prompt — 2026-11-05
+
+At owner's request for which prompt to use, added
+`prompts/finish-v46-compile-context-once.md`. Fresh dispatch for one later private
+compile after both evidence-backed harness corrections; do not replay previously
+consumed prompts. Uses tested public POC findings without claiming private exact
+ambiguity reproduction. Requires actual competing identities/intended bindings,
+no compiler/reference-set roulette or source edits, authentic annotated-input
+inclusion, existing guard, fresh output and diagnostic-limit reporting. Explicitly
+labels compiler-alias/narrowing adaptation rather than exact historical command
+recovery. Public change is prompt/task/state docs only; no private compile run.
+Validation: private-path guard and diff check; no application code/tests changed.

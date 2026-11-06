@@ -161,3 +161,7 @@
 - [x] Author independent VB/ADO, annotated-method tripwire, namespace collision and ASP.NET page/App_Code controls.
 - [x] Run bounded native Windows compiler/precompiler matrix with VB 8 and newer compiler profiles, preserve development failures and document observed scope/version behavior.
 - [x] Finish exact final runner validation, retained-output refusal, provenance/privacy checks and push POC/docs without PR/merge.
+
+## Post-POC private compile-context dispatch — 2026-11-05
+
+- [x] Add fresh single-attempt prompt using public Windows results to resolve both remaining imports/binding categories from private local evidence, preserving original inputs and distinguishing adapted harness success from historical-context/runtime proof.
