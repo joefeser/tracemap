@@ -1475,3 +1475,15 @@ private understanding document after an exact versioned sibling backup; no new
 folder hierarchy, rescans, compilation or application/source/config changes.
 Scope is one 30-call/15-minute pass with explicit uninspected remainder. Public
 prompt/task/state docs only; validation is private-path guard and diff check.
+
+### Fixed finish line for current flow handoff — 2026-11-06
+
+Owner objected to repeated tentative dispatches and another day of debugging.
+Added `prompts/finish-current-flow-handoff-once.md` with two remaining targeted
+reads in one pass: selected procedure result/aggregation behavior from existing
+local export, and skip-flag writes/default/reset/read paths. Preserve prior
+handoff and all original evidence. Deliver current understanding with named
+unknowns at a fixed 30-call/15-minute stopping point; no automatic next dispatch,
+scanner fix, revalidation, runtime/database execution or conversion redesign.
+Does not promise all unknowns can be resolved or whole-application completion.
+Public changes are prompt/task/state notes only; validate diff/private-path guard.
