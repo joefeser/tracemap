@@ -183,4 +183,4 @@
 - [x] Explain source folders versus project files and dependency DLLs; default only a sole root project; keep solution/discovery selection explicit.
 - [x] Show planned/active source entries, skipped framework source, projectless-folder scope and collect's built-in verification.
 - [x] Explain source/native/SQL outputs and separate retained selected-root lifecycle evidence in the result guide and collection completion output.
-- [ ] Complete focused tests, initial-source and late-add public replays, full required Debug gate, docs/guard checks and branch push without PR/merge.
+- [x] Complete focused tests, initial-source and late-add public replays, full required Debug gate, docs/guard checks and branch push without PR/merge.

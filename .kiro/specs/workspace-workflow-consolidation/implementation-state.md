@@ -1514,3 +1514,34 @@ native and SQL integrity checks plus new stdout/START-HERE context assertions.
 An additional add-framework wording line is covered by the upcoming committed-head
 late-add replay/full gate. No behavioral/code changes are planned beyond concrete
 verification failures. Full Debug and exact-head legacy replay remain pending.
+
+Committed application head `253d8e08a644d3b9f3763c33c34fef9244f9a1fd` passed
+the legacy/net20 rich late-add replay with new guide/stdout assertions. It retained
+the first one-source run, added framework through continuation, and proved new
+framework implementation facts in the fresh two-source index. All three channel
+SQLite checks passed. Readable replay folder/convenience scripts are outside Git.
+Initial-two-source replay also passed; full Debug exact-head gate is running.
+
+Final wizard-context validation PASS at application head
+`253d8e08a644d3b9f3763c33c34fef9244f9a1fd`:
+
+```text
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --nologo --no-restore --filter 'FullyQualifiedName~WebFormsWizardWorkspaceTests|FullyQualifiedName~WorkspaceAddSourceTests|FullyQualifiedName~WorkspaceFromWizardTests|FullyQualifiedName~WorkspaceCommandTests|FullyQualifiedName~WorkspaceSqlTests|FullyQualifiedName~WorkspaceCompiledTests'
+python3 scripts/tests/Test-WorkspaceWizardLauncher.py --output-root <fresh-public-initial-root> --with-source --sql-beside-workspace --sql-export-bytes 3335789 --sql-encoding utf16-le --sql-context-repair --sql-rich-export
+python3 scripts/tests/Test-WorkspaceWizardLauncher.py --output-root <fresh-public-late-add-root> --legacy-layout --sql-export-bytes 3335789 --sql-encoding utf16-le --sql-context-repair --sql-rich-export --add-framework-after-first-run
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --nologo
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --filter 'FullyQualifiedName!~TraceMap.Tests.SelfDiagnosticsTests'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --filter 'FullyQualifiedName~TraceMap.Tests.SelfDiagnosticsTests'
+```
+
+Focused: 109 passed, 0 failed/skipped (1m40s). Both public wizard replays
+passed including new context/default assertions and all channel integrity checks.
+The final late-add replay ran committed application head. Full Debug build:
+0 warnings/errors. Main lane 6069 passed, 3 skipped, 0 failed (14.1172 min);
+isolated same-binary diagnostics lane 4 passed, 0 failed/skipped (1.6344s).
+All 6076 tests included: 6073 passed, 3 skipped, 0 failed. Partitioning retains
+the previously documented global ActivityListener isolation; no unfiltered-race
+fix is claimed. Python harness syntax, diff check and private-path guard passed.
+Closing changes are task/state notes only, with no src/dotnet or scripts delta
+from the tested application head. No PR/merge, private rescan or WITS/C#-app
+execution. Next owner continuation can use the new guidance with existing setup.
