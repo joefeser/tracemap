@@ -3,6 +3,25 @@ Imports System.Data
 
 ' Independently authored public evidence fixtures. Never invoke these methods.
 Public Class WritePage
+    Public Sub ArrayConcatWindow(store As SyntheticStore, fragment As String)
+        store.ExecuteUpdateText(String.Concat(New String() {"UPDATE dbo.PublicWindow ", "SET Enabled = @enabled ", fragment, " ", "WHERE Code = @code"}))
+    End Sub
+
+    Public Sub ArrayConcatLocalWindow(store As SyntheticStore)
+        Dim parts(2) As String
+        Dim aliasParts = parts
+        parts(0) = "UPDATE dbo.PublicWindow "
+        aliasParts(1) = "SET Enabled = @enabled "
+        parts(2) = "WHERE Code = @code"
+        store.ExecuteUpdateText(String.Concat(aliasParts))
+    End Sub
+
+    Public Sub ArrayConcatEscapedWindow(store As SyntheticStore)
+        Dim parts = New String() {"UPDATE dbo.PublicWindow ", "WHERE Code = @code"}
+        store.TouchStrings(parts)
+        store.ExecuteUpdateText(String.Concat(parts))
+    End Sub
+
     Public Sub UpdateWindowTextControl(store As SyntheticStore)
         Dim sql As String = "UPDATE dbo.PublicWindow "
         sql = sql & "SET Enabled = @enabled "

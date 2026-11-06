@@ -13,6 +13,10 @@ Public Class SyntheticParameter
 End Class
 
 Partial Public Class SyntheticStore
+    Public Sub TouchStrings(parts As String())
+        parts(0) = "DELETE FROM dbo.PublicDecoy "
+    End Sub
+
     Public Sub ExecuteUpdateText(sql As String)
         Dim command As New SqlClient.SqlCommand(sql)
         command.ExecuteNonQuery()

@@ -20,8 +20,10 @@ internal static class IlControlFlowValueExtractor
         public Dictionary<int, IlValueOrigin> Arguments { get; } = [];
         public HashSet<int> ExposedLocals { get; } = [];
         public HashSet<int> ExposedArguments { get; } = [];
+        public Dictionary<IlValueOrigin, IlValueOrigin?[]> StringArrays { get; } = [];
         public bool InvalidStack { get; set; }
-        public int Cost => 1 + Stack.Count + Locals.Count + Arguments.Count + ExposedLocals.Count + ExposedArguments.Count;
+        public int Cost => 1 + Stack.Count + Locals.Count + Arguments.Count + ExposedLocals.Count + ExposedArguments.Count
+            + StringArrays.Sum(pair => 1 + pair.Value.Length);
         public State Copy()
         {
             var copy = new State { InvalidStack = InvalidStack };
@@ -29,6 +31,7 @@ internal static class IlControlFlowValueExtractor
             foreach (var pair in Locals) copy.Locals.Add(pair.Key, pair.Value);
             foreach (var pair in Arguments) copy.Arguments.Add(pair.Key, pair.Value);
             copy.ExposedLocals.UnionWith(ExposedLocals); copy.ExposedArguments.UnionWith(ExposedArguments);
+            foreach (var pair in StringArrays) copy.StringArrays.Add(pair.Key, pair.Value);
             return copy;
         }
     }
@@ -115,6 +118,9 @@ internal static class IlControlFlowValueExtractor
             }
             else successors[index] = next;
         }
+        // Allocation-site identities cannot distinguish loop generations. Refuse
+        // array contents in any body with a back edge instead of aliasing generations.
+        var arrayTrackingAllowed = !successors.SelectMany((targets, index) => targets.Select(target => target <= index)).Any(back => back);
         var inputs = new State?[instructions.Length];
         var events = new Dictionary<long, IlCallValueObservation>();
         var invalidates = new bool[instructions.Length];
@@ -185,6 +191,8 @@ internal static class IlControlFlowValueExtractor
             var opcode = instruction.Opcode; var operand = instruction.Operand;
             void Expose(IlValueOrigin value)
             {
+                var target = IlValueAddresses.Target(value);
+                if (state.StringArrays.Remove(target)) gaps.Add("IlValueStringArrayEscaped");
                 if (!exposed.TryGetValue(instruction.Offset, out var origins)) exposed.Add(instruction.Offset, origins = []);
                 if (origins.Add(IlValueAddresses.Target(value))) work++;
                 if (IlValueAddresses.Slot(value, out var slot))
@@ -204,6 +212,7 @@ internal static class IlControlFlowValueExtractor
             }
             void Clear(string reason)
             {
+                state.StringArrays.Clear();
                 state.Stack.Clear(); state.Locals.Clear();
                 // An invalidating operation cannot recreate original caller
                 // arguments after an earlier starg or by-reference exposure.
@@ -250,6 +259,17 @@ internal static class IlControlFlowValueExtractor
                 var arguments = new IlValueOrigin[shape.ParameterCount];
                 for (var argument = arguments.Length - 1; argument >= 0; argument--) arguments[argument] = Pop();
                 var receiver = opcode == "newobj" || !shape.HasThis ? Unknown : Pop();
+                var concat = opcode == "call" && call.ReferenceKind == "memberref" && IlStringArrayOrigins.IsConcat(call.TargetIdentity)
+                    && !shape.HasThis && shape.ParameterCount == 1 && shape.ReturnsValue && shape.ByReferenceParameters == "0";
+                if (concat)
+                {
+                    if (state.StringArrays.TryGetValue(arguments[0], out var elements) && elements.All(element => element is not null))
+                        arguments[0] = IlStringArrayOrigins.Snapshot(elements);
+                    else gaps.Add("IlValueStringArrayContentsUnavailable");
+                }
+                // Unknown code can retain or mutate any array passed to it.
+                foreach (var value in arguments.Append(receiver))
+                    if (!concat && state.StringArrays.Remove(IlValueAddresses.Target(value))) gaps.Add("IlValueStringArrayEscaped");
                 // Addresses never become scalar caller values. A callee can
                 // rewrite the referenced slot and mutate its former object.
                 foreach (var address in arguments.Append(receiver).Where(IlValueAddresses.IsAddress))
@@ -291,7 +311,20 @@ internal static class IlControlFlowValueExtractor
             // Preserve only its stack effect; no delegate dispatch/value is proven.
             if (opcode == "ldftn") { Push(Unknown); return false; }
             if (opcode == "ldvirtftn") { Expose(Pop()); Push(Unknown); return false; }
-            if (opcode == "newarr") { _ = Pop(); Push(new("allocation-site", instruction.Offset.ToString(CultureInfo.InvariantCulture))); return false; }
+            if (opcode == "newarr")
+            {
+                var length = Pop();
+                var origin = new IlValueOrigin("allocation-site", instruction.Offset.ToString(CultureInfo.InvariantCulture));
+                if (IlStringArrayOrigins.IsStringType(operand))
+                {
+                    if (arrayTrackingAllowed && length.Kind == "constant-int32"
+                        && int.TryParse(length.Identity, NumberStyles.None, CultureInfo.InvariantCulture, out var count)
+                        && count is >= 0 and <= IlStringArrayOrigins.MaxElements && state.StringArrays.Count < IlStringArrayOrigins.MaxArrays)
+                        state.StringArrays[origin] = new IlValueOrigin?[count];
+                    else gaps.Add("IlValueStringArrayBoundUnsupported");
+                }
+                Push(origin); return false;
+            }
             if (opcode == "ldfld") { Expose(Pop()); Push(Unknown); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
             if (opcode == "ldsfld") { Push(Unknown); gaps.Add("IlValueFieldOriginUnavailable"); return false; }
             if (opcode is "ldflda" or "ldsflda")
@@ -305,7 +338,24 @@ internal static class IlControlFlowValueExtractor
             if (opcode == "initobj")
             { var address = Pop(); Expose(address); RewriteAddress(address, Unknown); return false; }
             if (opcode.StartsWith("stelem", StringComparison.Ordinal))
-            { Expose(Pop()); _ = Pop(); Expose(Pop()); gaps.Add("IlValueHeapStoreUnavailable"); return false; }
+            {
+                var value = Pop(); var index = Pop(); var array = Pop();
+                if (state.StringArrays.TryGetValue(array, out var elements))
+                {
+                    if (opcode == "stelem.ref" && index.Kind == "constant-int32"
+                        && int.TryParse(index.Identity, NumberStyles.None, CultureInfo.InvariantCulture, out var position)
+                        && position >= 0 && position < elements.Length && elements[position] is null && IlStringArrayOrigins.IsElement(value))
+                    {
+                        var updated = (IlValueOrigin?[])elements.Clone(); updated[position] = value;
+                        state.StringArrays[array] = updated;
+                        return false;
+                    }
+                    state.StringArrays.Remove(array); gaps.Add("IlValueStringArrayStoreUnsupported");
+                }
+                Expose(value); Expose(array); gaps.Add("IlValueHeapStoreUnavailable"); return false;
+            }
+            if (opcode == "ldelema")
+            { _ = Pop(); Expose(Pop()); Push(Unknown); gaps.Add("IlValueStringArrayEscaped"); return false; }
             if (opcode.StartsWith("ldelem", StringComparison.Ordinal) && opcode != "ldelema")
             { _ = Pop(); _ = Pop(); Push(Unknown); return false; }
             Clear("IlValueInstructionUnavailable"); return true;
@@ -314,6 +364,9 @@ internal static class IlControlFlowValueExtractor
         bool Merge(State target, State incoming)
         {
             var changed = false;
+            foreach (var key in target.StringArrays.Keys.ToArray())
+                if (!incoming.StringArrays.TryGetValue(key, out var elements) || !target.StringArrays[key].SequenceEqual(elements))
+                { target.StringArrays.Remove(key); changed = true; gaps.Add("IlValueStringArrayMergeUnavailable"); }
             var oldExposed = target.ExposedLocals.Count + target.ExposedArguments.Count;
             target.ExposedLocals.UnionWith(incoming.ExposedLocals); target.ExposedArguments.UnionWith(incoming.ExposedArguments);
             changed |= oldExposed != target.ExposedLocals.Count + target.ExposedArguments.Count;

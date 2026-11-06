@@ -127,3 +127,21 @@ assemblies or rescan merely to reduce file size. The local report records both.
 --out <fresh-directory>` runs the public compiled fixture through a valid SQLite
 index padded to 768 MiB. It tests default refusal, explicit admission and native
 route retention. It is a file-size test, not a large logical-graph benchmark.
+
+### Bounded string-array concatenation (IL 0.2.70 / v71)
+
+`ArrayConcatWindow` and `ArrayConcatLocalWindow` exercise explicit VB string-array
+initializers and local aliases. `array-build/StringArrayCases.csproj` covers C#
+compiler-selected multi-piece concatenation, explicit arrays, nested concatenation
+and protected disposal. Exact framework Concat overloads in mscorlib 2/4 are
+recognized; ordered element origins are retained as a hashed/symbolic composition.
+`ArrayConcatEscapedWindow` and ObjectArrayRefused remain refused. Raw SQL is never
+materialized. Unknown values stay unknown, and parameter binding or transaction
+identity is not inferred from successful string composition.
+
+Direct operand tests additionally pin explicit nulls, zero/16/17 elements, the
+16-array cap, aliases, missing/duplicate/unknown/out-of-range writes, external
+calls, byref/address/field exposure, conflicting joins, back edges and fake
+framework identities. Report tests reject malformed/oversize/unknown snapshots
+and mismatched provenance. See the framework-string-composition rule limitations
+in docs/WEBFORMS_CONFIG_MIGRATION.md.

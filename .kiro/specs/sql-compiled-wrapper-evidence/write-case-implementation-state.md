@@ -51,3 +51,48 @@ Diff check and private-path guard passed. Use
 `prompts/verify-inline-and-bulk-evidence-once.md` for a bounded private review.
 No PR/merge or private rescan performed. Remaining implementation gaps above
 are explicit follow-up capabilities, not claimed fixed by adding coverage.
+
+## Bounded array follow-up (IL 0.2.70 / policy v71)
+
+Owner authorized implementation and local case expansion on this branch.
+Control-flow operand state now retains up to 16 local string arrays of at most
+16 elements, charging heap entries to the existing work/slot bounds. Array
+contents use immutable copy-on-write snapshots across state copies. Only exact
+mscorlib 2/4 string[] allocations and Concat(String[]) consumers qualify. Local
+aliases preserve allocation identity; unknown calls, addresses/field stores,
+unsupported/repeated writes, missing initialization and conflicting joins refuse
+contents. Bodies with back edges refuse array tracking because allocation-site
+identity alone cannot distinguish loop generations. No general heap/array load,
+parameter binding, transaction identity or SQL execution support is implied.
+
+At the admitted concat call, argumentOrigins may carry string-array-elements
+with a JSON-encoded ordered list of hashed string/scalar symbolic origins.
+The reporting rule validates exact call/body/operand provenance, bounds and
+allowed element kinds, then uses the existing bounded symbolic composition
+projection. Malformed/unknown/oversize snapshots refuse. Scalar two/three/four
+string concat and the string-array overload are exact-profile recognized.
+No raw strings, joined plaintext or assumed unknown values are emitted.
+
+Expanded direct controls cover explicit null/empty/16/17-element arrays, local
+aliases, 16-array cap, missing/repeated/out-of-range/unknown writes, escaped slots,
+byref/field/element-address exposure, branches, back edges, fake framework
+identities and the legacy-2 profile. Compiled C# and VB cover direct/compiler
+selected/local/nested/protected shapes and object-array/escape refusals. Retained
+fact tamper tests cover provenance, malformed encoding, oversize and unknown
+origins. One unknown-element control exposed too-permissive report validation;
+fixed it before proceeding. The preceding focused lane passed 152, skipped one
+existing Windows-only publish test, failed zero. Final expanded lane/full gate
+are pending; no private validation or completion claim.
+
+Public CLI smoke completed: 530 facts, two accepted array snapshots, three exact
+array-case root reports, failedQueries=0. The escaped-array case remains an
+explicit refusal. These are compile/static-only samples, never executed SQL.
+Use prompts/verify-bounded-string-array-concat-once.md after final validation.
+
+Final expanded focused gate passed: 266 passed, 1 existing Windows-only skip,
+0 failed, 3m1s, Debug -warnaserror. Filter: IlStringArrayValueTests,
+SqlWrapperRouteTests, IlCallValueExtractorTests, IlCommandBindingExtractorTests,
+IlBodyEvidenceExtractorTests, SqlDatabaseMatrixTests. Python SQL report helper
+17/17 passed. Diff/private-path checks passed. Full required Debug gate pending
+on the immutable implementation commit; publish remains provisional until that
+result is recorded. No branch-specific budget increases or private runs.
