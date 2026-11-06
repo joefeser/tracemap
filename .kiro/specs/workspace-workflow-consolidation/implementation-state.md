@@ -1449,3 +1449,16 @@ inclusion, existing guard, fresh output and diagnostic-limit reporting. Explicit
 labels compiler-alias/narrowing adaptation rather than exact historical command
 recovery. Public change is prompt/task/state docs only; no private compile run.
 Validation: private-path guard and diff check; no application code/tests changed.
+
+### Explanation-first consolidated handoff — 2026-11-05
+
+Owner clarified the need is a prompt helping Claude understand/explain what is
+already available, rather than jumping to a replacement-language decision. Added
+`prompts/explain-current-evidence-and-conversion-handoff.md`: use existing artifacts,
+explain the selected flow and evidence layers, optionally inspect directly relevant
+source with honest manual-observation labels, and save one readable document in
+the existing private progress folder. Consolidates owner-reported compile-v3 PASS
+as a reported isolated/adapted-context result, not independent runtime proof.
+No new scan, build, compiler attempt, source/config edit, stack choice or conversion
+rewrite. No public copying of private material; existing artifacts preserved.
+Prompt/task/state docs only; validation is diff and private-path checks.
