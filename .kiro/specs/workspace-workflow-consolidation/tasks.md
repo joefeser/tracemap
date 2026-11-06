@@ -155,3 +155,9 @@
 ## Evidence-backed compiler harness repair handoff — 2026-11-05
 
 - [x] Add fresh one-attempt dispatch to recover authentic VB global imports, change only an isolated response-file harness, verify annotated-method inclusion and fresh compiler output, retain prior failure and stop without rescans or source fixes.
+
+## Public Windows compiler-context qualification — 2026-11-05
+
+- [x] Author independent VB/ADO, annotated-method tripwire, namespace collision and ASP.NET page/App_Code controls.
+- [x] Run bounded native Windows compiler/precompiler matrix with VB 8 and newer compiler profiles, preserve development failures and document observed scope/version behavior.
+- [x] Finish exact final runner validation, retained-output refusal, provenance/privacy checks and push POC/docs without PR/merge.

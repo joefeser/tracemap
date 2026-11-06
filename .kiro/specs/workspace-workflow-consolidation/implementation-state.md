@@ -1405,3 +1405,34 @@ and reports probe versus actual compilation counts automatically. No compiler
 hunt or assumption that a .NET 2 dependency selects VB 8. This clarification
 does not grant a second attempt if the dispatch already compiled. Prompt only;
 private-path guard and diff check are the applicable validation.
+
+### Public Windows compiler-context POC — 2026-11-05
+
+Owner authorized public local POCs using the available Windows machine. Added
+`samples/vb-compile-context/`, `scripts/tests/Test-VbCompileContext.ps1` and
+`docs/VB_COMPILE_CONTEXT_POC.md`. No CLI/Core/source extractor code changed.
+Native Windows tests observed compiler file versions 8.0.50727.9177 and
+14.8.9221.0. Fifteen oracles passed including missing-import and annotated-input
+negative controls, complete ADO wrapper compilation, CLR2 dependency with newer
+compiler, controlled namespace conflict and no-source-edit import repair.
+ASP.NET page imports applied to App_Code on this host; removing the fixture
+namespace caused BC30002, explicit compiler import restored success. Actual
+framework namespace probes compiled on both versions: private exact ambiguity
+NOT reproduced. Do not infer a compiler switch is needed. Public fixture DLL
+rename/manifest mismatch and over-specific broad-import expectation failures
+were preserved. Final rule/provenance runner update and output-refusal check
+remain to run before closing. Limits: 120s wall, Windows Job aggregate 2048 MiB,
+16 processes; no generated application/SQL execution or employer inputs.
+
+Final runner native Windows validation: 15/15 expected case outcomes; no
+application/SQL execution. PowerShell parser passed. Existing-output refusal
+passed with original report hash unchanged and no compiler launched. Final
+receipts were copied outside Git and checked against the exact script hash.
+Generator SHA-256: `57868db1020f8302eda25055c370a242dc73243e2fbcc9a545af6573aaa0c384`.
+Bounded public input SHA-256: `000c94a88b027b2c320fc1c78001604054b1045bb8cce13cd8c98a16efe492c9`.
+Measured 6688 ms wall, 168521728 bytes peak aggregate job commit;
+120s/2048MiB/16-process caps active, exit 0, no timeout, both original and
+isolated fixture hashes preserved. Input copying is restricted to nine known
+files, <=64KiB each; output hashing <=256 files/16MiB per file.
+No shared-core change; full .NET suite not rerun for public fixtures/PowerShell
+validation/docs. Private-path and diff checks are required before push. No PR/merge.

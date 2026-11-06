@@ -8253,3 +8253,14 @@ rules:
       - Saved filters are extended in a new provenance-commented scope copy; originals are retained. Future explicit scope overrides still apply as specified by the owner.
       - A cooperative OS handle lock, input rechecks and atomic replace with backup protect updates. Non-cooperating external editors can race the final check; post-write checks refuse detected conflicts, and retained versions need owner review.
       - Initial wizard answers remain historical; the active workspace source list governs existing-workspace continuation. Existing results retain their original scope; a new collection is required for evidence of the added source.
+
+  - id: validation.vb-compile-context.v1
+    name: Public Windows VB compiler-context qualification
+    evidenceTier: Tier2Structural
+    description: Compiles independently authored fixtures under bounded Windows jobs to test global imports, namespace conflicts, annotated-input inclusion and ASP.NET page versus App_Code configuration scope.
+    limitations:
+      - Public synthetic compilation only; emitted application methods and SQL are never executed. No employer conversion, private build, source-to-DLL correspondence, runtime or deployment proof.
+      - Installed framework compiler identities and public fixture hashes bind each run; ASP.NET may spawn additional compiler children and no exact child invocation census is claimed.
+      - Actual framework broad-import behavior and App_Code namespace applicability are recorded observations, not assumed portable outcomes; a controlled namespace collision supplies the negative control.
+      - Comment-normalized executable-text comparison is specific to authored fixtures and is not a semantic equivalence algorithm. Fresh output plus successful compiler exit is required; a diagnostic-free file inside a failed compilation is not success.
+      - Windows-only, 120-second wall, 2048 MiB aggregate committed memory, 16 active-process limit; existing outputs refuse overwrite and all raw path-bearing logs remain local.
