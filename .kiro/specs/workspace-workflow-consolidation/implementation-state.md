@@ -1462,3 +1462,16 @@ as a reported isolated/adapted-context result, not independent runtime proof.
 No new scan, build, compiler attempt, source/config edit, stack choice or conversion
 rewrite. No public copying of private material; existing artifacts preserved.
 Prompt/task/state docs only; validation is diff and private-path checks.
+
+### Caller/consumer next dispatch — 2026-11-05
+
+Owner requested a pushed concrete next dispatch. Added
+`prompts/trace-sample-callers-and-dataset-consumers-once.md`: reuse current
+understanding and sample binding, inspect relevant entry/caller paths and result
+consumers, and resolve table-name versus ordinal dependencies where evidenced.
+Preserve execution identity and distinguish direct source observation from bound
+extractor facts, SQL result evidence and runtime behavior. Update only the existing
+private understanding document after an exact versioned sibling backup; no new
+folder hierarchy, rescans, compilation or application/source/config changes.
+Scope is one 30-call/15-minute pass with explicit uninspected remainder. Public
+prompt/task/state docs only; validation is private-path guard and diff check.

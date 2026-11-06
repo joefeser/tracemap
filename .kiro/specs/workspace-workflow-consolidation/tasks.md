@@ -169,3 +169,7 @@
 ## Current understanding and conversion handoff — 2026-11-05
 
 - [x] Add a bounded explanation-first prompt consolidating existing two-source, SQL, lifecycle, annotated-artifact and successful compile evidence into one private handoff without reopening validation or demanding a target language.
+
+## Sample caller/consumer flow handoff — 2026-11-05
+
+- [x] Add bounded dispatch tracing verified-sample argument origins and returned DataSet consumers, especially names versus ordinal dependencies, using existing evidence and source reads with a preserved private handoff update.
