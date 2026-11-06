@@ -9,6 +9,91 @@ namespace TraceMap.Tests;
 public sealed class SqlWrapperRouteTests
 {
     [Theory]
+    [InlineData("UpdateWindow", true)]
+    [InlineData("ReplaceRows", true)]
+    [InlineData("UpdateWindowTextControl", true)]
+    [InlineData("UpdateWindow", false)]
+    [InlineData("ReplaceRows", false)]
+    [InlineData("UpdateWindowTextControl", false)]
+    public async Task Incremental_text_and_transactional_bulk_copy_keep_route_and_value_evidence_distinct(string method, bool includeProvider)
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
+        var sample = Path.Combine(root!.FullName, "samples/sql-database-matrix");
+        var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
+        var binaries = Path.Combine(sample, "wrapper-build/bin", configuration, "net472");
+        var inputs = new List<string> { Path.Combine(binaries, "SyntheticWebsite.dll") };
+        if (includeProvider) inputs.Add(Path.Combine(binaries, "SyntheticStore.dll"));
+        using var temp = new TempDirectory();
+        var scan = ScanEngine.Scan(new ScanOptions(Path.Combine(sample, "wrapper-website"),
+            Path.Combine(temp.Path, "scan"), CompiledInputPaths: inputs, IlBodyEvidence: true));
+        var index = Path.Combine(temp.Path, "index.sqlite");
+        SqliteIndexWriter.Write(index, scan.Manifest, scan.Facts);
+        var entry = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared
+            && f.Properties.GetValueOrDefault("metadataName") == method
+            && f.TargetSymbol!.Contains("WritePage", StringComparison.Ordinal));
+        var report = await CombinedDependencyPathReporter.BuildReportAsync(new CombinedDependencyPathOptions(index, temp.Path,
+            FromSymbol: entry.TargetSymbol, ToSurface: "database-api") { ExactFromSymbol = true, CompiledOnly = true });
+        if (!includeProvider)
+        {
+            Assert.Empty(report.Paths);
+            Assert.NotEmpty(report.Gaps);
+            return;
+        }
+        var commands = report.Paths.SelectMany(p => p.Nodes).Where(n => n.SurfaceName == "SqlCommand.ExecuteNonQuery").ToArray();
+        var command = Assert.Single(commands);
+        if (method == "UpdateWindowTextControl")
+        {
+            var value = Assert.IsType<CompiledCommandPathValueBinding>(command.CommandBinding!.CommandTextFromPath);
+            Assert.Equal("symbolic-string-composition", value.State);
+            Assert.NotNull(value.Composition);
+            var constants = Constants(value).ToArray();
+            Assert.Contains(TextIdentity("UPDATE dbo.PublicWindow "), constants);
+            Assert.Contains(TextIdentity("WHERE Code = @code"), constants);
+            Assert.Matches("^[0-9a-f]{64}$", value.GeneratorSha256);
+            Assert.Matches("^[0-9a-f]{64}$", value.BoundedInputSha256);
+        }
+        else
+        {
+            Assert.Null(command.CommandBinding);
+            var provider = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedMethodDeclared
+                && f.Properties.GetValueOrDefault("metadataName") == (method == "UpdateWindow" ? "ExecuteUpdate" : "ReplaceRows")
+                && f.TargetSymbol!.Contains("|names:14:SyntheticStore|arity:0|method:", StringComparison.Ordinal));
+            Assert.Contains(scan.Facts, f => f.FactType == FactTypes.AnalysisGap
+                && f.RuleId == "dotnet.compiled.il-command-binding.v1"
+                && f.TargetSymbol!.StartsWith(provider.TargetSymbol!, StringComparison.Ordinal)
+                && f.Properties.GetValueOrDefault("gapKind") == "IlCommandTextBindingUnavailable");
+        }
+        if (method == "ReplaceRows")
+        {
+            var bulk = Assert.Single(report.Paths.SelectMany(p => p.Nodes), n => n.SurfaceName == "SqlBulkCopy.WriteToServer");
+            Assert.NotNull(bulk.CompiledDatabaseApiEvidence);
+            // A call-path endpoint is evidence of the API, not a proven destination or transaction linkage.
+            Assert.Null(bulk.CommandBinding);
+            var calls = scan.Facts.Where(f => f.FactType == FactTypes.ManagedIlCallObserved).ToArray();
+            foreach (var member in new[] { "set_DestinationTableName", "BeginTransaction", "Commit", "Rollback" })
+                Assert.Contains(calls, f => f.Properties["targetIdentity"].Contains($"|member:{member.Length}:{member}|", StringComparison.Ordinal));
+            var setter = Assert.Single(calls, f => f.Properties["targetIdentity"].Contains("|member:24:set_DestinationTableName|", StringComparison.Ordinal));
+            var operands = Assert.Single(scan.Facts, f => f.FactType == FactTypes.ManagedIlCallValuesObserved
+                && f.Properties.GetValueOrDefault("ilCallFactId") == setter.FactId);
+            var args = JsonSerializer.Deserialize<CompiledCommandOperandOrigin[]>(operands.Properties["argumentOrigins"])!;
+            Assert.Equal(new CompiledCommandOperandOrigin("constant-string-hash", TextIdentity("dbo.PublicStage")), Assert.Single(args));
+        }
+        // Raw SQL stays hashed; absence of its cleartext in facts does not imply absent value evidence.
+        Assert.DoesNotContain("UPDATE dbo.PublicWindow", JsonSerializer.Serialize(scan.Facts));
+        Assert.DoesNotContain("DELETE FROM dbo.PublicStage", JsonSerializer.Serialize(scan.Facts));
+
+        static IEnumerable<string> Constants(CompiledCommandPathValueBinding binding)
+        {
+            if (binding.Origin.Kind == "constant-string-hash") yield return binding.Origin.Identity;
+            if (binding.Composition is { } composition)
+                foreach (var child in composition.OperandBindings)
+                    foreach (var constant in Constants(child)) yield return constant;
+        }
+        static string TextIdentity(string text) => $"str:{text.Length}:{Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.Unicode.GetBytes(text)))}";
+    }
+
+    [Theory]
     [InlineData("both", "Save", true)]
     [InlineData("both", "Search", true)]
     [InlineData("caller-only", "Save", false)]

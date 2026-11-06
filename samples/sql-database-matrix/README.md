@@ -84,6 +84,29 @@ argument states, grouped inventory, and caller-only/provider-only/source-only
 missing-input controls. Existing compiled resolution supports this fixture; this
 is new acceptance coverage, not a newly implemented generic resolver.
 
+### Incremental UPDATE and transactional bulk-copy controls
+
+`WritePage.vb` and `WriteStore.vb` are independently authored public fixtures,
+compiled but never executed. `UpdateWindowTextControl` incrementally concatenates
+literal UPDATE fragments and forwards the text through the separate DLL. The
+selected compiled path retains a symbolic string composition with hashed literal
+operands; cleartext SQL is intentionally absent from ordinary facts.
+
+`UpdateWindow` adds an ArrayList of custom parameter records and a wrapper loop
+constructing actual SqlParameters. This more complex body retains the execution
+route but currently reports `IlCommandTextBindingUnavailable` in the ordinary
+command-binding route. This is not a claim about the separate selected-root
+lifecycle interpreter, nor a claim that all inline SQL is unsupported.
+
+`ReplaceRows` performs a parameterized DELETE followed by SqlBulkCopy under one
+transaction, with commit/rollback. Calls and the bulk destination setter's exact
+hashed string operand are retained. The path report recognizes WriteToServer,
+but does not project a bulk destination binding or establish shared transaction
+identity. Its DELETE command binding is also unavailable for this fixture.
+These limitations are pinned without replacing unknown values with assumptions.
+Missing-provider controls refuse both complete routes. A zero-hit search for a
+readable table name cannot establish that its hashed operand was not extracted.
+
 For an existing closed scan/index, `scripts/sql-wrapper-report.py` creates a
 local-only selected-root SQL report. The helper retains failed/unmatched selections, links native path evidence,
 records generator/component/input hashes, and preserves coverage warnings. It

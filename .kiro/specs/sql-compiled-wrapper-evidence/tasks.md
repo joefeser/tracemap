@@ -249,3 +249,9 @@
 - [x] Compile-only public smoke: retained original/table cases and local IL shapes pass, no SQL execution.
 - [x] Pushed exact-head remote full Debug -warnaserror gate: 5825 passed, 3 existing skips, 0 failed at fcd36a34f.
 - [x] Reviewable branch and draft PR #933; no merge or budget/private-scan authorization implied.
+
+## Inline UPDATE and transactional bulk-copy reconciliation — 2026-11-06
+
+- [x] Add independently authored VB compiled fixtures for incremental UPDATE through a custom-parameter wrapper and DELETE/bulk-copy with transaction calls.
+- [x] Add simple text-only and missing-provider controls; distinguish hashed operands, path projection, parameter binding and transaction evidence.
+- [x] Finish touched regression lanes and publish the bounded evidence-reconciliation prompt on the current branch, without PR/merge.
