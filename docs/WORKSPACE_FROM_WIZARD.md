@@ -301,6 +301,7 @@ repository-relative project/solution paths, or the explicit `discovery` choice.
 Absolute paths (including Windows drive and UNC forms), drive-relative paths such
 as `C:Library.csproj`, and any `..` path component are rejected. This includes
 `child/../Library.csproj`, even though normalization could stay inside the repo.
+These checks apply to the selected project/solution argument, not to ProjectReference paths inside project contents; project loading keeps its existing analysis policies.
 Both slash styles are recognized; a valid new selection is saved with forward
 slashes. Dots inside a filename such as `Library..v2.csproj` are not parent traversal.
 

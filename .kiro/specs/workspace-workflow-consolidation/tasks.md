@@ -189,4 +189,4 @@
 
 - [x] Share portable absolute/drive/UNC and parent-segment rejection across both new-selection CLI routes; retain relative wizard normalization and previous answers on retry.
 - [x] Cover inside-normalizing traversal, outside paths, slash styles, valid dotted filenames and legacy containment/preservation behavior.
-- [ ] Finish focused/full validation, public replay, rule/docs checks and push without PR/merge.
+- [x] Finish focused/full validation, public replay, rule/docs checks and push without PR/merge.

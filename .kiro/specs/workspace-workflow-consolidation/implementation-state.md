@@ -1567,3 +1567,42 @@ Enter, with rich UTF16 SQL/context repair and channel integrity checks. One repl
 assertion was initially placed before its local output variable was assigned;
 corrected the script ordering and retained the failed fresh replay. No product
 validation was weakened. Final committed late-add replay and full gate pending.
+
+Committed application head `a94928630521a35dafd66edc7308af85708264d8` passed
+the rich legacy/net20 late-add replay. It rejected '..' in the interactive target,
+accepted a corrected inside-root absolute file, stored `Dependency.csproj` as the
+relative selection, preserved prior run/config/answers/native/SQL choices, and
+proved fresh framework implementation facts plus all three SQLite checks.
+Full Debug exact-head gate remains in progress. Documentation clarifies the guard
+covers selection arguments, not ProjectReference contents or a new MSBuild policy.
+
+Final validation on application head `a94928630521a35dafd66edc7308af85708264d8`:
+Debug build with `-warnaserror` passed with 0 warnings/errors. Full coverage used
+the documented same-binary diagnostics isolation: main lane 6088 passed,
+3 skipped, 0 failed (13.8234 minutes); SelfDiagnosticsTests lane 4 passed,
+0 skipped/failed (1.6691 seconds). Total 6095 tests: 6092 passed, 3 skipped,
+0 failed. No claim that the unrelated global-listener race is fixed.
+
+Exact full gate commands (Windows host WSL Ubuntu-24.04, clean exact-head clone):
+
+```sh
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --nologo
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --filter 'FullyQualifiedName!~TraceMap.Tests.SelfDiagnosticsTests'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --filter 'FullyQualifiedName~TraceMap.Tests.SelfDiagnosticsTests'
+```
+
+Focused validation used `dotnet test src/dotnet/tests/TraceMap.Tests -c Debug
+-warnaserror --nologo --no-restore` with the combined FromWizard/AddSource/Wizard
+filter (69 passed), then expanded AddSource filter (21 passed; overlapping tests).
+Public replay commands used `python3 scripts/tests/Test-WorkspaceWizardLauncher.py`
+with fresh output roots and these respective argument sets:
+
+```text
+--with-source --sql-beside-workspace --sql-export-bytes 3335789 --sql-encoding utf16-le --sql-context-repair --sql-rich-export
+--legacy-layout --sql-export-bytes 3335789 --sql-encoding utf16-le --sql-context-repair --sql-rich-export --add-framework-after-first-run
+```
+
+Both public replays passed. Diff check and private-path guard passed. Closing
+changes are documentation/task state only; no application/scripts delta from the
+tested head. Pushed to `codex/workspace-scope-preflight`; no PR, merge, private
+scan, budget/policy change or application conversion was performed.
