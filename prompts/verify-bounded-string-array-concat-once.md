@@ -4,6 +4,8 @@ Read AGENTS.md. Use the owner's existing private setup and previously identified
 inline-UPDATE method. Do not restart setup or change source/configuration.
 Keep private source, SQL, identifiers, receipts and hashes outside public Git.
 
+Validated implementation commit: `17d5ab2f65c109116c07dd600064d96742de65b0`.
+Use that commit or a docs-only descendant with zero implementation/fixture delta.
 This dispatch verifies IL extractor 0.2.70 / evidence policy v71. The public
 regressions include VB and C# compiler-generated String.Concat(String[]) shapes,
 local arrays/aliases, null elements, nested concatenations and protected bodies.

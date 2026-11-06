@@ -96,3 +96,34 @@ IlBodyEvidenceExtractorTests, SqlDatabaseMatrixTests. Python SQL report helper
 17/17 passed. Diff/private-path checks passed. Full required Debug gate pending
 on the immutable implementation commit; publish remains provisional until that
 result is recorded. No branch-specific budget increases or private runs.
+
+
+### Exact-head full gate completed
+
+Implementation `17d5ab2f65c109116c07dd600064d96742de65b0` passed the complete
+Debug gate in a clean exact-head clone on Windows-hosted WSL Ubuntu-24.04:
+
+```sh
+dotnet build src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj -c Debug -warnaserror --nologo
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --filter 'FullyQualifiedName!~TraceMap.Tests.SelfDiagnosticsTests'
+dotnet test src/dotnet/tests/TraceMap.Tests/TraceMap.Tests.csproj --no-build -c Debug -warnaserror --filter 'FullyQualifiedName~TraceMap.Tests.SelfDiagnosticsTests'
+```
+
+Build: 0 warnings/errors. Main lane 6132 passed, 3 existing skips, 0 failed,
+14.0616 minutes; isolated same-binary diagnostics 4 passed, 0 skipped/failed,
+1.6282 seconds. Total 6139 tests: 6136 passed, 3 skipped, 0 failed. The documented
+global-listener isolation remains; no claim of fixing that unrelated test race.
+
+Exact committed-head public CLI smoke repeated: 530 facts, two accepted array
+snapshots, all three exact VB array-root reports, failedQueries=0. The native
+Windows ASP.NET publisher smoke remains the existing platform skip locally/WSL;
+no private/Windows application/runtime validation is claimed. Compile-only native
+C#/VB profiles and the full static regression gate passed.
+
+Final closing diff is task/state/prompt documentation only, with no src/dotnet,
+scripts or samples delta from the tested implementation. Private-path and diff
+checks passed. Pushed on codex/workspace-scope-preflight without PR/merge. Owner's
+next action is the single bounded private verification prompt, not another setup
+wizard or an automatic series of scans. Complex parameter-loop command binding,
+transaction identity and unrelated array/StringBuilder/enumerable capabilities
+remain outside this change.
