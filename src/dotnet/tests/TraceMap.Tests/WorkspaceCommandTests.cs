@@ -114,7 +114,12 @@ public sealed class WorkspaceCommandTests
         Assert.Equal(Hash(File.ReadAllBytes(typeof(WorkspaceCommand).Assembly.Location)), result.GetProperty("generatorSha256").GetString());
         var expectedInputs = JsonSerializer.SerializeToUtf8Bytes(result.GetProperty("inputs"), new JsonSerializerOptions { WriteIndented = true });
         Assert.Equal(Hash(expectedInputs), result.GetProperty("boundedInputSha256").GetString());
-        Assert.Contains("database definitions were not ingested", File.ReadAllText(Path.Combine(output, "START-HERE.md")), StringComparison.Ordinal);
+        var guide = File.ReadAllText(Path.Combine(output, "START-HERE.md"));
+        Assert.Contains("database definitions were not ingested", guide, StringComparison.Ordinal);
+        Assert.Contains("Selected source repositories collected: 2", guide);
+        Assert.Contains("## Which evidence to use", guide);
+        Assert.Contains("Selected-root lifecycle analysis is separate", guide);
+        Assert.Contains("does not configure lifecycle root selectors or import prior lifecycle outputs", guide);
     }
 
     [Fact]

@@ -7,6 +7,30 @@ namespace TraceMap.Tests;
 
 public sealed class WebFormsWizardWorkspaceTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Initial_setup_explains_file_selection_and_only_defaults_a_unique_project(bool multipleProjects)
+    {
+        using var fixture = new WorkspaceFromWizardTests.Fixture(); await fixture.Prepare();
+        if (multipleProjects) File.WriteAllText(Path.Combine(fixture.Framework, "Other.vbproj"), "<Project />");
+        var manifest = File.ReadAllBytes(fixture.Manifest);
+        var selection = multipleProjects ? "\nFramework.csproj\n" : "\n";
+        using var input = new StringReader($"workspace\n{fixture.Framework}\n{selection}{fixture.Manifest}\n{fixture.SqlRoot}\ncreate\nlater\n");
+        Assert.True(await WebFormsWizardCommand.RunAsync(["wizard", "--root", fixture.WizardRoot, "--continue"], input, fixture.Output, fixture.Error) == 0,
+            fixture.Error.ToString() + fixture.Output);
+        var config = JsonNode.Parse(File.ReadAllText(Path.Combine(fixture.WizardRoot, "workspace.local.json")))!;
+        Assert.Equal("Framework.csproj", config["repositories"]![1]!["projects"]![0]!.GetValue<string>());
+        Assert.Null(config["repositories"]![1]!["solution"]);
+        Assert.Contains("Select the PROJECT FILE inside it", fixture.Output.ToString());
+        Assert.Contains("SOURCE repositories to configure: 2", fixture.Output.ToString());
+        Assert.Contains("Existing selected-root lifecycle scans remain separate", fixture.Output.ToString());
+        Assert.Equal(!multipleProjects, fixture.Output.ToString().Contains("Enter uses detected project", StringComparison.Ordinal));
+        if (multipleProjects) Assert.Contains("Choose an existing project/solution inside that framework folder", fixture.Output.ToString());
+        Assert.Equal(manifest, File.ReadAllBytes(fixture.Manifest));
+        Assert.Empty(Directory.GetFiles(fixture.WizardRoot, "workspace-run.local.json", SearchOption.AllDirectories));
+    }
+
     [Fact]
     public async Task Existing_one_source_workspace_can_add_framework_without_restarting_or_reentering_SQL()
     {
@@ -31,6 +55,9 @@ public sealed class WebFormsWizardWorkspaceTests
         Assert.DoesNotContain("Existing SQL manifest FILE", fixture.Output.ToString());
         Assert.DoesNotContain("Framework SOURCE repository folder if you have its checkout", fixture.Output.ToString());
         Assert.Contains("Configured SOURCE repositories: 2", fixture.Output.ToString());
+        Assert.Contains("Collect verifies these settings first", fixture.Output.ToString());
+        Assert.Contains("SOURCE framework: folder=", fixture.Output.ToString());
+        Assert.Contains("existing lifecycle results are not imported", fixture.Output.ToString());
         Assert.Equal(1, fixture.Output.ToString().Split("Framework SOURCE Git repository folder", StringSplitOptions.None).Length - 1);
         Assert.Equal(0, await WorkspaceCommand.RunAsync(["verify", "--root", fixture.WizardRoot], fixture.Output, fixture.Error));
     }

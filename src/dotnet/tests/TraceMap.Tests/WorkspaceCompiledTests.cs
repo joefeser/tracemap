@@ -21,6 +21,9 @@ public sealed class WorkspaceCompiledTests
         Assert.Contains("pageMode=selected", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Contains("primaryAssemblies=", fixture.Output.ToString(), StringComparison.Ordinal);
         Assert.Contains("WORKSPACE_PAGE_SCOPE_IS_NOT_REPOSITORY_SCOPE", fixture.Output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("SOURCE repositories: 2 selected / 2 configured", fixture.Output.ToString());
+        Assert.Contains("Website folder mode is an explicit selection", fixture.Output.ToString());
+        Assert.Contains("does not configure lifecycle root selectors", fixture.Output.ToString());
         Assert.False(Directory.Exists(fixture.RunRoot));
     }
 

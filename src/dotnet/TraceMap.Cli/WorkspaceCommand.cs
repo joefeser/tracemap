@@ -284,9 +284,16 @@ public static partial class WorkspaceCommand
                 + "Application context is not the database revision. Source-call binding is not established; SQL was never executed.";
             await File.WriteAllTextAsync(System.IO.Path.Combine(run, "START-HERE.md"),
                 $"# {(snapshot is null ? "Source collection" : "Source and compiled collection")}\n\nOutcome: {(partial ? "partial" : "completed")}. Read [report.md](report.md).\n\n{sourceLinks}\n\n"
+                + $"Selected source repositories collected: {scanRoots.Count}. These are the source entries for this run; dependency DLLs do not add source repositories.\n\n"
                 + "Combined index: combined.sqlite. Run state: workspace-run.local.json.\n\n"
+                + "## Which evidence to use\n\n"
+                + "- Use the per-source reports above and combined.sqlite for indexed source/call observations and their coverage gaps.\n"
+                + "- If a compiled publication is configured, use its native workbench below; DLL context does not establish source correspondence.\n"
+                + "- If SQL is configured, use its definition report and sql/sql-evidence.sqlite alongside the source index. A separate SQL sidecar is intentional, not missing collection.\n"
+                + "- Selected-root lifecycle analysis is separate. This workspace does not configure lifecycle root selectors or import prior lifecycle outputs; keep any existing bound lifecycle evidence in its original run.\n\n"
                 + compiledLinks + sqlLinks + "\n\nNo repository build, restore or fetch was requested.\n"
-                + "Reduced analysis and failed builds remain gaps; completion is not proof of complete coverage.\n", token);
+                + "Reduced analysis and failed builds remain gaps; completion is not proof of complete coverage.\n\n"
+                + "For one flow, follow the entry/callers and result consumers using these reports and targeted source reads. Keep direct source observations separate from extractor proof; review the relevant SQL contract without executing it. A completed collection is not an instruction to rescan solely because coverage is partial.\n", token);
             stage = "completed";
             await Record(partial ? "partial" : "completed");
             await output.WriteLineAsync($"{(snapshot is null ? "Source" : "Source and compiled")} collection {(partial ? "partial" : "completed")}: {System.IO.Path.Combine(run, "START-HERE.md")}");

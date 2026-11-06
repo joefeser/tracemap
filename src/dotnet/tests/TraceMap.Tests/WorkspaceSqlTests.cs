@@ -28,7 +28,10 @@ public sealed class WorkspaceSqlTests
         Assert.Equal("not-established", sql.GetProperty("callBinding").GetString());
         Assert.Equal("not-established", sql.GetProperty("databaseRevision").GetString());
         Assert.True(File.Exists(Path.Combine(fixture.Run, sql.GetProperty("index").GetString()!)));
-        Assert.Contains("SQL is an offline local sidecar", File.ReadAllText(Path.Combine(fixture.Run, "START-HERE.md")), StringComparison.Ordinal);
+        var guide = File.ReadAllText(Path.Combine(fixture.Run, "START-HERE.md"));
+        Assert.Contains("SQL is an offline local sidecar", guide, StringComparison.Ordinal);
+        Assert.Contains("A separate SQL sidecar is intentional, not missing collection", guide);
+        Assert.Contains("keep any existing bound lifecycle evidence in its original run", guide);
         Assert.False(File.Exists(Path.Combine(fixture.Run, "sql", "scan-manifest.json")));
     }
 

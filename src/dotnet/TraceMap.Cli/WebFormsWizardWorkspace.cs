@@ -34,6 +34,12 @@ internal static class WebFormsWizardWorkspace
                 await output.WriteLineAsync("Configured SOURCE repositories: " + configured.Repositories.Length + " "
                     + JsonSerializer.Serialize(configured.Repositories.Select(item => item.Id).ToArray())
                     + ". Compiled dependency DLLs are separate from source repositories.");
+                foreach (var source in configured.Repositories)
+                    await output.WriteLineAsync("  SOURCE " + source.Id + ": folder=" + JsonSerializer.Serialize(source.Path)
+                        + "; selection=" + JsonSerializer.Serialize(source.Solution is { } solution ? new[] { solution } : source.Projects)
+                        + (source.Solution is null && source.Projects.Length == 0 ? " (folder/discovery or saved website scope; not a full-build claim)" : " (file selection relative to the source folder)"));
+                await output.WriteLineAsync("Collect verifies these settings first; you do not need to choose verify before collect. Each collect creates a fresh run and retains previous runs.");
+                await output.WriteLineAsync("Selected-root lifecycle analysis is a separate workflow; existing lifecycle results are not imported into this workspace run.");
                 await output.WriteLineAsync("Workspace configuration already exists in this root. Verify, collect a fresh run, add framework SOURCE, or pause? [verify/collect/add-framework/later]");
                 var choice = await input.ReadLineAsync(token);
                 if (choice is null || choice.Trim() == "later") return 2;
@@ -65,6 +71,7 @@ internal static class WebFormsWizardWorkspace
                     var selections = names.Where(Supported).Select(item => Path.GetFileName(item)!).Order(StringComparer.Ordinal).ToArray();
                     await output.WriteLineAsync("Root project/solution files: " + JsonSerializer.Serialize(selections) + ". Nested projects are not inventoried.");
                     var detected = projects.Length == 1 ? projects[0] : null;
+                    await output.WriteLineAsync("Choose the project FILE under that source folder, not another folder or DLL. For a nested project, enter its path such as Library/Library.vbproj. A solution can select more projects and is never chosen automatically.");
                     string target;
                     while (true)
                     {
@@ -148,7 +155,7 @@ internal static class WebFormsWizardWorkspace
         {
             if (answers.FrameworkRoot is null)
             {
-                await output.WriteLineAsync("Your website and compiled dependency DLLs are already selected. An additional source-code repository is optional; it is not the DLL or bin folder.");
+                await output.WriteLineAsync("Your website source and compiled dependency DLLs are already selected. A DLL does not add its source checkout. Give the additional source repository folder if you want its implementation files scanned; use skip only to leave that source out for now.");
                 var value = await Existing("Framework SOURCE repository folder if you have its checkout; type skip if you only have the DLL or do not want additional source, or later:", false, allowSkip: true);
                 if (value is null) return 2;
                 answers = answers with { FrameworkRoot = value, FrameworkTarget = value == "" ? "" : null }; await Save();
@@ -158,13 +165,19 @@ internal static class WebFormsWizardWorkspace
                 var names = Directory.EnumerateFiles(answers.FrameworkRoot).Take(257).ToArray();
                 var candidates = names.Length > 256 ? [] : names.Where(Supported).Order(StringComparer.Ordinal).ToArray();
                 if (names.Length > 256) await output.WriteLineAsync("Root file preview limit reached; no partial candidate list shown. Nested projects are not inventoried.");
+                var projects = candidates.Where(item => Path.GetExtension(item).ToLowerInvariant() is ".csproj" or ".vbproj" or ".fsproj").ToArray();
+                var detected = projects.Length == 1 ? Path.GetFileName(projects[0]) : null;
+                await output.WriteLineAsync("Source repository folder: " + JsonSerializer.Serialize(answers.FrameworkRoot)
+                    + ". Select the PROJECT FILE inside it, not the folder or dependency DLL. For Library/Library.vbproj below this folder, enter Library/Library.vbproj. Solution selection is explicit and can include more projects.");
                 for (var index = 0; index < candidates.Length; index++) await output.WriteLineAsync($"{index + 1}: {Path.GetFileName(candidates[index])}");
                 while (true)
                 {
-                    await output.WriteLineAsync("Framework project/solution: choose a listed number, paste a file path, or type discovery (explicit fallback) or later:");
+                    await output.WriteLineAsync("Framework project/solution: choose a listed number, paste a file path relative to the source folder (absolute paths inside it also work), or type discovery (explicit fallback) or later"
+                        + (detected is null ? ":" : "; Enter uses detected project " + JsonSerializer.Serialize(detected) + ":"));
                     var value = await input.ReadLineAsync(token);
                     if (value is null || value.Trim() == "later") return 2;
                     value = Unquote(value);
+                    if (value.Length == 0 && detected is not null) value = detected;
                     if (value == "discovery") { answers = answers with { FrameworkTarget = value }; break; }
                     if (int.TryParse(value, out var number))
                     {
@@ -303,7 +316,10 @@ internal static class WebFormsWizardWorkspace
                 answers = answers with { SqlRoot = value }; await Save();
             }
             await output.WriteLineAsync("Saved choices (same destination and wizard root): " + root);
-            await output.WriteLineAsync(answers.FrameworkRoot == "" ? "Additional dependency source: skipped; existing compiled DLL evidence retained." : "Framework source: " + answers.FrameworkRoot + "; target: " + answers.FrameworkTarget);
+            await output.WriteLineAsync(answers.FrameworkRoot == ""
+                ? "SOURCE repositories to configure: 1 (website). Additional framework SOURCE is SKIPPED; its DLL does not scan its source. You can add it later with workspace -> add-framework."
+                : "SOURCE repositories to configure: 2 (website and framework). Framework source: " + answers.FrameworkRoot + "; project/solution file: " + answers.FrameworkTarget);
+            await output.WriteLineAsync("Collection scope: selected sources, the saved compiled publication and the selected offline SQL files. Existing selected-root lifecycle scans remain separate; they are not rerun or imported.");
             await output.WriteLineAsync("SQL manifest: " + answers.SqlManifest + "; SQL folder: " + answers.SqlRoot);
             await output.WriteLineAsync("Create and verify the workspace configuration without scanning, change one answer, or pause? [create/change/later]");
             var action = await input.ReadLineAsync(token);
@@ -359,7 +375,13 @@ internal static class WebFormsWizardWorkspace
             {
                 await output.WriteLineAsync("Open the workspace results: " + Path.Combine(run, "START-HERE.md"));
                 await output.WriteLineAsync("Combined SQLite evidence: " + Path.Combine(run, "combined.sqlite"));
-                await output.WriteLineAsync("SQL evidence remains a separate sidecar; see START-HERE.md for coverage and channel paths.");
+                if (File.Exists(Path.Combine(run, "sql", "sql-evidence.sqlite")))
+                {
+                    await output.WriteLineAsync("SQL was collected separately on purpose: " + Path.Combine(run, "sql", "report.md"));
+                    await output.WriteLineAsync("SQL SQLite: " + Path.Combine(run, "sql", "sql-evidence.sqlite") + ". Read it alongside combined.sqlite; separate does not mean missing. SQL was not executed and application-call binding is not automatic.");
+                }
+                else await output.WriteLineAsync("SQL evidence was not collected in this run; see START-HERE.md for its configured channels and coverage.");
+                await output.WriteLineAsync("Earlier selected-root lifecycle evidence stays in its original run. This collection does not replace or import it. START-HERE.md explains which output answers which question.");
             }
             return result;
         }

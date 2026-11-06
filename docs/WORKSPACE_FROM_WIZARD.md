@@ -260,3 +260,36 @@ I/O failure cannot leave an active configuration pointing to deleted input.
 
 Adding source does not establish source-to-DLL correspondence, turn partial
 analysis into semantic completeness, or change an earlier run's coverage.
+
+## Scope and result guidance in the wizard
+
+Initial framework selection now explains that the repository folder and project
+file are different inputs. Enter accepts the sole root `.csproj`, `.vbproj` or
+`.fsproj`, including when a solution is also present. With multiple projects, a
+selection is required; neither a solution nor a recursive discovery scan is chosen
+automatically. Existing numbered/absolute-inside-root selections still work.
+
+Before creation, the wizard states whether one or two source repositories will be
+configured. Choosing `skip` leaves framework SOURCE out even if its DLL is present;
+the message points to `workspace -> add-framework` for later addition. Continuing
+an existing workspace lists stored source folders/selections and explains that
+`collect` verifies settings first. A separate `verify` step is optional.
+
+The scope preview distinguishes a projectless website folder from a project-file
+selection. A nearby project file is a scope warning, not evidence that folder mode
+failed. Selected/configured source counts and excluded IDs remain visible; these
+are selections, not proof that semantic analysis succeeded.
+
+After collection, `START-HERE.md` explains where to look:
+
+- Per-source reports and `combined.sqlite`: indexed observations with their gaps.
+- Native workbench, if configured: the selected publication's static evidence.
+- `sql/report.md` and `sql/sql-evidence.sqlite`: intentionally separate offline SQL
+  evidence to read alongside the source index; separate does not mean missing.
+- Earlier selected-root lifecycle runs: retained in their original output folders.
+  Workspace collection does not configure their selectors or import those results.
+
+This guidance changes neither evidence schemas nor coverage semantics. Partial
+coverage remains partial, and source, metadata, lifecycle and SQL observations do
+not become runtime or source-to-DLL proof by appearing in one workflow. Collection
+completion is not a request to rescan merely because gaps exist.

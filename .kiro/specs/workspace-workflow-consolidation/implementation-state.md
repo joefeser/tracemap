@@ -1487,3 +1487,30 @@ unknowns at a fixed 30-call/15-minute stopping point; no automatic next dispatch
 scanner fix, revalidation, runtime/database execution or conversion redesign.
 Does not promise all unknowns can be resolved or whole-application completion.
 Public changes are prompt/task/state notes only; validate diff/private-path guard.
+
+### Wizard scope/context hardening — 2026-11-06
+
+Owner authorized hardening the wizard before assessing the larger C# application;
+WITS and a possible DNN conversion pilot remain separate queued work. Existing
+branch was clean. This slice changes CLI guidance and a sole-project Enter default,
+not Core extractors, configuration/output JSON schemas, ACK policy or SQL contracts.
+Initial setup explains project files relative to source folder, defaults only one
+root project even with a solution present, and makes skipped source count explicit.
+Continuation lists configured source folders/selections and says collect verifies
+first. Scope/result guidance distinguishes projectless website mode, source entries,
+DLL context, SQL sidecar and older selected-root lifecycle evidence. No import of
+historical lifecycle results or automatic source/DLL/call binding is introduced.
+Tests cover sole/multiple project defaults and guide/preview context. First test
+run caught an over-specific new test assertion that no runs directory exists:
+fixtures already have native-review runs. Corrected it to assert no workspace-run
+record was created; this is a test correction, not relaxed product validation.
+Focused tests, public replays and full Debug coverage are pending on final code.
+
+Focused Debug -warnaserror lane passed: 109 tests, 0 failed/skipped (1m40s),
+covering WebFormsWizardWorkspace, WorkspaceAddSource, WorkspaceFromWizard,
+WorkspaceCommand, WorkspaceSql and WorkspaceCompiled. Public initial-two-source
+replay passed with sole-project Enter, rich UTF16 SQL/context repair, combined,
+native and SQL integrity checks plus new stdout/START-HERE context assertions.
+An additional add-framework wording line is covered by the upcoming committed-head
+late-add replay/full gate. No behavioral/code changes are planned beyond concrete
+verification failures. Full Debug and exact-head legacy replay remain pending.

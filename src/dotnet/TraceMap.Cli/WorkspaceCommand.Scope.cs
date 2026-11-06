@@ -11,6 +11,7 @@ public static partial class WorkspaceCommand
     {
         var selected = repositories.Select(item => item.Config.Id).ToHashSet(StringComparer.Ordinal);
         await output.WriteLineAsync("Scope preview: selection is not a coverage proof; paths and fingerprints remain local.");
+        await output.WriteLineAsync($"SOURCE repositories: {repositories.Count} selected / {configuration.Repositories.Length} configured. A dependency DLL is compiled context, not another source checkout.");
         await output.WriteLineAsync("Excluded repositories: " + Show(configuration.Repositories
             .Where(item => !selected.Contains(item.Id)).Select(item => item.Id).Order(StringComparer.Ordinal).ToArray()));
         foreach (var (repository, root, _) in repositories)
@@ -42,6 +43,10 @@ public static partial class WorkspaceCommand
                 if (mode == "discovery" && projects.Length + solutions.Length > 1)
                     await output.WriteLineAsync($"  warning WORKSPACE_DISCOVERY_SELECTION: {repository.Id}; multiple root project/solution names; select intended projects or solution explicitly.");
             }
+            if (native?.ProjectMode == "projectless")
+                await output.WriteLineAsync("  Website folder mode is an explicit selection: source files/pages can be indexed without a selected MSBuild project. Syntax-only or reduced coverage remains possible; this is not a failed folder choice by itself.");
+            else if (mode == "projects")
+                await output.WriteLineAsync("  Project selection uses the listed project FILES inside this source folder; it does not select every repository or solution nearby.");
             if (native is not null)
             {
                 await output.WriteLineAsync($"  sourceFolders={Show(native.SourceFolders)}; pageMode={native.PageMode}; pages={Show(native.PageRelativePaths)}");
@@ -51,6 +56,7 @@ public static partial class WorkspaceCommand
             else if (mode == "solution")
                 await output.WriteLineAsync($"  warning WORKSPACE_SOLUTION_SCOPE: {repository.Id}; solution selection does not establish inclusion of projects outside that solution.");
         }
+        await output.WriteLineAsync("Selected-root lifecycle scans use a separate workflow. This collection does not configure lifecycle root selectors or import earlier lifecycle run outputs.");
         await output.WriteLineAsync($"SQL context: {Show(configuration.SqlEvidence?.RepositoryId)}; compiled context: {Show(configuration.CompiledReview?.RepositoryId)}; no automatic source/compiled/SQL call binding.");
     }
 

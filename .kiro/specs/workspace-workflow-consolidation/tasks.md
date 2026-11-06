@@ -177,3 +177,10 @@
 ## Fixed-scope flow handoff closeout — 2026-11-06
 
 - [x] Add one bounded source/SQL dispatch covering procedure results and skip-flag behavior, with a concrete final handoff and retained unknowns instead of automatic follow-on debugging rounds.
+
+## Wizard context hardening from the completed VB walkthrough — 2026-11-06
+
+- [x] Explain source folders versus project files and dependency DLLs; default only a sole root project; keep solution/discovery selection explicit.
+- [x] Show planned/active source entries, skipped framework source, projectless-folder scope and collect's built-in verification.
+- [x] Explain source/native/SQL outputs and separate retained selected-root lifecycle evidence in the result guide and collection completion output.
+- [ ] Complete focused tests, initial-source and late-add public replays, full required Debug gate, docs/guard checks and branch push without PR/merge.

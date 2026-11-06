@@ -162,7 +162,7 @@ def main():
             sql_file.unlink()
             sql_file.parent.rmdir()
             (root / "sql.local.json").unlink()
-    source_answers = [str(dependency), "Dependency.csproj"] if args.with_source else ["skip"]
+    source_answers = [str(dependency), ""] if args.with_source else ["skip"]
     tool("wizard-pause-before-sql", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
          "\n".join(["workspace", *source_answers, "later", ""]), expected=2)
     if (workspace / "workspace.local.json").exists():
@@ -219,6 +219,9 @@ def main():
             raise RuntimeError("Unchanged validation retry did not stop the loop")
     output = tool("wizard-create-workspace", ["webforms-review", "wizard", "--root", str(workspace), "--continue"],
                   "\n".join(["workspace", *(["change"] if args.bad_manifest_first else []), str(manifest_path), *([] if args.sql_beside_workspace else [str(sql)]), *(["stream"] if (sql / "schema.sql").stat().st_size > 262144 or args.sql_encoding != "utf8" else []), *(["use-sql"] if args.sql_context_repair else []), "create", "collect", ""]))
+    for expected in ("SOURCE repositories to configure:", "Existing selected-root lifecycle scans remain separate", "SQL was collected separately on purpose:"):
+        if expected not in output:
+            raise RuntimeError("Missing wizard channel context: " + expected)
     config_path = workspace / "workspace.local.json"
     config = json.loads(config_path.read_text())
     if len(config["repositories"]) != (2 if args.with_source else 1):
@@ -256,6 +259,10 @@ def main():
     for path in (collection / "START-HERE.md", collection / "report.md"):
         if not path.is_file():
             raise RuntimeError(f"Missing report: {path}")
+    guide = (collection / "START-HERE.md").read_text()
+    for expected in ("## Which evidence to use", "Selected-root lifecycle analysis is separate", "A separate SQL sidecar is intentional, not missing collection"):
+        if expected not in guide:
+            raise RuntimeError("Missing run evidence guide: " + expected)
     tool("wizard-existing-workspace-verify", ["webforms-review", "wizard", "--root", str(workspace), "--continue"], "workspace\nverify\n")
     if args.add_framework_after_first_run:
         if len(record["sources"]) != 1: raise RuntimeError("Initial source skip did not produce exactly one source")
@@ -303,6 +310,11 @@ def main():
             with sqlite3.connect(index.as_uri()+"?mode=ro", uri=True) as db:
                 if db.execute("pragma quick_check").fetchone()[0] != "ok": raise RuntimeError("Fresh channel index corrupt")
         print("PASS preserved one-source run and settings; existing wizard added framework source; fresh combined index contains BOTH source contributions", flush=True)
+        new_guide = (collection / "START-HERE.md").read_text()
+        if "Selected source repositories collected: 2" not in new_guide:
+            raise RuntimeError("Fresh guide did not report two source entries")
+        if "Collect verifies these settings first" not in extension or "SQL was collected separately on purpose:" not in extension:
+            raise RuntimeError("Existing-workspace guidance missing")
         print("Fresh two-source report: " + str(fresh[0] / "START-HERE.md"))
 
     print("PASS full public wizard/SQL/SQLite replay", flush=True)
