@@ -6,7 +6,7 @@
 - [x] Preserve file-local identities, provenance, refusal gaps, and deterministic output.
 - [x] Add synthetic positive, negative, ambiguous, malformed and member/source limit tests.
 - [x] Complete focused Debug and CLI smoke validation; record exact results.
-- [x] Complete the full Debug suite on the current bundle implementation. Pinned AngularJS validation head dade38e25 passed 6,207 tests, skipped 3 and failed 0 across the main and isolated diagnostics runs.
+- [x] Complete the full Debug suite on the current bundle implementation. Pinned AngularJS validation head 5e597a958 passed 6,215 tests, skipped 3 and failed 0 across the main and isolated diagnostics runs.
 
 - [x] Admit bounded inline VB ASAX and retain physical file spans.
 - [x] Track explicit Include calls on separate unambiguous method locals and refuse uncertain ownership.

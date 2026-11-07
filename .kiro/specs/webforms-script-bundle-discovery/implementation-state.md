@@ -257,3 +257,10 @@ parity, five required outputs, the external target at line 2 and all three
 unknown initializer supports at lines 7–9 were checked. The initial focused
 run caught a missing regex inventory entry, now included. Pinned semantic
 C#/VB OSS reruns are deferred for this inline static JavaScript slice.
+
+Pinned full Debug results on `5e597a958`, using the two full-suite commands
+recorded above: 4 isolated diagnostics passed, remaining suite 6,211 passed,
+3 skipped and 0 failed. Combined 6,215 passed, 3 skipped and 0 failed.
+The regular and startup bundle CLI controls retained 4 and 7 bundle facts,
+respectively, passed SQLite integrity and NDJSON/SQLite ID parity, and
+produced zero AngularJS handler candidates.
