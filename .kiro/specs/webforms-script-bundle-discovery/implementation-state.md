@@ -242,3 +242,18 @@ has an unknown-value fact supporting the external handler. Separate genuine
 JS errors, unsupported server syntax, conflicting controllers and the
 64-initializer cap continue to block the join. LF and CRLF tests retain
 physical spans. The public fixture has three independently authored examples.
+
+Implementation `5e597a958e83ec7ac934b6988561d4a317ff50dc`. Focused Debug
+gate passed 158/158 using this filter:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --filter 'FullyQualifiedName~WebFormsAngularClickTests|FullyQualifiedName~WebFormsScriptBundleTests|FullyQualifiedName~LegacyWebFormsExtractorTests|FullyQualifiedName~EvidenceDocsExportTests'
+```
+
+Pinned Debug build had zero warnings/errors. CLI scans of
+`samples/webforms-angularjs-click` and `samples/webforms-script-bundles`
+completed. On the Angular fixture SQLite integrity, NDJSON/SQLite fact-ID
+parity, five required outputs, the external target at line 2 and all three
+unknown initializer supports at lines 7–9 were checked. The initial focused
+run caught a missing regex inventory entry, now included. Pinned semantic
+C#/VB OSS reruns are deferred for this inline static JavaScript slice.
