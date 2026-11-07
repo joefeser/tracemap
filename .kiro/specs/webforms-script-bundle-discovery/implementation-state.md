@@ -299,3 +299,20 @@ escaping and cross-application targets remain gaps; all scan inputs stay
 local. This slice is exposed through `tracemap scan`. The synthetic fixture
 uses a nested application root. The mapping makes no IIS deployment or
 runtime assertion. Master-page dynamic inline server output is separate.
+
+Pinned implementation `4f647c9b0603921a696bc19bcac05950dc55cd6d` built in
+Debug with zero warnings/errors. This focused gate passed 216/216:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --filter 'FullyQualifiedName~WebFormsIisMountTests|FullyQualifiedName~WebFormsAngularClickTests|FullyQualifiedName~ScanExecutionReceiptTests|FullyQualifiedName~WebFormsScriptBundleTests|FullyQualifiedName~LegacyWebFormsExtractorTests|FullyQualifiedName~EvidenceDocsExportTests'
+```
+
+The two mount fixture scans in docs/VALIDATION.md and the controller-chain
+smoke passed SQLite integrity, five-artifact and NDJSON/SQLite fact-ID
+checks. The unmapped scan had zero handlers and a typed gap; the mapped scan
+had one handler with the master include ID and actual inventoried file path.
+Scan ID and receipt scope differed. The prior chain fixture retained its one
+handler. The initial fixture used a repo-root master reference for a nested
+file; changing it to the correct page-relative master reference isolated
+the tested script resolution. Separate C#/VB semantic OSS reruns deferred
+for this WebForms URL resolution slice.
