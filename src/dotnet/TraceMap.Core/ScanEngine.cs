@@ -33,7 +33,7 @@ public static class ScanEngine
             || options.IncludeGlobs is { Count: > 0 } || options.ExcludeGlobs is { Count: > 0 }
             || options.TargetFramework is not null || options.BinlogPaths is { Count: > 0 }
             || options.WebFormsVbImportContextPath is not null || options.VisualBasicCompilationContextPath is not null
-            || options.IndexCiProducers || options.IndexDepsJson))
+            || options.IndexCiProducers || options.IndexDepsJson || options.WebFormsIisMount is not null))
             throw new ArgumentException("CompiledOnlyRequiresInputsAndNoSourceAnalysisOptions", nameof(options));
 
         GitMetadata git;
@@ -576,6 +576,7 @@ public static class ScanEngine
             $"ilrewritepdb={ilRewritePdbBoundedInputSha256 ?? string.Empty}",
             $"webformspublish={webFormsPublishBoundedInputSha256 ?? string.Empty}");
         if (options.CompiledOnly) optionSignature += "|compiledonly=1";
+        if (options.WebFormsIisMount is { } mount) optionSignature += $"|iisMount={FrameValues([mount.UrlPrefix, mount.WebRoot])}";
         if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonInputSignature}";
         if (options.IndexCiProducers) optionSignature += $"|ciproducers={ciProducersInputSignature}";
         if (options.CiHintWorkflows is { Count: > 0 }) optionSignature += $"|cihints={FrameValues(options.CiHintWorkflows)}";
@@ -1389,7 +1390,7 @@ public static class ScanEngine
                 protectedLineRanges).ToArray()));
         facts.AddRange(Observe(
             ScanPerformanceExtractors.LegacyWebForms,
-            () => FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges).ToArray()));
+            () => FilterProtectedEvidence(LegacyWebFormsExtractor.Extract(repoPath, manifest, inventory, facts, options.WebFormsIisMount), protectedLineRanges).ToArray()));
         facts.AddRange(Observe(
             ScanPerformanceExtractors.LegacyWinForms,
             () => FilterProtectedEvidence(LegacyWinFormsExtractor.Extract(repoPath, manifest, inventory, facts), protectedLineRanges).ToArray()));

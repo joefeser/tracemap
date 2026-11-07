@@ -186,6 +186,7 @@ public sealed record ScanOptions(
     public bool IlCompiledScalarBoundary { get; init; }
     public bool IlInfoMessageBoundary { get; init; }
     public bool CompiledOnly { get; init; }
+    public WebFormsIisMount? WebFormsIisMount { get; init; }
     public bool IndexDepsJson { get; init; }
     public DepsJsonLimits? DepsJsonLimits { get; init; }
     public string? WebFormsVbImportContextPath { get; init; }
@@ -763,7 +764,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.19.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.20.0";
     public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.3";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";

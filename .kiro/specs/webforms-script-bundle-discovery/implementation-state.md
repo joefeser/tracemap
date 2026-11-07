@@ -288,3 +288,14 @@ external line 2 and three inline initializer supports were verified.
 Full Debug validation on 4344b34fc used the previously recorded two pinned
 suite commands. Four isolated diagnostics passed. The remaining suite passed
 6,218 and skipped 3. Combined: 6,222 passed, 3 skipped, zero failures.
+
+### Explicit IIS application mount on codex/workspace-scope-preflight
+
+Extractor 0.20.0 accepts one operator-declared mount for direct root-relative
+scripts. The master-page include retains the script URL, mount prefix and
+repository-relative web root. It points to the inventory's actual path and
+supports the content-page handler candidate. Missing, filtered, ambiguous,
+escaping and cross-application targets remain gaps; all scan inputs stay
+local. This slice is exposed through `tracemap scan`. The synthetic fixture
+uses a nested application root. The mapping makes no IIS deployment or
+runtime assertion. Master-page dynamic inline server output is separate.

@@ -17,17 +17,17 @@ public static partial class LegacyWebFormsExtractor
         SHA256.HashData(GeneratorBinaryIdentity.ReadBytes(typeof(HtmlParser).Assembly))));
 
     private static void AddAngularClickFacts(string repo, ScanManifest manifest, IReadOnlyList<FileInventoryItem> inventory,
-        IReadOnlyList<WebFormsPage> pages, List<CodeFact> facts)
+        IReadOnlyList<WebFormsPage> pages, List<CodeFact> facts, WebFormsIisMount? iisMount)
     {
         var candidates = pages.Where(p => p.MarkupSnapshot is { } text && (text.Length > BundleSourceLimit
             || text.Contains("ng-click", StringComparison.OrdinalIgnoreCase))).ToArray();
         if (candidates.Length == 0) return;
-        var state = new AngularClickScan(repo, manifest, inventory, pages, facts);
+        var state = new AngularClickScan(repo, manifest, inventory, pages, facts, iisMount);
         foreach (var page in candidates) state.Extract(page);
     }
 
     private sealed class AngularClickScan(string repo, ScanManifest manifest, IReadOnlyList<FileInventoryItem> inventory,
-        IReadOnlyList<WebFormsPage> pages, List<CodeFact> facts)
+        IReadOnlyList<WebFormsPage> pages, List<CodeFact> facts, WebFormsIisMount? iisMount)
     {
         private readonly ILookup<string, CodeFact> masterLinks = facts.Where(f => f.FactType == FactTypes.WebFormsCompositionDeclared
             && f.Properties.GetValueOrDefault("relationshipKind") == "UsesMasterPage").ToLookup(f => f.Evidence.FilePath, StringComparer.Ordinal);
@@ -41,6 +41,8 @@ public static partial class LegacyWebFormsExtractor
         private readonly Dictionary<string, AngularJsScript> parsed = new(StringComparer.Ordinal);
         private readonly Dictionary<string, FileInventoryItem> scripts = inventory.Where(i => i.Kind == "JavaScript")
             .ToDictionary(i => i.RelativePath, StringComparer.Ordinal);
+        private readonly ILookup<string, string>? iisScripts = iisMount is null ? null : inventory.Where(i => i.Kind == "JavaScript")
+            .Select(i => i.RelativePath).ToLookup(path => path, StringComparer.OrdinalIgnoreCase);
         private readonly IGrouping<string, FileInventoryItem>[] roots = inventory.Where(i => Path.GetFileName(i.RelativePath).Equals("Global.asax", StringComparison.OrdinalIgnoreCase))
             .GroupBy(i => DirectoryOf(i.RelativePath), StringComparer.Ordinal).OrderByDescending(group => group.Key.Length).ToArray();
         private readonly Dictionary<string, string> failedScripts = new(StringComparer.Ordinal);
@@ -77,15 +79,15 @@ public static partial class LegacyWebFormsExtractor
                     if (relationship is null) throw new AngularClickGap("AngularMasterUnavailable");
                     supports.Add(relationship.FactId);
                 }
-                var initializerIds = new HashSet<string>(StringComparer.Ordinal);
+                var surfaceSupportIds = new HashSet<string>(StringComparer.Ordinal);
                 string? assetGap = null;
                 try
                 {
                     var overrides = markup.All.Where(e => e.LocalName == "asp:content").Select(e => e.GetAttribute("ContentPlaceHolderID"))
                         .OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
                     var hasBase = markup.QuerySelector("base[href]") is not null || layout?.QuerySelector("base[href]") is not null;
-                    IncludeSurface(page, markup, page.FilePath, hasBase, null, assets, inline, initializerIds);
-                    if (master is not null && layout is not null) IncludeSurface(master, layout, page.FilePath, hasBase, overrides, assets, inline, initializerIds);
+                    IncludeSurface(page, markup, page.FilePath, hasBase, null, assets, inline, surfaceSupportIds);
+                    if (master is not null && layout is not null) IncludeSurface(master, layout, page.FilePath, hasBase, overrides, assets, inline, surfaceSupportIds);
                     if (assets.Count == 0) throw new AngularClickGap("AngularScriptIncludeUnavailable");
                     foreach (var path in assets.Keys) ReadScript(path);
                 }
@@ -137,7 +139,7 @@ public static partial class LegacyWebFormsExtractor
                         var handlerId = $"webforms-angular-method:{FactFactory.Hash($"{handler.Method.File}|{handler.Method.Start}", 32)}";
                         var moduleFact = ScriptOwner(handler.Module, "module", module, assets[handler.Module.File]);
                         var registration = ScriptOwner(handler.Registration, "controller", controller, assets[handler.Registration.File].Append(moduleFact.FactId));
-                        var evidence = assets[handler.Method.File].Concat(initializerIds).Concat(ownerIds).Append(registration.FactId);
+                        var evidence = assets[handler.Method.File].Concat(surfaceSupportIds).Concat(ownerIds).Append(registration.FactId);
                         Observe(FactTypes.WebFormsAngularClickHandlerCandidate, handler.Method.File, handler.Method.Line, handler.Method.EndLine,
                             parsed[handler.Method.File].Hash, id, handlerId, evidence, hashProvided: true,
                             properties: new() { ["module"] = module, ["controller"] = controller, ["method"] = method, ["clickFactId"] = clickFact.FactId });
@@ -303,6 +305,29 @@ public static partial class LegacyWebFormsExtractor
             return root.Key;
         }
 
+        private string ResolveMountedScript(string page, string surface, string url, WebFormsIisMount mount)
+        {
+            var prefix = mount.UrlPrefix == "/" ? "/" : mount.UrlPrefix + "/";
+            if (!url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                throw new AngularClickGap("AngularIisMountPrefixMismatch");
+            var relative = url[prefix.Length..];
+            if (!WebFormsIisMount.SafeRelativePath(relative) || !relative.EndsWith(".js", StringComparison.OrdinalIgnoreCase))
+                throw new AngularClickGap("UnsupportedAngularScriptPath");
+
+            var root = mount.WebRoot == "." ? "" : mount.WebRoot;
+            bool InApplication(string file) =>
+                (root.Length == 0 || file.StartsWith(root + "/", StringComparison.Ordinal))
+                && (Root(file) is not { } knownRoot || knownRoot == root);
+            if (!InApplication(page) || !InApplication(surface))
+                throw new AngularClickGap("AngularApplicationRootMismatch");
+            var target = root.Length == 0 ? relative : root + "/" + relative;
+            var matches = iisScripts![target].Take(2).ToArray();
+            if (matches.Length == 0) throw new AngularClickGap("AngularScriptOutsideInventory");
+            if (matches.Length > 1) throw new AngularClickGap("AmbiguousAngularMountedScript");
+            if (!InApplication(matches[0])) throw new AngularClickGap("AngularApplicationRootMismatch");
+            return matches[0];
+        }
+
         private string ResolvePath(string surface, string src, bool bundle = false)
         {
             var rooted = src.StartsWith("~/", StringComparison.Ordinal) || src.StartsWith('/');
@@ -349,10 +374,24 @@ public static partial class LegacyWebFormsExtractor
                     continue;
                 }
                 if (hasBase) throw new AngularClickGap("AngularScriptBaseUnavailable");
-                var path = ResolvePath(pageUrl, script.GetAttribute("src")!);
+                var src = script.GetAttribute("src")!;
+                var mounted = src.StartsWith('/') && !src.StartsWith("//", StringComparison.Ordinal) && iisMount is not null;
+                if (mounted)
+                {
+                    var start = script.SourceReference?.Position.Index ?? throw new AngularClickGap("AngularScriptLocationUnavailable");
+                    var length = TagEnd(page.FilePath, start) - start + 1;
+                    if (page.MarkupSnapshot!.AsSpan(start, length).Contains("<%", StringComparison.Ordinal))
+                        throw new AngularClickGap("UnsupportedAngularScriptPath");
+                }
+                var path = mounted ? ResolveMountedScript(pageUrl, page.FilePath, src, iisMount!) : ResolvePath(pageUrl, src);
                 var line = script.SourceReference?.Position.Line ?? throw new AngularClickGap("AngularScriptLocationUnavailable");
                 var include = Observe(FactTypes.WebFormsExternalScriptReferenceCandidate, page.FilePath, line, TagEndLine(page.FilePath, script.SourceReference!.Position.Index), page.MarkupSnapshot!,
-                    SurfaceIdentity(page.FilePath), "file:" + path, []);
+                    SurfaceIdentity(page.FilePath), "file:" + path, [], properties: mounted ? new()
+                    {
+                        ["resolutionSource"] = "operator-iis-mount", ["mountPrefix"] = iisMount!.UrlPrefix,
+                        ["repositoryWebRoot"] = iisMount.WebRoot, ["scriptUrl"] = src
+                    } : null);
+                if (mounted) supports.Add(include.FactId);
                 Add(path, include.FactId);
             }
             if (bundleGaps.Any(f => f.Evidence.FilePath == page.FilePath))

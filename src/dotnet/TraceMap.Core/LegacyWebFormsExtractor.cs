@@ -64,7 +64,8 @@ public static partial class LegacyWebFormsExtractor
         string repoPath,
         ScanManifest manifest,
         IReadOnlyList<FileInventoryItem> inventory,
-        IReadOnlyList<CodeFact> existingFacts)
+        IReadOnlyList<CodeFact> existingFacts,
+        WebFormsIisMount? iisMount = null)
     {
         // One retained snapshot also serves entry projections; preserve the bounded
         // external evidence-enumeration contract as new relationship families grow.
@@ -131,7 +132,7 @@ public static partial class LegacyWebFormsExtractor
         }
 
         AddBundleDiscoveryFacts(repoPath, manifest, inventory, facts);
-        AddAngularClickFacts(repoPath, manifest, inventory, context.Pages, facts);
+        AddAngularClickFacts(repoPath, manifest, inventory, context.Pages, facts, iisMount);
         AddLifecycleEntryRelationships(manifest, entryEvidence, facts);
         AddClientHttpHandlerResolutionFacts(repoPath, manifest, inventory, context, existingFacts, facts);
 

@@ -5518,7 +5518,7 @@ handler and review the recorded supporting IDs and parser/input digests.
 The prior bundle fixtures retain their four- and seven-fact bundle controls.
 
 This rule is `legacy.webforms.angularjs-click.v1`, extractor
-`legacy-webforms/0.19.0`. It parses included JavaScript using pinned Acornima
+`legacy-webforms/0.20.0`. It parses included JavaScript using pinned Acornima
 1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
 tracks .js source changes. The explicit ownership and resource boundaries are
 in the rule catalog. General plain onclick, runtime, backend and private
@@ -5533,3 +5533,18 @@ The controller-chain fixture registers three named controllers with the same
 method name. Tests select each controller in turn and check its registration
 span, method span and owner identity. Duplicate names, unknown intermediates,
 malformed syntax and chains longer than 32 keep the join unresolved.
+
+### Explicit IIS mount for a master-page script
+
+Use fresh outputs for these two static controls:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/webforms-iis-mount --out "$out/unmapped"
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/webforms-iis-mount --webforms-iis-mount '/Portal/Desk=Site' --out "$out/mapped"
+```
+
+The first scan reports UnsupportedAngularScriptPath on the content-page click.
+The second records a master-page include with resolutionSource operator-iis-mount
+and an inventoried JS target. The handler must retain the include fact ID.
+Compare receipt fingerprints, scan IDs and SQLite integrity. Relative URL
+resolution remains unchanged. No IIS process or host configuration is read.
