@@ -27,3 +27,18 @@
 
 3. On the approved machine use the existing private source selection, a fresh output, and at most one static scan. Check the three inline declarations and the two simple click candidates independently. For each click ID report the handler, supporting initializer IDs and exact controller/module, bundle membership and registration evidence locally. If unresolved, record its typed gap and the first missing hop. Complex click expressions retain their own gaps. Treat HTTP, IL and SQL observations separately from this frontend edge.
 4. Return only sanitized counts, rule/version, and which stages were evidenced. Keep private identifiers, paths, receipts, digests, source and exception details local. This verification requires no site startup, rendering, or application JavaScript execution.
+
+## Reconciling an exploratory work-machine run
+
+Record the built checkout's commit and local change status privately. A shared
+extractor version can also appear on a locally modified build. Label results
+from an exploratory build separately, including any skips applied after
+script-path or master-page gaps. On the pinned build an unavailable script
+can contain a competing registration and keeps the join unresolved.
+
+If the exploratory run reaches UnsupportedAngularControllerRegistration,
+inspect the registration source locally and report only its synthetic shape:
+argument count, module receiver, any enclosing function's parameters, and
+whether the wrapper is directly invoked, conditionally invoked or has no
+observed invocation. The gap covers both non-top-level calls and argument
+counts other than two. Source inspection is sufficient for this follow-up.
