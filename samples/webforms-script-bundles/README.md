@@ -10,10 +10,9 @@ candidates and one master-page bundle-reference candidate. Member facts link to
 the declaration by fact ID. References do not automatically join registrations
 by virtual-path equality. No startup registration or runtime ordering is proven.
 
-Standalone JavaScript is not in the .NET scanner inventory yet: the click/function/
-HTTP chain is intentionally NOT an acceptance claim. The named HTTP endpoint has
-no implementation here. This fixture lets an investigator discover declared member
-paths without fabricating downstream calls or fetching/executing JavaScript.
+WebForms inventories now include standalone JavaScript. This original fixture
+uses a plain HTML onclick and verifies bundle discovery. The separate
+`samples/webforms-angularjs-click` fixture exercises AngularJS click ownership.
 
 To inspect the declared members in the emitted SQLite database:
 

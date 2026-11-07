@@ -131,6 +131,7 @@ public static partial class LegacyWebFormsExtractor
         }
 
         AddBundleDiscoveryFacts(repoPath, manifest, inventory, facts);
+        AddAngularClickFacts(repoPath, manifest, inventory, context.Pages, facts);
         AddLifecycleEntryRelationships(manifest, entryEvidence, facts);
         AddClientHttpHandlerResolutionFacts(repoPath, manifest, inventory, context, existingFacts, facts);
 

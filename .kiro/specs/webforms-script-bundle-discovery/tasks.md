@@ -12,8 +12,10 @@
 - [x] Track explicit Include calls on separate unambiguous method locals and refuse uncertain ownership.
 
 Explicit follow-ups, not acceptance claims of this discovery slice:
-- [ ] Application-scoped registration/reference resolution, including duplicate declarations and startup evidence.
-- [ ] Admitted external JavaScript inventory and bounded function/call/request relationships.
+- [x] Require a unique literal bundle declaration in the same nearest inventoried Global.asax application for AngularJS source selection.
+- [ ] Extend registration and startup execution evidence beyond static source selection.
+- [x] Admit .js to the WebForms source snapshot and emit candidate AngularJS click-to-external-method relationships for explicit app/controller scopes.
+- [ ] Extend supported handlers through calls to HTTP/backend evidence.
 - [ ] Wildcards, directory includes, general variable mutation beyond admitted local Include calls, ScriptManager/Bundle.config forms and configuration-dependent selection.
 
-Angular is out of scope and is not established as present in the motivating app.
+The AngularJS continuation uses its own rule and synthetic fixture. Private verification is recorded separately by the operator.

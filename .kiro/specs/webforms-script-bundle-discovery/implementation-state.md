@@ -159,3 +159,38 @@ control emitted four bundle facts. Startup emitted seven, including the three
 expected member-to-declaration joins with ordinals 0, 0, 1 on ASAX lines 7, 8, 9.
 Private work-machine verification remains with the owner via
 `prompts/verify-vb-asax-bundle-locals-once.md`.
+
+## AngularJS included-handler continuation
+
+Branch `codex/workspace-scope-preflight`, based on `ea4d8ae67`. New rule
+`legacy.webforms.angularjs-click.v1` uses extractor `legacy-webforms/0.17.0`.
+The selected WebForms inventory now fingerprints admitted .js sources. The
+extractor parses referenced files for click-bearing markup. Source filters and
+directory exclusions continue to apply. This expands the source snapshot of a
+WebForms scan, including its exact-source roster.
+
+The new public website `samples/webforms-angularjs-click` exercises a master
+content slot, a named app on the master, a controller on the page and a VB bundle
+with a module alias and two controllers that both assign save. A retained
+handler must point to the external assignment in editor.js. Includes, markup
+scope, JS module and registration, and the click site carry supporting fact IDs,
+endpoints, spans, commit, extractor version and producer/input digests. Acornima
+1.9.1 parses classic JavaScript. AngleSharp 1.10.0 supplies the HTML tree and
+positions with script execution disabled. The rule catalog records supported
+forms and resource bounds.
+
+The focused gate passed 150/150, zero skips and failures:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --filter 'FullyQualifiedName~WebFormsAngularClickTests|FullyQualifiedName~WebFormsScriptBundleTests|FullyQualifiedName~LegacyWebFormsExtractorTests|FullyQualifiedName~EvidenceDocsExportTests'
+```
+
+The overridden-placeholder regression initially found a false inclusion. The
+extractor now checks active render markers in the parsed markup and omits
+replaced master defaults, comments and inert render expressions. Tests cover
+direct and bundled includes, different and duplicate controllers, source scope,
+parser errors, conflict/refusal and resource limits. The frontend fixture
+provides syntax evidence. HTTP dispatch, runtime execution, named callback
+indirection and general inline onclick remain separate. Pinned C#/VB semantic
+OSS smoke reruns are deferred for this WebForms/JS syntax slice. The final
+pinned full Debug and public CLI results will be recorded below.

@@ -36,7 +36,7 @@ public sealed class WebFormsScriptBundleTests
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
             Assert.NotNull(fact.Evidence.SnippetHash);
         });
-        Assert.DoesNotContain(inventory, item => item.RelativePath.EndsWith(".js", StringComparison.Ordinal));
+        Assert.Contains(inventory, item => item.RelativePath == "Scripts/main.js" && item.Kind == "JavaScript");
         Assert.Equal(JsonSerializer.Serialize(facts), JsonSerializer.Serialize(Extract(temp.Path, inventory.Reverse().ToArray())));
     }
 

@@ -5489,7 +5489,7 @@ comments, same-path declarations, VB case handling and same-line fact identity.
 The public `samples/webforms-script-bundles` fixture retains one declaration,
 two members and one reference. Its click and external function are a downstream
 coverage boundary: standalone JavaScript, registration execution, rendered bundles
-and HTTP reachability are not proven by these syntax facts. Angular is out of scope.
+and HTTP reachability require separate evidence. The AngularJS click rule below has its own control.
 
 Run the focused bundle and LegacyWebFormsExtractorTests families, full Debug
 `-warnaserror` for this shared-core change, and the CLI against the sample. Verify
@@ -5506,3 +5506,20 @@ Join the three member facts to their declaration fact IDs and check source lines
 references remain candidates. The focused test families also exercise refusal
 for aliases, reassignment, duplicate names, conditional use, malformed markup
 and a member count above the limit.
+
+## AngularJS click to included JavaScript method
+
+Run the WebFormsAngularClickTests, WebFormsScriptBundleTests,
+LegacyWebFormsExtractorTests and EvidenceDocsExportTests families in Debug with
+`-warnaserror`, followed by the full Debug gate for the shared Core changes.
+Scan `samples/webforms-angularjs-click` and compare the new rule’s fact IDs in
+NDJSON and SQLite. Verify the fixture README query returns its one expected
+handler and review the recorded supporting IDs and parser/input digests.
+The prior bundle fixtures retain their four- and seven-fact bundle controls.
+
+This rule is `legacy.webforms.angularjs-click.v1`, extractor
+`legacy-webforms/0.17.0`. It parses included JavaScript using pinned Acornima
+1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
+tracks .js source changes. The explicit ownership and resource boundaries are
+in the rule catalog. General plain onclick, runtime, backend and private
+verification remain separate.
