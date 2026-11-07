@@ -25,3 +25,7 @@ Expected result is one row connecting `Page.aspx` line 4 to
 module scope, JS module alias and registration. Bundle facts identify the
 selected file by its exact declaration and member ID. This projectless
 fixture supports a syntax candidate. Browser and HTTP execution are separate.
+
+The script in Page.aspx lines 7–9 contains three single-line server output
+initializers. Each contributes a WebFormsInlineServerInitializerCandidate
+with valueStatus `unknown` and a supporting ID on the external handler.

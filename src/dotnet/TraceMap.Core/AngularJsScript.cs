@@ -19,7 +19,7 @@ internal sealed class AngularJsScript
     internal string File { get; }
     internal string Hash { get; }
 
-    internal AngularJsScript(string file, string text)
+    internal AngularJsScript(string file, string text, IReadOnlyList<int>? unknownInitializers = null)
     {
         File = file;
         Hash = FactFactory.Hash(text, 64);
@@ -29,6 +29,12 @@ internal sealed class AngularJsScript
             if (++tokenCount > 100_000) throw new AngularClickGap("AngularScriptTokenLimit");
         } }).ParseScript(text);
         var nodes = Walk(script).ToArray();
+        if (unknownInitializers is { Count: > 0 })
+        {
+            var initializers = nodes.OfType<VariableDeclarator>().Where(d => d.Id is Identifier && d.Init is NumericLiteral)
+                .Select(d => d.Init!.Start).ToHashSet();
+            if (!unknownInitializers.All(initializers.Contains)) throw new AngularClickGap("UnsupportedAngularServerInitializer");
+        }
         controllerCalls = nodes.OfType<CallExpression>().Where(call => Member(call.Callee, "controller", out _)).ToArray();
         globals = script.Body.OfType<VariableDeclaration>().SelectMany(v => v.Declarations.ToArray())
             .Where(d => d.Id is Identifier).ToLookup(d => ((Identifier)d.Id).Name, StringComparer.Ordinal);

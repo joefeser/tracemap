@@ -77,14 +77,15 @@ public static partial class LegacyWebFormsExtractor
                     if (relationship is null) throw new AngularClickGap("AngularMasterUnavailable");
                     supports.Add(relationship.FactId);
                 }
+                var initializerIds = new HashSet<string>(StringComparer.Ordinal);
                 string? assetGap = null;
                 try
                 {
                     var overrides = markup.All.Where(e => e.LocalName == "asp:content").Select(e => e.GetAttribute("ContentPlaceHolderID"))
                         .OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
                     var hasBase = markup.QuerySelector("base[href]") is not null || layout?.QuerySelector("base[href]") is not null;
-                    IncludeSurface(page, markup, page.FilePath, hasBase, null, assets, inline);
-                    if (master is not null && layout is not null) IncludeSurface(master, layout, page.FilePath, hasBase, overrides, assets, inline);
+                    IncludeSurface(page, markup, page.FilePath, hasBase, null, assets, inline, initializerIds);
+                    if (master is not null && layout is not null) IncludeSurface(master, layout, page.FilePath, hasBase, overrides, assets, inline, initializerIds);
                     if (assets.Count == 0) throw new AngularClickGap("AngularScriptIncludeUnavailable");
                     foreach (var path in assets.Keys) ReadScript(path);
                 }
@@ -136,7 +137,7 @@ public static partial class LegacyWebFormsExtractor
                         var handlerId = $"webforms-angular-method:{FactFactory.Hash($"{handler.Method.File}|{handler.Method.Start}", 32)}";
                         var moduleFact = ScriptOwner(handler.Module, "module", module, assets[handler.Module.File]);
                         var registration = ScriptOwner(handler.Registration, "controller", controller, assets[handler.Registration.File].Append(moduleFact.FactId));
-                        var evidence = assets[handler.Method.File].Concat(ownerIds).Append(registration.FactId);
+                        var evidence = assets[handler.Method.File].Concat(initializerIds).Concat(ownerIds).Append(registration.FactId);
                         Observe(FactTypes.WebFormsAngularClickHandlerCandidate, handler.Method.File, handler.Method.Line, handler.Method.EndLine,
                             parsed[handler.Method.File].Hash, id, handlerId, evidence, hashProvided: true,
                             properties: new() { ["module"] = module, ["controller"] = controller, ["method"] = method, ["clickFactId"] = clickFact.FactId });
@@ -220,7 +221,9 @@ public static partial class LegacyWebFormsExtractor
             return document;
         }
 
-        private int TagEndLine(string file, int start)
+        private int TagEndLine(string file, int start) => LineAt(markupSources[file], TagEnd(file, start));
+
+        private int TagEnd(string file, int start)
         {
             var source = markupSources[file];
             var quote = '\0';
@@ -229,7 +232,7 @@ public static partial class LegacyWebFormsExtractor
                 var ch = source[i];
                 if (quote != '\0') { if (ch == quote) quote = '\0'; }
                 else if (ch is '\'' or '"') quote = ch;
-                else if (ch == '>') return LineAt(source, i);
+                else if (ch == '>') return i;
             }
             throw new AngularClickGap("MalformedAngularMarkup");
         }
@@ -314,7 +317,7 @@ public static partial class LegacyWebFormsExtractor
             return path;
         }
 
-        private void IncludeSurface(WebFormsPage page, IDocument markup, string pageUrl, bool hasBase, HashSet<string>? overrides, SortedDictionary<string, HashSet<string>> assets, List<AngularJsScript> inline)
+        private void IncludeSurface(WebFormsPage page, IDocument markup, string pageUrl, bool hasBase, HashSet<string>? overrides, SortedDictionary<string, HashSet<string>> assets, List<AngularJsScript> inline, HashSet<string> supports)
         {
             void Add(string path, params string[] ids)
             {
@@ -339,10 +342,10 @@ public static partial class LegacyWebFormsExtractor
                 if (type is not (null or "" or "text/javascript" or "application/javascript")) continue;
                 if (!script.HasAttribute("src"))
                 {
-                    if (string.IsNullOrWhiteSpace(script.TextContent)) continue;
-                    if (inline.Count >= 32) throw new AngularClickGap("AngularIncludedScriptLimit");
+                    if (script.TextContent.Length == 0) continue;
                     var offset = script.SourceReference?.Position.Index ?? throw new AngularClickGap("AngularScriptLocationUnavailable");
-                    inline.Add(ParseScript($"inline:{page.FilePath}#{offset}", script.TextContent));
+                    var source = ParseInlineScript(page, offset, script.TextContent, supports, inline.Count);
+                    if (source is not null) inline.Add(source);
                     continue;
                 }
                 if (hasBase) throw new AngularClickGap("AngularScriptBaseUnavailable");
@@ -370,6 +373,71 @@ public static partial class LegacyWebFormsExtractor
                     Add(ResolvePath(declaration.Evidence.FilePath, member.TargetSymbol!, bundle: true), reference.FactId, declaration.FactId, member.FactId);
             }
         }
+
+        // HTML parsing operates on masked markup. Reconcile the DOM script text with
+        // its physical source before admitting server output into a JS initializer.
+        private AngularJsScript? ParseInlineScript(WebFormsPage page, int offset, string body, HashSet<string> supports, int inlineCount)
+        {
+            var id = $"inline:{page.FilePath}#{offset}";
+            var start = TagEnd(page.FilePath, offset) + 1;
+            var masked = markupSources[page.FilePath];
+            var end = start;
+            foreach (var ch in body)
+            {
+                if (end >= masked.Length) throw new AngularClickGap("AngularScriptLocationUnavailable");
+                var actual = masked[end++];
+                if (ch == '\n' && actual == '\r')
+                {
+                    if (end < masked.Length && masked[end] == '\n') end++;
+                    continue;
+                }
+                if (ch != actual) throw new AngularClickGap("AngularScriptLocationUnavailable");
+            }
+
+            var raw = page.MarkupSnapshot![start..end];
+            var cursor = raw.IndexOf("<%", StringComparison.Ordinal);
+            if (cursor < 0 && string.IsNullOrWhiteSpace(body)) return null;
+            if (inlineCount >= 32) throw new AngularClickGap("AngularIncludedScriptLimit");
+            if (cursor < 0) return ParseScript(id, body);
+            var projection = masked.ToString(new Microsoft.CodeAnalysis.Text.TextSpan(start, end - start)).ToCharArray();
+            var positions = new List<int>();
+            while (cursor >= 0)
+            {
+                var comment = raw.AsSpan(cursor).StartsWith("<%--", StringComparison.Ordinal);
+                var terminator = comment ? "--%>" : "%>";
+                var close = raw.IndexOf(terminator, cursor + 2, StringComparison.Ordinal);
+                if (close < 0) throw new AngularClickGap("UnsupportedAngularServerInitializer");
+                if (!comment)
+                {
+                    var lineStart = raw.LastIndexOfAny(['\r', '\n'], cursor) + 1;
+                    var lineEnd = raw.IndexOfAny(['\r', '\n'], close);
+                    if (lineEnd < 0) lineEnd = raw.Length;
+                    var match = InlineInitializer.Match(raw[lineStart..lineEnd]);
+                    if (!match.Success || lineStart + match.Groups["value"].Index != cursor)
+                        throw new AngularClickGap("UnsupportedAngularServerInitializer");
+                    if (positions.Count >= 64) throw new AngularClickGap("AngularServerInitializerLimit");
+                    // A literal carries no owner identity. Its value is never reported or evaluated.
+                    projection[cursor] = '0';
+                    positions.Add(cursor);
+                }
+                cursor = raw.IndexOf("<%", close + terminator.Length, StringComparison.Ordinal);
+            }
+            var script = ParseScript(id, new string(projection), positions);
+            foreach (var position in positions)
+            {
+                var line = LineAt(masked, start + position);
+                var fact = Observe(FactTypes.WebFormsInlineServerInitializerCandidate, page.FilePath, line, line,
+                    page.MarkupSnapshot!, SurfaceIdentity(page.FilePath), $"webforms-server-initializer:{page.FilePath}#{start + position}", [],
+                    properties: new() { ["valueStatus"] = "unknown" });
+                supports.Add(fact.FactId);
+            }
+            return script;
+        }
+
+        private static readonly Regex InlineInitializer = new(
+            @"^[ \t]*(?:var|const|let)[ \t]+" + AngularIdentifier +
+            @"[ \t]*=[ \t]*(?<value><%=[ \t]*(?:[0-9]+|[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*)[ \t]*%>)[ \t]*;[ \t]*\z",
+            AngularOptions, RegexBudget.LoadTolerant);
 
         private void ReadScript(string path)
         {
@@ -400,9 +468,9 @@ public static partial class LegacyWebFormsExtractor
             { throw new AngularClickGap("AngularScriptUnavailable"); }
         }
 
-        private static AngularJsScript ParseScript(string path, string text)
+        private static AngularJsScript ParseScript(string path, string text, IReadOnlyList<int>? unknownInitializers = null)
         {
-            try { return new AngularJsScript(path, text); }
+            try { return new AngularJsScript(path, text, unknownInitializers); }
             catch (Acornima.ParseErrorException) { throw new AngularClickGap("MalformedAngularScript"); }
             catch (InsufficientExecutionStackException) { throw new AngularClickGap("AngularScriptDepthLimit"); }
         }

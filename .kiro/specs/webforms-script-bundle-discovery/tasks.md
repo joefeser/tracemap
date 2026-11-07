@@ -19,3 +19,4 @@ Explicit follow-ups, not acceptance claims of this discovery slice:
 - [ ] Wildcards, directory includes, general variable mutation beyond admitted local Include calls, ScriptManager/Bundle.config forms and configuration-dependent selection.
 
 The AngularJS continuation uses its own rule and synthetic fixture. Private verification is recorded separately by the operator.
+- [x] Preserve inline WebForms property initializers as unknown, retain their physical spans and require the rest of the script to parse before attaching an external handler.

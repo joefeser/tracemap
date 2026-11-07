@@ -42,6 +42,52 @@ public sealed class WebFormsAngularClickTests
         Assert.Equal(JsonSerializer.Serialize(all), JsonSerializer.Serialize(Extract(temp.Path, inventory.Reverse().ToArray())));
     }
 
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void Three_inline_server_initializers_keep_physical_spans_and_external_handler(string newline)
+    {
+        using var temp = Fixture();
+        var page = Path.Combine(temp.Path, "Page.aspx");
+        File.WriteAllText(page, File.ReadAllText(page).ReplaceLineEndings(newline));
+        var facts = Extract(temp.Path);
+        var edge = Assert.Single(facts, f => f.FactType == FactTypes.WebFormsAngularClickHandlerCandidate);
+        var initializers = facts.Where(f => f.FactType == FactTypes.WebFormsInlineServerInitializerCandidate)
+            .OrderBy(f => f.Evidence.StartLine).ToArray();
+        Assert.Equal(new[] { 7, 8, 9 }, initializers.Select(f => f.Evidence.StartLine));
+        Assert.All(initializers, f =>
+        {
+            Assert.Equal("Page.aspx", f.Evidence.FilePath);
+            Assert.Equal(f.Evidence.StartLine, f.Evidence.EndLine);
+            Assert.Equal("unknown", f.Properties["valueStatus"]);
+            Assert.Contains(f.FactId, edge.Properties["supportingFactIds"].Split(','));
+        });
+    }
+
+    [Theory]
+    [InlineData("var showHints = ;", "MalformedAngularScript")]
+    [InlineData("var showHints = <%= Pick() %>;", "UnsupportedAngularServerInitializer")]
+    [InlineData("var showHints = 3 + <%= Flags.Value %>;", "UnsupportedAngularServerInitializer")]
+    [InlineData("/*\nvar pretend = <%= Flags.Value %>;\n*/", "UnsupportedAngularServerInitializer")]
+    [InlineData("angular.module('sampleApp').controller('EditorController', function($scope){});", "AmbiguousAngularController")]
+    public void Invalid_or_conflicting_inline_content_cannot_supply_a_handler(string replacement, string gap)
+    {
+        using var temp = Fixture();
+        var file = Path.Combine(temp.Path, "Page.aspx");
+        File.WriteAllText(file, File.ReadAllText(file).Replace("var showHints = <%= Preferences.ShowHints %>;", replacement));
+        AssertGap(Extract(temp.Path), gap);
+    }
+
+    [Fact]
+    public void More_than_64_inline_server_initializers_refuses_a_partial_join()
+    {
+        using var temp = Fixture();
+        var file = Path.Combine(temp.Path, "Page.aspx");
+        var extra = string.Join("\n", Enumerable.Range(0, 62).Select(i => $"var v{i} = <%= Flags.Value %>;"));
+        File.WriteAllText(file, File.ReadAllText(file).Replace("</script>", extra + "\n</script>"));
+        AssertGap(Extract(temp.Path), "AngularServerInitializerLimit");
+    }
+
     [Fact]
     public void Direct_script_reference_supports_a_page_without_a_master()
     {

@@ -231,3 +231,14 @@ dotnet test src/dotnet/tests/TraceMap.Tests -c Debug --no-build -warnaserror --f
 
 The isolated diagnostics run passed 4/4. The remaining suite passed 6,203,
 skipped 3 and failed 0. Combined, 6,207 passed, 3 skipped and 0 failed.
+
+### Inline WebForms initializers on codex/workspace-scope-preflight
+
+Extractor 0.18.0 recovers a one-line declaration whose entire initializer
+is an unquoted WebForms output expression containing a dotted identifier,
+a plain identifier or an unsigned integer. The placeholder occupies the
+original offset and must parse as a variable initializer. Each occurrence
+has an unknown-value fact supporting the external handler. Separate genuine
+JS errors, unsupported server syntax, conflicting controllers and the
+64-initializer cap continue to block the join. LF and CRLF tests retain
+physical spans. The public fixture has three independently authored examples.
