@@ -83,7 +83,8 @@ suite result. The final repaired CLI smoke used output
 NDJSON/SQLite parity, integrity, tier/version and five-required-output checks.
 Tracked diff and new-file whitespace checks passed.
 
-Changes remain uncommitted on the requested existing testing branch. No PR or
-push was performed. Full Debug validation remains required before PR/merge.
+Implementation committed at `1d123c325b46300e08266e7a78bac06ef076bda2` on
+`codex/workspace-scope-preflight`. The Claude verification dispatch is
+`prompts/verify-webforms-script-bundle-discovery-once.md`. Full Debug validation remains required before PR/merge.
 Next functional work is application-scoped bundle reference resolution and
 external JavaScript analysis; the browser-click-to-backend trace is not closed.
