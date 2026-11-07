@@ -59,3 +59,11 @@ text and debugger captures local. If the exception cannot be reproduced,
 report that explicitly. Leave the handler join unresolved until all
 eligible inputs support unique ownership. No browser, site startup, or
 application JavaScript execution is needed.
+
+If the failing source is inline, compare the private original with the input
+to ParseScript at the reported position. ParsePage blanks WebForms server
+blocks before HTML parsing. In a synthetic fixture, an inline assignment
+`var count = <%= 1 %>;` produces MalformedAngularScript on 0.17.0, while
+`var count = 1;` allows the external click-handler candidate. Check whether
+a server expression occupies that position in the original. Return yes, no,
+or unknown. An existing local diagnostic and source inspection suffice.
