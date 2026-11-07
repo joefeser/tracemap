@@ -33,3 +33,29 @@ Acornima 1.9.1 and AngleSharp 1.10.0. Use the existing approved build environmen
 ## Copy-ready instruction for Claude
 
 > Follow `prompts/verify-included-angularjs-click-once.md` on the testing branch. Run the public same-name-controller control, then check the authorized work page for the exact click-to-external-method relationship. Report the first gap and which links came from retained facts.
+
+## Follow-up when a simple click reports MalformedAngularScript
+
+Use the existing private index to identify the affected click and its page,
+master and rendered bundle. A gap belongs to the click. Version 0.17.0
+discards the failing parser input and position, so the click's evidence
+span cannot identify which script failed. Any included script, including
+inline page or master code, can block the controller lookup.
+
+On the approved work machine, use a local debugger on the Debug scanner.
+Set a breakpoint inside the ParseErrorException catch in
+LegacyWebFormsExtractor.AngularClicks.cs, method ParseScript. Repeat the
+same bounded static scan once, with fresh output. At the catch inspect
+the path argument and the exception's LineNumber (one-based), Column (zero-based) and Message
+locally. For inline script these positions are relative to the parser input.
+Record locally whether the input is the intended controller, a sibling
+bundle member, or inline markup. If several pages fail, correlate with the
+affected page in the caller before drawing a conclusion. The first failing
+parse stops the lookup on that surface.
+
+Return only the input category and a synthetic minimal syntax example if
+one can be reproduced independently. Keep paths, code, detailed exception
+text and debugger captures local. If the exception cannot be reproduced,
+report that explicitly. Leave the handler join unresolved until all
+eligible inputs support unique ownership. No browser, site startup, or
+application JavaScript execution is needed.
