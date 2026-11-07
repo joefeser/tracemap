@@ -284,3 +284,7 @@ Pinned CLI scans of angularjs-click, script-bundles and script-bundle-startup
 used the same commands as above. All passed SQLite integrity and NDJSON/SQLite
 ID parity. Only angularjs-click emitted a handler; its retained click ID,
 external line 2 and three inline initializer supports were verified.
+
+Full Debug validation on 4344b34fc used the previously recorded two pinned
+suite commands. Four isolated diagnostics passed. The remaining suite passed
+6,218 and skipped 3. Combined: 6,222 passed, 3 skipped, zero failures.
