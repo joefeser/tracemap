@@ -32,7 +32,7 @@ Acornima 1.9.1 and AngleSharp 1.10.0. Use the existing approved build environmen
 
 ## Copy-ready instruction for Claude
 
-> Follow `prompts/verify-included-angularjs-click-once.md` on the testing branch. Run the public same-name-controller control, then check the authorized work page for the exact click-to-external-method relationship. Report the first gap and which links came from retained facts.
+> Follow `prompts/verify-included-angularjs-click-once.md` on the testing branch. Run the public same-name-controller control, then check the authorized work page for the exact click-to-external-method relationship. Report the first gap and which links came from retained facts. Use the pinned scanner as built. Stop at the first unresolved hop and report it. Preserve local edits separately. A scanner repair belongs in a separate implementation task.
 
 ## Follow-up when a simple click reports MalformedAngularScript
 

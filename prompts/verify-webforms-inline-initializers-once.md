@@ -2,7 +2,7 @@
 
 ## Copy-ready instruction for Claude
 
-> Follow `prompts/verify-webforms-inline-initializers-once.md` on `codex/workspace-scope-preflight`. First verify the public three-initializer fixture, then use the authorized local workspace to check the two previously unresolved simple clicks. Report the first unresolved hop and sanitized counts.
+> Follow `prompts/verify-webforms-inline-initializers-once.md` on `codex/workspace-scope-preflight`. First verify the public three-initializer fixture, then use the authorized local workspace to check the two previously unresolved simple clicks. Report the first unresolved hop and sanitized counts. Use the pinned scanner as built. Stop at the first unresolved hop and report it. Preserve local edits separately. A scanner repair belongs in a separate implementation task.
 
 1. Read AGENTS.md. Pin implementation `5e597a958e83ec7ac934b6988561d4a317ff50dc` or a docs-only descendant. Verify the executable emits `legacy-webforms/0.18.0` in fact evidence. Build the CLI and run the focused tests in Debug with warnings as errors.
 
