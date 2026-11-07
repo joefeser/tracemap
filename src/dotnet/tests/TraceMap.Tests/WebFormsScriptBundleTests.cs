@@ -152,6 +152,80 @@ public sealed class WebFormsScriptBundleTests
         Assert.Contains(facts, fact => fact.TargetSymbol == "~/Scripts/Main.js");
     }
 
+    private const string ApplicationStart = """
+        <%@ Application Language="VB" %>
+        <%@ Import Namespace="System.Web.Optimization" %>
+        <script runat="server">
+        Sub Application_Start(sender As Object, e As EventArgs)
+            Dim first As New ScriptBundle("~/bundles/first")
+            Dim second = New ScriptBundle("~/bundles/second")
+            first.Include("~/Scripts/a.js")
+            second.Include("~/Scripts/b.js")
+            FIRST.Include("~/Scripts/c.js")
+            BundleTable.Bundles.Add(first)
+            BundleTable.Bundles.Add(second)
+        End Sub
+        </script>
+        """;
+
+    [Fact]
+    public void Global_asax_interleaved_locals_keep_declaration_ids_ordinals_and_physical_lines()
+    {
+        using var temp = new TempDirectory();
+        Write(temp.Path, "Global.asax", ApplicationStart);
+        var facts = Extract(temp.Path);
+        Assert.Equal(5, facts.Length);
+        var first = Assert.Single(facts, f => f.TargetSymbol == "~/bundles/first");
+        var second = Assert.Single(facts, f => f.TargetSymbol == "~/bundles/second");
+        Assert.Equal(5, first.Evidence.StartLine);
+        foreach (var (target, owner, ordinal, line) in new[] {
+            ("~/Scripts/a.js", first, "0", 7), ("~/Scripts/b.js", second, "0", 8), ("~/Scripts/c.js", first, "1", 9) })
+        {
+            var member = Assert.Single(facts, f => f.TargetSymbol == target);
+            Assert.Equal(owner.FactId, member.Properties["bundleDeclarationFactId"]);
+            Assert.Equal(ordinal, member.Properties["declaredOrdinal"]);
+            Assert.Equal("Global.asax", member.Evidence.FilePath);
+            Assert.Equal(line, member.Evidence.StartLine);
+        }
+    }
+
+    [Theory]
+    [InlineData("first = second")]
+    [InlineData("Dim aliasValue = first")]
+    [InlineData("Dim FIRST As Object")]
+    [InlineData("If enabled Then first.Include(\"~/Scripts/conditional.js\")")]
+    public void Unsafe_local_uses_refuse_member_attribution(string extra)
+    {
+        using var temp = new TempDirectory();
+        Write(temp.Path, "Global.asax", ApplicationStart.Replace("End Sub", extra + "\nEnd Sub"));
+        var facts = Extract(temp.Path);
+        Assert.Contains(facts, f => f.FactType == FactTypes.AnalysisGap);
+        Assert.DoesNotContain(facts, f => f.TargetSymbol is "~/Scripts/a.js" or "~/Scripts/c.js");
+    }
+
+    [Theory]
+    [InlineData("runat=\"server\"", "type=\"text/javascript\"", "UnsupportedApplicationBundleSource")]
+    [InlineData("</script>", "", "UnsupportedApplicationBundleSource")]
+    [InlineData("Language=\"VB\"", "Language=\"C#\"", "UnsupportedApplicationBundleSource")]
+    [InlineData("End Sub", "End If", "MalformedBundleSource")]
+    public void Unsupported_application_markup_or_malformed_body_emits_gap(string from, string to, string kind)
+    {
+        using var temp = new TempDirectory();
+        Write(temp.Path, "Global.asax", ApplicationStart.Replace(from, to));
+        Assert.Equal(kind, Assert.Single(Extract(temp.Path)).Properties["gapKind"]);
+    }
+
+    [Fact]
+    public void Sequential_member_limit_refuses_only_the_oversized_local()
+    {
+        using var temp = new TempDirectory();
+        var includes = string.Join("\n", Enumerable.Repeat("first.Include(\"~/Scripts/file.js\")", 129));
+        Write(temp.Path, "Global.asax", ApplicationStart.Replace("FIRST.Include(\"~/Scripts/c.js\")", includes));
+        var facts = Extract(temp.Path);
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "BundleMemberLimit");
+        Assert.Equal("~/Scripts/b.js", Assert.Single(facts, f => f.FactType == FactTypes.WebFormsScriptBundleMemberCandidate).TargetSymbol);
+    }
+
     private static string Config(bool vb, string members) => vb
         ? $"Imports System.Web.Optimization\nModule BundleConfig\nSub RegisterBundles(bundles As BundleCollection)\nbundles.Add(New ScriptBundle(\"~/bundles/app\").Include({members}))\nEnd Sub\nEnd Module"
         : $"using System.Web.Optimization;\nclass BundleConfig {{ void RegisterBundles(BundleCollection bundles) {{ bundles.Add(new ScriptBundle(\"~/bundles/app\").Include({members})); }} }}";

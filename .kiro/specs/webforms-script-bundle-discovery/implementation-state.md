@@ -88,3 +88,32 @@ Implementation committed at `1d123c325b46300e08266e7a78bac06ef076bda2` on
 `prompts/verify-webforms-script-bundle-discovery-once.md`. Full Debug validation remains required before PR/merge.
 Next functional work is application-scoped bundle reference resolution and
 external JavaScript analysis; the browser-click-to-backend trace is not closed.
+
+## VB application startup continuation
+
+Testing branch `codex/workspace-scope-preflight`, previous head `641660422`.
+Version 0.16.0 reads an explicit VB inline server block in an ASAX file and maps
+its syntax nodes back to the physical source lines and offsets. A direct method
+local initialized by `As New` or `= New` can supply several standalone literal
+Include calls. Match receivers case-insensitively inside their declaring method,
+preserve per-local ordinal order, and refuse aliases, reassignment, duplicate
+names, conditional uses, unsupported uses and excessive member counts. Refusals
+discard the affected declaration's staged members. A malformed or unsupported
+inline application containing bundle syntax produces a Tier4 gap.
+
+Five initial red regressions reproduced the missing ASAX facts and gaps.
+The final focused Debug gate with warnings as errors passed 109/109 (bundle,
+legacy WebForms, evidence export and diagnostics). During hardening the regex
+inventory guard caught the bounded regexes generated as static fields. They now
+use the existing shared budget through the static API and that guard passes.
+The first broad run was interrupted early to harden parsing of malformed script
+blocks. The broad final-binary result is recorded separately below.
+
+The public CLI control is `samples/webforms-script-bundle-startup`. Its exact
+three membership rows and physical lines are documented in the fixture README.
+Use `dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll scan --repo
+samples/webforms-script-bundle-startup --out <fresh-directory>` after a Debug
+build. This checks portable syntax evidence only. Separate application-scoped
+render resolution, external JavaScript tracing, IIS execution and private
+verification remain open. Pinned C#/VB OSS smokes are deferred for this
+syntax-only ASAX change.

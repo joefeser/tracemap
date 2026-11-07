@@ -5498,3 +5498,11 @@ Pinned source OSS smokes are explicitly deferred for this bounded configuration
 syntax slice; no source symbol, metadata, PDB, rewrite or runtime claim is widened.
 Exact local results and any platform failures belong in
 `.kiro/specs/webforms-script-bundle-discovery/implementation-state.md`.
+
+The VB startup control in `samples/webforms-script-bundle-startup` exercises
+two local bundles in one inline ASAX method. Verify seven bundle-rule facts.
+Join the three member facts to their declaration fact IDs and check source lines
+7, 8 and 9 against ordinals 0, 0 and 1. Two independent master-page render
+references remain candidates. The focused test families also exercise refusal
+for aliases, reassignment, duplicate names, conditional use, malformed markup
+and a member count above the limit.

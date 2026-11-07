@@ -14,7 +14,7 @@ public static partial class LegacyWebFormsExtractor
     // turn a virtual path/name match into a semantic/runtime call edge.
     private const int BundleSourceLimit = 1_048_576;
     private const int BundleMemberLimit = 128;
-    private const string BundleLimitations = "Syntax-only bundle discovery. Framework identity, registration execution, application-root identity, rendered script selection/order, file existence, JavaScript calls and runtime behavior are not proven. Wildcards, directory includes, mutations and custom transforms are unsupported.";
+    private const string BundleLimitations = "Syntax-only bundle discovery. Framework identity, registration execution, application-root identity, rendered script selection/order, file existence, JavaScript calls and runtime behavior are not proven. Wildcards, directory includes, aliases, reassignment and custom transforms are unsupported.";
 
     private static void AddBundleDiscoveryFacts(string repoPath, ScanManifest manifest,
         IReadOnlyList<FileInventoryItem> inventory, List<CodeFact> facts)
@@ -23,7 +23,7 @@ public static partial class LegacyWebFormsExtractor
         foreach (var item in inventory.OrderBy(item => item.RelativePath, StringComparer.Ordinal))
         {
             var extension = Path.GetExtension(item.RelativePath).ToLowerInvariant();
-            if (extension is not (".cs" or ".vb" or ".aspx" or ".master" or ".ascx")) continue;
+            if (extension is not (".cs" or ".vb" or ".aspx" or ".master" or ".ascx" or ".asax")) continue;
             if (item.SizeBytes > BundleSourceLimit)
             {
                 facts.Add(BundleFact(manifest, item.RelativePath, 1, 1, "", FactTypes.AnalysisGap,
@@ -50,7 +50,19 @@ public static partial class LegacyWebFormsExtractor
                     "BundleSourceUnavailable", null, null));
                 continue;
             }
-            if (extension is ".cs" or ".vb")
+            if (extension == ".asax")
+            {
+                try
+                {
+                    AddApplicationBundles(manifest, item.RelativePath, text, facts);
+                }
+                catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+                {
+                    facts.Add(BundleFact(manifest, item.RelativePath, 1, 1, FactFactory.Hash(text, 64),
+                        FactTypes.AnalysisGap, "ApplicationBundleParsingLimit", null, null));
+                }
+            }
+            else if (extension is ".cs" or ".vb")
             {
                 if (!text.Contains("ScriptBundle", StringComparison.OrdinalIgnoreCase)) continue;
                 AddBundleDeclarations(manifest, item.RelativePath, text, extension == ".vb", facts);
@@ -60,10 +72,18 @@ public static partial class LegacyWebFormsExtractor
         }
     }
 
-    private static void AddBundleDeclarations(ScanManifest manifest, string path, string text, bool vb, List<CodeFact> facts)
+    private static void AddBundleDeclarations(ScanManifest manifest, string path, string text, bool vb, List<CodeFact> facts,
+        int lineOffset = 0, int positionOffset = 0, string? originalHash = null)
     {
-        var inputHash = FactFactory.Hash(text, 64);
+        var inputHash = originalHash ?? FactFactory.Hash(text, 64);
         var root = vb ? VB.VisualBasicSyntaxTree.ParseText(text).GetRoot() : CSharpSyntaxTree.ParseText(text).GetRoot();
+        if (originalHash is not null && root.ContainsDiagnostics)
+        {
+            var diagnostic = root.GetDiagnostics().First();
+            var line = Math.Max(1, diagnostic.Location.GetLineSpan().StartLinePosition.Line + 1 + lineOffset);
+            facts.Add(BundleFact(manifest, path, line, line, inputHash, FactTypes.AnalysisGap, "MalformedBundleSource", null, null));
+            return;
+        }
         var declarationCount = 0;
         foreach (var node in root.DescendantNodes().Where(node => node is ObjectCreationExpressionSyntax or VBS.ObjectCreationExpressionSyntax))
         {
@@ -81,10 +101,10 @@ public static partial class LegacyWebFormsExtractor
                 break;
             }
             var span = node.GetLocation().GetLineSpan();
-            var start = span.StartLinePosition.Line + 1;
+            var start = span.StartLinePosition.Line + 1 + lineOffset;
             var args = BundleArguments(node);
             var bundle = args.Length == 1 ? BundleLiteral(args[0]) : null;
-            var id = $"webforms-bundle-declaration:{FactFactory.Hash($"{path}|{node.SpanStart}", 24)}";
+            var id = $"webforms-bundle-declaration:{FactFactory.Hash($"{path}|{node.SpanStart + positionOffset}", 24)}";
             var chain = node;
             var members = new List<SyntaxNode>();
             var supported = true;
@@ -102,9 +122,13 @@ public static partial class LegacyWebFormsExtractor
                 if (!string.Equals(name, "Include", vb ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) supported = false;
                 members.AddRange(BundleArguments(chain));
             }
+            var localGap = vb
+                ? CollectLocalBundleIncludes(chain, members)
+                : null;
             var values = members.Select(BundleLiteral).ToArray();
             var reason = root.ContainsDiagnostics ? "MalformedBundleSource"
                 : !BundleVirtualPath(bundle) ? "UnsupportedBundlePath"
+                : localGap is not null ? localGap
                 : !supported || members.Count == 0 ? "UnsupportedBundleInclude"
                 : members.Count > BundleMemberLimit ? "BundleMemberLimit"
                 : values.Any(value => !BundleVirtualPath(value) || !value!.EndsWith(".js", StringComparison.OrdinalIgnoreCase)) ? "UnsupportedBundleMember"
@@ -114,14 +138,14 @@ public static partial class LegacyWebFormsExtractor
                 facts.Add(BundleFact(manifest, path, start, start, inputHash, FactTypes.AnalysisGap, reason, id, null));
                 continue;
             }
-            var declaration = BundleFact(manifest, path, start, span.EndLinePosition.Line + 1, inputHash,
+            var declaration = BundleFact(manifest, path, start, span.EndLinePosition.Line + 1 + lineOffset, inputHash,
                 FactTypes.WebFormsScriptBundleDeclaredCandidate, "bundle-declaration", id, bundle);
             facts.Add(declaration);
             // Keep include order and repeated declarations; do not claim final runtime order.
             for (var index = 0; index < members.Count; index++)
             {
                 var memberSpan = members[index].GetLocation().GetLineSpan();
-                facts.Add(BundleFact(manifest, path, memberSpan.StartLinePosition.Line + 1, memberSpan.EndLinePosition.Line + 1,
+                facts.Add(BundleFact(manifest, path, memberSpan.StartLinePosition.Line + 1 + lineOffset, memberSpan.EndLinePosition.Line + 1 + lineOffset,
                     inputHash, FactTypes.WebFormsScriptBundleMemberCandidate, "bundle-member", id, values[index],
                     declaration.FactId, index));
             }
