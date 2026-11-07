@@ -130,3 +130,32 @@ on a fixed head, the affected seven parameterized cases passed. The subsequent
 partial broad run was stopped to harden tag admission. Neither partial run is a
 complete validation result. Full final validation uses a dedicated checkout of
 the pinned verification head to keep the source revision fixed.
+
+
+## Final verification on 2026-11-07
+
+Published implementation `fff0b0967f3757b8b5097d116019c2a548e8b3f3`.
+Verified its documentation-only descendant `d39d533a0ed704606f6330ddc171636dbcc1c9e4`
+in a clean detached checkout.
+
+```sh
+dotnet build src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --nologo
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --no-build --filter 'FullyQualifiedName~TraceMap.Tests.SelfDiagnosticsTests'
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --no-build --filter 'FullyQualifiedName!~TraceMap.Tests.SelfDiagnosticsTests' --logger 'console;verbosity=normal'
+```
+
+Build completed with zero warnings and errors. The main run passed 6,163, skipped
+3 and failed 0 across 6,166 cases in 43.9372 minutes. Isolated diagnostics passed
+4/4. Combined coverage was 6,167 passed, 3 skipped, 0 failed across 6,170 cases.
+The skips were the native HTTP receipt, optional full generated-golden sweep,
+and deep projectless Windows ASP.NET publish. All three snapshot cases seen in
+the earlier mutable checkout passed within this full run.
+
+The focused WebForms bundle, legacy WebForms and evidence export filter passed
+110/110 on the hardened code. Both public CLI fixtures passed again using the
+pinned build. Verified all five required outputs, SQLite integrity, identical
+NDJSON/SQLite bundle fact IDs, commit, Tier3 and extractor version. The original
+control emitted four bundle facts. Startup emitted seven, including the three
+expected member-to-declaration joins with ordinals 0, 0, 1 on ASAX lines 7, 8, 9.
+Private work-machine verification remains with the owner via
+`prompts/verify-vb-asax-bundle-locals-once.md`.
