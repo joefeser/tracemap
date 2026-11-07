@@ -130,6 +130,7 @@ public static partial class LegacyWebFormsExtractor
             AddAutoWireupFacts(manifest, page, context, evidenceIndex, facts);
         }
 
+        AddBundleDiscoveryFacts(repoPath, manifest, inventory, facts);
         AddLifecycleEntryRelationships(manifest, entryEvidence, facts);
         AddClientHttpHandlerResolutionFacts(repoPath, manifest, inventory, context, existingFacts, facts);
 

@@ -5479,3 +5479,22 @@ SQLite readback and output preservation. These are not compiled application test
 Replay the actual pinned DNN five-method path against the selected SQL scenario;
 all unresolved compiler, dispatch, external PetaPoco, event/hydration, result and
 runtime boundaries must remain. No SQL execution or raw index mutation.
+
+## Regular WebForms script-bundle discovery
+
+`WebFormsScriptBundleTests` covers C#/VB explicit literal `ScriptBundle.Include`
+syntax and ASPX/master server-output `Scripts.Render`, including member/source/
+declaration/render limits, malformed input, dynamic paths, wildcard refusal,
+comments, same-path declarations, VB case handling and same-line fact identity.
+The public `samples/webforms-script-bundles` fixture retains one declaration,
+two members and one reference. Its click and external function are a downstream
+coverage boundary: standalone JavaScript, registration execution, rendered bundles
+and HTTP reachability are not proven by these syntax facts. Angular is out of scope.
+
+Run the focused bundle and LegacyWebFormsExtractorTests families, full Debug
+`-warnaserror` for this shared-core change, and the CLI against the sample. Verify
+the four new facts in both NDJSON and SQLite and run `PRAGMA integrity_check`.
+Pinned source OSS smokes are explicitly deferred for this bounded configuration
+syntax slice; no source symbol, metadata, PDB, rewrite or runtime claim is widened.
+Exact local results and any platform failures belong in
+`.kiro/specs/webforms-script-bundle-discovery/implementation-state.md`.

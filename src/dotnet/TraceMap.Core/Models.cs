@@ -372,6 +372,9 @@ public static class FactTypes
     public const string WebFormsEventFlowProjected = nameof(WebFormsEventFlowProjected);
     public const string WebFormsLogicSignalDetected = nameof(WebFormsLogicSignalDetected);
     public const string WebFormsLifecycleBranchCandidate = nameof(WebFormsLifecycleBranchCandidate);
+    public const string WebFormsScriptBundleDeclaredCandidate = nameof(WebFormsScriptBundleDeclaredCandidate);
+    public const string WebFormsScriptBundleMemberCandidate = nameof(WebFormsScriptBundleMemberCandidate);
+    public const string WebFormsScriptBundleReferenceCandidate = nameof(WebFormsScriptBundleReferenceCandidate);
     public const string WebFormsClientScriptRegistrationCandidate = nameof(WebFormsClientScriptRegistrationCandidate);
     public const string WebFormsClientEventBindingCandidate = nameof(WebFormsClientEventBindingCandidate);
     public const string WebFormsClientUiMutationCandidate = nameof(WebFormsClientUiMutationCandidate);
@@ -606,6 +609,7 @@ public static class RuleIds
     public const string LegacyWebFormsEventFlow = "legacy.webforms.event-flow.v1";
     public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
     public const string LegacyWebFormsLifecycleContext = "legacy.webforms.lifecycle-context.v1";
+    public const string LegacyWebFormsScriptBundles = "legacy.webforms.script-bundles.v1";
     public const string LegacyWebFormsClientScript = "legacy.webforms.client-script.v1";
     public const string LegacyWebFormsInlineClientBehavior = "legacy.webforms.inline-client-behavior.v1";
     public const string LegacyWebFormsInlineClientHttpRequest = "legacy.webforms.inline-client-http-request.v1";
@@ -753,7 +757,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.14.3";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.15.0";
     public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.3";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
