@@ -10,7 +10,7 @@ internal sealed class AngularJsScript
     internal sealed record Handler(Site Method, Site Registration, Site Module);
     private sealed record ModuleBinding(string Name, Site Declaration);
     private Site Location(Node node) => new(File, node.Start, node.Location.Start.Line, node.Location.End.Line);
-    private readonly Script script;
+    private readonly Dictionary<CallExpression, Expression> registrationRoots = new();
     private readonly CallExpression[] controllerCalls;
     private readonly ILookup<string, VariableDeclarator> globals;
     private readonly HashSet<string> writes;
@@ -24,7 +24,7 @@ internal sealed class AngularJsScript
         File = file;
         Hash = FactFactory.Hash(text, 64);
         var tokenCount = 0;
-        script = new Parser(new ParserOptions { OnToken = (in Token _) =>
+        var script = new Parser(new ParserOptions { OnToken = (in Token _) =>
         {
             if (++tokenCount > 100_000) throw new AngularClickGap("AngularScriptTokenLimit");
         } }).ParseScript(text);
@@ -36,6 +36,21 @@ internal sealed class AngularJsScript
             if (!unknownInitializers.All(initializers.Contains)) throw new AngularClickGap("UnsupportedAngularServerInitializer");
         }
         controllerCalls = nodes.OfType<CallExpression>().Where(call => Member(call.Callee, "controller", out _)).ToArray();
+        foreach (var statement in script.Body.OfType<ExpressionStatement>())
+        {
+            Expression root = statement.Expression;
+            var chain = new List<CallExpression>();
+            while (root is CallExpression { Optional: false } link && Member(link.Callee, "controller", out var receiver))
+            {
+                if (chain.Count == 32) throw new AngularClickGap("AngularControllerChainLimit");
+                chain.Add(link);
+                root = receiver;
+            }
+            // Only a complete top-level chain can carry its module through successive calls.
+            if (chain.Count > 1 && chain.Any(link => link.Arguments.Count != 2 || link.Arguments[0] is not StringLiteral))
+                continue;
+            foreach (var link in chain) registrationRoots.Add(link, root);
+        }
         globals = script.Body.OfType<VariableDeclaration>().SelectMany(v => v.Declarations.ToArray())
             .Where(d => d.Id is Identifier).ToLookup(d => ((Identifier)d.Id).Name, StringComparer.Ordinal);
         namedDeclarations = script.Body.Select(statement => statement switch
@@ -114,15 +129,16 @@ internal sealed class AngularJsScript
             {
                 if (!Member(call.Callee, "controller", out var receiver)) continue;
                 if (call.Arguments.Count > 0 && call.Arguments[0] is StringLiteral other && other.Value != controller) continue;
-                var owner = ResolveModule(source, receiver, scripts);
+                var admitted = source.registrationRoots.TryGetValue(call, out var root);
+                var owner = ResolveModule(source, root ?? receiver, scripts);
                 if (call.Arguments.Count == 0 || call.Arguments[0] is not StringLiteral)
                 {
-                    if (owner?.Name == module) throw new AngularClickGap("DynamicAngularControllerRegistration");
+                    if (owner is null || owner.Name == module) throw new AngularClickGap("DynamicAngularControllerRegistration");
                     continue;
                 }
                 if (owner is null) throw new AngularClickGap("AngularModuleOwnershipUnavailable");
                 if (owner.Name != module) continue;
-                if (call.Arguments.Count != 2 || !source.script.Body.OfType<ExpressionStatement>().Any(statement => statement.Expression == call))
+                if (call.Arguments.Count != 2 || !admitted)
                     throw new AngularClickGap("UnsupportedAngularControllerRegistration");
                 registrations.Add((source, call, owner.Declaration, call.Arguments[1]));
             }
@@ -179,7 +195,13 @@ internal sealed class AngularJsScript
         if (candidates.Count != 1)
             throw new AngularClickGap(candidates.Count == 0 ? "AngularScopeMethodUnavailable" : "AmbiguousAngularScopeMethod");
         var binding = candidates[0];
-        return new Handler(file.Location(binding), file.Location(registration), moduleSite);
+        // Nested call nodes share the start of the entire chain. Anchor each registration
+        // at its own controller property, through the end of that particular invocation.
+        var member = (MemberExpression)registration.Callee;
+        var registrationSite = file.registrationRoots[registration] == member.Object
+            ? file.Location(registration)
+            : file.Location(member.Property) with { EndLine = registration.Location.End.Line };
+        return new Handler(file.Location(binding), registrationSite, moduleSite);
     }
 }
 

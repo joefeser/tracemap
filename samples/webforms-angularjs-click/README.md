@@ -29,3 +29,7 @@ fixture supports a syntax candidate. Browser and HTTP execution are separate.
 The script in Page.aspx lines 7–9 contains three single-line server output
 initializers. Each contributes a WebFormsInlineServerInitializerCandidate
 with valueStatus `unknown` and a supporting ID on the external handler.
+
+Scripts/editor.js registers three controllers in one top-level call chain.
+The page selects the first. Regression tests exercise the middle and last
+registrations as well. Each exposes its own save function.

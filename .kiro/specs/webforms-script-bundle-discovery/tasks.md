@@ -20,3 +20,5 @@ Explicit follow-ups, not acceptance claims of this discovery slice:
 
 The AngularJS continuation uses its own rule and synthetic fixture. Private verification is recorded separately by the operator.
 - [x] Preserve inline WebForms property initializers as unknown, retain their physical spans and require the rest of the script to parse before attaching an external handler.
+
+- [x] Resolve bounded top-level controller chains to the included module and retain a distinct registration site for each controller.

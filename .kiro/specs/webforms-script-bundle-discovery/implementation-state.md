@@ -264,3 +264,14 @@ recorded above: 4 isolated diagnostics passed, remaining suite 6,211 passed,
 The regular and startup bundle CLI controls retained 4 and 7 bundle facts,
 respectively, passed SQLite integrity and NDJSON/SQLite ID parity, and
 produced zero AngularJS handler candidates.
+
+### AngularJS controller chains on codex/workspace-scope-preflight
+
+Extractor 0.19.0 indexes the receiver links of a complete top-level controller
+chain once during parsing. The joined registration keeps the original module
+identity and its own source location. The public fixture selects the first of
+three controllers with same-named methods. Regression tests cover all three
+positions, malformed and ambiguous inputs, unknown intermediate calls, and
+the 32-link limit. Absolute script URL mapping and server expressions inside
+master-page strings remain independent gaps. C#/VB semantic OSS reruns are
+deferred for this JavaScript syntax slice.

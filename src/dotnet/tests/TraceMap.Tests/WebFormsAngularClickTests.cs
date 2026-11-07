@@ -89,6 +89,57 @@ public sealed class WebFormsAngularClickTests
     }
 
     [Fact]
+    public void Every_position_in_a_controller_chain_has_its_own_registration_and_handler()
+    {
+        using var temp = Fixture();
+        var page = Path.Combine(temp.Path, "Page.aspx");
+        var markup = File.ReadAllText(page).Replace("</asp:Content>", """
+            <section ng-controller="ListController"><button ng-click="save()">List</button></section>
+            <section ng-controller="DraftController"><button ng-click="save()">Draft</button></section>
+            </asp:Content>
+            """);
+        File.WriteAllText(page, markup);
+        var facts = Extract(temp.Path);
+        var handlers = facts.Where(f => f.FactType == FactTypes.WebFormsAngularClickHandlerCandidate)
+            .OrderBy(f => f.Evidence.StartLine).ToArray();
+        Assert.Equal(new[] { 2, 7, 10 }, handlers.Select(f => f.Evidence.StartLine));
+        var owners = handlers.Select(handler => Assert.Single(facts, f =>
+            handler.Properties["supportingFactIds"].Split(',').Contains(f.FactId)
+            && f.Properties.GetValueOrDefault("ownerKind") == "controller")).ToArray();
+        Assert.Equal(new[] { 1, 6, 9 }, owners.Select(f => f.Evidence.StartLine));
+        Assert.Equal(3, owners.Select(f => f.TargetSymbol).Distinct().Count());
+        Assert.Equal(handlers.Select(f => f.Properties["controller"]), owners.Select(f => f.Properties["ownerName"]));
+    }
+
+    [Theory]
+    [InlineData("ListController", "EditorController", "AmbiguousAngularController")]
+    [InlineData(".controller(\"ListController\"", ".unknown().controller(\"ListController\"", "UnsupportedAngularControllerRegistration")]
+    [InlineData(".controller(\"ListController\"", ".controller(dynamicName", "DynamicAngularControllerRegistration")]
+    [InlineData("sampleApp.controller", "if (enabled) sampleApp.controller", "UnsupportedAngularControllerRegistration")]
+    [InlineData("}]);", "}]) +", "MalformedAngularScript")]
+    public void Broken_or_ambiguous_controller_chains_keep_the_gap(string from, string to, string gap)
+    {
+        using var temp = Fixture();
+        var file = Path.Combine(temp.Path, "Scripts/editor.js");
+        File.WriteAllText(file, File.ReadAllText(file).Replace(from, to));
+        AssertGap(Extract(temp.Path), gap);
+    }
+
+    [Fact]
+    public void Chain_length_bound_includes_32_and_refuses_33()
+    {
+        using var temp = Fixture();
+        var file = Path.Combine(temp.Path, "Scripts/editor.js");
+        var text = File.ReadAllText(file).TrimEnd().TrimEnd(';');
+        string Link(int index) => $".controller('Extra{index}', function(){{}})";
+        text += string.Concat(Enumerable.Range(0, 29).Select(Link));
+        File.WriteAllText(file, text + ";");
+        Assert.Single(Extract(temp.Path), f => f.FactType == FactTypes.WebFormsAngularClickHandlerCandidate);
+        File.WriteAllText(file, text + Link(29) + ";");
+        AssertGap(Extract(temp.Path), "AngularControllerChainLimit");
+    }
+
+    [Fact]
     public void Direct_script_reference_supports_a_page_without_a_master()
     {
         using var temp = new TempDirectory();

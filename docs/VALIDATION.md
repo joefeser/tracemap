@@ -5518,7 +5518,7 @@ handler and review the recorded supporting IDs and parser/input digests.
 The prior bundle fixtures retain their four- and seven-fact bundle controls.
 
 This rule is `legacy.webforms.angularjs-click.v1`, extractor
-`legacy-webforms/0.18.0`. It parses included JavaScript using pinned Acornima
+`legacy-webforms/0.19.0`. It parses included JavaScript using pinned Acornima
 1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
 tracks .js source changes. The explicit ownership and resource boundaries are
 in the rule catalog. General plain onclick, runtime, backend and private
@@ -5528,3 +5528,8 @@ The public AngularJS click fixture also requires three physical inline server
 initializer spans on Page.aspx lines 7–9. Each value stays unknown. Their IDs
 must support the same unique external handler. A genuine empty initializer,
 unsupported server output or duplicate controller must retain a typed gap.
+
+The controller-chain fixture registers three named controllers with the same
+method name. Tests select each controller in turn and check its registration
+span, method span and owner identity. Duplicate names, unknown intermediates,
+malformed syntax and chains longer than 32 keep the join unresolved.
