@@ -194,3 +194,40 @@ provides syntax evidence. HTTP dispatch, runtime execution, named callback
 indirection and general inline onclick remain separate. Pinned C#/VB semantic
 OSS smoke reruns are deferred for this WebForms/JS syntax slice. The final
 pinned full Debug and public CLI results will be recorded below.
+
+### Pinned AngularJS CLI and Debug validation
+
+Checkout `dade38e25cd935b0bf5cfe2e32947110f2cf27cd` includes the
+`4e32864e4` implementation and its verification prompt. The Debug build
+reported zero errors and warnings. The public CLI smoke ran the following
+command once for each of the three fixture repositories with fresh outputs:
+
+```sh
+dotnet src/dotnet/TraceMap.Cli/bin/Debug/net10.0/tracemap.dll scan --repo "$fixture" --out "$output"
+```
+
+The AngularJS fixture produced one handler and five bundle facts (one
+declaration, three members, one render reference). The regular and ASAX
+bundle controls retained four and seven bundle facts respectively. All
+three produced the five required scan artifacts and passed SQLite integrity
+and NDJSON/SQLite fact-ID checks. The smoke verification originally expected
+six bundle facts for the AngularJS fixture. Correcting the expected count to
+five matched the fixture and the unchanged scan outputs.
+
+An independent static probe copied the public AngularJS sample into a
+temporary committed repository. Adding an inline script with
+`var count = <%= 1 %>;` yielded a click and MalformedAngularScript.
+Changing that single initializer to literal `1` restored the external
+handler candidate. This isolates one effect of server-block masking in
+0.17.0. The verification prompt describes how to distinguish this case
+using local evidence from the original page.
+
+Full Debug suite on the pinned checkout:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug --no-build -warnaserror --filter 'FullyQualifiedName~TraceMap.Tests.SelfDiagnosticsTests'
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug --no-build -warnaserror --filter 'FullyQualifiedName!~TraceMap.Tests.SelfDiagnosticsTests' --logger 'console;verbosity=normal'
+```
+
+The isolated diagnostics run passed 4/4. The remaining suite passed 6,203,
+skipped 3 and failed 0. Combined, 6,207 passed, 3 skipped and 0 failed.
