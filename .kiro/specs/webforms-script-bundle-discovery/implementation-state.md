@@ -275,3 +275,12 @@ positions, malformed and ambiguous inputs, unknown intermediate calls, and
 the 32-link limit. Absolute script URL mapping and server expressions inside
 master-page strings remain independent gaps. C#/VB semantic OSS reruns are
 deferred for this JavaScript syntax slice.
+
+Pinned implementation `4344b34fc93876b6de7c17635ca13b7d968e0b68` built in
+Debug with zero warnings/errors. The focused filter used for the previous
+slice passed 165/165. The dynamic-name negative case initially expected a
+generic registration refusal and now checks the emitted dynamic-name gap.
+Pinned CLI scans of angularjs-click, script-bundles and script-bundle-startup
+used the same commands as above. All passed SQLite integrity and NDJSON/SQLite
+ID parity. Only angularjs-click emitted a handler; its retained click ID,
+external line 2 and three inline initializer supports were verified.
