@@ -9,3 +9,7 @@ Read AGENTS.md. Use implementation commit `1d123c325b46300e08266e7a78bac06ef076b
 5. For the original click investigation, identify which steps have TraceMap fact IDs and which came from Claude reading source independently. Specifically check the page/master reference, bundle declaration and members, inline click, function in the external JS file, and backend request. The .NET inventory currently excludes standalone JS. Leave unestablished steps open. Angular is outside this verification.
 
 Return one sanitized table with the stage, `present` / `explicit gap` / `not established`, evidence source, and brief reason. Keep exact private paths, identifiers, source, digests, fact IDs and detailed receipts local. Include public control counts, tool version, input coverage and the first unsupported hop. Stop after this verification.
+
+## Copy-ready instruction for Claude
+
+> Use `codex/workspace-scope-preflight` at `85e1a2c08` and follow `prompts/verify-webforms-script-bundle-discovery-once.md`. Verify the public fixture first, then check the known work page. For each hop from the click toward the backend, identify what TraceMap retained, what you found by reading source, and where the evidence stops. Keep private details local.
