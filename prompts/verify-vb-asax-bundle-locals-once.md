@@ -1,7 +1,7 @@
 # Verify VB application startup bundle locals once
 
 Read AGENTS.md. Use `codex/workspace-scope-preflight` implementation commit
-`8f60c0aa25fac2006386959ef5b9df0d77a0f74a` or a documentation-only descendant
+`fff0b0967f3757b8b5097d116019c2a548e8b3f3` or a documentation-only descendant
 with identical implementation and fixtures. Record the tool commit and look for
 extractor version `legacy-webforms/0.16.0` in the emitted bundle facts.
 

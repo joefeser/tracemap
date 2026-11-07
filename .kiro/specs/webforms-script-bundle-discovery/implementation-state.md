@@ -117,3 +117,16 @@ build. This checks portable syntax evidence only. Separate application-scoped
 render resolution, external JavaScript tracing, IIS execution and private
 verification remain open. Pinned C#/VB OSS smokes are deferred for this
 syntax-only ASAX change.
+
+ASAX markup hardening at `fff0b0967f3757b8b5097d116019c2a548e8b3f3` rejects
+lookalike tag/directive names, malformed or duplicate attributes and conflicting
+application language. Server comments preserve physical offsets and use the
+shared load-tolerant regex budget. Final focused bundle, WebForms and evidence
+export tests passed 110/110 in Debug with warnings treated as errors.
+
+An intermediate broad run encountered three generated compilation-input snapshot
+mismatches while the branch advanced to the verification prompt. After rebuilding
+on a fixed head, the affected seven parameterized cases passed. The subsequent
+partial broad run was stopped to harden tag admission. Neither partial run is a
+complete validation result. Full final validation uses a dedicated checkout of
+the pinned verification head to keep the source revision fixed.
