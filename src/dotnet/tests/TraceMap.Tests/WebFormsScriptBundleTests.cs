@@ -206,6 +206,10 @@ public sealed class WebFormsScriptBundleTests
     [Theory]
     [InlineData("runat=\"server\"", "type=\"text/javascript\"", "UnsupportedApplicationBundleSource")]
     [InlineData("</script>", "", "UnsupportedApplicationBundleSource")]
+    [InlineData("<script ", "<script-custom ", "UnsupportedApplicationBundleSource")]
+    [InlineData("Application Language", "Application-custom Language", "UnsupportedApplicationBundleSource")]
+    [InlineData("runat=\"server\"", "runat=\"client\" runat=\"server\"", "UnsupportedApplicationBundleSource")]
+    [InlineData("runat=\"server\"", "invalid runat=\"server\"", "UnsupportedApplicationBundleSource")]
     [InlineData("Language=\"VB\"", "Language=\"C#\"", "UnsupportedApplicationBundleSource")]
     [InlineData("End Sub", "End If", "MalformedBundleSource")]
     public void Unsupported_application_markup_or_malformed_body_emits_gap(string from, string to, string kind)
@@ -213,6 +217,14 @@ public sealed class WebFormsScriptBundleTests
         using var temp = new TempDirectory();
         Write(temp.Path, "Global.asax", ApplicationStart.Replace(from, to));
         Assert.Equal(kind, Assert.Single(Extract(temp.Path)).Properties["gapKind"]);
+    }
+
+    [Fact]
+    public void Commented_out_application_script_contributes_no_bundle_candidates()
+    {
+        using var temp = new TempDirectory();
+        Write(temp.Path, "Global.asax", "<%--" + ApplicationStart + "--%>");
+        Assert.Empty(Extract(temp.Path));
     }
 
     [Fact]

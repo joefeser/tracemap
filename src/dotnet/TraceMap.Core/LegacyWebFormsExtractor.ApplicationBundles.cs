@@ -9,7 +9,10 @@ public static partial class LegacyWebFormsExtractor
 {
     private static void AddApplicationBundles(ScanManifest manifest, string path, string text, List<CodeFact> facts)
     {
-        var markup = MaskServerComments(text);
+        if (!text.Contains("ScriptBundle", StringComparison.OrdinalIgnoreCase)) return;
+        var markup = Regex.Replace(text, ServerCommentRegex().ToString(),
+            match => new string(match.Value.Select(ch => ch is '\r' or '\n' ? ch : ' ').ToArray()),
+            BundleMarkupOptions | RegexOptions.Singleline, RegexBudget.LoadTolerant);
         if (!markup.Contains("ScriptBundle", StringComparison.OrdinalIgnoreCase)) return;
 
         // Admit one inline server block and Application/Import directives only.
@@ -20,10 +23,14 @@ public static partial class LegacyWebFormsExtractor
         var header = script.Success ? markup[..scriptStart] : "";
         var directives = Regex.Matches(header, ApplicationBundleDirective, BundleMarkupOptions, RegexBudget.LoadTolerant);
         var applications = directives.Where(m => m.Groups["kind"].Value.Equals("Application", StringComparison.OrdinalIgnoreCase)).ToArray();
-        var attributes = applications.Length == 1 ? ParseAttributes(applications[0].Groups["attrs"].Value) : null;
-        var scriptAttributes = script.Success ? ParseAttributes(script.Groups["attrs"].Value) : null;
+        var attributes = applications.Length == 1 ? BundleAttributes(applications[0].Groups["attrs"].Value) : null;
+        var scriptAttributes = script.Success ? BundleAttributes(script.Groups["attrs"].Value) : null;
         var language = scriptAttributes?.GetValueOrDefault("language") ?? attributes?.GetValueOrDefault("language");
+        var applicationLanguage = attributes?.GetValueOrDefault("language");
         if (attributes is null || scriptAttributes is null || !IsServerControl(scriptAttributes)
+            || applicationLanguage is not null && !SameVbName(applicationLanguage, "VB")
+            || directives.Any(m => SameVbName(m.Groups["kind"].Value, "Import") &&
+                string.IsNullOrWhiteSpace(BundleAttributes(m.Groups["attrs"].Value)?.GetValueOrDefault("Namespace")))
             || scriptAttributes.ContainsKey("src") || !string.Equals(language, "VB", StringComparison.OrdinalIgnoreCase)
             || !string.IsNullOrWhiteSpace(Regex.Replace(header, ApplicationBundleDirective, "", BundleMarkupOptions, RegexBudget.LoadTolerant))
             || !string.IsNullOrWhiteSpace(markup[(scriptStart + script.Length)..]))
@@ -38,6 +45,20 @@ public static partial class LegacyWebFormsExtractor
         var source = SourceText.From(text);
         AddBundleDeclarations(manifest, path, prefix + body.Value + "\nEnd Class", true, facts,
             source.Lines.GetLineFromPosition(bodyOffset).LineNumber - 1, bodyOffset - prefix.Length, hash);
+    }
+
+    private static Dictionary<string, string>? BundleAttributes(string text)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var end = 0;
+        foreach (Match match in Regex.Matches(text, AttributeRegex().ToString(), BundleMarkupOptions, RegexBudget.LoadTolerant))
+        {
+            if (match.Index == end || !text.AsSpan(end, match.Index - end).IsWhiteSpace()) return null;
+            var value = match.Groups["dq"].Success ? match.Groups["dq"].Value : match.Groups["sq"].Value;
+            if (!result.TryAdd(match.Groups["name"].Value, value)) return null;
+            end = match.Index + match.Length;
+        }
+        return text.AsSpan(end).IsWhiteSpace() ? result : null;
     }
 
     private static string? CollectLocalBundleIncludes(SyntaxNode initializer, List<SyntaxNode> members)
@@ -83,6 +104,6 @@ public static partial class LegacyWebFormsExtractor
     private static bool SameVbName(string text, string expected) => text.Equals(expected, StringComparison.OrdinalIgnoreCase);
 
     private const RegexOptions BundleMarkupOptions = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking;
-    private const string ApplicationBundleDirective = @"<%@\s*(?<kind>Application|Import)\b(?<attrs>[^%>]*)%>";
-    private const string ApplicationBundleScript = @"\A<script\b(?<attrs>[^>]*)>(?<body>.*?)</script\s*>";
+    private const string ApplicationBundleDirective = @"<%@\s*(?<kind>Application|Import)(?<attrs>(?:\s[^%>]*)?)%>";
+    private const string ApplicationBundleScript = @"\A<script(?<attrs>\s[^>]*)>(?<body>.*?)</script\s*>";
 }
