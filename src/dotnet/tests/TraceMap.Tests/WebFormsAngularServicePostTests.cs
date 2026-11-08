@@ -222,6 +222,32 @@ public sealed class WebFormsAngularServicePostTests
             Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularModuleOwnershipUnavailable");
     }
 
+    [Theory]
+    [InlineData("function local(exampleApp) { exampleApp = null; }", true)]
+    [InlineData("function local(exampleApp) { return () => { exampleApp++; }; }", true)]
+    [InlineData("function local() { exampleApp = null; }", false)]
+    [InlineData("function local(exampleApp) { exampleApp.service = custom; }", false)]
+    [InlineData("function local(exampleApp) { with (settings) { exampleApp = null; } }", false)]
+    [InlineData("function local(exampleApp) { exampleApp.service('records', ctor); }", false)]
+    public void Direct_parameter_rebindings_are_local_and_parameter_receivers_cannot_supply_module_identity(
+        string source, bool expected)
+    {
+        var facts = Extract("Scripts/adapter.js", "function configureAdapter()", source + "\nfunction configureAdapter()");
+        Assert.Equal(expected ? 2 : 0, facts.Count(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate));
+        if (!expected) Assert.Contains(facts, f => f.FactType == FactTypes.AnalysisGap
+            && f.Properties.GetValueOrDefault("gapKind") is "AngularModuleOwnershipUnavailable" or "AngularServiceModuleUnavailable");
+    }
+
+    [Fact]
+    public void Scope_aware_walk_keeps_the_script_node_limit()
+    {
+        var withinBudget = string.Concat(Enumerable.Repeat("x\n", 49_999));
+        var script = new AngularJsScript("public.js", withinBudget);
+        Assert.Equal(99_999, script.NodeCount);
+        var gap = Assert.Throws<AngularClickGap>(() => new AngularJsScript("public.js", withinBudget + "x\n"));
+        Assert.Equal("AngularScriptNodeLimit", gap.Kind);
+    }
+
     [Fact]
     public void Bundle_wide_angular_write_stops_the_controller_before_a_service_call_can_be_retained()
     {

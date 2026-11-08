@@ -66,3 +66,5 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 - [ ] Verify 0.35.0 registration-to-member and member-to-POST joins on both controls.
 - [x] Link an independent service-member POST to a unique mounted handler declaration, including explicit mapping gaps.
 - [x] Use bounded iterative traversal for write indexing without repeated walks of nested assignment patterns.
+- [x] Track direct parameter rebinding without binding a parameter receiver to a global module of the same name.
+- [x] Verify ordinary and truncated independent/selected counts from separate public SQLite outputs.

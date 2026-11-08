@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Acornima;
 using Acornima.Ast;
 
@@ -13,6 +14,7 @@ internal sealed partial class AngularJsScript
     private readonly Dictionary<CallExpression, Expression> registrationRoots = new();
     private readonly CallExpression[] controllerCalls;
     private readonly ILookup<string, VariableDeclarator> globals;
+    private readonly HashSet<Identifier> parameterReferences = new();
     private readonly HashSet<string> writes = new(StringComparer.Ordinal);
     private readonly HashSet<string> namedDeclarations;
     private readonly ILookup<string, CallExpression> creations;
@@ -31,7 +33,7 @@ internal sealed partial class AngularJsScript
         {
             if (++tokenCount > 100_000) throw new AngularClickGap("AngularScriptTokenLimit");
         } }).ParseScript(text);
-        var nodes = Walk(script, writes).ToArray();
+        var nodes = Walk(script, this).ToArray();
         NodeCount = nodes.Length;
         if (unknownInitializers is { Count: > 0 })
         {
@@ -138,18 +140,30 @@ internal sealed partial class AngularJsScript
         }
     }
 
-    private static IEnumerable<Node> Walk(Node root, HashSet<string>? writes = null)
+    private static IEnumerable<Node> Walk(Node root, AngularJsScript? index = null)
     {
-        var stack = new Stack<(Node Node, bool InsideAssignmentPattern)>();
-        stack.Push((root, false));
+        var stack = new Stack<(Node Node, bool InsideAssignmentPattern, ImmutableHashSet<string> Parameters, bool InsideWith)>();
+        stack.Push((root, false, ImmutableHashSet<string>.Empty, false));
         var scheduled = 1;
         while (stack.TryPop(out var frame))
         {
             var node = frame.Node;
             Node? pattern = null;
-            if (writes is not null)
+            var parameters = frame.Parameters;
+            var insideWith = frame.InsideWith;
+            if (index is not null)
             {
-                if (frame.InsideAssignmentPattern && node is Identifier id) writes.Add(id.Name);
+                insideWith |= node is WithStatement;
+                parameters = node switch
+                {
+                    FunctionExpression fn => parameters.Union(fn.Params.OfType<Identifier>().Select(p => p.Name)),
+                    FunctionDeclaration fn => parameters.Union(fn.Params.OfType<Identifier>().Select(p => p.Name)),
+                    ArrowFunctionExpression fn => parameters.Union(fn.Params.OfType<Identifier>().Select(p => p.Name)),
+                    _ => parameters
+                };
+                if (node is Identifier reference && parameters.Contains(reference.Name)) index.parameterReferences.Add(reference);
+
+                if (frame.InsideAssignmentPattern && node is Identifier id) index.writes.Add(id.Name);
                 if (node is AssignmentExpression { Left: ArrayPattern or ObjectPattern } assignment)
                     pattern = assignment.Left;
                 var name = node switch
@@ -160,13 +174,17 @@ internal sealed partial class AngularJsScript
                     UpdateExpression { Argument: Identifier target } => target.Name,
                     _ => null
                 };
-                if (name is not null) writes.Add(name);
+                if (name is not null)
+                {
+                    bool directRebind = node is AssignmentExpression { Left: Identifier } or UpdateExpression { Argument: Identifier };
+                    if (!directRebind || insideWith || !parameters.Contains(name)) index.writes.Add(name);
+                }
             }
             yield return node;
             foreach (var child in node.ChildNodes)
             {
                 if (++scheduled > 100_000) throw new AngularClickGap("AngularScriptNodeLimit");
-                stack.Push((child, frame.InsideAssignmentPattern || ReferenceEquals(child, pattern)));
+                stack.Push((child, frame.InsideAssignmentPattern || ReferenceEquals(child, pattern), parameters, insideWith));
             }
         }
     }
@@ -184,9 +202,9 @@ internal sealed partial class AngularJsScript
         return false;
     }
 
-    private static string? Module(Expression? expression) =>
+    private string? Module(Expression? expression) =>
         expression is CallExpression call && Member(call.Callee, "module", out var receiver)
-        && receiver is Identifier { Name: "angular" } && call.Arguments.Count is 1 or 2
+        && receiver is Identifier { Name: "angular" } angular && !parameterReferences.Contains(angular) && call.Arguments.Count is 1 or 2
         && call.Arguments[0] is StringLiteral name
         && (call.Arguments.Count == 1 || call.Arguments[1] is ArrayExpression dependencies
             && dependencies.Elements.All(item => item is StringLiteral)) ? name.Value : null;
@@ -198,11 +216,11 @@ internal sealed partial class AngularJsScript
     {
         failure = "angular-binding-or-write";
         if (scripts.Any(s => s.globals["angular"].Any() || s.writes.Contains("angular") || s.namedDeclarations.Contains("angular"))) return null;
-        if (Module(receiver) is { } literal) return new(literal, file.Location(receiver));
+        if (file.Module(receiver) is { } literal) return new(literal, file.Location(receiver));
         failure = "unsupported-receiver";
         if (receiver is not Identifier id) return null;
         failure = "alias-write-or-shadow";
-        if (scripts.Any(s => s.writes.Contains(id.Name) || s.namedDeclarations.Contains(id.Name))) return null;
+        if (file.parameterReferences.Contains(id) || scripts.Any(s => s.writes.Contains(id.Name) || s.namedDeclarations.Contains(id.Name))) return null;
         var vars = scripts.SelectMany(s => s.globals[id.Name].Select(d => (File: s, Declaration: d))).Take(2).ToArray();
         if (vars.Length != 1)
         {
@@ -210,7 +228,7 @@ internal sealed partial class AngularJsScript
             return null;
         }
         failure = "unsupported-alias-initializer";
-        if (Module(vars[0].Declaration.Init) is not { } name) return null;
+        if (vars[0].File.Module(vars[0].Declaration.Init) is not { } name) return null;
         return new(name, vars[0].File.Location(vars[0].Declaration));
     }
 

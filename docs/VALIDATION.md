@@ -5518,7 +5518,7 @@ handler and review the recorded supporting IDs and parser/input digests.
 The prior bundle fixtures retain their four- and seven-fact bundle controls.
 
 This rule is `legacy.webforms.angularjs-click.v1`, extractor
-`legacy-webforms/0.37.0`. It parses included JavaScript using pinned Acornima
+`legacy-webforms/0.38.0`. It parses included JavaScript using pinned Acornima
 1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
 tracks .js source changes. The explicit ownership and resource boundaries are
 in the rule catalog. General plain onclick, runtime, backend and private
@@ -5641,3 +5641,10 @@ For private Windows scans, use the existing job-object guard and phase checkpoin
 described in [Bounded scan diagnostics](validation/BOUNDED_SCAN_DIAGNOSTICS.md).
 The 0.37.0 fixture also checks the registration-side handler edge by exact
 request and declaration IDs, including when click selection remains blocked.
+
+For 0.38.0 check ordinary and overflow outputs separately. The independent
+handler count is one in both. The ordinary fixture has two click-selected
+handlers. The overflow control has zero and an AngularUnboundProviderLimit
+gap. Direct local parameter rebinding is covered for a standalone function
+and a closure. Global reassignment, property mutation and a provider receiver
+that is itself a parameter remain fail-closed controls.

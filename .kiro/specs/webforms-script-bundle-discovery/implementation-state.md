@@ -575,3 +575,20 @@ and right-hand read. The vendor control added public AngularJS 1.8.2,
 ng-idle 1.3.2 and jQuery UI 1.12.1 as static bundle inputs. Both vendor and
 truncated controls produced one declaration-side handler and zero selected
 click endpoints. No private scan or local xUnit run was performed.
+
+### Scope-aware parameter writes on the shared testing branch
+
+On `codex/workspace-scope-preflight`, `legacy-webforms/0.38.0` tracks simple
+function parameters across the iterative walk and nested closures. Local
+identifier rebinding does not invalidate a global alias. A parameter reference
+at the provider site cannot establish global module ownership. Property
+mutations and dynamic with scopes retain conservative checks.
+This implementation was made on the published branch. The work-machine
+commit was unavailable from origin.
+
+Debug compilation of TraceMap.Tests with -warnaserror succeeded. Nine bounded
+public CLI smoke scans passed with SQLite integrity OK. Independent and
+click-selected handler counts were (1,2) for the ordinary fixture and (1,0)
+for overflow. The alias, mutation, closure, parameter receiver, dynamic scope
+and node-limit controls matched expectations. xUnit and private scans were
+deferred. The earlier Windows process stall has no established cause.
