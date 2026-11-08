@@ -358,3 +358,16 @@ unshadowed callback scope, duplicate, reassigned, conditional, malformed,
 unsupported and nested callbacks are covered. The public fixture has two
 clicks with distinct IDs, one method and one callback location. Source calls
 from that method to a backend service are outside this slice.
+
+Pinned implementation `e2e3b029184c1fc6e492e02d61d999753e863802` built in
+Debug with zero warnings/errors. Focused gate passed 216/216 with:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --filter 'FullyQualifiedName~WebFormsAngularThenCallbackTests|FullyQualifiedName~WebFormsInlineSettingsTests|FullyQualifiedName~WebFormsIisMountTests|FullyQualifiedName~WebFormsAngularClickTests|FullyQualifiedName~WebFormsScriptBundleTests|FullyQualifiedName~LegacyWebFormsExtractorTests|FullyQualifiedName~EvidenceDocsExportTests'
+```
+
+Four pinned CLI smokes passed SQLite integrity, NDJSON/SQLite fact-ID parity
+and required-output checks. The callback fixture's README query returned
+four rows for two clicks, one method and two independent gaps per click.
+The three prior controls retained their ordinary/partial classifications.
+Separate C#/VB semantic OSS reruns are deferred for this syntax slice.
