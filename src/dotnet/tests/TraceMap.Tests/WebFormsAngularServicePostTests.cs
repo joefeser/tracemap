@@ -24,7 +24,7 @@ public sealed class WebFormsAngularServicePostTests
             Assert.Equal("POST", request.Properties["httpMethod"]);
             Assert.Equal("1", request.Properties["httpInjectionSlot"]);
             Assert.Equal("Scripts/services.js", request.Evidence.FilePath);
-            Assert.Equal(3, request.Evidence.StartLine);
+            Assert.Equal(5, request.Evidence.StartLine);
             var member = facts.Single(f => f.FactId == request.Properties["supportingFactIds"]);
             Assert.Equal("records", member.Properties["serviceToken"]);
             var support = member.Properties["supportingFactIds"].Split(',');
@@ -34,7 +34,15 @@ public sealed class WebFormsAngularServicePostTests
             var handler = facts.Single(f => f.FactId == call.Properties["clickHandlerFactId"]);
             Assert.Equal(FactTypes.WebFormsAngularPartialClickHandlerCandidate, handler.FactType);
             Assert.Equal(handler.Properties["clickFactId"], link.Properties["clickFactId"]);
-            Assert.Contains(facts, f => support.Contains(f.FactId) && f.FactType == FactTypes.WebFormsAngularServiceRegistrationCandidate);
+            var registration = Assert.Single(facts, f => support.Contains(f.FactId) && f.FactType == FactTypes.WebFormsAngularServiceRegistrationCandidate);
+            Assert.Equal(3, registration.Evidence.StartLine);
+            var factory = Assert.Single(facts, f => f.FactType == FactTypes.WebFormsAngularFactoryRegistrationCandidate
+                && registration.Properties["supportingFactIds"].Split(',').Contains(f.FactId));
+            Assert.Equal("formatting", factory.Properties["factoryToken"]);
+            Assert.Equal(2, factory.Evidence.StartLine);
+            Assert.Equal(factory.TargetSymbol, registration.SourceSymbol);
+            Assert.Contains(facts, f => f.TargetSymbol == factory.SourceSymbol && f.Properties.GetValueOrDefault("ownerKind") == "module"
+                && factory.Properties["supportingFactIds"].Split(',').Contains(f.FactId));
         }
     }
 
@@ -56,6 +64,34 @@ public sealed class WebFormsAngularServicePostTests
         Assert.Contains(facts, f => f.RuleId == RuleIds.LegacyWebFormsAngularServiceHttp && f.Properties.GetValueOrDefault("gapKind") == gap);
     }
 
+    [Theory]
+    [InlineData(".factory(\"formatting\"", ".unknown(\"formatting\"", "AngularServiceModuleUnavailable")]
+    [InlineData(".factory(\"formatting\"", ".factory(dynamicName", "UnsupportedAngularFactoryRegistration")]
+    [InlineData(".factory(\"formatting\"", ".factory(\"records\"", "UnsupportedAngularServiceRegistration")]
+    [InlineData("function () { return {}; }", "makeFactory()", "UnsupportedAngularFactoryRegistration")]
+    [InlineData("exampleApp\n.factory", "exampleApp.factory = custom; exampleApp\n.factory", "AngularFactoryReceiverMutation")]
+    [InlineData("exampleApp\n.factory", "if (enabled) exampleApp\n.factory", "UnsupportedAngularServiceRegistration")]
+    public void Unsupported_factory_chains_keep_the_gap(string from, string to, string gap)
+    {
+        var facts = Extract("Scripts/services.js", from, to);
+        Assert.DoesNotContain(facts, f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate);
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == gap);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(31)]
+    [InlineData(32)]
+    public void Registration_bound_counts_the_terminal_service(int count)
+    {
+        var chain = string.Concat(Enumerable.Range(0, count).Select(i => $".factory('helper{i}', ['input', function (input) {{}}])"));
+        var facts = Extract("Scripts/services.js", ".factory(\"formatting\", function () { return {}; })", chain);
+        Assert.Equal(count < 32 ? 2 : 0, facts.Count(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate));
+        Assert.Equal(count < 32 ? count : 0, facts.Count(f => f.FactType == FactTypes.WebFormsAngularFactoryRegistrationCandidate));
+        if (count >= 32) Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceProviderChainLimit");
+    }
+
     [Fact]
     public void More_than_sixteen_injected_calls_retains_the_truncation_gap()
     {
@@ -73,7 +109,7 @@ public sealed class WebFormsAngularServicePostTests
             var relative = Path.GetRelativePath(source, path);
             var output = Path.Combine(temp.Path, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-            var text = File.ReadAllText(path);
+            var text = File.ReadAllText(path).ReplaceLineEndings("\n");
             File.WriteAllText(output, relative.Replace('\\', '/') == file ? text.Replace(from!, to) : text);
         }
         var inventory = FileInventory.Collect(temp.Path);

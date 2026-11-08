@@ -40,8 +40,12 @@ public static partial class LegacyWebFormsExtractor
                         if (!assets.TryGetValue(method.Member.File, out var memberIds) || !assets.TryGetValue(method.Module.File, out var moduleIds))
                             throw new AngularClickGap("AngularServiceOutsideIncludedFiles");
                         var moduleFact = ScriptOwner(method.Module, "module", module, moduleIds);
-                        var registration = ServiceSite(FactTypes.WebFormsAngularServiceRegistrationCandidate, method.Registration, moduleFact.TargetSymbol!,
-                            memberIds.Append(moduleFact.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token });
+                        var receiver = moduleFact;
+                        foreach (var factory in method.Factories)
+                            receiver = ServiceSite(FactTypes.WebFormsAngularFactoryRegistrationCandidate, factory.Site, receiver.TargetSymbol!,
+                                memberIds.Append(receiver.FactId), new() { ["module"] = module, ["factoryToken"] = factory.Token });
+                        var registration = ServiceSite(FactTypes.WebFormsAngularServiceRegistrationCandidate, method.Registration, receiver.TargetSymbol!,
+                            memberIds.Append(receiver.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token });
                         last = ServiceSite(FactTypes.WebFormsAngularServiceMemberCandidate, method.Member, callFact.TargetSymbol!,
                             [callFact.FactId, registration.FactId], new() { ["module"] = module, ["serviceToken"] = call.Token, ["member"] = call.Member });
                         var post = AngularJsScript.ResolvePost(method);

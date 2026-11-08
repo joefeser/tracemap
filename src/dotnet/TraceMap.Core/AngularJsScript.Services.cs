@@ -5,10 +5,12 @@ namespace TraceMap.Core;
 internal sealed partial class AngularJsScript
 {
     private readonly CallExpression[] providers;
+    private readonly Expression[] factoryMutations;
     private readonly HashSet<CallExpression> directCalls;
     internal sealed record ServiceCall(Site Site, string Token, string Member, int Slot);
+    internal sealed record FactoryLink(string Token, Site Site);
     internal sealed record ServiceMethod(AngularJsScript Script, Site Registration, Site Module, Site Member,
-        FunctionExpression Body, FunctionExpression Constructor, ArrayExpression Annotation);
+        FunctionExpression Body, FunctionExpression Constructor, ArrayExpression Annotation, IReadOnlyList<FactoryLink> Factories);
     internal sealed record Post(Site Site, string Url, int HttpSlot);
 
     private static bool IsProviderCall(CallExpression call)
@@ -70,6 +72,30 @@ internal sealed partial class AngularJsScript
         }
     }
 
+    private (Expression Root, List<FactoryLink> Factories) ServiceReceiver(MemberExpression service)
+    {
+        var factories = new List<FactoryLink>();
+        Expression root = service.Object;
+        while (root is CallExpression { Optional: false } call && Member(call.Callee, "factory", out var receiver))
+        {
+            // Count the terminal service as the last registration.
+            if (factories.Count >= 31) throw new AngularClickGap("AngularServiceProviderChainLimit");
+            if (call.Arguments.Count != 2 || call.Arguments[0] is not StringLiteral token
+                || !LiteralFactory(call.Arguments[1]))
+                throw new AngularClickGap("UnsupportedAngularFactoryRegistration");
+            var property = ((MemberExpression)call.Callee).Property;
+            factories.Add(new FactoryLink(token.Value, Location(property) with { EndLine = call.Location.End.Line }));
+            root = receiver;
+        }
+        factories.Reverse();
+        return (root, factories);
+    }
+
+    private static bool LiteralFactory(Node argument) => argument is FunctionExpression
+        || argument is ArrayExpression annotated && annotated.Elements.Count > 0
+            && annotated.Elements[^1] is FunctionExpression factory && factory.Params.Count == annotated.Elements.Count - 1
+            && annotated.Elements.SkipLast(1).All(item => item is StringLiteral);
+
     internal static ServiceMethod ResolveService(AngularJsScript[] sources, string module, ServiceCall target)
     {
         ServiceMethod? result = null;
@@ -80,8 +106,12 @@ internal sealed partial class AngularJsScript
             if (++checkedCalls > 1024) throw new AngularClickGap("AngularProviderLimit");
             if (registration.Arguments.Count > 0 && registration.Arguments[0] is StringLiteral name && name.Value != target.Token) continue;
             var member = (MemberExpression)registration.Callee;
-            var owner = ResolveModule(source, member.Object, sources) ?? throw new AngularClickGap("AngularServiceModuleUnavailable");
+            var (root, factories) = source.ServiceReceiver(member);
+            var owner = ResolveModule(source, root, sources) ?? throw new AngularClickGap("AngularServiceModuleUnavailable");
             if (owner.Name != module) continue;
+            if (factories.Count != 0 && sources.Any(file => file.factoryMutations.Any(receiver =>
+                ResolveModule(file, receiver, sources)?.Name is not { } name || name == module)))
+                throw new AngularClickGap("AngularFactoryReceiverMutation");
             if (registration.Optional || registration.Arguments.Count != 2 || registration.Arguments[0] is not StringLiteral
                 || !source.directCalls.Contains(registration) || !Member(member, "service", out _))
                 throw new AngularClickGap("UnsupportedAngularServiceRegistration");
@@ -90,8 +120,10 @@ internal sealed partial class AngularJsScript
                 || annotation.Elements[^1] is not FunctionExpression { Async: false, Generator: false } fn)
                 throw new AngularClickGap("AngularServiceInjectionUnavailable");
             var binding = ServiceMember(fn, target.Member);
-            result = new ServiceMethod(source, source.Location(registration), owner.Declaration, source.Location(binding),
-                (FunctionExpression)binding.Right, fn, annotation);
+            var site = factories.Count == 0 ? source.Location(registration)
+                : source.Location(member.Property) with { EndLine = registration.Location.End.Line };
+            result = new ServiceMethod(source, site, owner.Declaration, source.Location(binding),
+                (FunctionExpression)binding.Right, fn, annotation, factories);
         }
         return result ?? throw new AngularClickGap("AngularServiceRegistrationUnavailable");
     }

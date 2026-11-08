@@ -41,6 +41,13 @@ internal sealed partial class AngularJsScript
         }
         if (settings is { Count: > 0 })
             SettingsScriptGap = CheckSettingsStrings(script, nodes, settings);
+        factoryMutations = nodes.Select(node => node switch
+        {
+            AssignmentExpression assignment => assignment.Left,
+            UpdateExpression update => update.Argument,
+            UnaryExpression { Operator: Operator.Delete } delete => delete.Argument,
+            _ => null
+        }).OfType<MemberExpression>().Where(member => Member(member, "factory", out _)).Select(member => member.Object).ToArray();
         providers = nodes.OfType<CallExpression>().Where(IsProviderCall).ToArray();
         directCalls = script.Body.OfType<ExpressionStatement>().Select(s => s.Expression).OfType<CallExpression>().ToHashSet();
         controllerCalls = nodes.OfType<CallExpression>().Where(call => Member(call.Callee, "controller", out _)).ToArray();

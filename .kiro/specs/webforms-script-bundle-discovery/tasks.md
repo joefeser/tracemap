@@ -32,4 +32,6 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 - [x] Admit one literal terminal catch on the fulfillment registration, preserving the two source spans and partial evidence.
 
 - [x] Implement positional AngularJS service binding, service POST and exact mounted handler declaration evidence.
-- [ ] Execute the new service POST regression tests and public scan controls when authorized.
+- [x] Service POST 0.24.0 public controls verified by operator.
+- [x] Support a terminal service following bounded factory registrations with exact receiver provenance.
+- [ ] Verify the 0.25.0 factory-chain fixture and rerun the authorized private scan.

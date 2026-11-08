@@ -26,6 +26,11 @@ ORDER BY c.start_line;
 ```
 
 Expected: click lines 4 and 5, partial handlers, call Scripts/panel.js:6,
-POST Scripts/services.js:3 and declaration Api/Save.ashx:1. The existing
+POST Scripts/services.js:5 and declaration Api/Save.ashx:1. The existing
 dynamic-script and callback-invocation gaps stay attached to each partial
 handler. This query describes source candidates and observed declarations.
+
+The service registration is the terminal call after a literal factory
+registration. Its supporting IDs include the factory at Scripts/services.js:2,
+which in turn references the external module declaration. The service site
+starts at its own property on line 3.

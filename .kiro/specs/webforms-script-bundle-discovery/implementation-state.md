@@ -416,3 +416,16 @@ and missing or ambiguous routes retain gaps. CLI and test-project Debug
 compilation with -warnaserror are the local gates for this handoff. Test
 execution, CLI fixture scans and private verification are deferred at the
 owner's request. Expected fixture results are unverified.
+
+### Terminal service after literal factories
+
+Branch `codex/workspace-scope-preflight`. The supplied 0.24.0 work-machine
+public control report records 12 passing focused tests, SQLite integrity ok,
+64 facts matching 64 NDJSON rows, and the expected two fixture query rows.
+Extractor 0.25.0 extends top-level service registration to a bounded chain
+of literal factories. A factory fact at its own source site references the
+receiver, and the terminal service references the final factory. Unknown
+intermediates, nonliteral registrations, competing tokens, factory mutation,
+and overlong chains preserve explicit gaps. Direct registrations keep their
+previous site and module support. Focused regressions and the updated fixture
+are prepared; new test execution and scans are deferred.

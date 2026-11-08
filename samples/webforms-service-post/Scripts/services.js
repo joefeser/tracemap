@@ -1,4 +1,6 @@
-exampleApp.service("records", ["formatter", "$http", function (format, send) {
+exampleApp
+.factory("formatting", function () { return {}; })
+.service("records", ["$filter", "$http", function (format, send) {
     this.submit = function (items) {
         return send({ method: "post", url: "/Portal/Desk/API/save.ashx", data: items });
     };
