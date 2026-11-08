@@ -4,10 +4,10 @@ using Acornima.Ast;
 namespace TraceMap.Core;
 
 // Source locations and bindings come from parsed JavaScript. No loader or JS runtime is involved.
-internal sealed class AngularJsScript
+internal sealed partial class AngularJsScript
 {
     internal sealed record Site(string File, int Start, int Line, int EndLine);
-    internal sealed record Handler(Site Method, Site Registration, Site Module, Site? ThenCallback, Site? RejectionCallback);
+    internal sealed record Handler(Site Method, Site Registration, Site Module, Site? ThenCallback, Site? RejectionCallback, FunctionExpression Controller, Expression MethodBody, string[] Parameters, string?[] Dependencies, bool Annotated);
     private sealed record ModuleBinding(string Name, Site Declaration);
     private Site Location(Node node) => new(File, node.Start, node.Location.Start.Line, node.Location.End.Line);
     private readonly Dictionary<CallExpression, Expression> registrationRoots = new();
@@ -16,6 +16,7 @@ internal sealed class AngularJsScript
     private readonly HashSet<string> writes;
     private readonly HashSet<string> namedDeclarations;
     private readonly ILookup<string, CallExpression> creations;
+    internal int NodeCount { get; }
     internal string File { get; }
     internal string Hash { get; }
     internal string? SettingsScriptGap { get; }
@@ -31,6 +32,7 @@ internal sealed class AngularJsScript
             if (++tokenCount > 100_000) throw new AngularClickGap("AngularScriptTokenLimit");
         } }).ParseScript(text);
         var nodes = Walk(script).ToArray();
+        NodeCount = nodes.Length;
         if (unknownInitializers is { Count: > 0 })
         {
             var initializers = nodes.OfType<VariableDeclarator>().Where(d => d.Id is Identifier && d.Init is NumericLiteral)
@@ -39,6 +41,8 @@ internal sealed class AngularJsScript
         }
         if (settings is { Count: > 0 })
             SettingsScriptGap = CheckSettingsStrings(script, nodes, settings);
+        providers = nodes.OfType<CallExpression>().Where(IsProviderCall).ToArray();
+        directCalls = script.Body.OfType<ExpressionStatement>().Select(s => s.Expression).OfType<CallExpression>().ToHashSet();
         controllerCalls = nodes.OfType<CallExpression>().Where(call => Member(call.Callee, "controller", out _)).ToArray();
         foreach (var statement in script.Body.OfType<ExpressionStatement>())
         {
@@ -71,7 +75,7 @@ internal sealed class AngularJsScript
         writes = nodes.Select(n => n switch {
             AssignmentExpression { Left: Identifier target } => target.Name,
             AssignmentExpression { Left: MemberExpression { Object: Identifier receiver, Computed: true } } => receiver.Name,
-            AssignmentExpression { Left: MemberExpression { Object: Identifier receiver, Property: Identifier { Name: "module" or "controller" } } } => receiver.Name,
+            AssignmentExpression { Left: MemberExpression { Object: Identifier receiver, Property: Identifier { Name: "module" or "controller" or "service" } } } => receiver.Name,
             UpdateExpression { Argument: Identifier target } => target.Name,
             _ => null
         }).OfType<string>().ToHashSet(StringComparer.Ordinal);
@@ -306,7 +310,7 @@ internal sealed class AngularJsScript
         var fulfillment = sites[binding];
         return new Handler(file.Location(binding), registrationSite, moduleSite,
             fulfillment is null ? null : file.Location(fulfillment.Then),
-            fulfillment?.Catch is { } rejection ? file.Location(rejection) : null);
+            fulfillment?.Catch is { } rejection ? file.Location(rejection) : null, fn, binding.Right, parameters, dependencies, injection is not null);
     }
 }
 

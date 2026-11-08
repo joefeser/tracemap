@@ -8307,3 +8307,19 @@ rules:
       - Parses ECMAScript syntax without executing scripts. Supports literal angular.module controller registrations and unique top-level module variable aliases, a direct top-level controller call or a top-level chain of up to 32 literal controller registrations rooted in the same module. The target needs a function callback or positional string injection array, and one direct scope method assigned a function or arrow. Inline classic scripts participate in ambiguity checks. The positive target must be external and included. Named callback indirection, wrappers, dynamic controller names, controller-as syntax, general aliasing, runtime mutations and HTTP/backend dispatch are beyond this rule.
       - The .NET source inventory includes .js when the selected file set contains ASPX, ASCX or master markup. Existing exclusions apply and included inventory bytes participate in source snapshot checks. Unreferenced files cannot satisfy a click. Only scripts reachable from selected surfaces are parsed.
       - Limits are 1 MiB per markup/script, 128 surfaces, 64 click sites per surface, 32 included external paths and 32 inline scripts per surface, 128 attempted external script files and 8 MiB external script bytes per scan, 100000 tokens/nodes per script, 32768 markup elements and depth below 128. Limits, malformed JS, unreadable sources and ambiguous or unsupported ownership produce gaps. Source evidence retains hashes and locations. Generator, parser binary and projected bounded-input digests are recorded.
+  - id: legacy.webforms.angularjs-service-http.v1
+    name: Included AngularJS service member POST to an ASP.NET handler declaration
+    description: Follows a retained click-handler candidate through an annotated injected service receiver, its module registration and member, a literal injected HTTP POST, and an explicitly mounted handler declaration.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsAngularServiceCallCandidate
+      - WebFormsAngularServiceRegistrationCandidate
+      - WebFormsAngularServiceMemberCandidate
+      - WebFormsClientHttpRequestCandidate
+      - WebFormsAngularPostHandlerCandidate
+      - AnalysisGap
+    limitations:
+      - Only selected external classic scripts can provide positive service and module sites. Includes and partial-click supporting IDs are retained. The call must be an immediate statement or return in the selected method, optionally followed by then. Nested calls, ambiguous receivers and parameter rebinding are gaps. The controller injection array must bind the receiver by position.
+      - Requires a unique top-level literal service registration in the same module with an annotated constructor, one direct this.member function assignment, and one directly called positional $http dependency in the method. Constructor returns, unsupported instance aliases, dynamic option keys, spread, duplicate properties, dynamic verbs or URLs, and competing service registrations are unsupported. This bounded syntax rule does not establish runtime DI, monkey-patching, request dispatch, or effects of third-party code.
+      - A declaration link requires an explicit IIS mount, a unique selected .ashx path in the same application, and the exact retained directive fact at that path. No filename fallback. A request may be retained with a separate gap even when its endpoint is unavailable. Payloads and raw request configuration are omitted.
+      - Limits include 16 qualifying calls per handler, 1024 provider registrations inspected per lookup, and a per-scan budget of 4000000 included syntax nodes charged across handler and service lookups. A truncated traversal retains an explicit gap. Parent script size, parse and inclusion limits still apply.

@@ -26,7 +26,7 @@ public static partial class LegacyWebFormsExtractor
         foreach (var page in candidates) state.Extract(page);
     }
 
-    private sealed class AngularClickScan(string repo, ScanManifest manifest, IReadOnlyList<FileInventoryItem> inventory,
+    private sealed partial class AngularClickScan(string repo, ScanManifest manifest, IReadOnlyList<FileInventoryItem> inventory,
         IReadOnlyList<WebFormsPage> pages, List<CodeFact> facts, WebFormsIisMount? iisMount)
     {
         private readonly ILookup<string, CodeFact> masterLinks = facts.Where(f => f.FactType == FactTypes.WebFormsCompositionDeclared
@@ -174,9 +174,10 @@ public static partial class LegacyWebFormsExtractor
                             type = FactTypes.WebFormsAngularPartialClickHandlerCandidate;
                             properties["coverageStatus"] = "included-source-only";
                         }
-                        Observe(type, handler.Method.File, handler.Method.Line, handler.Method.EndLine,
+                        var clickHandler = Observe(type, handler.Method.File, handler.Method.Line, handler.Method.EndLine,
                             parsed[handler.Method.File].Hash, id, handlerId, evidence, hashProvided: true,
                             properties: properties);
+                        AddServiceRequests(page, handler, clickHandler, sources, assets, module);
                     }
                     catch (AngularClickGap ex) { Gap(page, position.Value.Line, id, ex.Kind, [clickFact.FactId]); }
                 }
@@ -339,13 +340,16 @@ public static partial class LegacyWebFormsExtractor
             return root.Key;
         }
 
-        private string ResolveMountedScript(string page, string surface, string url, WebFormsIisMount mount)
+        private string ResolveMountedScript(string page, string surface, string url, WebFormsIisMount mount) =>
+            ResolveMountedFile(page, surface, url, mount, ".js", iisScripts!);
+
+        private string ResolveMountedFile(string page, string surface, string url, WebFormsIisMount mount, string extension, ILookup<string, string> files)
         {
             var prefix = mount.UrlPrefix == "/" ? "/" : mount.UrlPrefix + "/";
             if (!url.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
                 throw new AngularClickGap("AngularIisMountPrefixMismatch");
             var relative = url[prefix.Length..];
-            if (!WebFormsIisMount.SafeRelativePath(relative) || !relative.EndsWith(".js", StringComparison.OrdinalIgnoreCase))
+            if (!WebFormsIisMount.SafeRelativePath(relative) || !relative.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
                 throw new AngularClickGap("UnsupportedAngularScriptPath");
 
             var root = mount.WebRoot == "." ? "" : mount.WebRoot;
@@ -355,7 +359,7 @@ public static partial class LegacyWebFormsExtractor
             if (!InApplication(page) || !InApplication(surface))
                 throw new AngularClickGap("AngularApplicationRootMismatch");
             var target = root.Length == 0 ? relative : root + "/" + relative;
-            var matches = iisScripts![target].Take(2).ToArray();
+            var matches = files[target].Take(2).ToArray();
             if (matches.Length == 0) throw new AngularClickGap("AngularScriptOutsideInventory");
             if (matches.Length > 1) throw new AngularClickGap("AmbiguousAngularMountedScript");
             if (!InApplication(matches[0])) throw new AngularClickGap("AngularApplicationRootMismatch");
@@ -572,26 +576,33 @@ public static partial class LegacyWebFormsExtractor
         private CodeFact Observe(string type, string file, int line, int endLine, string text, string source, string target,
             IEnumerable<string> support, bool hashProvided = false, SortedDictionary<string, string>? properties = null)
         {
-            var ids = support.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-            var p = new SortedDictionary<string, string>(properties ?? new(), StringComparer.Ordinal);
-            p["sourceSymbolId"] = source;
-            p["targetSymbolId"] = target;
-            p["supportingFactIds"] = string.Join(",", ids);
-            p["ruleLimitations"] = AngularLimitations;
-            p["generatorSha256"] = EntryGeneratorSha256.Value;
-            p["javascriptParserSha256"] = JsParserHash.Value;
-            p["markupParserSha256"] = MarkupParserHash.Value;
             string? hash = hashProvided ? text : null;
             if (!hashProvided && text.Length > 0 && !markupHashes.TryGetValue(file, out hash))
                 markupHashes[file] = hash = FactFactory.Hash(text, 64);
             var evidence = new EvidenceSpan(file, line, endLine, hash,
                 "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor);
-            p["boundedInputSha256"] = FactFactory.Hash(JsonSerializer.Serialize(new { manifest.CommitSha, file, line, endLine, type, source, target, inputs = p.ToArray() }), 64);
-            var fact = FactFactory.Create(manifest, type, RuleIds.LegacyWebFormsAngularClick,
-                type == FactTypes.AnalysisGap ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier3SyntaxOrTextual,
-                evidence, sourceSymbol: source, targetSymbol: target, properties: p);
+            var fact = AngularFact(manifest, RuleIds.LegacyWebFormsAngularClick, type, evidence, source, target, support, properties);
             facts.Add(fact);
             return fact;
         }
+    }
+
+    private static CodeFact AngularFact(ScanManifest manifest, string rule, string type, EvidenceSpan evidence,
+        string source, string target, IEnumerable<string> support, SortedDictionary<string, string>? properties)
+    {
+        var ids = support.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var p = new SortedDictionary<string, string>(properties ?? new(), StringComparer.Ordinal);
+        p["sourceSymbolId"] = source;
+        p["targetSymbolId"] = target;
+        p["supportingFactIds"] = string.Join(",", ids);
+        p["ruleLimitations"] = rule == RuleIds.LegacyWebFormsAngularClick ? AngularLimitations : ServiceLimitations;
+        p["generatorSha256"] = EntryGeneratorSha256.Value;
+        p["javascriptParserSha256"] = JsParserHash.Value;
+        p["markupParserSha256"] = MarkupParserHash.Value;
+        p["boundedInputSha256"] = FactFactory.Hash(JsonSerializer.Serialize(new { manifest.CommitSha, file = evidence.FilePath,
+            line = evidence.StartLine, endLine = evidence.EndLine, type, source, target, inputs = p.ToArray() }), 64);
+        return FactFactory.Create(manifest, type, rule,
+            type == FactTypes.AnalysisGap ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier3SyntaxOrTextual,
+            evidence, sourceSymbol: source, targetSymbol: target, properties: p);
     }
 }

@@ -1,0 +1,156 @@
+using Acornima.Ast;
+
+namespace TraceMap.Core;
+
+internal sealed partial class AngularJsScript
+{
+    private readonly CallExpression[] providers;
+    private readonly HashSet<CallExpression> directCalls;
+    internal sealed record ServiceCall(Site Site, string Token, string Member, int Slot);
+    internal sealed record ServiceMethod(AngularJsScript Script, Site Registration, Site Module, Site Member,
+        FunctionExpression Body, FunctionExpression Constructor, ArrayExpression Annotation);
+    internal sealed record Post(Site Site, string Url, int HttpSlot);
+
+    private static bool IsProviderCall(CallExpression call)
+    {
+        if (call.Callee is not MemberExpression member) return false;
+        var name = member.Computed ? (member.Property as StringLiteral)?.Value : (member.Property as Identifier)?.Name;
+        return name is "service" or "factory" or "provider" or "value" or "constant" or "decorator";
+    }
+
+    // Only the selected method's immediate statements supply call sites. An enclosing
+    // fulfillment registration or the body of another callback cannot supply one.
+    private static IEnumerable<CallExpression> ImmediateCalls(Expression function)
+    {
+        Node? body = function switch
+        {
+            FunctionExpression fn => fn.Body,
+            ArrowFunctionExpression arrow => arrow.Body,
+            _ => null
+        };
+        IEnumerable<Expression?> expressions = body is BlockStatement block
+            ? block.Body.Select(s => s switch { ExpressionStatement es => es.Expression, ReturnStatement ret => ret.Argument, _ => null })
+            : [body as Expression];
+        foreach (var expression in expressions)
+        {
+            if (expression is not CallExpression { Optional: false } call) continue;
+            if (Member(call.Callee, "then", out var receiver) && receiver is CallExpression { Optional: false } inner) call = inner;
+            yield return call;
+        }
+    }
+
+    private static bool ExclusiveReceiver(FunctionExpression owner, string parameter, bool callable)
+    {
+        if (parameter == "arguments") return false;
+        var nodes = Walk(owner.Body).ToArray();
+        var allowed = new HashSet<Node>();
+        foreach (var call in nodes.OfType<CallExpression>().Where(call => !call.Optional))
+        {
+            if (callable) allowed.Add(call.Callee);
+            if (call.Callee is MemberExpression { Optional: false, Computed: false } member) allowed.Add(member.Object);
+        }
+        return nodes.OfType<Identifier>().Where(id => id.Name == parameter).All(allowed.Contains);
+    }
+
+    internal IEnumerable<ServiceCall> ServiceCalls(Handler handler)
+    {
+        var count = 0;
+        var immediate = ImmediateCalls(handler.MethodBody).ToHashSet();
+        foreach (var call in Walk(handler.MethodBody).OfType<CallExpression>())
+        {
+            if (call.Callee is not MemberExpression { Optional: false, Computed: false, Object: Identifier id, Property: Identifier key }) continue;
+            var slot = Array.IndexOf(handler.Parameters, id.Name);
+            if (slot < 0 || handler.Dependencies[slot] is not { } token || token.StartsWith('$')) continue;
+            if (!immediate.Contains(call) || call.Optional) throw new AngularClickGap("UnsupportedAngularServiceCall");
+            if (!handler.Annotated) throw new AngularClickGap("AngularServiceInjectionUnavailable");
+            if (++count > 16) throw new AngularClickGap("AngularServiceCallLimit");
+            if (!ExclusiveReceiver(handler.Controller, id.Name, false))
+                throw new AngularClickGap("AngularServiceReceiverBindingUnavailable");
+            yield return new ServiceCall(Location(call), token, key.Name, slot);
+        }
+    }
+
+    internal static ServiceMethod ResolveService(AngularJsScript[] sources, string module, ServiceCall target)
+    {
+        ServiceMethod? result = null;
+        var checkedCalls = 0;
+        foreach (var source in sources)
+        foreach (var registration in source.providers)
+        {
+            if (++checkedCalls > 1024) throw new AngularClickGap("AngularProviderLimit");
+            if (registration.Arguments.Count > 0 && registration.Arguments[0] is StringLiteral name && name.Value != target.Token) continue;
+            var member = (MemberExpression)registration.Callee;
+            var owner = ResolveModule(source, member.Object, sources) ?? throw new AngularClickGap("AngularServiceModuleUnavailable");
+            if (owner.Name != module) continue;
+            if (registration.Optional || registration.Arguments.Count != 2 || registration.Arguments[0] is not StringLiteral
+                || !source.directCalls.Contains(registration) || !Member(member, "service", out _))
+                throw new AngularClickGap("UnsupportedAngularServiceRegistration");
+            if (result is not null) throw new AngularClickGap("AmbiguousAngularService");
+            if (registration.Arguments[1] is not ArrayExpression annotation || annotation.Elements.Count < 2
+                || annotation.Elements[^1] is not FunctionExpression { Async: false, Generator: false } fn)
+                throw new AngularClickGap("AngularServiceInjectionUnavailable");
+            var binding = ServiceMember(fn, target.Member);
+            result = new ServiceMethod(source, source.Location(registration), owner.Declaration, source.Location(binding),
+                (FunctionExpression)binding.Right, fn, annotation);
+        }
+        return result ?? throw new AngularClickGap("AngularServiceRegistrationUnavailable");
+    }
+
+    private static bool ConstructorReturns(BlockStatement body)
+    {
+        var pending = new Stack<Node>();
+        pending.Push(body);
+        while (pending.TryPop(out var node))
+        {
+            if (node is ReturnStatement) return true;
+            if (node is FunctionExpression or ArrowFunctionExpression or FunctionDeclaration) continue;
+            foreach (var child in node.ChildNodes) pending.Push(child);
+        }
+        return false;
+    }
+
+    private static AssignmentExpression ServiceMember(FunctionExpression fn, string name)
+    {
+        var direct = fn.Body.Body.OfType<ExpressionStatement>().Select(s => s.Expression).OfType<AssignmentExpression>().ToHashSet();
+        if (ConstructorReturns(fn.Body)) throw new AngularClickGap("AngularServiceInstanceUnavailable");
+        var nodes = Walk(fn.Body).ToArray();
+        var allowedThis = new HashSet<Node>();
+        AssignmentExpression? found = null;
+        foreach (var assignment in direct)
+        {
+            if (assignment.Left is not MemberExpression { Computed: false, Object: ThisExpression self, Property: Identifier key }) continue;
+            allowedThis.Add(self);
+            if (key.Name != name) continue;
+            if (found is not null) throw new AngularClickGap("AmbiguousAngularServiceMember");
+            if (assignment.Operator != Acornima.Operator.Assignment || assignment.Right is not FunctionExpression)
+                throw new AngularClickGap("UnsupportedAngularServiceMember");
+            found = assignment;
+        }
+        if (nodes.OfType<ThisExpression>().Any(node => !allowedThis.Contains(node))) throw new AngularClickGap("AngularServiceInstanceUnavailable");
+        return found ?? throw new AngularClickGap("AngularServiceMemberUnavailable");
+    }
+
+    internal static Post ResolvePost(ServiceMethod method)
+    {
+        var tokens = method.Annotation.Elements.SkipLast(1).Select(e => (e as StringLiteral)?.Value).ToArray();
+        var parameters = method.Constructor.Params.Select(p => (p as Identifier)?.Name).ToArray();
+        var slot = Array.IndexOf(tokens, "$http");
+        if (slot < 0 || tokens.Length != parameters.Length || tokens.Any(t => t is null) || tokens.Count(t => t == "$http") != 1
+            || parameters.Any(p => p is null) || parameters.Distinct(StringComparer.Ordinal).Count() != parameters.Length
+            || !ExclusiveReceiver(method.Constructor, parameters[slot]!, true)) throw new AngularClickGap("AngularHttpInjectionUnavailable");
+        var calls = Walk(method.Body.Body).OfType<CallExpression>()
+            .Where(c => c.Callee is Identifier id && id.Name == parameters[slot]).Take(2).ToArray();
+        if (calls.Length != 1 || !ImmediateCalls(method.Body).Contains(calls[0]) || calls[0].Arguments.Count != 1 || calls[0].Arguments[0] is not ObjectExpression obj)
+            throw new AngularClickGap("AngularHttpRequestUnavailable");
+        var values = new Dictionary<string, Node>(StringComparer.Ordinal);
+        foreach (var property in obj.Properties)
+        {
+            if (property is not Property { Computed: false, Method: false, Shorthand: false, Kind: PropertyKind.Init } p
+                || (p.Key switch { Identifier id => id.Name, StringLiteral literal => literal.Value, _ => null }) is not { } key
+                || key == "__proto__" || !values.TryAdd(key, p.Value)) throw new AngularClickGap("AngularHttpOptionsUnavailable");
+        }
+        if (values.GetValueOrDefault("method") is not StringLiteral verb || !verb.Value.Equals("POST", StringComparison.OrdinalIgnoreCase)
+            || values.GetValueOrDefault("url") is not StringLiteral url) throw new AngularClickGap("AngularHttpPostUnavailable");
+        return new Post(method.Script.Location(calls[0]), url.Value, slot);
+    }
+}

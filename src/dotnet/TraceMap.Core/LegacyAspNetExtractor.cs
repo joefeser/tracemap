@@ -97,6 +97,7 @@ public static partial class LegacyAspNetExtractor
         }
 
         AddNavigationEdges(manifest, pageFacts, facts);
+        LegacyWebFormsExtractor.LinkAngularPostHandlers(manifest, existingFacts, facts);
         AddIdentityControlFacts(manifest, existingFacts, facts);
         if (hasAspNetCandidateInventory)
         {

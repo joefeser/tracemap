@@ -375,6 +375,10 @@ public static class FactTypes
     public const string WebFormsLifecycleBranchCandidate = nameof(WebFormsLifecycleBranchCandidate);
     public const string WebFormsAngularOwnerCandidate = nameof(WebFormsAngularOwnerCandidate);
     public const string WebFormsAngularClickCandidate = nameof(WebFormsAngularClickCandidate);
+    public const string WebFormsAngularServiceCallCandidate = nameof(WebFormsAngularServiceCallCandidate);
+    public const string WebFormsAngularServiceRegistrationCandidate = nameof(WebFormsAngularServiceRegistrationCandidate);
+    public const string WebFormsAngularServiceMemberCandidate = nameof(WebFormsAngularServiceMemberCandidate);
+    public const string WebFormsAngularPostHandlerCandidate = nameof(WebFormsAngularPostHandlerCandidate);
     public const string WebFormsAngularThenCallbackCandidate = nameof(WebFormsAngularThenCallbackCandidate);
     public const string WebFormsAngularPartialClickHandlerCandidate = nameof(WebFormsAngularPartialClickHandlerCandidate);
     public const string WebFormsAngularClickHandlerCandidate = nameof(WebFormsAngularClickHandlerCandidate);
@@ -618,6 +622,7 @@ public static class RuleIds
     public const string LegacyWebFormsEventFlow = "legacy.webforms.event-flow.v1";
     public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
     public const string LegacyWebFormsLifecycleContext = "legacy.webforms.lifecycle-context.v1";
+    public const string LegacyWebFormsAngularServiceHttp = "legacy.webforms.angularjs-service-http.v1";
     public const string LegacyWebFormsAngularClick = "legacy.webforms.angularjs-click.v1";
     public const string LegacyWebFormsScriptBundles = "legacy.webforms.script-bundles.v1";
     public const string LegacyWebFormsClientScript = "legacy.webforms.client-script.v1";
@@ -767,7 +772,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.23.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.24.0";
     public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.3";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";

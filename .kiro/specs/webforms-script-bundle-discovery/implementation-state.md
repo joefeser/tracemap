@@ -403,3 +403,16 @@ combined per checkout.
 | 8b144e465 | 0.21.0 | 6,260 | 3 | 0 |
 | e2e3b0291 | 0.22.0 | 6,274 | 3 | 0 |
 | d525d8080 | 0.23.0 | 6,280 | 3 | 0 |
+
+### Click method to an included AngularJS service POST
+
+On codex/workspace-scope-preflight, legacy-webforms/0.24.0 adds a separate
+service-HTTP rule. Each stage retains supporting fact IDs and locations,
+including the parent partial handler. The endpoint link runs after ASP.NET
+directive extraction and requires its independent declaration fact. A
+competing service with the same method name and the outer callback setup
+call are negative controls. Dynamic binding, unsupported request options
+and missing or ambiguous routes retain gaps. CLI and test-project Debug
+compilation with -warnaserror are the local gates for this handoff. Test
+execution, CLI fixture scans and private verification are deferred at the
+owner's request. Expected fixture results are unverified.
