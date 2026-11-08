@@ -145,10 +145,11 @@ internal sealed partial class AngularJsScript
         }
     }
 
-    internal static ServiceMethod ResolveService(AngularJsScript[] sources, string module, ServiceCall target,
+    internal static (ServiceMethod Method, ProviderOwnerGap? AliasGap) ResolveService(AngularJsScript[] sources, string module, ServiceCall target,
         Action<AngularJsScript, Site, string, string, string> recordUnboundProvider)
     {
         ServiceMethod? result = null;
+        ProviderOwnerGap? aliasGap = null;
         var checkedCalls = 0;
         var unboundCalls = 0;
         foreach (var source in sources)
@@ -178,8 +179,16 @@ internal sealed partial class AngularJsScript
                         root is ThisExpression ? "this" : "member-expression", tokenKind);
                     continue;
                 }
-                throw new ProviderOwnerGap(source.Location(member.Property), failure, root.Type.ToString(),
+                var rejected = new ProviderOwnerGap(source.Location(member.Property), failure, root.Type.ToString(),
                     registration.Arguments.Count == 0 ? "absent" : registration.Arguments[0] is StringLiteral ? "string-literal" : registration.Arguments[0].Type.ToString(), factories.Count);
+                // A competing alias blocks selection, but another included file can still
+                // establish its own registration. Keep the first diagnostic in scan order.
+                if (failure == "alias-write-or-shadow")
+                {
+                    aliasGap ??= rejected;
+                    continue;
+                }
+                throw rejected;
             }
             if (owner.Name != module) continue;
             if (factories.Count != 0 && sources.Any(file => file.factoryMutations.Any(receiver =>
@@ -201,7 +210,9 @@ internal sealed partial class AngularJsScript
             result = new ServiceMethod(source, site, owner.Declaration, source.Location(binding),
                 (FunctionExpression)binding.Right, fn, annotation, factories, suffix);
         }
-        return result ?? throw new AngularClickGap(unboundCalls > 0 ? "AngularServiceOnlyUnboundProviders" : "AngularServiceRegistrationUnavailable");
+        if (result is null)
+            throw (AngularClickGap?)aliasGap ?? new AngularClickGap(unboundCalls > 0 ? "AngularServiceOnlyUnboundProviders" : "AngularServiceRegistrationUnavailable");
+        return (result, aliasGap);
     }
 
     private static bool ConstructorReturns(BlockStatement body)

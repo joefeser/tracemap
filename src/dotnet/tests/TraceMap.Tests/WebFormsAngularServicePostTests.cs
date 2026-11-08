@@ -219,6 +219,28 @@ public sealed class WebFormsAngularServicePostTests
             or FactTypes.WebFormsAngularServiceCallCandidate or FactTypes.WebFormsAngularPostHandlerCandidate);
     }
 
+    [Theory]
+    [InlineData("adapter.js")]
+    [InlineData("z-adapter.js")]
+    public void Shadowed_provider_retains_independent_registration_without_selecting_it(string file)
+    {
+        var facts = Extract("Scripts/adapter.js", "this.service(settings.feature",
+            "adapterOwner = registry.hooks; adapterOwner.service(featureName", file);
+        var gaps = facts.Where(f => f.Properties.GetValueOrDefault("ownerFailure") == "alias-write-or-shadow").ToArray();
+        Assert.Equal(2, gaps.Length);
+        foreach (var gap in gaps)
+        {
+            var registration = Assert.Single(facts, f => f.FactId == gap.Properties["observedRegistrationFactId"]);
+            Assert.Equal(FactTypes.WebFormsAngularServiceRegistrationCandidate, registration.FactType);
+            Assert.Equal("Scripts/services.js", registration.Evidence.FilePath);
+            Assert.Contains(registration.FactId, gap.Properties["supportingFactIds"].Split(','));
+            Assert.Equal("Scripts/" + file, gap.Evidence.FilePath);
+            Assert.Equal(5, gap.Evidence.StartLine);
+        }
+        Assert.DoesNotContain(facts, f => f.FactType is FactTypes.WebFormsAngularServiceMemberCandidate
+            or FactTypes.WebFormsAngularPostHandlerCandidate || f.Properties.ContainsKey("httpInjectionSlot"));
+    }
+
     [Fact]
     public void Unbound_call_alone_never_supplies_a_service_registration()
     {

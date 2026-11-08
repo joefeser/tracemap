@@ -33,11 +33,12 @@ public static partial class LegacyWebFormsExtractor
                         [clickHandler.FactId], new() { ["serviceToken"] = call.Token, ["member"] = call.Member,
                             ["injectionSlot"] = call.Slot.ToString(CultureInfo.InvariantCulture), ["clickHandlerFactId"] = clickHandler.FactId });
                     var last = callFact;
+                    CodeFact? observedRegistration = null;
                     try
                     {
                         ChargeServiceWork(sources.Sum(source => source.NodeCount));
                         var unboundIds = new List<string>();
-                        var method = AngularJsScript.ResolveService(sources, module, call, (source, site, providerMember, receiverKind, tokenKind) =>
+                        var (method, aliasGap) = AngularJsScript.ResolveService(sources, module, call, (source, site, providerMember, receiverKind, tokenKind) =>
                         {
                             if (!assets.TryGetValue(source.File, out var includes)) throw new AngularClickGap("AngularInlineProviderOwnerUnavailable");
                             var providerGap = ServiceSite(FactTypes.AnalysisGap, site, callFact.TargetSymbol!, includes.Append(callFact.FactId),
@@ -61,6 +62,11 @@ public static partial class LegacyWebFormsExtractor
                                 new { member = link.Member, offset = link.Site.Start, startLine = link.Site.Line, endLine = link.Site.EndLine }));
                         var registration = ServiceSite(FactTypes.WebFormsAngularServiceRegistrationCandidate, method.Registration, receiver.TargetSymbol!,
                             memberIds.Append(receiver.FactId), registrationDetails);
+                        if (aliasGap is not null)
+                        {
+                            observedRegistration = registration;
+                            throw aliasGap;
+                        }
                         last = ServiceSite(FactTypes.WebFormsAngularServiceMemberCandidate, method.Member, callFact.TargetSymbol!,
                             unboundIds.Append(callFact.FactId).Append(registration.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token, ["member"] = call.Member });
                         var post = AngularJsScript.ResolvePost(method);
@@ -105,14 +111,20 @@ public static partial class LegacyWebFormsExtractor
                             ["providerOffset"] = ex.Provider.Start.ToString(CultureInfo.InvariantCulture),
                             ["providerInputLine"] = ex.Provider.Line.ToString(CultureInfo.InvariantCulture)
                         };
+                        var supports = new List<string> { last.FactId };
+                        if (observedRegistration is not null)
+                        {
+                            details["observedRegistrationFactId"] = observedRegistration.FactId;
+                            supports.Add(observedRegistration.FactId);
+                        }
                         if (assets.TryGetValue(ex.Provider.File, out var includes))
-                            ServiceSite(FactTypes.AnalysisGap, ex.Provider, last.TargetSymbol!, includes.Append(last.FactId), details);
+                            ServiceSite(FactTypes.AnalysisGap, ex.Provider, last.TargetSymbol!, includes.Concat(supports), details);
                         else
                         {
                             // Inline parser positions are relative to the individual script input.
                             details["inlineInput"] = ex.Provider.File;
                             facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.AnalysisGap,
-                                last.Evidence, last.TargetSymbol!, "unresolved", [last.FactId], details));
+                                last.Evidence, last.TargetSymbol!, "unresolved", supports, details));
                         }
                     }
                     catch (AngularClickGap ex) { ServiceGap(last, ex.Kind); }

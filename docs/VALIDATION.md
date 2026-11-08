@@ -5518,7 +5518,7 @@ handler and review the recorded supporting IDs and parser/input digests.
 The prior bundle fixtures retain their four- and seven-fact bundle controls.
 
 This rule is `legacy.webforms.angularjs-click.v1`, extractor
-`legacy-webforms/0.32.0`. It parses included JavaScript using pinned Acornima
+`legacy-webforms/0.33.0`. It parses included JavaScript using pinned Acornima
 1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
 tracks .js source changes. The explicit ownership and resource boundaries are
 in the rule catalog. General plain onclick, runtime, backend and private
@@ -5620,3 +5620,8 @@ For 0.32.0 the same fixture adds a fourth unresolved provider. Check the
 line 5 gap reports receiverKind `this` and tokenKind `member-expression`
 and appears by ID on each request and endpoint. A member token on the known
 application module still blocks selection.
+
+For 0.33.0 run the service POST tests including both orderings of the
+shadowed provider. Follow observedRegistrationFactId from the blocking gap
+to the independently declared registration. Require no service member,
+Angular POST request or endpoint for the affected click.

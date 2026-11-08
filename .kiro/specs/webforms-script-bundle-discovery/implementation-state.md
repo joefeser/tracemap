@@ -522,3 +522,14 @@ prefix. Known module and ambiguity checks still apply. The public fixture
 exercises both file orders and the 16-observation bound. Local checks are
 Debug compilation with warnings as errors and diff checking. Tests and
 scan execution are deferred to the pinned verification dispatch.
+
+### Registration observed with an unresolved provider alias
+
+Branch `codex/workspace-scope-preflight`, extractor `legacy-webforms/0.33.0`.
+A bounded lookup can retain one independently validated registration while
+reporting its first alias-write-or-shadow conflict. The gap supports the
+call and declaration. The receiver check still blocks service selection.
+Tests place the conflicting provider before and after the registration.
+Local validation was a Debug build of the test project with warnings as
+errors and a diff check. Test execution and scans are deferred. Next verify
+the gap and declaration by ID and determine the lexical scope of the alias.
