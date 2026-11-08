@@ -60,3 +60,17 @@ WHERE post.fact_type = 'WebFormsAngularServiceMemberPostCandidate'
 
 Expected row: Scripts/services.js, 3, 4, 5. These syntax facts can also
 be retained when a provider gap prevents selection for a click.
+
+For each declaration-side POST, follow its independent mapped handler edge:
+
+```sql
+SELECT post.file_path, post.start_line, decl.file_path, decl.start_line
+FROM facts edge
+JOIN facts post ON post.fact_id = json_extract(edge.properties_json, '$.requestFactId')
+JOIN facts decl ON decl.fact_id = json_extract(edge.properties_json, '$.declarationFactId')
+WHERE edge.fact_type = 'WebFormsAngularServiceMemberPostHandlerCandidate';
+```
+
+The fixture yields one row from Scripts/services.js line 5 to Api/Save.ashx
+line 1. The edge has no click ID. A mismatched mount or missing declaration
+leaves a gap supported by the POST.

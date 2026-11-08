@@ -69,14 +69,14 @@ public static partial class LegacyWebFormsExtractor
                                 ["serviceToken"] = call.Token, ["member"] = call.Member });
                         if (aliasGap is not null || truncated)
                         {
-                            try { ObserveMemberPost(method, definition); }
+                            try { ObserveMemberPost(page, method, definition); }
                             catch (AngularClickGap ex) { ServiceGap(definition, ex.Kind); }
                             if (aliasGap is not null) throw aliasGap;
                             continue;
                         }
                         last = ServiceSite(FactTypes.WebFormsAngularServiceMemberCandidate, method.Member, callFact.TargetSymbol!,
                             unboundIds.Append(callFact.FactId).Append(registration.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token, ["member"] = call.Member });
-                        var post = ObserveMemberPost(method, definition);
+                        var post = ObserveMemberPost(page, method, definition);
                         var props = new SortedDictionary<string, string>(StringComparer.Ordinal)
                         {
                             ["httpMethod"] = "POST", ["behaviorKind"] = "client-http-request", ["eventName"] = "HTTP POST",
@@ -86,26 +86,7 @@ public static partial class LegacyWebFormsExtractor
                             ["surfaceIdentity"] = SurfaceIdentity(page.FilePath), ["targetResolution"] = "unresolved"
                         };
                         if (unboundIds.Count > 0) props["unboundProviderGapIds"] = string.Join(",", unboundIds.Order(StringComparer.Ordinal));
-                        string? gap = null;
-                        try
-                        {
-                            if (iisMount is null) throw new AngularClickGap("AngularHttpMountUnavailable");
-                            props["endpointDeclarationFile"] = ResolveMountedFile(page.FilePath, method.Member.File, post.Url, iisMount, ".ashx", endpoints);
-                            props["endpointPathHash"] = FactFactory.Hash(post.Url, 64);
-                            props["targetResolution"] = "operator-mounted-handler-file";
-                            props["mountPrefix"] = iisMount.UrlPrefix;
-                            props["repositoryWebRoot"] = iisMount.WebRoot;
-                        }
-                        catch (AngularClickGap ex)
-                        {
-                            gap = ex.Kind switch
-                            {
-                                "AngularScriptOutsideInventory" => "AngularHttpEndpointOutsideInventory",
-                                "AmbiguousAngularMountedScript" => "AmbiguousAngularHttpEndpoint",
-                                "UnsupportedAngularScriptPath" => "UnsupportedAngularHttpEndpoint",
-                                _ => ex.Kind
-                            };
-                        }
+                        var gap = ResolvePostTarget(page, method, post, props);
                         last = ServiceSite(FactTypes.WebFormsClientHttpRequestCandidate, post.Site, last.TargetSymbol!, [last.FactId], props);
                         if (gap is not null) ServiceGap(last, gap);
                     }
@@ -159,13 +140,45 @@ public static partial class LegacyWebFormsExtractor
             catch (AngularClickGap ex) { ServiceGap(clickHandler, ex.Kind); }
         }
 
-        private AngularJsScript.Post ObserveMemberPost(AngularJsScript.ServiceMethod method, CodeFact definition)
+        private AngularJsScript.Post ObserveMemberPost(WebFormsPage page, AngularJsScript.ServiceMethod method, CodeFact definition)
         {
             var post = AngularJsScript.ResolvePost(method);
-            ServiceSite(FactTypes.WebFormsAngularServiceMemberPostCandidate, post.Site, definition.TargetSymbol!, [definition.FactId],
-                new() { ["httpMethod"] = "POST", ["endpointPathHash"] = FactFactory.Hash(post.Url, 64),
-                    ["httpParameterSlot"] = post.HttpSlot.ToString(CultureInfo.InvariantCulture) });
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["httpMethod"] = "POST", ["endpointPathHash"] = FactFactory.Hash(post.Url, 64),
+                ["httpParameterSlot"] = post.HttpSlot.ToString(CultureInfo.InvariantCulture)
+            };
+            var gap = ResolvePostTarget(page, method, post, properties);
+            var request = ServiceSite(FactTypes.WebFormsAngularServiceMemberPostCandidate, post.Site,
+                definition.TargetSymbol!, [definition.FactId], properties);
+            if (gap is not null) ServiceGap(request, gap);
             return post;
+        }
+
+        private string? ResolvePostTarget(WebFormsPage page, AngularJsScript.ServiceMethod method, AngularJsScript.Post post,
+            SortedDictionary<string, string> props)
+        {
+            props["targetResolution"] = "unresolved";
+            try
+            {
+                if (iisMount is null) throw new AngularClickGap("AngularHttpMountUnavailable");
+                props["endpointDeclarationFile"] = ResolveMountedFile(page.FilePath, method.Member.File, post.Url, iisMount, ".ashx", endpoints);
+                props["endpointPathHash"] = FactFactory.Hash(post.Url, 64);
+                props["targetResolution"] = "operator-mounted-handler-file";
+                props["mountPrefix"] = iisMount.UrlPrefix;
+                props["repositoryWebRoot"] = iisMount.WebRoot;
+                return null;
+            }
+            catch (AngularClickGap ex)
+            {
+                return ex.Kind switch
+                {
+                    "AngularScriptOutsideInventory" => "AngularHttpEndpointOutsideInventory",
+                    "AmbiguousAngularMountedScript" => "AmbiguousAngularHttpEndpoint",
+                    "UnsupportedAngularScriptPath" => "UnsupportedAngularHttpEndpoint",
+                    _ => ex.Kind
+                };
+            }
         }
 
         private CodeFact ServiceSite(string type, AngularJsScript.Site site, string source, IEnumerable<string> ids,
@@ -190,7 +203,7 @@ public static partial class LegacyWebFormsExtractor
                 && f.Properties.GetValueOrDefault("handlerKind") == "ashx-directive" && !string.IsNullOrEmpty(f.TargetSymbol))
             .ToLookup(f => f.Evidence.FilePath, StringComparer.Ordinal);
         foreach (var request in prior.Where(f => f.RuleId == RuleIds.LegacyWebFormsAngularServiceHttp
-                     && f.FactType == FactTypes.WebFormsClientHttpRequestCandidate && f.Properties.ContainsKey("endpointDeclarationFile")))
+                     && (f.FactType is FactTypes.WebFormsClientHttpRequestCandidate or FactTypes.WebFormsAngularServiceMemberPostCandidate) && f.Properties.ContainsKey("endpointDeclarationFile")))
         {
             var matches = declarations[request.Properties["endpointDeclarationFile"]].Take(2).ToArray();
             if (matches.Length != 1)
@@ -202,11 +215,17 @@ public static partial class LegacyWebFormsExtractor
             var handler = matches[0];
             var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
             {
-                ["clickFactId"] = request.Properties["clickFactId"], ["clickHandlerFactId"] = request.Properties["clickHandlerFactId"],
                 ["requestFactId"] = request.FactId, ["declarationFactId"] = handler.FactId
             };
+            var edgeType = FactTypes.WebFormsAngularServiceMemberPostHandlerCandidate;
+            if (request.FactType == FactTypes.WebFormsClientHttpRequestCandidate)
+            {
+                edgeType = FactTypes.WebFormsAngularPostHandlerCandidate;
+                properties["clickFactId"] = request.Properties["clickFactId"];
+                properties["clickHandlerFactId"] = request.Properties["clickHandlerFactId"];
+            }
             if (request.Properties.TryGetValue("unboundProviderGapIds", out var gaps)) properties["unboundProviderGapIds"] = gaps;
-            facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.WebFormsAngularPostHandlerCandidate,
+            facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, edgeType,
                 handler.Evidence with { ExtractorId = "LegacyWebFormsExtractor", ExtractorVersion = ScannerVersions.LegacyWebFormsExtractor },
                 request.TargetSymbol!, handler.TargetSymbol!, [request.FactId, handler.FactId], properties));
         }

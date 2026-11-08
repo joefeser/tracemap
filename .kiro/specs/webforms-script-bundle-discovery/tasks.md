@@ -64,3 +64,5 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 - [x] Verify the 0.34.0 combined regression and both private click IDs. Operator reported 59 passing public tests and 75 matching facts.
 - [x] Emit independent service member and literal POST evidence from an identified registration.
 - [ ] Verify 0.35.0 registration-to-member and member-to-POST joins on both controls.
+- [x] Link an independent service-member POST to a unique mounted handler declaration, including explicit mapping gaps.
+- [x] Use bounded iterative traversal for write indexing without repeated walks of nested assignment patterns.

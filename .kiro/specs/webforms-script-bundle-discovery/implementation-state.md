@@ -556,3 +556,22 @@ Regressions cover two source orders and duplicate HTTP options. Local checks
 are Debug compilation with warnings as errors and diff checking. Tests
 and scans are deferred to the pinned dispatch. Runtime injection, request
 execution and a declaration-side POST-to-handler join remain unverified.
+
+### Independent mounted handler and bounded scan
+
+Branch `codex/workspace-scope-preflight`, extractor `legacy-webforms/0.37.0`.
+The declaration-side POST now uses the same mount and directive checks as
+selected requests. The independent edge carries request and declaration IDs.
+Source spans and gaps remain available when the selected click is blocked.
+Write indexing now uses the bounded iterative node walk. Assignment-pattern
+identifiers are collected during that walk with the same conservative write
+rules. Windows diagnostics use the existing job-object guard. The separate 0.36.0 work-machine source was
+unavailable here. Its traversal changes are not part of this branch.
+
+Local Debug build of TraceMap.Tests passed with warnings as errors. Six
+bounded public CLI smoke scans completed with SQLite integrity OK: ordinary,
+alias plus truncation, wrong mount, vendor bundle, destructuring write,
+and right-hand read. The vendor control added public AngularJS 1.8.2,
+ng-idle 1.3.2 and jQuery UI 1.12.1 as static bundle inputs. Both vendor and
+truncated controls produced one declaration-side handler and zero selected
+click endpoints. No private scan or local xUnit run was performed.

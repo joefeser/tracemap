@@ -211,6 +211,17 @@ public sealed class WebFormsAngularServicePostTests
         });
     }
 
+    [Theory]
+    [InlineData("({nested: [exampleApp]} = packet);", false)]
+    [InlineData("({nested: [local]} = exampleApp);", true)]
+    public void Nested_assignment_patterns_distinguish_write_targets_from_right_hand_reads(string assignment, bool expected)
+    {
+        var facts = Extract("Scripts/adapter.js", "this.value();", assignment + " this.value();");
+        Assert.Equal(expected, facts.Any(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate));
+        if (!expected)
+            Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularModuleOwnershipUnavailable");
+    }
+
     [Fact]
     public void Bundle_wide_angular_write_stops_the_controller_before_a_service_call_can_be_retained()
     {
@@ -296,6 +307,11 @@ public sealed class WebFormsAngularServicePostTests
             Assert.Equal("1", post.Properties["httpParameterSlot"]);
             Assert.Equal(FactFactory.Hash("/Portal/Desk/API/save.ashx", 64), post.Properties["endpointPathHash"]);
             Assert.False(post.Properties.ContainsKey("clickFactId"));
+            var edge = Assert.Single(facts, f => f.FactType == FactTypes.WebFormsAngularServiceMemberPostHandlerCandidate);
+            Assert.Equal(post.FactId, edge.Properties["requestFactId"]);
+            Assert.False(edge.Properties.ContainsKey("clickFactId"));
+            Assert.Contains(facts, f => f.FactType == FactTypes.AspNetHandlerDeclared
+                && f.FactId == edge.Properties["declarationFactId"] && f.Evidence.FilePath == "Api/Save.ashx");
             Assert.Equal(16, facts.Count(f => ids.Contains(f.FactId) && f.Properties.GetValueOrDefault("gapKind") == "AngularUnboundProviderIdentity"));
             var call = Assert.Single(facts, f => ids.Contains(f.FactId) && f.FactType == FactTypes.WebFormsAngularServiceCallCandidate);
             Assert.Contains(facts, f => f.Properties.GetValueOrDefault("ownerFailure") == "alias-write-or-shadow"
@@ -304,6 +320,18 @@ public sealed class WebFormsAngularServicePostTests
         }
         Assert.DoesNotContain(facts, f => f.FactType is FactTypes.WebFormsAngularServiceMemberCandidate
             or FactTypes.WebFormsAngularPostHandlerCandidate || f.Properties.ContainsKey("httpInjectionSlot"));
+    }
+
+    [Theory]
+    [InlineData("/Other/Api/save.ashx", "AngularIisMountPrefixMismatch")]
+    [InlineData("/Portal/Desk/Api/missing.ashx", "AngularHttpEndpointOutsideInventory")]
+    public void Declaration_side_post_requires_a_mapped_handler(string url, string reason)
+    {
+        var facts = Extract("Scripts/services.js", "/Portal/Desk/API/save.ashx", url);
+        var post = Assert.Single(facts, f => f.FactType == FactTypes.WebFormsAngularServiceMemberPostCandidate);
+        Assert.DoesNotContain(facts, f => f.FactType == FactTypes.WebFormsAngularServiceMemberPostHandlerCandidate);
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == reason
+            && f.Properties["supportingFactIds"] == post.FactId);
     }
 
     [Fact]

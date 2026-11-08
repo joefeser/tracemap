@@ -13,7 +13,7 @@ internal sealed partial class AngularJsScript
     private readonly Dictionary<CallExpression, Expression> registrationRoots = new();
     private readonly CallExpression[] controllerCalls;
     private readonly ILookup<string, VariableDeclarator> globals;
-    private readonly HashSet<string> writes;
+    private readonly HashSet<string> writes = new(StringComparer.Ordinal);
     private readonly HashSet<string> namedDeclarations;
     private readonly ILookup<string, CallExpression> creations;
     internal int NodeCount { get; }
@@ -31,7 +31,7 @@ internal sealed partial class AngularJsScript
         {
             if (++tokenCount > 100_000) throw new AngularClickGap("AngularScriptTokenLimit");
         } }).ParseScript(text);
-        var nodes = Walk(script).ToArray();
+        var nodes = Walk(script, writes).ToArray();
         NodeCount = nodes.Length;
         if (unknownInitializers is { Count: > 0 })
         {
@@ -79,15 +79,6 @@ internal sealed partial class AngularJsScript
             namedDeclarations.Add(id.Name);
         creations = nodes.OfType<CallExpression>().Where(c => c.Arguments.Count == 2 && Module(c) is not null)
             .ToLookup(c => Module(c)!, StringComparer.Ordinal);
-        writes = nodes.Select(n => n switch {
-            AssignmentExpression { Left: Identifier target } => target.Name,
-            AssignmentExpression { Left: MemberExpression { Object: Identifier receiver, Computed: true } } => receiver.Name,
-            AssignmentExpression { Left: MemberExpression { Object: Identifier receiver, Property: Identifier { Name: "module" or "controller" or "service" } } } => receiver.Name,
-            UpdateExpression { Argument: Identifier target } => target.Name,
-            _ => null
-        }).OfType<string>().ToHashSet(StringComparer.Ordinal);
-        foreach (var assignment in nodes.OfType<AssignmentExpression>().Where(a => a.Left is ArrayPattern or ObjectPattern))
-            foreach (var id in Walk(assignment.Left).OfType<Identifier>()) writes.Add(id.Name);
     }
 
     // Admitted holes may contribute data to an IIFE's local string initializer.
@@ -147,16 +138,36 @@ internal sealed partial class AngularJsScript
         }
     }
 
-    private static IEnumerable<Node> Walk(Node root)
+    private static IEnumerable<Node> Walk(Node root, HashSet<string>? writes = null)
     {
-        var stack = new Stack<Node>();
-        stack.Push(root);
-        var count = 0;
-        while (stack.TryPop(out var node))
+        var stack = new Stack<(Node Node, bool InsideAssignmentPattern)>();
+        stack.Push((root, false));
+        var scheduled = 1;
+        while (stack.TryPop(out var frame))
         {
-            if (++count > 100_000) throw new AngularClickGap("AngularScriptNodeLimit");
+            var node = frame.Node;
+            Node? pattern = null;
+            if (writes is not null)
+            {
+                if (frame.InsideAssignmentPattern && node is Identifier id) writes.Add(id.Name);
+                if (node is AssignmentExpression { Left: ArrayPattern or ObjectPattern } assignment)
+                    pattern = assignment.Left;
+                var name = node switch
+                {
+                    AssignmentExpression { Left: Identifier target } => target.Name,
+                    AssignmentExpression { Left: MemberExpression { Object: Identifier receiver, Computed: true } } => receiver.Name,
+                    AssignmentExpression { Left: MemberExpression { Object: Identifier receiver, Property: Identifier { Name: "module" or "controller" or "service" } } } => receiver.Name,
+                    UpdateExpression { Argument: Identifier target } => target.Name,
+                    _ => null
+                };
+                if (name is not null) writes.Add(name);
+            }
             yield return node;
-            foreach (var child in node.ChildNodes) stack.Push(child);
+            foreach (var child in node.ChildNodes)
+            {
+                if (++scheduled > 100_000) throw new AngularClickGap("AngularScriptNodeLimit");
+                stack.Push((child, frame.InsideAssignmentPattern || ReferenceEquals(child, pattern)));
+            }
         }
     }
 

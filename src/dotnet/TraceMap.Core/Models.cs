@@ -379,6 +379,7 @@ public static class FactTypes
     public const string WebFormsAngularFactoryRegistrationCandidate = nameof(WebFormsAngularFactoryRegistrationCandidate);
     public const string WebFormsAngularServiceRegistrationCandidate = nameof(WebFormsAngularServiceRegistrationCandidate);
     public const string WebFormsAngularServiceMemberDeclaredCandidate = nameof(WebFormsAngularServiceMemberDeclaredCandidate);
+    public const string WebFormsAngularServiceMemberPostHandlerCandidate = nameof(WebFormsAngularServiceMemberPostHandlerCandidate);
     public const string WebFormsAngularServiceMemberPostCandidate = nameof(WebFormsAngularServiceMemberPostCandidate);
     public const string WebFormsAngularServiceMemberCandidate = nameof(WebFormsAngularServiceMemberCandidate);
     public const string WebFormsAngularPostHandlerCandidate = nameof(WebFormsAngularPostHandlerCandidate);
@@ -775,7 +776,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.35.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.37.0";
     public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.3";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";
