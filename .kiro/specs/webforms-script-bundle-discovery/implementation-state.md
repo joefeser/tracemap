@@ -381,3 +381,12 @@ the rejection callback's physical offset and lines. The whole controller is
 still checked for scope reassignment and competing method definitions.
 Standalone then registrations retain their previous evidence shape. The
 callback and dynamic-source gaps remain separate.
+
+Implementation `d525d808094e3154b02a622381785eccba7ce3c7` built with zero
+warnings/errors. The focused callback filter recorded above passed 222/222;
+four CLI controls passed integrity, file output and NDJSON/SQLite ID parity.
+The callback fixture produced two partials, zero ordinary handlers and four
+gap rows. The smoke check verified the exact rejection function offset and
+lines 7–9 alongside the fulfillment span 4–7. The prior three fixtures kept
+their expected classifications. C#/VB semantic OSS reruns are deferred for
+this bounded JavaScript syntax change.
