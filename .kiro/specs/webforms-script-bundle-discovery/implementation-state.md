@@ -472,3 +472,7 @@ actual recognized provider member. The fixture now exercises literal bracket
 access; new regressions cover optional access and other named provider members.
 An unbound call still supplies only a gap, and only an independent application
 registration can reach a POST declaration. Positive results remain unverified.
+
+Implementation `534dc6706346d2181549c9b89d9c0054112073fb` compiled via
+`dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
+with zero warnings/errors. No local tests or scans ran.
