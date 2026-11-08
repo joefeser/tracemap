@@ -444,3 +444,7 @@ IDs. Literal-token collisions with unknown owners, dynamic tokens on known
 modules, competing registrations, and over-limit inputs cannot produce an
 endpoint. A public adapter supplies the before/after file-order control.
 Tests and public/private scans for this implementation are deferred.
+
+Implementation `954c1617dbd4fb1c9530b30fe6d8a4e0a262fba2` compiled with
+`dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
+with zero warnings/errors. No local tests or scans ran for this handoff.
