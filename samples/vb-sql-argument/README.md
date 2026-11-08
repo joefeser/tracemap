@@ -24,3 +24,8 @@ The operation and binding fields are the two review signals. The binding
 field describes the scope of this source rule. Check compiled command facts
 separately for stronger evidence. The fixture contains invented data and
 requires no database or application execution.
+
+The gateway and logger are declared interfaces. The VB file can be compiled
+in a class library with Option Strict On. The projectless scan exercises
+source syntax. The fixture ends at the wrapper call and supplies no database
+implementation.
