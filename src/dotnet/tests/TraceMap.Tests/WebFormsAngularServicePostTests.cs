@@ -269,6 +269,32 @@ public sealed class WebFormsAngularServicePostTests
         Assert.Equal(endpoints == 0, facts.Any(f => f.Properties.GetValueOrDefault("gapKind") == "AngularUnboundProviderLimit"));
     }
 
+    [Theory]
+    [InlineData("adapter.js")]
+    [InlineData("z-adapter.js")]
+    public void Overflow_preserves_registration_and_alias_evidence_in_both_file_orders(string adapter)
+    {
+        var extra = "localOwner = registry.hooks; localOwner.service(featureName, function() {}); "
+            + string.Concat(Enumerable.Repeat("this.value(); ", 17));
+        var facts = Extract("Scripts/adapter.js", "this.value();", extra, adapter);
+        var limits = facts.Where(f => f.Properties.GetValueOrDefault("gapKind") == "AngularUnboundProviderLimit").ToArray();
+        Assert.Equal(2, limits.Length);
+        foreach (var limit in limits)
+        {
+            var ids = limit.Properties["supportingFactIds"].Split(',');
+            var registration = Assert.Single(facts, f => f.FactId == limit.Properties["observedRegistrationFactId"]);
+            Assert.Contains(registration.FactId, ids);
+            Assert.Equal(FactTypes.WebFormsAngularServiceRegistrationCandidate, registration.FactType);
+            Assert.Equal(16, facts.Count(f => ids.Contains(f.FactId) && f.Properties.GetValueOrDefault("gapKind") == "AngularUnboundProviderIdentity"));
+            var call = Assert.Single(facts, f => ids.Contains(f.FactId) && f.FactType == FactTypes.WebFormsAngularServiceCallCandidate);
+            Assert.Contains(facts, f => f.Properties.GetValueOrDefault("ownerFailure") == "alias-write-or-shadow"
+                && f.Properties.GetValueOrDefault("observedRegistrationFactId") == registration.FactId
+                && f.Properties["supportingFactIds"].Split(',').Contains(call.FactId));
+        }
+        Assert.DoesNotContain(facts, f => f.FactType is FactTypes.WebFormsAngularServiceMemberCandidate
+            or FactTypes.WebFormsAngularPostHandlerCandidate || f.Properties.ContainsKey("httpInjectionSlot"));
+    }
+
     [Fact]
     public void Excess_unbound_calls_leave_a_limit_gap_without_a_partial_selection()
     {

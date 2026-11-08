@@ -533,3 +533,15 @@ Tests place the conflicting provider before and after the registration.
 Local validation was a Debug build of the test project with warnings as
 errors and a diff check. Test execution and scans are deferred. Next verify
 the gap and declaration by ID and determine the lexical scope of the alias.
+
+### Registration evidence at the observation limit
+
+On `codex/workspace-scope-preflight`, `legacy-webforms/0.34.0` caps retained
+unbound providers at 16 while the search remains capped at 1,024 providers.
+A truncated lookup can return declaration evidence and an unresolved alias.
+The limit gap supports its call, the retained observations and any validated
+registration. Member, POST and handler selection remain blocked.
+The combined regression covers both file orders. Local validation is Debug
+compilation of the test project with warnings as errors and diff checking.
+Tests and scans await the pinned dispatch. Lexical resolution of injected
+provider parameters remains a separate scope-analysis task.

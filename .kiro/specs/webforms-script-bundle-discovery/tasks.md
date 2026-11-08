@@ -59,3 +59,6 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 - [x] Verify the 0.32.0 public fixture (55 tests, 75 matching facts) and identify the private alias ownership gap.
 - [x] Retain independent registration evidence alongside an unresolved alias without selecting a service.
 - [ ] Verify 0.33.0 and characterize the receiver's lexical binding on the authorized machine.
+- [x] Verify 0.33.0 public controls (57 passing tests and 75 matching facts) and identify observation truncation in the private run.
+- [x] Preserve registration and alias evidence across the 16-observation reporting limit under the existing provider search bound.
+- [ ] Verify the 0.34.0 combined limit/alias regression and inspect both private click IDs.

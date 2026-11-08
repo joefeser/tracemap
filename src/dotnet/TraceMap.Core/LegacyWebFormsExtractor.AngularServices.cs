@@ -34,10 +34,11 @@ public static partial class LegacyWebFormsExtractor
                             ["injectionSlot"] = call.Slot.ToString(CultureInfo.InvariantCulture), ["clickHandlerFactId"] = clickHandler.FactId });
                     var last = callFact;
                     CodeFact? observedRegistration = null;
+                    bool truncated = false;
+                    var unboundIds = new List<string>();
                     try
                     {
                         ChargeServiceWork(sources.Sum(source => source.NodeCount));
-                        var unboundIds = new List<string>();
                         var (method, aliasGap) = AngularJsScript.ResolveService(sources, module, call, (source, site, providerMember, receiverKind, tokenKind) =>
                         {
                             if (!assets.TryGetValue(source.File, out var includes)) throw new AngularClickGap("AngularInlineProviderOwnerUnavailable");
@@ -45,7 +46,7 @@ public static partial class LegacyWebFormsExtractor
                                 new() { ["gapKind"] = "AngularUnboundProviderIdentity", ["receiverKind"] = receiverKind, ["tokenKind"] = tokenKind,
                                     ["ownerFailure"] = "unsupported-receiver", ["factoryCount"] = "0", ["providerMember"] = providerMember });
                             unboundIds.Add(providerGap.FactId);
-                        });
+                        }, () => truncated = true);
                         if (!assets.TryGetValue(method.Member.File, out var memberIds) || !assets.TryGetValue(method.Module.File, out var moduleIds))
                             throw new AngularClickGap("AngularServiceOutsideIncludedFiles");
                         var moduleFact = ScriptOwner(method.Module, "module", module, moduleIds);
@@ -62,11 +63,9 @@ public static partial class LegacyWebFormsExtractor
                                 new { member = link.Member, offset = link.Site.Start, startLine = link.Site.Line, endLine = link.Site.EndLine }));
                         var registration = ServiceSite(FactTypes.WebFormsAngularServiceRegistrationCandidate, method.Registration, receiver.TargetSymbol!,
                             memberIds.Append(receiver.FactId), registrationDetails);
-                        if (aliasGap is not null)
-                        {
-                            observedRegistration = registration;
-                            throw aliasGap;
-                        }
+                        observedRegistration = registration;
+                        if (aliasGap is not null) throw aliasGap;
+                        if (truncated) continue;
                         last = ServiceSite(FactTypes.WebFormsAngularServiceMemberCandidate, method.Member, callFact.TargetSymbol!,
                             unboundIds.Append(callFact.FactId).Append(registration.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token, ["member"] = call.Member });
                         var post = AngularJsScript.ResolvePost(method);
@@ -128,6 +127,25 @@ public static partial class LegacyWebFormsExtractor
                         }
                     }
                     catch (AngularClickGap ex) { ServiceGap(last, ex.Kind); }
+                    finally
+                    {
+                        if (truncated)
+                        {
+                            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["gapKind"] = "AngularUnboundProviderLimit",
+                                ["retainedObservations"] = unboundIds.Count.ToString(CultureInfo.InvariantCulture)
+                            };
+                            var supports = unboundIds.Append(callFact.FactId);
+                            if (observedRegistration is not null)
+                            {
+                                properties["observedRegistrationFactId"] = observedRegistration.FactId;
+                                supports = supports.Append(observedRegistration.FactId);
+                            }
+                            facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.AnalysisGap,
+                                callFact.Evidence, callFact.TargetSymbol!, "unresolved", supports, properties));
+                        }
+                    }
                 }
             }
             catch (AngularClickGap ex) { ServiceGap(clickHandler, ex.Kind); }

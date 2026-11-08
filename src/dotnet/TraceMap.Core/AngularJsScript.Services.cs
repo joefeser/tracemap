@@ -146,11 +146,12 @@ internal sealed partial class AngularJsScript
     }
 
     internal static (ServiceMethod Method, ProviderOwnerGap? AliasGap) ResolveService(AngularJsScript[] sources, string module, ServiceCall target,
-        Action<AngularJsScript, Site, string, string, string> recordUnboundProvider)
+        Action<AngularJsScript, Site, string, string, string> recordUnboundProvider, Action onObservationLimit)
     {
         ServiceMethod? result = null;
         ProviderOwnerGap? aliasGap = null;
         var checkedCalls = 0;
+        const int observationLimit = 16;
         var unboundCalls = 0;
         foreach (var source in sources)
         foreach (var registration in source.providers)
@@ -174,7 +175,11 @@ internal sealed partial class AngularJsScript
                 if (failure == "unsupported-receiver" && factories.Count == 0 && tokenKind is not null
                     && root is ThisExpression or MemberExpression)
                 {
-                    if (++unboundCalls > 16) throw new AngularClickGap("AngularUnboundProviderLimit");
+                    if (++unboundCalls > observationLimit)
+                    {
+                        if (unboundCalls == observationLimit + 1) onObservationLimit();
+                        continue;
+                    }
                     recordUnboundProvider(source, source.Location(member.Property), ProviderMember(member)!,
                         root is ThisExpression ? "this" : "member-expression", tokenKind);
                     continue;
