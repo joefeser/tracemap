@@ -458,3 +458,7 @@ only unbound providers and runs blocked by an unbound inline provider are
 distinguished from a failed ResolveModule predicate. The public regressions
 also pin the shared namespace guard's effect on controller resolution.
 Tests and scans deferred per the local validation hold.
+
+Implementation `1d0a5408b601d4d203770c247baa360dfc91a124` compiled with
+`dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
+with zero warnings/errors. No local tests or scans ran.
