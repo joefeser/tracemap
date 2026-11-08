@@ -1,0 +1,8 @@
+# Identify the statement containing the intended service registration
+
+> Use the retained 0.29.0 index and local source from the same revision. Read only. Report the complete synthetic enclosing statement for the intended AngularJS service registration and identify which admission condition fails. No new scan, tests, debugger patch or application execution are needed.
+
+1. Follow the two original click IDs to their retained service-call candidates. Confirm the four unbound library observations and the remaining UnsupportedAngularServiceRegistration gap for each call.
+2. Inspect the target service registration in the included source. Record whether the call is optional, its argument count, whether the token is a literal, and the member name. Check its module receiver, including the factory links.
+3. Follow the **result** of the service call out to the containing statement. List any subsequent calls in order, plus any assignment, return, conditional, function body or wrapper enclosing the statement. If there is a wrapper, show its parameters, how it is invoked, and where the module alias is declared relative to it. If a chain continues inside a wrapper, include both. A non-top-level call alone cannot identify its enclosing syntax.
+4. Return a minimal invented snippet preserving the entire structure, e.g. where the statement starts and where its semicolon falls. Identify the first unsupported condition from the pinned source. Report separately whether the member, POST and handler declaration have retained facts. Keep private identifiers, paths and source local. Stop after source inspection.
