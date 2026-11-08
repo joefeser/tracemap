@@ -390,3 +390,16 @@ gap rows. The smoke check verified the exact rejection function offset and
 lines 7–9 alongside the fulfillment span 4–7. The prior three fixtures kept
 their expected classifications. C#/VB semantic OSS reruns are deferred for
 this bounded JavaScript syntax change.
+
+### Pinned full Debug validation
+
+Each implementation ran the full Debug suite using the two commands recorded
+above, including the separate four passing SelfDiagnostics tests. Counts are
+combined per checkout.
+
+| Implementation | Extractor | Passed | Skipped | Failed |
+|---|---|---:|---:|---:|
+| 4f647c9b0 | 0.20.0 | 6,245 | 3 | 0 |
+| 8b144e465 | 0.21.0 | 6,260 | 3 | 0 |
+| e2e3b0291 | 0.22.0 | 6,274 | 3 | 0 |
+| d525d8080 | 0.23.0 | 6,280 | 3 | 0 |
