@@ -1045,6 +1045,8 @@ public sealed class EvidenceDocsExportTests
         "TraceMap.Core.DepsJsonExtractor.Name",
         "TraceMap.Core.DepsJsonExtractor.Target",
         "TraceMap.Core.DepsJsonExtractor.Version",
+        "TraceMap.Core.LegacyWebFormsExtractor+AngularClickScan.InlineAppSetting",
+        "TraceMap.Core.LegacyWebFormsExtractor+AngularClickScan.InlineInitializer",
         "TraceMap.Core.ProjectFileReader.SafeLockfileTargetFrameworkPattern",
         "TraceMap.Core.ProjectFileReader.SafeNuGetPackageIdPattern",
         "TraceMap.Core.ProjectFileReader.SafeNuGetResolvedVersionPattern",

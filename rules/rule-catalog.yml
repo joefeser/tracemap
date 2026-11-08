@@ -5198,6 +5198,18 @@ rules:
       - Only explicit System.Data.SqlDbType enum syntax yields a type candidate. No overload/provider/compiler identity, direction default, command attachment, wrapper propagation, database declaration or runtime value is inferred.
       - Candidate facts are independent construction or collection-call evidence, not database execution calls or unique procedure parameters. Reports retain source/fact references for human review; absent candidates do not prove no parameters.
 
+  - id: vb.syntax.sql-text-argument.v1
+    name: Visual Basic SQL text argument
+    description: A SELECT or UPDATE text expression occupies the first positional argument of a SQL-named wrapper call.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SqlTextArgumentCandidate
+      - AnalysisGap
+    limitations:
+      - The first literal must start with SELECT or UPDATE and whitespace. Syntax does not validate the SQL grammar, wrapper identity, command instance, parameter binding, safety or execution.
+      - Supports a simple receiver and an ExecSql or ExecuteSql method name, optionally followed by an underscore and suffix. Source and compiled facts have separate identities.
+      - A local requires an adjacent Dim initializer and simple appends in a top-level method body. Unsupported intervening statements clear the local. Inline operands may be string literals or identifier reads. SQL text and values are not retained.
+      - Conditional compilation, malformed methods, protected spans, unstructured flow and dynamic expressions are excluded. At most 256 hits per file; overflow emits a gap.
   - id: vb.syntax.database-operation.v1
     name: Visual Basic syntax database operation
     description: Bounded explicit-receiver SQL command, adapter and bulk API syntax candidates, including projectless App_Code Web Sites.
@@ -8208,3 +8220,72 @@ rules:
       - Conditional target uses declared owner/qualifier values matching the separately admitted definition-selection input, never guessed defaults or deployment configuration. One input formal maps ordinal zero only; output-capable/multiple formals, types/sizes/coercion/values, OUTPUT/RETURN channels, cache/event entry, hydration and result shapes remain unproven.
       - External PetaPoco implementation/transport is not inspected. Provider StoredProcedure intent is translated to Exec text; no final SqlCommand CommandType, actual ADO parameter binding, database access or SQL execution is established. This is not a terminal DatabaseOperationCandidate or existing semantic comparison binding.
       - Exact Core/CLI/source-parser/SQL-parser and bounded-input SHA-256 bind original source selectors, normalized method hashes, spans, explicit assumptions and embedded regenerated SQL evidence. SQLite is a separate local sidecar. No raw bodies, unrelated literals, connection values, raw projected SQL, raw scan/index mutation or public privacy projection.
+  - id: legacy.webforms.script-bundles.v1
+    name: Classic WebForms explicit script bundle discovery
+    description: Retains C#/VB ScriptBundle literal Include declarations, ordered member candidates, and literal Scripts.Render references in ASPX/master/ASCX server output blocks.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsScriptBundleDeclaredCandidate
+      - WebFormsScriptBundleMemberCandidate
+      - WebFormsScriptBundleReferenceCandidate
+      - AnalysisGap
+    limitations:
+      - Syntax candidates do not establish System.Web.Optimization symbol identity, registration execution, application-root identity, actual rendering, script existence, JavaScript function calls, backend request links or runtime behavior. Custom same-named symbols can match the syntax shape.
+      - Members reference an exact declaration fact. References retain file-local virtual-path candidate identities and are not automatically joined across files or applications by matching display names or virtual paths. Existing page/master composition remains separate.
+      - Direct creation and fluent Include calls remain supported. VB also admits a unique method-level local initialized by New or As New followed by direct positional literal Include calls. Each local has its own ordinal sequence. Alias, reassignment, nested conditional use, duplicate names and unknown uses refuse that local. Array arguments, custom transforms, CDN constructor overloads, wildcards, version placeholders and IncludeDirectory are unsupported. A rejecting member refuses the entire declaration rather than emitting a partial membership list.
+      - ASAX requires an Application directive, explicit VB language and a single inline server script surrounded only by Application/Import directives and whitespace. Unsupported markup, malformed VB or a parsing timeout produces a gap when ScriptBundle text is present. Fact locations refer to the original ASAX source.
+      - Literal Scripts.Render calls in server output blocks are supported; ScriptManager, Bundle.config and other rendering forms are deferred. ASP.NET comments are masked. No optimization/minification step or external script load executes.
+      - Input is bounded to 1 MiB inventory bytes and 1048576 decoded characters per actual read, 256 declarations or output blocks per file, 128 members or render arguments, and 1024 characters per virtual path. Source read failures and bounded refusals remain explicit gaps. Whole-file parse diagnostics refuse bundle declarations.
+      - Declared include order is retained but runtime bundle ordering and debug/release file selection are not inferred. Source evidence retains a decoded-file text hash, never the raw body. Angular support is not implied.
+
+  - id: legacy.webforms.angularjs-click.v1
+    name: AngularJS WebForms click to included scope method
+    description: Connects a literal WebForms ng-click to a function assignment in an admitted external classic JavaScript file through explicit AngularJS module, controller and script inclusion evidence.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsAngularClickCandidate
+      - WebFormsAngularOwnerCandidate
+      - WebFormsExternalScriptReferenceCandidate
+      - WebFormsInlineServerStringCandidate
+      - WebFormsAngularThenCallbackCandidate
+      - WebFormsAngularPartialClickHandlerCandidate
+      - WebFormsInlineServerInitializerCandidate
+      - WebFormsAngularClickHandlerCandidate
+      - AnalysisGap
+    limitations:
+      - Parses literal ng-click and data-ng-click calls to a bare method with zero or more simple identifier or dotted-path arguments. DOM ancestry must identify a literal ng-controller and named ng-app. Master scope requires a retained UsesMasterPage relationship and a unique matching content placeholder. Non-bindable content, duplicate attributes, unsupported expressions, unknown scope and nested masters remain gaps.
+      - Sources come from direct page-relative classic script includes or existing Scripts.Render, ScriptBundle declaration and exact declaration-linked member facts within the same nearest inventoried Global.asax application root. These are static candidate relationships. Rendering, deployment paths, framework identity, conditional content, scope inheritance and execution remain unproven. Unmapped origin-relative URLs, base overrides, directory traversal, module scripts, missing or filtered files and ambiguous bundle roots or declarations are gaps.
+      - An explicit --webforms-iis-mount binds one root-relative URL prefix to one repository-relative application root. Only a complete prefix segment followed by a literal JavaScript path can resolve. The target must be unique in the selected inventory under case-insensitive lookup. Page, master and target must belong to the mapped directory and agree with any inventoried Global.asax root. The include fact records the operator mapping, original script URL, source span and actual inventoried path. Authority is a scan input rather than observed IIS deployment behavior. External URLs, URL escapes, unsafe segments, queries and fragments remain gaps.
+      - An inline classic script may declare a variable on its own line with a single unquoted <%= ... %> initializer containing an unsigned integer or dotted identifier. Each occurrence has a physical source span and unknown value. Up to 64 per script are admitted. The parsed initializer must be a variable declaration. Other executable server constructs or competing registrations keep the handler lookup unresolved.
+      - A bounded literal-key AppSettings lookup in a quoted classic JavaScript string is recorded as unknown at its WebForms source span. Acornima must locate the entire output expression inside one string literal in a directly invoked top-level function or its literal arguments. The combined limit is 64 server values per script. The rule supports local string initializers, direct literal invocation arguments and literal assignments to src. Unknown string flow or a potential dynamic script source retains an AnalysisGap. A unique method in the inspected sources can then emit a separate WebFormsAngularPartialClickHandlerCandidate with coverageStatus included-source-only and the exact gap ID. Competing registrations and unsupported identity-bearing uses refuse the handler join. Settings are never read and no dynamic asset is fetched.
+      - Also admits one direct assignment on the captured scope in the sole anonymous function passed to a top-level service.method(...).then(...) expression in the registered controller. One terminal catch with a literal regular function and at most one identifier parameter is supported. Only the fulfillment body supplies an assignment site, while conflicting mutations in either body still refuse the join. The recorded callback retains the fulfillment span and the rejection function offset and lines when present. The partial click candidate supports an explicit unobserved-callback gap; callback execution, fulfillment and click timing are not observed. Shadowing, competing assignments, nested or conditional registration, error callbacks and unsupported scope mutation keep the lookup unresolved.
+      - Parses ECMAScript syntax without executing scripts. Supports literal angular.module controller registrations and unique top-level module variable aliases, a direct top-level controller call or a top-level chain of up to 32 literal controller registrations rooted in the same module. The target needs a function callback or positional string injection array, and one direct scope method assigned a function or arrow. Inline classic scripts participate in ambiguity checks. The positive target must be external and included. Named callback indirection, wrappers, dynamic controller names, controller-as syntax, general aliasing, runtime mutations and HTTP/backend dispatch are beyond this rule.
+      - The .NET source inventory includes .js when the selected file set contains ASPX, ASCX or master markup. Existing exclusions apply and included inventory bytes participate in source snapshot checks. Unreferenced files cannot satisfy a click. Only scripts reachable from selected surfaces are parsed.
+      - Limits are 1 MiB per markup/script, 128 surfaces, 64 click sites per surface, 32 included external paths and 32 inline scripts per surface, 128 attempted external script files and 8 MiB external script bytes per scan, 100000 tokens/nodes per script, 32768 markup elements and depth below 128. Limits, malformed JS, unreadable sources and ambiguous or unsupported ownership produce gaps. Source evidence retains hashes and locations. Generator, parser binary and projected bounded-input digests are recorded.
+  - id: legacy.webforms.angularjs-service-http.v1
+    name: Included AngularJS service member POST to an ASP.NET handler declaration
+    description: Follows a retained click-handler candidate through an annotated injected service receiver, its module registration and member, a literal injected HTTP POST, and an explicitly mounted handler declaration.
+    evidenceTier: Tier3SyntaxOrTextual or Tier4Unknown
+    emits:
+      - WebFormsAngularServiceCallCandidate
+      - WebFormsAngularFactoryRegistrationCandidate
+      - WebFormsAngularServiceRegistrationCandidate
+      - WebFormsAngularServiceMemberDeclaredCandidate
+      - WebFormsAngularServiceMemberPostCandidate
+      - WebFormsAngularServiceMemberPostHandlerCandidate
+      - WebFormsAngularServiceMemberCandidate
+      - WebFormsClientHttpRequestCandidate
+      - WebFormsAngularPostHandlerCandidate
+      - AnalysisGap
+    limitations:
+      - Only selected external classic scripts can provide positive service and module sites. Includes and partial-click supporting IDs are retained. The call must be an immediate statement or return in the selected method, optionally followed by then. Nested calls, ambiguous receivers and parameter rebinding are gaps. The controller injection array must bind the receiver by position.
+      - Requires a unique top-level literal service registration in the same module with an annotated constructor, one direct this.member function assignment, and one directly called positional $http dependency in the method. Constructor returns, unsupported instance aliases, dynamic option keys, spread, duplicate properties, dynamic verbs or URLs, and competing service registrations are unsupported. This bounded syntax rule does not establish runtime DI, monkey-patching, request dispatch, or effects of third-party code.
+      - A terminal service may follow up to 31 literal factory registrations in one top-level expression. Each factory must take a literal token and an inline function or annotated inline function. Each link retains its own location and the preceding receiver fact ID. Unknown intermediates, nonliteral factory tokens, competing providers, factory mutation and unbound module roots remain gaps. The rule does not evaluate the factory or infer the contents of its returned object.
+      - The service may occur inside the receiver chain of a top-level expression ending in literal filter, directive, config or run calls. Each continuation must have the expected arity and a literal function or annotated function; named registrations require a literal name. The combined factory, service and continuation bound is 32. The service retains its own span and the continuation names, offsets and lines. Nested callback arguments, conditionals, unknown methods and assignments do not establish a top-level registration.
+      - The bounded write walk tracks simple identifier parameters in function and arrow scopes, including enclosing parameters in closures. Direct parameter rebinding is local. A parameter receiver cannot prove a global module binding. Property mutations, destructuring writes, dynamic with scopes and unresolved bindings retain conservative checks.
+      - When module lookup fails with unsupported-receiver, a recognized literal provider member on a ThisExpression or MemberExpression root with zero preceding factories and either zero arguments, a CallExpression, Identifier or MemberExpression token has no statically identified module or token. This applies to dot, literal bracket and optional access; the actual member, receiver kind and absent, call-expression, identifier or member-expression token kind are recorded. Retain an AngularUnboundProviderIdentity gap at the call and continue searching for an independently bound registration. The member supports those gap IDs and the request and endpoint expose them. No unbound call can establish a registration. Cap retained observations at 16 per lookup. Record a truncation gap supported by the retained observations and originating call. Continue the bounded registration lookup and attach any independently validated declaration to the gap. Truncation blocks member, request and endpoint selection. Unknown alias roots, matching literal tokens with unknown owners, and dynamic registrations on the selected module remain blocking gaps.
+      - An alias-write-or-shadow failure prevents service selection. When the bounded lookup independently validates one registration it retains the registration with its module and factory evidence. The provider gap supports the originating call and identifies that declaration through observedRegistrationFactId. The gap does not establish injection, a member call, or a request.
+      - A validated registration can independently support its member assignment. The assignment can support a literal POST with a positional HTTP injection slot and URL hash. These facts describe source syntax only. A separate declaration-side handler fact requires an operator mount, a unique in-root inventory file and one matching handler directive. Neither the POST nor that edge establishes click selection or execution.
+      - A rejected provider module lookup records the failing predicate, receiver and token syntax kinds, factory count and provider source location. External provider gaps support the included file and originating service call. Inline positions are relative to the inline input. Only-unbound and inline-unbound exits have distinct gap kinds. These diagnostics do not certify a runtime owner.
+      - A declaration link requires an explicit IIS mount, a unique selected .ashx path in the same application, and the exact retained directive fact at that path. No filename fallback. A request may be retained with a separate gap even when its endpoint is unavailable. Payloads and raw request configuration are omitted.
+      - Limits include 16 qualifying calls per handler, 1024 provider registrations inspected per lookup, and a per-scan budget of 4000000 included syntax nodes charged across handler and service lookups. A truncated traversal retains an explicit gap. Parent script size, parse and inclusion limits still apply.

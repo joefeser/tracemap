@@ -49,7 +49,7 @@ public static partial class CombinedDependencyPathReporter
                 var calls = Related(callerBody.SourceIndexId, FactTypes.ManagedIlCallObserved, callerBody.OriginalFactId + "/" + origin.Identity);
                 if (calls.Count != 1) return Fail("IlCommandReturnProducerMissingOrAmbiguous");
                 var producer = calls[0];
-                if (allowComposition && constantKind == "constant-string-hash" && TryConcatArity(producer, out var arity))
+                if (allowComposition && constantKind == "constant-string-hash" && TryConcatArity(producer, out var arity, out var arrayConcat))
                 {
                     var values = graph.CommandFacts is IIndexedCombinedFacts indexed
                         ? indexed.CallOperandFacts(producer.SourceIndexId, producer.OriginalFactId)
@@ -78,7 +78,17 @@ public static partial class CombinedDependencyPathReporter
                     CompiledCommandOperandOrigin[]? compositionOperands;
                     try { compositionOperands = JsonSerializer.Deserialize<CompiledCommandOperandOrigin[]>(compositionJson); }
                     catch (JsonException) { return Fail("IlCommandCompositionOperandsUnavailable"); }
-                    if (compositionOperands is null || compositionOperands.Length != arity || compositionOperands.Any(o => o is null ||
+                    if (arrayConcat)
+                    {
+                        if (compositionOperands is not [{ Kind: "string-array-elements" } snapshot]
+                            || snapshot.Identity is null || snapshot.Identity.Length > 24 * 1024) return Fail("IlCommandCompositionArrayUnavailable");
+                        try { compositionOperands = JsonSerializer.Deserialize<CompiledCommandOperandOrigin[]>(snapshot.Identity); }
+                        catch (JsonException) { return Fail("IlCommandCompositionArrayUnavailable"); }
+                        if (compositionOperands is null || compositionOperands.Length > 16 || compositionOperands.Any(element => element is null
+                            || element.Kind is not ("constant-string-hash" or "argument-slot" or "call-result" or "null")))
+                            return Fail("IlCommandCompositionArrayUnavailable");
+                    }
+                    if (compositionOperands is null || !arrayConcat && compositionOperands.Length != arity || compositionOperands.Any(o => o is null ||
                         !(o.Kind == "null" && o.Identity == "" || ValidCompiledCommandOrigin(o))))
                         return Fail("IlCommandCompositionOperandsUnavailable");
                     Composition = new("combined.paths.framework-string-composition.v1", EvidenceTiers.Tier3SyntaxOrTextual,
@@ -194,15 +204,20 @@ public static partial class CombinedDependencyPathReporter
         private bool Fail(string gap) { gaps.Add(gap); return false; }
     }
 
-    private static bool TryConcatArity(CombinedFactRow call, out int arity)
+    private static bool TryConcatArity(CombinedFactRow call, out int arity, out bool arrayConcat)
     {
-        arity = 0;
+        arity = 0; arrayConcat = false;
         if (call.Properties.GetValueOrDefault("opcode") != "call" || call.Properties.GetValueOrDefault("referenceKind") != "memberref") return false;
         const string type = "type(namespace:6:System|names:6:String)";
-        const string prefix = "memberref|type:scope(assembly:name:8:mscorlib|version:7:4.0.0.0|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:6:System|names:6:String)|member:6:Concat|arity:0|call:default|hasThis:false|explicitThis:false|(";
-        foreach (var count in new[] { 2, 3 })
-            if (call.Properties.GetValueOrDefault("targetIdentity") == prefix + string.Join(",", Enumerable.Repeat(type, count)) + ")->" + type)
-            { arity = count; return true; }
+        foreach (var version in new[] { "2.0.0.0", "4.0.0.0" })
+        {
+            var prefix = $"memberref|type:scope(assembly:name:8:mscorlib|version:7:{version}|culture:7:neutral|publicKeyToken:16:b77a5c561934e089)type(namespace:6:System|names:6:String)|member:6:Concat|arity:0|call:default|hasThis:false|explicitThis:false|(";
+            if (call.Properties.GetValueOrDefault("targetIdentity") == prefix + type + "[])->" + type)
+            { arity = 1; arrayConcat = true; return true; }
+            foreach (var count in new[] { 2, 3, 4 })
+                if (call.Properties.GetValueOrDefault("targetIdentity") == prefix + string.Join(",", Enumerable.Repeat(type, count)) + ")->" + type)
+                { arity = count; return true; }
+        }
         return false;
     }
 }

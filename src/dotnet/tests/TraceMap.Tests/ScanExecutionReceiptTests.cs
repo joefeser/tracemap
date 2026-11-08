@@ -11,6 +11,34 @@ public sealed class ScanExecutionReceiptTests
     private const string CommitSha = "0123456789abcdef0123456789abcdef01234567";
 
     [Fact]
+    public async Task Iis_mount_changes_scan_identity_and_authorized_scope_and_rejects_duplicate_options()
+    {
+        using var temp = new TempDirectory();
+        var repo = Path.Combine(temp.Path, "repo");
+        Directory.CreateDirectory(repo);
+        File.WriteAllText(Path.Combine(repo, "Page.aspx"), "<%@ Page Language='VB' %>");
+        InitializeRepository(repo);
+
+        var signatures = new HashSet<string>(StringComparer.Ordinal);
+        var scopes = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var mount in new[] { null, "/Portal=.", "/Desk=.", "/Portal=Site" })
+        {
+            var output = Path.Combine(temp.Path, "out" + signatures.Count);
+            var args = new List<string> { "scan", "--repo", repo, "--out", output };
+            if (mount is not null) args.AddRange(["--webforms-iis-mount", mount]);
+            Assert.Equal(0, await TraceMapCommand.RunAsync(args.ToArray(), TextWriter.Null, TextWriter.Null));
+            var receipt = JsonSerializer.Deserialize<ScanExecutionReceipt>(await File.ReadAllTextAsync(Path.Combine(output, "scan-receipt.json")), JsonOptions.Stable)!;
+            var manifest = JsonSerializer.Deserialize<ScanManifest>(await File.ReadAllTextAsync(Path.Combine(output, "scan-manifest.json")), JsonOptions.Stable)!;
+            Assert.True(signatures.Add(manifest.ScanId));
+            Assert.True(scopes.Add(receipt.AuthorizedScopeFingerprint));
+        }
+        var duplicateOutput = Path.Combine(temp.Path, "duplicate");
+        Assert.NotEqual(0, await TraceMapCommand.RunAsync(["scan", "--repo", repo, "--out", duplicateOutput,
+            "--webforms-iis-mount", "/Portal=.", "--webforms-iis-mount", "/Desk=."], TextWriter.Null, TextWriter.Null));
+        Assert.False(Directory.Exists(duplicateOutput));
+    }
+
+    [Fact]
     public void Explicit_vb_compilation_context_is_a_distinct_authorized_scope()
     {
         string Fingerprint(string? context)

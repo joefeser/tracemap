@@ -249,3 +249,18 @@
 - [x] Compile-only public smoke: retained original/table cases and local IL shapes pass, no SQL execution.
 - [x] Pushed exact-head remote full Debug -warnaserror gate: 5825 passed, 3 existing skips, 0 failed at fcd36a34f.
 - [x] Reviewable branch and draft PR #933; no merge or budget/private-scan authorization implied.
+
+## Inline UPDATE and transactional bulk-copy reconciliation — 2026-11-06
+
+- [x] Add independently authored VB compiled fixtures for incremental UPDATE through a custom-parameter wrapper and DELETE/bulk-copy with transaction calls.
+- [x] Add simple text-only and missing-provider controls; distinguish hashed operands, path projection, parameter binding and transaction evidence.
+- [x] Exercise compiled route and value-binding controls independently.
+
+## Bounded string-array composition — 2026-11-06
+
+- [x] Retain complete bounded local string[] origins at exact mscorlib 2/4 Concat(String[]) calls, preserving existing aggregate work/slot bounds and explicit refusals.
+- [x] Project ordered symbolic operands with exact provenance and malformed/oversize/unknown snapshot controls; retain expression depth/node bounds.
+- [x] Add VB/C# compiler shapes and mutation/escape/alias/size/loop/metadata controls.
+- [x] Document the bounds and exercise the public CLI and focused tests.
+
+- [x] Add a VB Tier 3 candidate for straight-line SQL text passed to a SQL-named wrapper and a public manual-review fixture.

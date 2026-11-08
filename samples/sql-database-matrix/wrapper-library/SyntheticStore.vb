@@ -1,7 +1,7 @@
 Imports System.Data
 
 ' Compile and scan only. No real connection strings or database execution.
-Public Class SyntheticStore
+Partial Public Class SyntheticStore
     Public Sub ExecuteProcedure(procedureName As String)
         ExecuteProcedure(procedureName, New Object() {})
     End Sub
