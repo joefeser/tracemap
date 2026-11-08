@@ -92,6 +92,58 @@ public sealed class WebFormsAngularServicePostTests
         if (count >= 32) Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceProviderChainLimit");
     }
 
+    [Theory]
+    [InlineData("adapter.js")]
+    [InlineData("z-adapter.js")]
+    public void Unbound_library_call_is_a_location_backed_gap_in_either_source_order(string adapter)
+    {
+        var facts = Extract(adapterName: adapter);
+        var edges = facts.Where(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate).ToArray();
+        Assert.Equal(2, edges.Length);
+        foreach (var edge in edges)
+        {
+            var request = Assert.Single(facts, f => f.FactId == edge.Properties["requestFactId"]);
+            var gap = Assert.Single(facts, f => f.FactId == request.Properties["unboundProviderGapIds"]);
+            var member = Assert.Single(facts, f => f.FactId == request.Properties["supportingFactIds"]);
+            Assert.Equal(gap.FactId, edge.Properties["unboundProviderGapIds"]);
+            Assert.Contains(gap.FactId, member.Properties["supportingFactIds"].Split(','));
+            Assert.Equal("AngularUnboundProviderIdentity", gap.Properties["gapKind"]);
+            Assert.Equal("Scripts/" + adapter, gap.Evidence.FilePath);
+            Assert.Equal(2, gap.Evidence.StartLine);
+            Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+            Assert.Contains(facts, f => f.FactType == FactTypes.WebFormsScriptBundleMemberCandidate
+                && gap.Properties["supportingFactIds"].Split(',').Contains(f.FactId));
+        }
+    }
+
+    [Theory]
+    [InlineData("this.service(selectFeature()", "this.service('records'", "AngularServiceModuleUnavailable")]
+    [InlineData("this.service(selectFeature()", "unknownOwner.service(selectFeature()", "AngularServiceModuleUnavailable")]
+    [InlineData("this.service(selectFeature()", "exampleApp.service(selectFeature()", "UnsupportedAngularServiceRegistration")]
+    public void Other_potential_competitors_still_block_the_endpoint(string from, string to, string reason)
+    {
+        var facts = Extract("Scripts/adapter.js", from, to);
+        Assert.DoesNotContain(facts, f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate);
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == reason);
+    }
+
+    [Fact]
+    public void Unbound_call_alone_never_supplies_a_service_registration()
+    {
+        var facts = Extract("Scripts/services.js", ".service(\"records\"", ".service(\"notRecords\"");
+        Assert.DoesNotContain(facts, f => f.FactType is FactTypes.WebFormsAngularServiceRegistrationCandidate or FactTypes.WebFormsAngularPostHandlerCandidate);
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceModuleUnavailable");
+    }
+
+    [Fact]
+    public void Excess_unbound_calls_leave_a_limit_gap_without_a_partial_selection()
+    {
+        const string call = "this.service(selectFeature(), function () {});";
+        var facts = Extract("Scripts/adapter.js", call, string.Concat(Enumerable.Repeat(call, 17)));
+        Assert.DoesNotContain(facts, f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate);
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularUnboundProviderLimit");
+    }
+
     [Fact]
     public void More_than_sixteen_injected_calls_retains_the_truncation_gap()
     {
@@ -100,16 +152,16 @@ public sealed class WebFormsAngularServicePostTests
         Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceCallLimit");
     }
 
-    private static CodeFact[] Extract(string? file = null, string? from = null, string? to = null)
+    private static CodeFact[] Extract(string? file = null, string? from = null, string? to = null, string adapterName = "adapter.js")
     {
         using var temp = new TempDirectory();
         var source = Path.Combine(SqlDatabaseMatrixCells.Repo(), "samples/webforms-service-post");
         foreach (var path in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(source, path);
-            var output = Path.Combine(temp.Path, relative);
+            var output = Path.Combine(temp.Path, relative.Replace("adapter.js", adapterName, StringComparison.Ordinal));
             Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-            var text = File.ReadAllText(path).ReplaceLineEndings("\n");
+            var text = File.ReadAllText(path).ReplaceLineEndings("\n").Replace("adapter.js", adapterName, StringComparison.Ordinal);
             File.WriteAllText(output, relative.Replace('\\', '/') == file ? text.Replace(from!, to) : text);
         }
         var inventory = FileInventory.Collect(temp.Path);

@@ -34,3 +34,8 @@ The service registration is the terminal call after a literal factory
 registration. Its supporting IDs include the factory at Scripts/services.js:2,
 which in turn references the external module declaration. The service site
 starts at its own property on line 3.
+
+An external adapter also calls `this.service(selectFeature(), ...)`.
+For each click the expected endpoint carries an unboundProviderGapIds entry.
+Follow it to the adapter's line 2 and verify that the member supports the
+same gap. The adapter cannot establish the module, service token or endpoint.

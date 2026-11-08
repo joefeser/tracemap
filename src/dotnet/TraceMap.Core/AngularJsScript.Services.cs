@@ -96,16 +96,27 @@ internal sealed partial class AngularJsScript
             && annotated.Elements[^1] is FunctionExpression factory && factory.Params.Count == annotated.Elements.Count - 1
             && annotated.Elements.SkipLast(1).All(item => item is StringLiteral);
 
-    internal static ServiceMethod ResolveService(AngularJsScript[] sources, string module, ServiceCall target)
+    internal static ServiceMethod ResolveService(AngularJsScript[] sources, string module, ServiceCall target,
+        Action<AngularJsScript, Site> recordUnboundProvider)
     {
         ServiceMethod? result = null;
         var checkedCalls = 0;
+        var unboundCalls = 0;
         foreach (var source in sources)
         foreach (var registration in source.providers)
         {
             if (++checkedCalls > 1024) throw new AngularClickGap("AngularProviderLimit");
             if (registration.Arguments.Count > 0 && registration.Arguments[0] is StringLiteral name && name.Value != target.Token) continue;
             var member = (MemberExpression)registration.Callee;
+            // A this-receiver and computed token establish neither module nor token identity.
+            // Preserve that uncertainty while searching for independently bound registrations.
+            if (!registration.Optional && member is { Optional: false, Computed: false, Object: ThisExpression, Property: Identifier { Name: "service" } }
+                && registration.Arguments.Count > 0 && registration.Arguments[0] is CallExpression)
+            {
+                if (++unboundCalls > 16) throw new AngularClickGap("AngularUnboundProviderLimit");
+                recordUnboundProvider(source, source.Location(registration));
+                continue;
+            }
             var (root, factories) = source.ServiceReceiver(member);
             var owner = ResolveModule(source, root, sources) ?? throw new AngularClickGap("AngularServiceModuleUnavailable");
             if (owner.Name != module) continue;
@@ -125,7 +136,7 @@ internal sealed partial class AngularJsScript
             result = new ServiceMethod(source, site, owner.Declaration, source.Location(binding),
                 (FunctionExpression)binding.Right, fn, annotation, factories);
         }
-        return result ?? throw new AngularClickGap("AngularServiceRegistrationUnavailable");
+        return result ?? throw new AngularClickGap(unboundCalls > 0 ? "AngularServiceModuleUnavailable" : "AngularServiceRegistrationUnavailable");
     }
 
     private static bool ConstructorReturns(BlockStatement body)

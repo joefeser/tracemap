@@ -36,7 +36,14 @@ public static partial class LegacyWebFormsExtractor
                     try
                     {
                         ChargeServiceWork(sources.Sum(source => source.NodeCount));
-                        var method = AngularJsScript.ResolveService(sources, module, call);
+                        var unboundIds = new List<string>();
+                        var method = AngularJsScript.ResolveService(sources, module, call, (source, site) =>
+                        {
+                            if (!assets.TryGetValue(source.File, out var includes)) throw new AngularClickGap("AngularServiceModuleUnavailable");
+                            var providerGap = ServiceSite(FactTypes.AnalysisGap, site, callFact.TargetSymbol!, includes.Append(callFact.FactId),
+                                new() { ["gapKind"] = "AngularUnboundProviderIdentity", ["receiverKind"] = "this", ["tokenKind"] = "call-expression" });
+                            unboundIds.Add(providerGap.FactId);
+                        });
                         if (!assets.TryGetValue(method.Member.File, out var memberIds) || !assets.TryGetValue(method.Module.File, out var moduleIds))
                             throw new AngularClickGap("AngularServiceOutsideIncludedFiles");
                         var moduleFact = ScriptOwner(method.Module, "module", module, moduleIds);
@@ -47,7 +54,7 @@ public static partial class LegacyWebFormsExtractor
                         var registration = ServiceSite(FactTypes.WebFormsAngularServiceRegistrationCandidate, method.Registration, receiver.TargetSymbol!,
                             memberIds.Append(receiver.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token });
                         last = ServiceSite(FactTypes.WebFormsAngularServiceMemberCandidate, method.Member, callFact.TargetSymbol!,
-                            [callFact.FactId, registration.FactId], new() { ["module"] = module, ["serviceToken"] = call.Token, ["member"] = call.Member });
+                            unboundIds.Append(callFact.FactId).Append(registration.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token, ["member"] = call.Member });
                         var post = AngularJsScript.ResolvePost(method);
                         var props = new SortedDictionary<string, string>(StringComparer.Ordinal)
                         {
@@ -57,6 +64,7 @@ public static partial class LegacyWebFormsExtractor
                             ["clickHandlerFactId"] = clickHandler.FactId, ["clickFactId"] = clickHandler.Properties["clickFactId"],
                             ["surfaceIdentity"] = SurfaceIdentity(page.FilePath), ["targetResolution"] = "unresolved"
                         };
+                        if (unboundIds.Count > 0) props["unboundProviderGapIds"] = string.Join(",", unboundIds.Order(StringComparer.Ordinal));
                         string? gap = null;
                         try
                         {
@@ -118,13 +126,15 @@ public static partial class LegacyWebFormsExtractor
                 continue;
             }
             var handler = matches[0];
+            var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["clickFactId"] = request.Properties["clickFactId"], ["clickHandlerFactId"] = request.Properties["clickHandlerFactId"],
+                ["requestFactId"] = request.FactId, ["declarationFactId"] = handler.FactId
+            };
+            if (request.Properties.TryGetValue("unboundProviderGapIds", out var gaps)) properties["unboundProviderGapIds"] = gaps;
             facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.WebFormsAngularPostHandlerCandidate,
                 handler.Evidence with { ExtractorId = "LegacyWebFormsExtractor", ExtractorVersion = ScannerVersions.LegacyWebFormsExtractor },
-                request.TargetSymbol!, handler.TargetSymbol!, [request.FactId, handler.FactId], new()
-                {
-                    ["clickFactId"] = request.Properties["clickFactId"], ["clickHandlerFactId"] = request.Properties["clickHandlerFactId"],
-                    ["requestFactId"] = request.FactId, ["declarationFactId"] = handler.FactId
-                }));
+                request.TargetSymbol!, handler.TargetSymbol!, [request.FactId, handler.FactId], properties));
         }
     }
 }

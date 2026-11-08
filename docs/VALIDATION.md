@@ -5518,7 +5518,7 @@ handler and review the recorded supporting IDs and parser/input digests.
 The prior bundle fixtures retain their four- and seven-fact bundle controls.
 
 This rule is `legacy.webforms.angularjs-click.v1`, extractor
-`legacy-webforms/0.25.0`. It parses included JavaScript using pinned Acornima
+`legacy-webforms/0.26.0`. It parses included JavaScript using pinned Acornima
 1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
 tracks .js source changes. The explicit ownership and resource boundaries are
 in the rule catalog. General plain onclick, runtime, backend and private
@@ -5583,3 +5583,9 @@ The same fixture includes a factory before the selected service. Check that
 the service registration references the factory fact and that the factory
 references the module declaration. The standalone and 32-registration boundary
 cases are in WebFormsAngularServicePostTests.
+
+The 0.26.0 service fixture includes a library-style this.service call with a
+computed token. Require the source-located uncertainty gap on the member,
+request and endpoint chain. Regressions vary script order, remove the
+application registration, introduce a possible module competitor and exceed
+the 16-observation limit.

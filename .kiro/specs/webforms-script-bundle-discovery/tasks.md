@@ -35,3 +35,6 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 - [x] Service POST 0.24.0 public controls verified by operator.
 - [x] Support a terminal service following bounded factory registrations with exact receiver provenance.
 - [ ] Verify the 0.25.0 factory-chain fixture and rerun the authorized private scan.
+
+- [x] Continue past bounded unbound this.service calls with computed tokens and retain their source gaps on independently evidenced candidates.
+- [ ] Verify 0.26.0 controls and private service-to-POST results.
