@@ -448,3 +448,13 @@ Tests and public/private scans for this implementation are deferred.
 Implementation `954c1617dbd4fb1c9530b30fe6d8a4e0a262fba2` compiled with
 `dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
 with zero warnings/errors. No local tests or scans ran for this handoff.
+
+### Provider owner diagnostic on codex/workspace-scope-preflight
+
+Extractor 0.27.0 keeps the module-ownership checks intact. An unresolved
+provider now reports the actual failed condition and provider site together
+with the originating service-call evidence. Runs that exhaust the search with
+only unbound providers and runs blocked by an unbound inline provider are
+distinguished from a failed ResolveModule predicate. The public regressions
+also pin the shared namespace guard's effect on controller resolution.
+Tests and scans deferred per the local validation hold.

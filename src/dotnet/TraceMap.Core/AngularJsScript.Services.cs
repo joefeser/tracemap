@@ -4,6 +4,16 @@ namespace TraceMap.Core;
 
 internal sealed partial class AngularJsScript
 {
+    internal sealed class ProviderOwnerGap(Site provider, string reason, string receiver, string token, int factories)
+        : AngularClickGap("AngularServiceModuleUnavailable")
+    {
+        internal Site Provider { get; } = provider;
+        internal string Reason { get; } = reason;
+        internal string Receiver { get; } = receiver;
+        internal string Token { get; } = token;
+        internal int Factories { get; } = factories;
+    }
+
     private readonly CallExpression[] providers;
     private readonly Expression[] factoryMutations;
     private readonly HashSet<CallExpression> directCalls;
@@ -118,7 +128,10 @@ internal sealed partial class AngularJsScript
                 continue;
             }
             var (root, factories) = source.ServiceReceiver(member);
-            var owner = ResolveModule(source, root, sources) ?? throw new AngularClickGap("AngularServiceModuleUnavailable");
+            var owner = ResolveModule(source, root, sources, out var failure);
+            if (owner is null)
+                throw new ProviderOwnerGap(source.Location(member.Property), failure, root.Type.ToString(),
+                    registration.Arguments.Count == 0 ? "absent" : registration.Arguments[0] is StringLiteral ? "string-literal" : registration.Arguments[0].Type.ToString(), factories.Count);
             if (owner.Name != module) continue;
             if (factories.Count != 0 && sources.Any(file => file.factoryMutations.Any(receiver =>
                 ResolveModule(file, receiver, sources)?.Name is not { } name || name == module)))
@@ -136,7 +149,7 @@ internal sealed partial class AngularJsScript
             result = new ServiceMethod(source, site, owner.Declaration, source.Location(binding),
                 (FunctionExpression)binding.Right, fn, annotation, factories);
         }
-        return result ?? throw new AngularClickGap(unboundCalls > 0 ? "AngularServiceModuleUnavailable" : "AngularServiceRegistrationUnavailable");
+        return result ?? throw new AngularClickGap(unboundCalls > 0 ? "AngularServiceOnlyUnboundProviders" : "AngularServiceRegistrationUnavailable");
     }
 
     private static bool ConstructorReturns(BlockStatement body)

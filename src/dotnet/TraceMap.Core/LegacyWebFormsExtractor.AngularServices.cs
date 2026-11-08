@@ -39,7 +39,7 @@ public static partial class LegacyWebFormsExtractor
                         var unboundIds = new List<string>();
                         var method = AngularJsScript.ResolveService(sources, module, call, (source, site) =>
                         {
-                            if (!assets.TryGetValue(source.File, out var includes)) throw new AngularClickGap("AngularServiceModuleUnavailable");
+                            if (!assets.TryGetValue(source.File, out var includes)) throw new AngularClickGap("AngularInlineProviderOwnerUnavailable");
                             var providerGap = ServiceSite(FactTypes.AnalysisGap, site, callFact.TargetSymbol!, includes.Append(callFact.FactId),
                                 new() { ["gapKind"] = "AngularUnboundProviderIdentity", ["receiverKind"] = "this", ["tokenKind"] = "call-expression" });
                             unboundIds.Add(providerGap.FactId);
@@ -87,6 +87,25 @@ public static partial class LegacyWebFormsExtractor
                         }
                         last = ServiceSite(FactTypes.WebFormsClientHttpRequestCandidate, post.Site, last.TargetSymbol!, [last.FactId], props);
                         if (gap is not null) ServiceGap(last, gap);
+                    }
+                    catch (AngularJsScript.ProviderOwnerGap ex)
+                    {
+                        var details = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["gapKind"] = ex.Kind, ["ownerFailure"] = ex.Reason, ["receiverKind"] = ex.Receiver,
+                            ["tokenKind"] = ex.Token, ["factoryCount"] = ex.Factories.ToString(CultureInfo.InvariantCulture),
+                            ["providerOffset"] = ex.Provider.Start.ToString(CultureInfo.InvariantCulture),
+                            ["providerInputLine"] = ex.Provider.Line.ToString(CultureInfo.InvariantCulture)
+                        };
+                        if (assets.TryGetValue(ex.Provider.File, out var includes))
+                            ServiceSite(FactTypes.AnalysisGap, ex.Provider, last.TargetSymbol!, includes.Append(last.FactId), details);
+                        else
+                        {
+                            // Inline parser positions are relative to the individual script input.
+                            details["inlineInput"] = ex.Provider.File;
+                            facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.AnalysisGap,
+                                last.Evidence, last.TargetSymbol!, "unresolved", [last.FactId], details));
+                        }
                     }
                     catch (AngularClickGap ex) { ServiceGap(last, ex.Kind); }
                 }

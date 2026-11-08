@@ -38,3 +38,6 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 
 - [x] Continue past bounded unbound this.service calls with computed tokens and retain their source gaps on independently evidenced candidates.
 - [ ] Verify 0.26.0 controls and private service-to-POST results.
+
+- [x] Distinguish provider owner lookup failures with parser locations and exact service-call support.
+- [ ] Validate the reported provider site and ownerFailure on the pinned diagnostic build.

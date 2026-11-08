@@ -127,12 +127,42 @@ public sealed class WebFormsAngularServicePostTests
         Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == reason);
     }
 
+    [Theory]
+    [InlineData("unknownOwner", "missing-alias-declaration", "Identifier")]
+    [InlineData("obtainOwner()", "unsupported-receiver", "CallExpression")]
+    [InlineData("this", "unsupported-receiver", "ThisExpression")]
+    public void Failed_owner_check_retains_the_specific_provider_site(string receiver, string failure, string kind)
+    {
+        var facts = Extract("Scripts/adapter.js", "this.service(selectFeature()", receiver + ".service('records'");
+        var gaps = facts.Where(f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceModuleUnavailable").ToArray();
+        Assert.Equal(2, gaps.Length);
+        Assert.All(gaps, gap =>
+        {
+            Assert.Equal(failure, gap.Properties["ownerFailure"]);
+            Assert.Equal(kind, gap.Properties["receiverKind"]);
+            Assert.Equal("string-literal", gap.Properties["tokenKind"]);
+            Assert.Equal("0", gap.Properties["factoryCount"]);
+            Assert.Equal("Scripts/adapter.js", gap.Evidence.FilePath);
+            Assert.Equal(2, gap.Evidence.StartLine);
+            Assert.Contains(facts, f => f.FactType == FactTypes.WebFormsAngularServiceCallCandidate
+                && gap.Properties["supportingFactIds"].Split(',').Contains(f.FactId));
+        });
+    }
+
+    [Fact]
+    public void Bundle_wide_angular_write_stops_the_controller_before_a_service_call_can_be_retained()
+    {
+        var facts = Extract("Scripts/adapter.js", "function configureAdapter()", "(function () { angular = {}; }()); function configureAdapter()");
+        Assert.DoesNotContain(facts, f => f.FactType is FactTypes.WebFormsAngularPartialClickHandlerCandidate
+            or FactTypes.WebFormsAngularServiceCallCandidate or FactTypes.WebFormsAngularPostHandlerCandidate);
+    }
+
     [Fact]
     public void Unbound_call_alone_never_supplies_a_service_registration()
     {
         var facts = Extract("Scripts/services.js", ".service(\"records\"", ".service(\"notRecords\"");
         Assert.DoesNotContain(facts, f => f.FactType is FactTypes.WebFormsAngularServiceRegistrationCandidate or FactTypes.WebFormsAngularPostHandlerCandidate);
-        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceModuleUnavailable");
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceOnlyUnboundProviders");
     }
 
     [Fact]

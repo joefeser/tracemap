@@ -180,13 +180,26 @@ internal sealed partial class AngularJsScript
         && (call.Arguments.Count == 1 || call.Arguments[1] is ArrayExpression dependencies
             && dependencies.Elements.All(item => item is StringLiteral)) ? name.Value : null;
 
-    private static ModuleBinding? ResolveModule(AngularJsScript file, Expression receiver, AngularJsScript[] scripts)
+    private static ModuleBinding? ResolveModule(AngularJsScript file, Expression receiver, AngularJsScript[] scripts) =>
+        ResolveModule(file, receiver, scripts, out _);
+
+    private static ModuleBinding? ResolveModule(AngularJsScript file, Expression receiver, AngularJsScript[] scripts, out string failure)
     {
+        failure = "angular-binding-or-write";
         if (scripts.Any(s => s.globals["angular"].Any() || s.writes.Contains("angular") || s.namedDeclarations.Contains("angular"))) return null;
         if (Module(receiver) is { } literal) return new(literal, file.Location(receiver));
-        if (receiver is not Identifier id || scripts.Any(s => s.writes.Contains(id.Name) || s.namedDeclarations.Contains(id.Name))) return null;
+        failure = "unsupported-receiver";
+        if (receiver is not Identifier id) return null;
+        failure = "alias-write-or-shadow";
+        if (scripts.Any(s => s.writes.Contains(id.Name) || s.namedDeclarations.Contains(id.Name))) return null;
         var vars = scripts.SelectMany(s => s.globals[id.Name].Select(d => (File: s, Declaration: d))).Take(2).ToArray();
-        if (vars.Length != 1 || Module(vars[0].Declaration.Init) is not { } name) return null;
+        if (vars.Length != 1)
+        {
+            failure = vars.Length == 0 ? "missing-alias-declaration" : "multiple-alias-declarations";
+            return null;
+        }
+        failure = "unsupported-alias-initializer";
+        if (Module(vars[0].Declaration.Init) is not { } name) return null;
         return new(name, vars[0].File.Location(vars[0].Declaration));
     }
 
@@ -321,7 +334,7 @@ internal sealed partial class AngularJsScript
     }
 }
 
-internal sealed class AngularClickGap(string kind) : Exception(kind)
+internal class AngularClickGap(string kind) : Exception(kind)
 {
     internal string Kind { get; } = kind;
 }
