@@ -499,3 +499,7 @@ The four admitted continuation methods retain their offsets and line spans
 on the registration fact. The same 32-call limit covers the prefix, service
 and suffix. Terminal service and unknown provider handling remain covered.
 Updated public regressions and work-machine validation are pending.
+
+Implementation `1fb838773aca942446ef51f650a201f31b970c6e` compiled with
+`dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
+with zero warnings/errors. No local tests or scans ran.
