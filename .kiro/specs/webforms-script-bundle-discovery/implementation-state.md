@@ -429,3 +429,7 @@ intermediates, nonliteral registrations, competing tokens, factory mutation,
 and overlong chains preserve explicit gaps. Direct registrations keep their
 previous site and module support. Focused regressions and the updated fixture
 are prepared; new test execution and scans are deferred.
+
+Implementation `0e53bd94741d00f75dbdc304e9bedf64b9037ad5` compiled via
+`dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
+with zero warnings/errors. No 0.25.0 tests or scans ran locally.
