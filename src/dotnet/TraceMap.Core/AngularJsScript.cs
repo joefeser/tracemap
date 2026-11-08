@@ -49,7 +49,7 @@ internal sealed partial class AngularJsScript
             _ => null
         }).OfType<MemberExpression>().Where(member => Member(member, "factory", out _)).Select(member => member.Object).ToArray();
         providers = nodes.OfType<CallExpression>().Where(IsProviderCall).ToArray();
-        directCalls = script.Body.OfType<ExpressionStatement>().Select(s => s.Expression).OfType<CallExpression>().ToHashSet();
+        IndexServiceStatements(script);
         controllerCalls = nodes.OfType<CallExpression>().Where(call => Member(call.Callee, "controller", out _)).ToArray();
         foreach (var statement in script.Body.OfType<ExpressionStatement>())
         {

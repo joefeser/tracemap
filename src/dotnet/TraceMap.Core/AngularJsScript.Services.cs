@@ -16,11 +16,13 @@ internal sealed partial class AngularJsScript
 
     private readonly CallExpression[] providers;
     private readonly Expression[] factoryMutations;
-    private readonly HashSet<CallExpression> directCalls;
+    private readonly Dictionary<CallExpression, ServiceContinuation[]> serviceStatements = new();
+    private readonly HashSet<CallExpression> overlongServiceStatements = new();
+    internal sealed record ServiceContinuation(string Member, string? RegisteredToken, Site Site);
     internal sealed record ServiceCall(Site Site, string Token, string Member, int Slot);
     internal sealed record FactoryLink(string Token, Site Site);
     internal sealed record ServiceMethod(AngularJsScript Script, Site Registration, Site Module, Site Member,
-        FunctionExpression Body, FunctionExpression Constructor, ArrayExpression Annotation, IReadOnlyList<FactoryLink> Factories);
+        FunctionExpression Body, FunctionExpression Constructor, ArrayExpression Annotation, IReadOnlyList<FactoryLink> Factories, IReadOnlyList<ServiceContinuation> Continuations);
     internal sealed record Post(Site Site, string Url, int HttpSlot);
 
     private static string? ProviderMember(MemberExpression member) => member.Computed
@@ -90,7 +92,7 @@ internal sealed partial class AngularJsScript
         Expression root = service.Object;
         while (root is CallExpression { Optional: false } call && Member(call.Callee, "factory", out var receiver))
         {
-            // Count the terminal service as the last registration.
+            // Reserve a slot for the service itself; the continuation count is checked at lookup.
             if (factories.Count >= 31) throw new AngularClickGap("AngularServiceProviderChainLimit");
             if (call.Arguments.Count != 2 || call.Arguments[0] is not StringLiteral token
                 || !LiteralFactory(call.Arguments[1]))
@@ -107,6 +109,41 @@ internal sealed partial class AngularJsScript
         || argument is ArrayExpression annotated && annotated.Elements.Count > 0
             && annotated.Elements[^1] is FunctionExpression factory && factory.Params.Count == annotated.Elements.Count - 1
             && annotated.Elements.SkipLast(1).All(item => item is StringLiteral);
+
+    // Follow receiver links only, starting from the expression statement. Calls
+    // below an argument, conditional, assignment or wrapper have no such path.
+    private void IndexServiceStatements(Script script)
+    {
+        foreach (var statement in script.Body.OfType<ExpressionStatement>())
+        {
+            Expression current = statement.Expression;
+            var suffix = new List<ServiceContinuation>();
+            while (current is CallExpression { Optional: false, Callee: MemberExpression { Optional: false } member } call)
+            {
+                var name = ProviderMember(member);
+                if (name == "service")
+                {
+                    if (suffix.Count >= 32) overlongServiceStatements.Add(call);
+                    else
+                    {
+                        suffix.Reverse();
+                        serviceStatements.Add(call, suffix.ToArray());
+                    }
+                    break;
+                }
+                if (name is not ("filter" or "directive" or "config" or "run")) break;
+                var named = name is "filter" or "directive";
+                if (call.Arguments.Count != (named ? 2 : 1) || named && call.Arguments[0] is not StringLiteral
+                    || !LiteralFactory(call.Arguments[named ? 1 : 0])) break;
+                if (suffix.Count < 32)
+                {
+                    var token = named ? ((StringLiteral)call.Arguments[0]).Value + (name == "filter" ? "Filter" : "Directive") : null;
+                    suffix.Add(new(name, token, Location(member.Property) with { EndLine = call.Location.End.Line }));
+                }
+                current = member.Object;
+            }
+        }
+    }
 
     internal static ServiceMethod ResolveService(AngularJsScript[] sources, string module, ServiceCall target,
         Action<AngularJsScript, Site, string, string> recordUnboundProvider)
@@ -141,18 +178,21 @@ internal sealed partial class AngularJsScript
             if (factories.Count != 0 && sources.Any(file => file.factoryMutations.Any(receiver =>
                 ResolveModule(file, receiver, sources)?.Name is not { } name || name == module)))
                 throw new AngularClickGap("AngularFactoryReceiverMutation");
+            if (source.overlongServiceStatements.Contains(registration)) throw new AngularClickGap("AngularServiceProviderChainLimit");
             if (registration.Optional || registration.Arguments.Count != 2 || registration.Arguments[0] is not StringLiteral
-                || !source.directCalls.Contains(registration) || !Member(member, "service", out _))
+                || !source.serviceStatements.TryGetValue(registration, out var suffix) || !Member(member, "service", out _))
                 throw new AngularClickGap("UnsupportedAngularServiceRegistration");
-            if (result is not null) throw new AngularClickGap("AmbiguousAngularService");
+            if (factories.Count + 1 + suffix.Length > 32) throw new AngularClickGap("AngularServiceProviderChainLimit");
+            if (result is not null || suffix.Any(link => link.RegisteredToken == target.Token))
+                throw new AngularClickGap("AmbiguousAngularService");
             if (registration.Arguments[1] is not ArrayExpression annotation || annotation.Elements.Count < 2
                 || annotation.Elements[^1] is not FunctionExpression { Async: false, Generator: false } fn)
                 throw new AngularClickGap("AngularServiceInjectionUnavailable");
             var binding = ServiceMember(fn, target.Member);
-            var site = factories.Count == 0 ? source.Location(registration)
+            var site = factories.Count == 0 && suffix.Length == 0 ? source.Location(registration)
                 : source.Location(member.Property) with { EndLine = registration.Location.End.Line };
             result = new ServiceMethod(source, site, owner.Declaration, source.Location(binding),
-                (FunctionExpression)binding.Right, fn, annotation, factories);
+                (FunctionExpression)binding.Right, fn, annotation, factories, suffix);
         }
         return result ?? throw new AngularClickGap(unboundCalls > 0 ? "AngularServiceOnlyUnboundProviders" : "AngularServiceRegistrationUnavailable");
     }

@@ -47,3 +47,6 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 
 - [x] Preserve absent-token provider gaps alongside computed-token gaps under the same per-lookup bound.
 - [ ] Validate the 0.29.0 fixture and private service-to-POST joins.
+
+- [x] Admit a service inside a bounded top-level module receiver chain with literal filter, directive, config and run continuations.
+- [ ] Validate the 0.30.0 fixture and private service-to-handler joins.

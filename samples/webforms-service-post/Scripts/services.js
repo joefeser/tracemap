@@ -5,7 +5,11 @@ exampleApp
         return send({ method: "post", url: "/Portal/Desk/API/save.ashx", data: items });
     };
     this.list = function () { return send({ method: "GET", url: "/Portal/Desk/Api/list.ashx" }); };
-}]);
+}])
+.filter("display", function () { return function (x) { return x; }; })
+.directive("summary", [function () { return {}; }])
+.config([function () {}])
+.run(["records", function (records) {}]);
 exampleApp.service("unrelated", ["$http", function (send) {
     this.submit = function (items) {
         return send({ method: "POST", url: "/Portal/Desk/Api/unused.ashx", data: items });

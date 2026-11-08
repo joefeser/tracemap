@@ -52,8 +52,15 @@ public static partial class LegacyWebFormsExtractor
                         foreach (var factory in method.Factories)
                             receiver = ServiceSite(FactTypes.WebFormsAngularFactoryRegistrationCandidate, factory.Site, receiver.TargetSymbol!,
                                 memberIds.Append(receiver.FactId), new() { ["module"] = module, ["factoryToken"] = factory.Token });
+                        var registrationDetails = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["module"] = module, ["serviceToken"] = call.Token
+                        };
+                        if (method.Continuations.Count > 0)
+                            registrationDetails["moduleContinuations"] = System.Text.Json.JsonSerializer.Serialize(method.Continuations.Select(link =>
+                                new { member = link.Member, offset = link.Site.Start, startLine = link.Site.Line, endLine = link.Site.EndLine }));
                         var registration = ServiceSite(FactTypes.WebFormsAngularServiceRegistrationCandidate, method.Registration, receiver.TargetSymbol!,
-                            memberIds.Append(receiver.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token });
+                            memberIds.Append(receiver.FactId), registrationDetails);
                         last = ServiceSite(FactTypes.WebFormsAngularServiceMemberCandidate, method.Member, callFact.TargetSymbol!,
                             unboundIds.Append(callFact.FactId).Append(registration.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token, ["member"] = call.Member });
                         var post = AngularJsScript.ResolvePost(method);

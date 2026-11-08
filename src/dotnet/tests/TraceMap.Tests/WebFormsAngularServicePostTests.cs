@@ -35,7 +35,11 @@ public sealed class WebFormsAngularServicePostTests
             Assert.Equal(FactTypes.WebFormsAngularPartialClickHandlerCandidate, handler.FactType);
             Assert.Equal(handler.Properties["clickFactId"], link.Properties["clickFactId"]);
             var registration = Assert.Single(facts, f => support.Contains(f.FactId) && f.FactType == FactTypes.WebFormsAngularServiceRegistrationCandidate);
-            Assert.Equal(3, registration.Evidence.StartLine);
+            Assert.Equal((3, 8), (registration.Evidence.StartLine, registration.Evidence.EndLine));
+            using var continuations = System.Text.Json.JsonDocument.Parse(registration.Properties["moduleContinuations"]);
+            var suffix = continuations.RootElement.EnumerateArray().ToArray();
+            Assert.Equal(new[] { "filter", "directive", "config", "run" }, suffix.Select(x => x.GetProperty("member").GetString()));
+            Assert.Equal(new[] { 9, 10, 11, 12 }, suffix.Select(x => x.GetProperty("startLine").GetInt32()));
             var factory = Assert.Single(facts, f => f.FactType == FactTypes.WebFormsAngularFactoryRegistrationCandidate
                 && registration.Properties["supportingFactIds"].Split(',').Contains(f.FactId));
             Assert.Equal("formatting", factory.Properties["factoryToken"]);
@@ -81,15 +85,38 @@ public sealed class WebFormsAngularServicePostTests
     [Theory]
     [InlineData(0)]
     [InlineData(2)]
-    [InlineData(31)]
+    [InlineData(27)]
+    [InlineData(28)]
     [InlineData(32)]
-    public void Registration_bound_counts_the_terminal_service(int count)
+    public void Registration_bound_counts_prefix_service_and_suffix(int count)
     {
         var chain = string.Concat(Enumerable.Range(0, count).Select(i => $".factory('helper{i}', ['input', function (input) {{}}])"));
         var facts = Extract("Scripts/services.js", ".factory(\"formatting\", function () { return {}; })", chain);
-        Assert.Equal(count < 32 ? 2 : 0, facts.Count(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate));
-        Assert.Equal(count < 32 ? count : 0, facts.Count(f => f.FactType == FactTypes.WebFormsAngularFactoryRegistrationCandidate));
-        if (count >= 32) Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceProviderChainLimit");
+        Assert.Equal(count <= 27 ? 2 : 0, facts.Count(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate));
+        Assert.Equal(count <= 27 ? count : 0, facts.Count(f => f.FactType == FactTypes.WebFormsAngularFactoryRegistrationCandidate));
+        if (count > 27) Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceProviderChainLimit");
+    }
+
+    [Fact]
+    public void Terminal_service_still_resolves_without_continuation_evidence()
+    {
+        var facts = Extract("Scripts/services.js", "}])\n.filter", "}]);\nexampleApp.filter");
+        Assert.Equal(2, facts.Count(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate));
+        Assert.DoesNotContain(facts, f => f.Properties.ContainsKey("moduleContinuations"));
+    }
+
+    [Theory]
+    [InlineData(".filter(\"display\"", ".unknown(\"display\"")]
+    [InlineData(".directive(\"summary\"", ".directive(dynamicName")]
+    [InlineData(".config([function () {}])", ".config(configureLater)")]
+    [InlineData(".run([\"records\"", "?.run([\"records\"")]
+    [InlineData("exampleApp\n.factory", "var configured = exampleApp\n.factory")]
+    [InlineData("exampleApp\n.factory", "if (enabled) exampleApp\n.factory")]
+    public void Unproven_continuation_or_enclosure_refuses_the_join(string from, string to)
+    {
+        var facts = Extract("Scripts/services.js", from, to);
+        Assert.DoesNotContain(facts, f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate);
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "UnsupportedAngularServiceRegistration");
     }
 
     [Theory]

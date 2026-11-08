@@ -490,3 +490,12 @@ passed 41/41 focused cases. Tests and scans for 0.29.0 remain deferred.
 Implementation `7e3d2f810bba9c00c1dff345e04310f424a205c5` compiled with
 `dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
 with zero warnings/errors. No local tests or scans ran.
+
+### Service followed by module configuration calls
+
+On codex/workspace-scope-preflight, extractor 0.30.0 indexes a service
+registration only along the receiver path of a complete top-level expression.
+The four admitted continuation methods retain their offsets and line spans
+on the registration fact. The same 32-call limit covers the prefix, service
+and suffix. Terminal service and unknown provider handling remain covered.
+Updated public regressions and work-machine validation are pending.

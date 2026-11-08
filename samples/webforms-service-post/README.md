@@ -30,8 +30,8 @@ POST Scripts/services.js:5 and declaration Api/Save.ashx:1. The existing
 dynamic-script and callback-invocation gaps stay attached to each partial
 handler. This query describes source candidates and observed declarations.
 
-The service registration is the terminal call after a literal factory
-registration. Its supporting IDs include the factory at Scripts/services.js:2,
+The service registration follows a literal factory
+registration and precedes filter, directive, config and run calls. Its supporting IDs include the factory at Scripts/services.js:2,
 which in turn references the external module declaration. The service site
 starts at its own property on line 3.
 
@@ -40,3 +40,7 @@ Each endpoint's `unboundProviderGapIds` references both observations: line 2
 has tokenKind `absent`, and line 3 has `call-expression`. Both have
 ownerFailure `unsupported-receiver` and factoryCount `0`. The member supports
 both gap IDs independently of the module/factory/service registration.
+
+The service registration spans lines 3–8. Its moduleContinuations property
+records the four following calls at lines 9–12 in source order. The POST's
+source line stays 5.
