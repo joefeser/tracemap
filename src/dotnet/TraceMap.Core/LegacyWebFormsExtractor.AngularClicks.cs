@@ -574,6 +574,20 @@ public static partial class LegacyWebFormsExtractor
             Observe(FactTypes.AnalysisGap, page.FilePath, line, line, page.MarkupSnapshot is { Length: <= BundleSourceLimit } text ? text : "", source, "unresolved", supports,
                 properties: new() { ["gapKind"] = reason, ["message"] = reason });
 
+        private readonly Dictionary<string, CodeFact> supportFacts = new(StringComparer.Ordinal);
+        private int indexedFactCount;
+
+        private CodeFact CreateAngularFact(string rule, string type, EvidenceSpan evidence, string source, string target,
+            IEnumerable<string> support, SortedDictionary<string, string>? properties)
+        {
+            while (indexedFactCount < facts.Count)
+            {
+                var fact = facts[indexedFactCount++];
+                supportFacts[fact.FactId] = fact;
+            }
+            return AngularFact(manifest, rule, type, evidence, source, target, support.Select(id => supportFacts[id]), properties);
+        }
+
         private CodeFact Observe(string type, string file, int line, int endLine, string text, string source, string target,
             IEnumerable<string> support, bool hashProvided = false, SortedDictionary<string, string>? properties = null)
         {
@@ -582,25 +596,27 @@ public static partial class LegacyWebFormsExtractor
                 markupHashes[file] = hash = FactFactory.Hash(text, 64);
             var evidence = new EvidenceSpan(file, line, endLine, hash,
                 "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor);
-            var fact = AngularFact(manifest, RuleIds.LegacyWebFormsAngularClick, type, evidence, source, target, support, properties);
+            var fact = CreateAngularFact(RuleIds.LegacyWebFormsAngularClick, type, evidence, source, target, support, properties);
             facts.Add(fact);
             return fact;
         }
     }
 
     private static CodeFact AngularFact(ScanManifest manifest, string rule, string type, EvidenceSpan evidence,
-        string source, string target, IEnumerable<string> support, SortedDictionary<string, string>? properties)
+        string source, string target, IEnumerable<CodeFact> support, SortedDictionary<string, string>? properties)
     {
-        var ids = support.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        var supportingInputs = support.DistinctBy(f => f.FactId).OrderBy(f => f.FactId, StringComparer.Ordinal)
+            .Select(f => new { f.FactId, f.Evidence.SnippetHash, boundedInputSha256 = f.Properties.GetValueOrDefault("boundedInputSha256") })
+            .ToArray();
         var p = new SortedDictionary<string, string>(properties ?? new(), StringComparer.Ordinal);
         p["sourceSymbolId"] = source;
         p["targetSymbolId"] = target;
-        p["supportingFactIds"] = string.Join(",", ids);
+        p["supportingFactIds"] = string.Join(",", supportingInputs.Select(f => f.FactId));
         p["ruleLimitations"] = rule == RuleIds.LegacyWebFormsAngularClick ? AngularLimitations : ServiceLimitations;
         p["generatorSha256"] = EntryGeneratorSha256.Value;
         p["javascriptParserSha256"] = JsParserHash.Value;
         p["markupParserSha256"] = MarkupParserHash.Value;
-        p["boundedInputSha256"] = FactFactory.Hash(JsonSerializer.Serialize(new { manifest.CommitSha, file = evidence.FilePath,
+        p["boundedInputSha256"] = FactFactory.Hash(JsonSerializer.Serialize(new { manifest.CommitSha, evidence.SnippetHash, supportingInputs, file = evidence.FilePath,
             line = evidence.StartLine, endLine = evidence.EndLine, type, source, target, inputs = p.ToArray() }), 64);
         return FactFactory.Create(manifest, type, rule,
             type == FactTypes.AnalysisGap ? EvidenceTiers.Tier4Unknown : EvidenceTiers.Tier3SyntaxOrTextual,

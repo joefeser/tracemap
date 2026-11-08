@@ -246,7 +246,7 @@ internal sealed partial class AngularJsScript
             allowedThis.Add(self);
             if (key.Name != name) continue;
             if (found is not null) throw new AngularClickGap("AmbiguousAngularServiceMember");
-            if (assignment.Operator != Acornima.Operator.Assignment || assignment.Right is not FunctionExpression)
+            if (assignment.Operator != Acornima.Operator.Assignment || assignment.Right is not FunctionExpression { Generator: false })
                 throw new AngularClickGap("UnsupportedAngularServiceMember");
             found = assignment;
         }

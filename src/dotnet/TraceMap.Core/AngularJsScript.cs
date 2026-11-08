@@ -232,6 +232,31 @@ internal sealed partial class AngularJsScript
         return new(name, vars[0].File.Location(vars[0].Declaration));
     }
 
+    // Follow binding positions only. Property keys and default values are expressions.
+    private static bool BindsName(Node pattern, string name)
+    {
+        var pending = new Stack<Node>();
+        pending.Push(pattern);
+        while (pending.TryPop(out var node))
+        {
+            switch (node)
+            {
+                case Identifier id when id.Name == name: return true;
+                case ArrayPattern array:
+                    foreach (var element in array.Elements)
+                        if (element is not null) pending.Push(element);
+                    break;
+                case ObjectPattern obj:
+                    foreach (var property in obj.Properties) pending.Push(property);
+                    break;
+                case Property property: pending.Push(property.Value); break;
+                case RestElement rest: pending.Push(rest.Argument); break;
+                case AssignmentPattern assignment: pending.Push(assignment.Left); break;
+            }
+        }
+        return false;
+    }
+
     private sealed record FulfillmentRegistration(CallExpression Then, FunctionExpression? Catch);
 
     private static Dictionary<AssignmentExpression, FulfillmentRegistration?> ScopeAssignmentSites(FunctionExpression controller, string scope)
@@ -308,7 +333,7 @@ internal sealed partial class AngularJsScript
                 throw new AngularClickGap("AngularScopeInjectionUnavailable");
             callback = last;
         }
-        if (callback is not FunctionExpression fn || fn.Params.Any(p => p is not Identifier))
+        if (callback is not FunctionExpression { Generator: false } fn || fn.Params.Any(p => p is not Identifier))
             throw new AngularClickGap("UnsupportedAngularControllerCallback");
         var parameters = fn.Params.Select(p => ((Identifier)p).Name).ToArray();
         var dependencies = injection is null ? parameters :
@@ -323,10 +348,11 @@ internal sealed partial class AngularJsScript
         foreach (var node in Walk(fn.Body))
         {
             if (node is VariableDeclarator { Id: Identifier redeclared, Init: not null } && redeclared.Name == scope
+                || node is VariableDeclarator { Id: ArrayPattern or ObjectPattern } declaration && BindsName(declaration.Id, scope)
                 || node is FunctionDeclaration { Id: { } fnName } && fnName.Name == scope
                 || node is ClassDeclaration { Id: { } clsName } && clsName.Name == scope
                 || node is AssignmentExpression pattern && pattern.Left is ArrayPattern or ObjectPattern
-                    && Walk(pattern.Left).OfType<Identifier>().Any(i => i.Name == scope))
+                    && BindsName(pattern.Left, scope))
                 throw new AngularClickGap("AngularScopeReassigned");
             if (node is VariableDeclarator { Init: Identifier alias } && alias.Name == scope
                 || node is AssignmentExpression { Right: Identifier stored } && stored.Name == scope
@@ -342,7 +368,7 @@ internal sealed partial class AngularJsScript
             if (left.Computed) throw new AngularClickGap("DynamicAngularScopeMember");
             if (left.Property is not Identifier key || key.Name != method) continue;
             if (assignment.Operator != Operator.Assignment
-                || assignment.Right is not (FunctionExpression or ArrowFunctionExpression)
+                || assignment.Right is not (FunctionExpression { Generator: false } or ArrowFunctionExpression)
                 || !sites.ContainsKey(assignment))
                 throw new AngularClickGap("UnsupportedAngularScopeAssignment");
             candidates.Add(assignment);

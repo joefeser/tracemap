@@ -111,7 +111,7 @@ public static partial class LegacyWebFormsExtractor
                         {
                             // Inline parser positions are relative to the individual script input.
                             details["inlineInput"] = ex.Provider.File;
-                            facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.AnalysisGap,
+                            facts.Add(CreateAngularFact(RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.AnalysisGap,
                                 last.Evidence, last.TargetSymbol!, "unresolved", supports, details));
                         }
                     }
@@ -131,7 +131,7 @@ public static partial class LegacyWebFormsExtractor
                                 properties["observedRegistrationFactId"] = observedRegistration.FactId;
                                 supports = supports.Append(observedRegistration.FactId);
                             }
-                            facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.AnalysisGap,
+                            facts.Add(CreateAngularFact(RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.AnalysisGap,
                                 callFact.Evidence, callFact.TargetSymbol!, "unresolved", supports, properties));
                         }
                     }
@@ -187,12 +187,12 @@ public static partial class LegacyWebFormsExtractor
             var target = $"angular-service-site:{FactFactory.Hash($"{type}|{site.File}|{site.Start}", 32)}";
             var evidence = new EvidenceSpan(site.File, site.Line, site.EndLine, parsed[site.File].Hash,
                 "LegacyWebFormsExtractor", ScannerVersions.LegacyWebFormsExtractor);
-            var fact = AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, type, evidence, source, target, ids, properties);
+            var fact = CreateAngularFact(RuleIds.LegacyWebFormsAngularServiceHttp, type, evidence, source, target, ids, properties);
             facts.Add(fact);
             return fact;
         }
 
-        private void ServiceGap(CodeFact last, string kind) => facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp,
+        private void ServiceGap(CodeFact last, string kind) => facts.Add(CreateAngularFact(RuleIds.LegacyWebFormsAngularServiceHttp,
             FactTypes.AnalysisGap, last.Evidence, last.TargetSymbol!, "unresolved", [last.FactId], new() { ["gapKind"] = kind }));
     }
 
@@ -209,7 +209,7 @@ public static partial class LegacyWebFormsExtractor
             if (matches.Length != 1)
             {
                 facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, FactTypes.AnalysisGap, request.Evidence,
-                    request.TargetSymbol!, "unresolved", [request.FactId], new() { ["gapKind"] = "AngularHttpHandlerDeclarationUnavailable" }));
+                    request.TargetSymbol!, "unresolved", [request], new() { ["gapKind"] = "AngularHttpHandlerDeclarationUnavailable" }));
                 continue;
             }
             var handler = matches[0];
@@ -227,7 +227,7 @@ public static partial class LegacyWebFormsExtractor
             if (request.Properties.TryGetValue("unboundProviderGapIds", out var gaps)) properties["unboundProviderGapIds"] = gaps;
             facts.Add(AngularFact(manifest, RuleIds.LegacyWebFormsAngularServiceHttp, edgeType,
                 handler.Evidence with { ExtractorId = "LegacyWebFormsExtractor", ExtractorVersion = ScannerVersions.LegacyWebFormsExtractor },
-                request.TargetSymbol!, handler.TargetSymbol!, [request.FactId, handler.FactId], properties));
+                request.TargetSymbol!, handler.TargetSymbol!, [request, handler], properties));
         }
     }
 }

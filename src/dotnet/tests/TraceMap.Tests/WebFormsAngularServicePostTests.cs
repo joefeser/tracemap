@@ -54,6 +54,7 @@ public sealed class WebFormsAngularServicePostTests
     [InlineData("Scripts/services.js", "\"unrelated\"", "\"records\"", "AmbiguousAngularService")]
     [InlineData("Scripts/panel.js", "client.submit(rows)", "(function(client){ client.submit(rows); })(other)", "UnsupportedAngularServiceCall")]
     [InlineData("Scripts/panel.js", "client.submit(rows)", "client = other; client.submit(rows)", "AngularServiceReceiverBindingUnavailable")]
+    [InlineData("Scripts/services.js", "this.submit = function (", "this.submit = function* (", "UnsupportedAngularServiceMember")]
     [InlineData("Scripts/services.js", "this.submit =", "this.submit = function() {}; this.submit =", "AmbiguousAngularServiceMember")]
     [InlineData("Scripts/services.js", "return send({", "return send({ ...options,", "AngularHttpOptionsUnavailable")]
     [InlineData("Scripts/services.js", "method: \"post\"", "method: \"post\", method: \"get\"", "AngularHttpOptionsUnavailable")]

@@ -8254,6 +8254,7 @@ rules:
       - WebFormsAngularClickHandlerCandidate
       - AnalysisGap
     limitations:
+      - Scope rebinding through destructuring and generator handler functions leave the click unresolved. Angular fact input digests include the source evidence hash and ordered supporting fact evidence digests.
       - Clicks inside noscript or template markup are excluded before the per-surface click limit.
       - Parses literal ng-click and data-ng-click calls to a bare method with zero or more simple identifier or dotted-path arguments. DOM ancestry must identify a literal ng-controller and named ng-app. Master scope requires a retained UsesMasterPage relationship and a unique matching content placeholder. Non-bindable content, duplicate attributes, unsupported expressions, unknown scope and nested masters remain gaps.
       - Sources come from direct page-relative classic script includes or existing Scripts.Render, ScriptBundle declaration and exact declaration-linked member facts within the same nearest inventoried Global.asax application root. These are static candidate relationships. Rendering, deployment paths, framework identity, conditional content, scope inheritance and execution remain unproven. Unmapped origin-relative URLs, base overrides, directory traversal, module scripts, missing or filtered files and ambiguous bundle roots or declarations are gaps.
@@ -8280,6 +8281,7 @@ rules:
       - WebFormsAngularPostHandlerCandidate
       - AnalysisGap
     limitations:
+      - A generator service method returns an iterator. Its body cannot establish an immediate POST candidate.
       - Only selected external classic scripts can provide positive service and module sites. Includes and partial-click supporting IDs are retained. The call must be an immediate statement or return in the selected method, optionally followed by then. Nested calls, ambiguous receivers and parameter rebinding are gaps. The controller injection array must bind the receiver by position.
       - Requires a unique top-level literal service registration in the same module with an annotated constructor, one direct this.member function assignment, and one directly called positional $http dependency in the method. Constructor returns, unsupported instance aliases, dynamic option keys, spread, duplicate properties, dynamic verbs or URLs, and competing service registrations are unsupported. This bounded syntax rule does not establish runtime DI, monkey-patching, request dispatch, or effects of third-party code.
       - A terminal service may follow up to 31 literal factory registrations in one top-level expression. Each factory must take a literal token and an inline function or annotated inline function. Each link retains its own location and the preceding receiver fact ID. Unknown intermediates, nonliteral factory tokens, competing providers, factory mutation and unbound module roots remain gaps. The rule does not evaluate the factory or infer the contents of its returned object.
