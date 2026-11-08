@@ -513,3 +513,12 @@ Tests cover both file orders, a matching literal token that still blocks
 selection, and the shared observation limit. Runtime callback execution and
 dynamic script content remain unknown. Local validation is compilation and
 diff checking only. Next run the focused tests and inspect both click IDs.
+
+### Provider token read from a property
+
+On `codex/workspace-scope-preflight`, 0.32.0 records a property-read token
+as unknown when the provider has an unsupported receiver and no factory
+prefix. Known module and ambiguity checks still apply. The public fixture
+exercises both file orders and the 16-observation bound. Local checks are
+Debug compilation with warnings as errors and diff checking. Tests and
+scan execution are deferred to the pinned verification dispatch.

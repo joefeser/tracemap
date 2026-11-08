@@ -53,3 +53,6 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 - [x] Verify the 0.30.0 public fixture. Operator reported 53 passing tests and 71 matching SQLite/NDJSON facts.
 - [x] Retain independently evidenced registrations across unresolved member-receiver providers with identifier tokens.
 - [ ] Verify 0.31.0 public and private endpoint evidence.
+- [x] Verify 0.31.0 public controls (54 tests, 73 facts in both outputs) and identify the next private provider gap.
+- [x] Preserve an unresolved provider with a property-read token under the shared observation limit.
+- [ ] Verify both 0.32.0 endpoints and all four provider gaps in the public fixture and report private reach.

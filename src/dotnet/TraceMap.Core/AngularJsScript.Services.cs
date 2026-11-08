@@ -167,6 +167,7 @@ internal sealed partial class AngularJsScript
                 {
                     CallExpression => "call-expression",
                     Identifier => "identifier",
+                    MemberExpression => "member-expression",
                     _ => null
                 };
                 if (failure == "unsupported-receiver" && factories.Count == 0 && tokenKind is not null

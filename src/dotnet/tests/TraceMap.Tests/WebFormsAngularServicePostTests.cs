@@ -133,9 +133,9 @@ public sealed class WebFormsAngularServicePostTests
             var ids = request.Properties["unboundProviderGapIds"];
             Assert.Equal(ids, edge.Properties["unboundProviderGapIds"]);
             var gaps = ids.Split(',').Select(id => Assert.Single(facts, f => f.FactId == id)).OrderBy(f => f.Evidence.StartLine).ToArray();
-            Assert.Equal(new[] { "absent", "call-expression", "identifier" }, gaps.Select(f => f.Properties["tokenKind"]));
-            Assert.Equal(new[] { "this", "this", "member-expression" }, gaps.Select(f => f.Properties["receiverKind"]));
-            Assert.Equal(new[] { 2, 3, 4 }, gaps.Select(f => f.Evidence.StartLine));
+            Assert.Equal(new[] { "absent", "call-expression", "identifier", "member-expression" }, gaps.Select(f => f.Properties["tokenKind"]));
+            Assert.Equal(new[] { "this", "this", "member-expression", "this" }, gaps.Select(f => f.Properties["receiverKind"]));
+            Assert.Equal(new[] { 2, 3, 4, 5 }, gaps.Select(f => f.Evidence.StartLine));
             var member = Assert.Single(facts, f => f.FactId == request.Properties["supportingFactIds"]);
             Assert.All(gaps, gap =>
             {
@@ -180,6 +180,7 @@ public sealed class WebFormsAngularServicePostTests
     [InlineData("this['service'](selectFeature()", "this['service']('records'", "AngularServiceModuleUnavailable")]
     [InlineData("this['service'](selectFeature()", "unknownOwner.service(selectFeature()", "AngularServiceModuleUnavailable")]
     [InlineData("this['service'](selectFeature()", "exampleApp.service(selectFeature()", "UnsupportedAngularServiceRegistration")]
+    [InlineData("this.service(settings.feature", "exampleApp.service(settings.feature", "UnsupportedAngularServiceRegistration")]
     public void Other_potential_competitors_still_block_the_endpoint(string from, string to, string reason)
     {
         var facts = Extract("Scripts/adapter.js", from, to);
@@ -237,8 +238,8 @@ public sealed class WebFormsAngularServicePostTests
     }
 
     [Theory]
-    [InlineData(14, 2)]
-    [InlineData(15, 0)]
+    [InlineData(13, 2)]
+    [InlineData(14, 0)]
     public void Absent_and_computed_tokens_share_the_observation_limit(int absentCount, int endpoints)
     {
         var facts = Extract("Scripts/adapter.js", "this.value();", string.Concat(Enumerable.Repeat("this.value(); ", absentCount)));

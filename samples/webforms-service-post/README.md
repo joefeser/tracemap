@@ -35,9 +35,10 @@ registration and precedes filter, directive, config and run calls. Its supportin
 which in turn references the external module declaration. The service site
 starts at its own property on line 3.
 
-The external adapter has three unresolved providers. Its calls at lines 2 and 3
+The external adapter has four unresolved providers. Its calls at lines 2 and 3
 use `this` with an absent or computed token. Line 4 uses a member receiver
-and an identifier token. Each endpoint carries all three `unboundProviderGapIds`.
+and an identifier token. Line 5 uses `this` with a property read as its token.
+Each endpoint carries all four `unboundProviderGapIds`.
 The application registration has separate module and factory evidence.
 
 The service registration spans lines 3–8. Its moduleContinuations property
