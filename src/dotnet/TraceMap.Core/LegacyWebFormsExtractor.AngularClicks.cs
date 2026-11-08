@@ -140,9 +140,21 @@ public static partial class LegacyWebFormsExtractor
                         var moduleFact = ScriptOwner(handler.Module, "module", module, assets[handler.Module.File]);
                         var registration = ScriptOwner(handler.Registration, "controller", controller, assets[handler.Registration.File].Append(moduleFact.FactId));
                         var evidence = assets[handler.Method.File].Concat(surfaceSupportIds).Concat(ownerIds).Append(registration.FactId);
-                        Observe(FactTypes.WebFormsAngularClickHandlerCandidate, handler.Method.File, handler.Method.Line, handler.Method.EndLine,
+                        var type = FactTypes.WebFormsAngularClickHandlerCandidate;
+                        var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                        {
+                            ["module"] = module, ["controller"] = controller, ["method"] = method, ["clickFactId"] = clickFact.FactId
+                        };
+                        foreach (var reason in inline.Select(s => s.SettingsScriptGap).OfType<string>().Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+                        {
+                            var gap = Gap(page, position.Value.Line, id, reason, surfaceSupportIds.Append(clickFact.FactId).ToArray());
+                            evidence = evidence.Append(gap.FactId);
+                            type = FactTypes.WebFormsAngularPartialClickHandlerCandidate;
+                            properties["coverageStatus"] = "included-source-only";
+                        }
+                        Observe(type, handler.Method.File, handler.Method.Line, handler.Method.EndLine,
                             parsed[handler.Method.File].Hash, id, handlerId, evidence, hashProvided: true,
-                            properties: new() { ["module"] = module, ["controller"] = controller, ["method"] = method, ["clickFactId"] = clickFact.FactId });
+                            properties: properties);
                     }
                     catch (AngularClickGap ex) { Gap(page, position.Value.Line, id, ex.Kind, [clickFact.FactId]); }
                 }
@@ -440,6 +452,7 @@ public static partial class LegacyWebFormsExtractor
             if (cursor < 0) return ParseScript(id, body);
             var projection = masked.ToString(new Microsoft.CodeAnalysis.Text.TextSpan(start, end - start)).ToCharArray();
             var positions = new List<int>();
+            var settings = new List<(int Start, int End)>();
             while (cursor >= 0)
             {
                 var comment = raw.AsSpan(cursor).StartsWith("<%--", StringComparison.Ordinal);
@@ -451,23 +464,34 @@ public static partial class LegacyWebFormsExtractor
                     var lineStart = raw.LastIndexOfAny(['\r', '\n'], cursor) + 1;
                     var lineEnd = raw.IndexOfAny(['\r', '\n'], close);
                     if (lineEnd < 0) lineEnd = raw.Length;
+                    if (positions.Count + settings.Count >= 64) throw new AngularClickGap("AngularServerInitializerLimit");
                     var match = InlineInitializer.Match(raw[lineStart..lineEnd]);
-                    if (!match.Success || lineStart + match.Groups["value"].Index != cursor)
-                        throw new AngularClickGap("UnsupportedAngularServerInitializer");
-                    if (positions.Count >= 64) throw new AngularClickGap("AngularServerInitializerLimit");
-                    // A literal carries no owner identity. Its value is never reported or evaluated.
-                    projection[cursor] = '0';
-                    positions.Add(cursor);
+                    if (match.Success && lineStart + match.Groups["value"].Index == cursor)
+                    {
+                        projection[cursor] = '0';
+                        positions.Add(cursor);
+                    }
+                    else if (InlineAppSetting.IsMatch(raw[cursor..(close + terminator.Length)]))
+                        settings.Add((cursor, close + terminator.Length));
+                    else throw new AngularClickGap("UnsupportedAngularServerInitializer");
                 }
                 cursor = raw.IndexOf("<%", close + terminator.Length, StringComparison.Ordinal);
             }
-            var script = ParseScript(id, new string(projection), positions);
+            var script = ParseScript(id, new string(projection), positions, settings);
             foreach (var position in positions)
             {
                 var line = LineAt(masked, start + position);
                 var fact = Observe(FactTypes.WebFormsInlineServerInitializerCandidate, page.FilePath, line, line,
                     page.MarkupSnapshot!, SurfaceIdentity(page.FilePath), $"webforms-server-initializer:{page.FilePath}#{start + position}", [],
                     properties: new() { ["valueStatus"] = "unknown" });
+                supports.Add(fact.FactId);
+            }
+            foreach (var setting in settings)
+            {
+                var line = LineAt(masked, start + setting.Start);
+                var fact = Observe(FactTypes.WebFormsInlineServerStringCandidate, page.FilePath, line, line,
+                    page.MarkupSnapshot!, SurfaceIdentity(page.FilePath), $"webforms-server-string:{page.FilePath}#{start + setting.Start}", [],
+                    properties: new() { ["valueStatus"] = "unknown", ["expressionKind"] = "app-setting" });
                 supports.Add(fact.FactId);
             }
             return script;
@@ -477,6 +501,10 @@ public static partial class LegacyWebFormsExtractor
             @"^[ \t]*(?:var|const|let)[ \t]+" + AngularIdentifier +
             @"[ \t]*=[ \t]*(?<value><%=[ \t]*(?:[0-9]+|[A-Za-z_][A-Za-z_0-9]*(?:\.[A-Za-z_][A-Za-z_0-9]*)*)[ \t]*%>)[ \t]*;[ \t]*\z",
             AngularOptions, RegexBudget.LoadTolerant);
+
+        private static readonly Regex InlineAppSetting = new(
+            @"^<%=[ \t]*(?:(?:[A-Za-z_][A-Za-z_0-9]*\.){0,8}AppSettings)[ \t]*\([ \t]*""[A-Za-z0-9_.:-]{1,128}""[ \t]*\)[ \t]*%>\z",
+            AngularOptions | RegexOptions.IgnoreCase, RegexBudget.LoadTolerant);
 
         private void ReadScript(string path)
         {
@@ -507,14 +535,15 @@ public static partial class LegacyWebFormsExtractor
             { throw new AngularClickGap("AngularScriptUnavailable"); }
         }
 
-        private static AngularJsScript ParseScript(string path, string text, IReadOnlyList<int>? unknownInitializers = null)
+        private static AngularJsScript ParseScript(string path, string text, IReadOnlyList<int>? unknownInitializers = null,
+            IReadOnlyList<(int Start, int End)>? settings = null)
         {
-            try { return new AngularJsScript(path, text, unknownInitializers); }
+            try { return new AngularJsScript(path, text, unknownInitializers, settings); }
             catch (Acornima.ParseErrorException) { throw new AngularClickGap("MalformedAngularScript"); }
             catch (InsufficientExecutionStackException) { throw new AngularClickGap("AngularScriptDepthLimit"); }
         }
 
-        private void Gap(WebFormsPage page, int line, string source, string reason, string[] supports) =>
+        private CodeFact Gap(WebFormsPage page, int line, string source, string reason, string[] supports) =>
             Observe(FactTypes.AnalysisGap, page.FilePath, line, line, page.MarkupSnapshot is { Length: <= BundleSourceLimit } text ? text : "", source, "unresolved", supports,
                 properties: new() { ["gapKind"] = reason, ["message"] = reason });
 

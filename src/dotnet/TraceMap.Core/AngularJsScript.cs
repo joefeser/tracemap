@@ -18,8 +18,10 @@ internal sealed class AngularJsScript
     private readonly ILookup<string, CallExpression> creations;
     internal string File { get; }
     internal string Hash { get; }
+    internal string? SettingsScriptGap { get; }
 
-    internal AngularJsScript(string file, string text, IReadOnlyList<int>? unknownInitializers = null)
+    internal AngularJsScript(string file, string text, IReadOnlyList<int>? unknownInitializers = null,
+        IReadOnlyList<(int Start, int End)>? settings = null)
     {
         File = file;
         Hash = FactFactory.Hash(text, 64);
@@ -35,6 +37,8 @@ internal sealed class AngularJsScript
                 .Select(d => d.Init!.Start).ToHashSet();
             if (!unknownInitializers.All(initializers.Contains)) throw new AngularClickGap("UnsupportedAngularServerInitializer");
         }
+        if (settings is { Count: > 0 })
+            SettingsScriptGap = CheckSettingsStrings(script, nodes, settings);
         controllerCalls = nodes.OfType<CallExpression>().Where(call => Member(call.Callee, "controller", out _)).ToArray();
         foreach (var statement in script.Body.OfType<ExpressionStatement>())
         {
@@ -73,6 +77,63 @@ internal sealed class AngularJsScript
         }).OfType<string>().ToHashSet(StringComparer.Ordinal);
         foreach (var assignment in nodes.OfType<AssignmentExpression>().Where(a => a.Left is ArrayPattern or ObjectPattern))
             foreach (var id in Walk(assignment.Left).OfType<Identifier>()) writes.Add(id.Name);
+    }
+
+    // Admitted holes may contribute data to an IIFE's local string initializer.
+    // A masked value cannot establish a module name, controller name or resource URL.
+    private static string? CheckSettingsStrings(Script script, Node[] nodes, IReadOnlyList<(int Start, int End)> settings)
+    {
+        var iifes = script.Body.OfType<ExpressionStatement>()
+            .Select(statement => statement.Expression)
+            .OfType<CallExpression>()
+            .Where(call => !call.Optional && call.Callee is FunctionExpression).ToArray();
+        var bodies = iifes.Select(call => ((FunctionExpression)call.Callee).Body).ToArray();
+        var arguments = iifes.SelectMany(call => call.Arguments.ToArray()).OfType<StringLiteral>().ToHashSet();
+        var literals = nodes.OfType<StringLiteral>().OrderBy(literal => literal.Start).ToArray();
+        var locals = nodes.OfType<VariableDeclarator>().Where(v => v.Id is Identifier && v.Init is not null)
+            .SelectMany(v => StringTerms(v.Init!).Select(literal => (literal, local: (Identifier)v.Id)))
+            .ToDictionary(pair => pair.literal, pair => pair.local);
+        var identifiers = nodes.OfType<Identifier>().ToLookup(id => id.Name, StringComparer.Ordinal);
+        var resources = nodes.OfType<AssignmentExpression>().Where(a => a.Left is Expression target && Member(target, "src", out _))
+            .SelectMany(a => StringTerms(a.Right)).ToHashSet();
+        var literalIndex = 0;
+        var unknownDataFlow = false;
+        var resourceUse = false;
+        foreach (var setting in settings)
+        {
+            while (literalIndex < literals.Length && literals[literalIndex].End <= setting.Start) literalIndex++;
+            if (literalIndex == literals.Length) throw new AngularClickGap("UnsupportedAngularServerInitializer");
+            var literal = literals[literalIndex];
+            if (literal.Start >= setting.Start || literal.End <= setting.End) throw new AngularClickGap("UnsupportedAngularServerInitializer");
+            if (arguments.Contains(literal)) unknownDataFlow = true;
+            else if (!bodies.Any(body => body.Start < literal.Start && literal.End < body.End))
+                throw new AngularClickGap("UnsupportedAngularServerInitializer");
+            else if (resources.Contains(literal)) resourceUse = true;
+            else if (locals.TryGetValue(literal, out var local))
+                unknownDataFlow |= identifiers[local.Name].Any(id => id != local);
+            else throw new AngularClickGap("AngularServerStringUseUnavailable");
+        }
+        if (resourceUse || nodes.OfType<CallExpression>().Any(call =>
+            Member(call.Callee, "createElement", out _) && call.Arguments.FirstOrDefault() is StringLiteral tag
+                && tag.Value.Equals("script", StringComparison.OrdinalIgnoreCase)
+            || call.Callee is Identifier { Name: "eval" or "Function" }))
+            return "AngularDynamicScriptSourceUnavailable";
+        return unknownDataFlow ? "AngularServerStringFlowUnavailable" : null;
+    }
+
+    private static IEnumerable<StringLiteral> StringTerms(Expression value)
+    {
+        var pending = new Stack<Expression>();
+        pending.Push(value);
+        while (pending.TryPop(out var term))
+        {
+            if (term is StringLiteral literal) yield return literal;
+            else if (term is BinaryExpression { Operator: Operator.Addition } sum)
+            {
+                pending.Push(sum.Right);
+                pending.Push(sum.Left);
+            }
+        }
     }
 
     private static IEnumerable<Node> Walk(Node root)

@@ -316,3 +316,16 @@ handler. The initial fixture used a repo-root master reference for a nested
 file; changing it to the correct page-relative master reference isolated
 the tested script resolution. Separate C#/VB semantic OSS reruns deferred
 for this WebForms URL resolution slice.
+
+### Quoted server settings on codex/workspace-scope-preflight
+
+Extractor 0.21.0 recognizes restricted literal-key settings syntax and requires
+a parsed JavaScript string spanning the entire expression in a directly
+invoked function. Settings remain unknown without evaluating VB, rendering
+the page or fetching script assets. Inline registrations remain part of the
+ambiguity check. When the known sources identify a unique method but unknown
+string flow or a dynamic resource is present, a distinct partial fact retains
+the click ID, handler location, settings support and typed gap ID. Ordinary
+handler facts stay absent on that path. The independent fixture uses public
+synthetic names. Encoded server expressions, arbitrary setting expressions,
+template strings and opaque identity-bearing uses remain unsupported.

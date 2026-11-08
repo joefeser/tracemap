@@ -24,3 +24,5 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 - [x] Resolve bounded top-level controller chains to the included module and retain a distinct registration site for each controller.
 
 - [x] Accept one explicit IIS mount for a master-page script and bind the exact selected inventory file, mapping provenance, scan ID and authorized scope.
+
+- [x] Admit bounded quoted WebForms AppSettings expressions in classic IIFEs and report a gap-linked partial handler when dynamic script contents remain unknown.
