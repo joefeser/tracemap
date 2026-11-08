@@ -5206,6 +5206,7 @@ rules:
       - SqlTextArgumentCandidate
       - AnalysisGap
     limitations:
+      - If source cannot be read after semantic analysis, a file-scoped SQL syntax gap records the missing coverage.
       - The first literal must start with SELECT or UPDATE and whitespace. Syntax does not validate the SQL grammar, wrapper identity, command instance, parameter binding, safety or execution.
       - Supports a simple receiver and an ExecSql or ExecuteSql method name, optionally followed by an underscore and suffix. Source and compiled facts have separate identities.
       - A local requires an adjacent Dim initializer and simple appends in a top-level method body. Unsupported intervening statements clear the local. Inline operands may be string literals or identifier reads. SQL text and values are not retained.
@@ -8253,6 +8254,7 @@ rules:
       - WebFormsAngularClickHandlerCandidate
       - AnalysisGap
     limitations:
+      - Clicks inside noscript or template markup are excluded before the per-surface click limit.
       - Parses literal ng-click and data-ng-click calls to a bare method with zero or more simple identifier or dotted-path arguments. DOM ancestry must identify a literal ng-controller and named ng-app. Master scope requires a retained UsesMasterPage relationship and a unique matching content placeholder. Non-bindable content, duplicate attributes, unsupported expressions, unknown scope and nested masters remain gaps.
       - Sources come from direct page-relative classic script includes or existing Scripts.Render, ScriptBundle declaration and exact declaration-linked member facts within the same nearest inventoried Global.asax application root. These are static candidate relationships. Rendering, deployment paths, framework identity, conditional content, scope inheritance and execution remain unproven. Unmapped origin-relative URLs, base overrides, directory traversal, module scripts, missing or filtered files and ambiguous bundle roots or declarations are gaps.
       - An explicit --webforms-iis-mount binds one root-relative URL prefix to one repository-relative application root. Only a complete prefix segment followed by a literal JavaScript path can resolve. The target must be unique in the selected inventory under case-insensitive lookup. Page, master and target must belong to the mapped directory and agree with any inventoried Global.asax root. The include fact records the operator mapping, original script URL, source span and actual inventoried path. Authority is a scan input rather than observed IIS deployment behavior. External URLs, URL escapes, unsafe segments, queries and fragments remain gaps.

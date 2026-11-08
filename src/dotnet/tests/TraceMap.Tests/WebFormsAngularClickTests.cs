@@ -43,6 +43,20 @@ public sealed class WebFormsAngularClickTests
     }
 
     [Theory]
+    [InlineData("noscript")]
+    [InlineData("template")]
+    public void Inert_clicks_do_not_count_towards_the_limit_or_produce_handlers(string container)
+    {
+        using var temp = Fixture();
+        var page = Path.Combine(temp.Path, "Page.aspx");
+        var hidden = string.Concat(Enumerable.Repeat("<button data-ng-click='save(item)'></button>", 65));
+        File.WriteAllText(page, File.ReadAllText(page).Replace("</section>", $"<{container}>{hidden}</{container}></section>"));
+        var facts = Extract(temp.Path);
+        Assert.Equal(4, Assert.Single(facts, f => f.FactType == FactTypes.WebFormsAngularClickCandidate).Evidence.StartLine);
+        Assert.Single(facts, f => f.FactType == FactTypes.WebFormsAngularClickHandlerCandidate);
+    }
+
+    [Theory]
     [InlineData("\n")]
     [InlineData("\r\n")]
     public void Three_inline_server_initializers_keep_physical_spans_and_external_handler(string newline)

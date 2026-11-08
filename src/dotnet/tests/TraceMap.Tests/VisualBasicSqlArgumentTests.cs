@@ -7,6 +7,22 @@ public sealed class VisualBasicSqlArgumentTests
     private static readonly ScanManifest Manifest = new("public", "synthetic", null, "test", "abc123", "test/1",
         DateTimeOffset.UnixEpoch, "Level3SyntaxAnalysis", "NotRun", [], [], [], []);
 
+    [Fact]
+    public void Missing_source_after_semantic_analysis_reports_sql_coverage_gap()
+    {
+        using var temp = new TempDirectory();
+        var file = Path.Combine(temp.Path, "Missing.vb");
+        File.WriteAllText(file, "Public Class Sample\nEnd Class");
+        var inventory = FileInventory.Collect(temp.Path);
+        File.Delete(file);
+        var facts = VisualBasicSyntaxExtractor.Extract(temp.Path, Manifest, inventory, new HashSet<string> { "Missing.vb" });
+        var gap = Assert.Single(facts, f => f.RuleId == RuleIds.VisualBasicSqlArgument);
+        Assert.Equal(FactTypes.AnalysisGap, gap.FactType);
+        Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+        Assert.Equal("Missing.vb", gap.Evidence.FilePath);
+        Assert.Equal("reduces-syntax-coverage-for-file", gap.Properties["coverageEffect"]);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

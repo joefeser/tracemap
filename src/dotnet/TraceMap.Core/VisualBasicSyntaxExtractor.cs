@@ -66,7 +66,11 @@ public static partial class VisualBasicSyntaxExtractor
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                if (semanticCoverage) continue;
+                if (semanticCoverage)
+                {
+                    AddPhaseFailureGap(manifest, facts, file.RelativePath, RuleIds.VisualBasicSqlArgument, "sql-argument-read", ex);
+                    continue;
+                }
                 facts.Add(FactFactory.Create(
                     manifest,
                     FactTypes.AnalysisGap,

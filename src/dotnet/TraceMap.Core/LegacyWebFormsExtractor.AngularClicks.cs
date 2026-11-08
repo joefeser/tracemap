@@ -60,7 +60,7 @@ public static partial class LegacyWebFormsExtractor
                 renderMarkers.Clear();
                 if (++surfaceCount > 128) throw new AngularClickGap("AngularSurfaceLimit");
                 using var markup = ParsePage(page);
-                var clicks = markup.QuerySelectorAll("[ng-click],[data-ng-click]").ToArray();
+                var clicks = markup.QuerySelectorAll("[ng-click],[data-ng-click]").Where(element => Visible(element, null)).ToArray();
                 if (clicks.Length == 0) return;
                 if (clicks.Length > 64) throw new AngularClickGap("AngularClickLimit");
 
@@ -85,7 +85,7 @@ public static partial class LegacyWebFormsExtractor
                 {
                     var overrides = markup.All.Where(e => e.LocalName == "asp:content").Select(e => e.GetAttribute("ContentPlaceHolderID"))
                         .OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase);
-                    var hasBase = markup.QuerySelector("base[href]") is not null || layout?.QuerySelector("base[href]") is not null;
+                    var hasBase = markup.QuerySelectorAll("base[href]").Any(e => Visible(e, null)) || layout?.QuerySelectorAll("base[href]").Any(e => Visible(e, overrides)) == true;
                     IncludeSurface(page, markup, page.FilePath, hasBase, null, assets, inline, surfaceSupportIds);
                     if (master is not null && layout is not null) IncludeSurface(master, layout, page.FilePath, hasBase, overrides, assets, inline, surfaceSupportIds);
                     if (assets.Count == 0) throw new AngularClickGap("AngularScriptIncludeUnavailable");
@@ -380,6 +380,16 @@ public static partial class LegacyWebFormsExtractor
             return path;
         }
 
+        private static bool Visible(IElement element, HashSet<string>? overrides)
+        {
+            for (var e = element; e is not null; e = e.ParentElement)
+            {
+                if (e.LocalName is "template" or "noscript") return false;
+                if (e.LocalName == "asp:contentplaceholder" && e.GetAttribute("id") is { } id && overrides?.Contains(id) == true) return false;
+            }
+            return true;
+        }
+
         private void IncludeSurface(WebFormsPage page, IDocument markup, string pageUrl, bool hasBase, HashSet<string>? overrides, SortedDictionary<string, HashSet<string>> assets, List<AngularJsScript> inline, HashSet<string> supports)
         {
             void Add(string path, params string[] ids)
@@ -388,16 +398,7 @@ public static partial class LegacyWebFormsExtractor
                 set.UnionWith(ids);
                 if (assets.Count > 32) throw new AngularClickGap("AngularIncludedScriptLimit");
             }
-            bool Visible(IElement element)
-            {
-                for (var e = element; e is not null; e = e.ParentElement)
-                {
-                    if (e.LocalName is "template" or "noscript") return false;
-                    if (e.LocalName == "asp:contentplaceholder" && e.GetAttribute("id") is { } id && overrides?.Contains(id) == true) return false;
-                }
-                return true;
-            }
-            foreach (var script in markup.QuerySelectorAll("script").Where(Visible))
+            foreach (var script in markup.QuerySelectorAll("script").Where(element => Visible(element, overrides)))
             {
                 if (string.Equals(script.GetAttribute("runat"), "server", StringComparison.OrdinalIgnoreCase)) continue;
                 var type = script.GetAttribute("type")?.Trim().ToLowerInvariant();
@@ -434,7 +435,7 @@ public static partial class LegacyWebFormsExtractor
             }
             if (bundleGaps.Any(f => f.Evidence.FilePath == page.FilePath))
                 throw new AngularClickGap("AngularBundleRenderIncomplete");
-            var activeMarkers = markup.QuerySelectorAll("meta").Where(Visible).Select(e => e.SourceReference?.Position.Index).ToHashSet();
+            var activeMarkers = markup.QuerySelectorAll("meta").Where(element => Visible(element, overrides)).Select(e => e.SourceReference?.Position.Index).ToHashSet();
             foreach (var reference in references[page.FilePath])
             {
                 var offset = int.Parse(reference.Properties["sourceOffset"], System.Globalization.CultureInfo.InvariantCulture);
