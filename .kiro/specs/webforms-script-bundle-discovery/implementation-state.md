@@ -486,3 +486,7 @@ toward the 16-observation limit and neither can establish the target service.
 The public fixture contains both shapes and regressions cover order, the
 shared limit and competing owners. The reported 0.28.0 public validation
 passed 41/41 focused cases. Tests and scans for 0.29.0 remain deferred.
+
+Implementation `7e3d2f810bba9c00c1dff345e04310f424a205c5` compiled with
+`dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
+with zero warnings/errors. No local tests or scans ran.
