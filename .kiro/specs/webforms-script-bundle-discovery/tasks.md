@@ -44,3 +44,6 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 
 - [x] Classify unresolved library providers using the diagnosed receiver, token, factory depth and ownership predicate.
 - [ ] Validate 0.28.0 controls and private POST joins.
+
+- [x] Preserve absent-token provider gaps alongside computed-token gaps under the same per-lookup bound.
+- [ ] Validate the 0.29.0 fixture and private service-to-POST joins.

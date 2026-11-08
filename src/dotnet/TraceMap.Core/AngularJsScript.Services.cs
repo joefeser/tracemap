@@ -109,7 +109,7 @@ internal sealed partial class AngularJsScript
             && annotated.Elements.SkipLast(1).All(item => item is StringLiteral);
 
     internal static ServiceMethod ResolveService(AngularJsScript[] sources, string module, ServiceCall target,
-        Action<AngularJsScript, Site, string> recordUnboundProvider)
+        Action<AngularJsScript, Site, string, string> recordUnboundProvider)
     {
         ServiceMethod? result = null;
         var checkedCalls = 0;
@@ -127,10 +127,11 @@ internal sealed partial class AngularJsScript
                 // Use the same parsed shapes reported by the owner diagnostic. All calls
                 // reaching here already have a recognized, statically named provider member.
                 if (failure == "unsupported-receiver" && factories.Count == 0 && root.Type == NodeType.ThisExpression
-                    && registration.Arguments.Count > 0 && registration.Arguments[0].Type == NodeType.CallExpression)
+                    && (registration.Arguments.Count == 0 || registration.Arguments[0].Type == NodeType.CallExpression))
                 {
                     if (++unboundCalls > 16) throw new AngularClickGap("AngularUnboundProviderLimit");
-                    recordUnboundProvider(source, source.Location(member.Property), ProviderMember(member)!);
+                    recordUnboundProvider(source, source.Location(member.Property), ProviderMember(member)!,
+                        registration.Arguments.Count == 0 ? "absent" : "call-expression");
                     continue;
                 }
                 throw new ProviderOwnerGap(source.Location(member.Property), failure, root.Type.ToString(),

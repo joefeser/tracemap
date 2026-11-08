@@ -103,16 +103,21 @@ public sealed class WebFormsAngularServicePostTests
         foreach (var edge in edges)
         {
             var request = Assert.Single(facts, f => f.FactId == edge.Properties["requestFactId"]);
-            var gap = Assert.Single(facts, f => f.FactId == request.Properties["unboundProviderGapIds"]);
+            var ids = request.Properties["unboundProviderGapIds"];
+            Assert.Equal(ids, edge.Properties["unboundProviderGapIds"]);
+            var gaps = ids.Split(',').Select(id => Assert.Single(facts, f => f.FactId == id)).OrderBy(f => f.Evidence.StartLine).ToArray();
+            Assert.Equal(new[] { "absent", "call-expression" }, gaps.Select(f => f.Properties["tokenKind"]));
+            Assert.Equal(new[] { 2, 3 }, gaps.Select(f => f.Evidence.StartLine));
             var member = Assert.Single(facts, f => f.FactId == request.Properties["supportingFactIds"]);
-            Assert.Equal(gap.FactId, edge.Properties["unboundProviderGapIds"]);
-            Assert.Contains(gap.FactId, member.Properties["supportingFactIds"].Split(','));
-            Assert.Equal("AngularUnboundProviderIdentity", gap.Properties["gapKind"]);
-            Assert.Equal("Scripts/" + adapter, gap.Evidence.FilePath);
-            Assert.Equal(2, gap.Evidence.StartLine);
-            Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
-            Assert.Contains(facts, f => f.FactType == FactTypes.WebFormsScriptBundleMemberCandidate
-                && gap.Properties["supportingFactIds"].Split(',').Contains(f.FactId));
+            Assert.All(gaps, gap =>
+            {
+                Assert.Contains(gap.FactId, member.Properties["supportingFactIds"].Split(','));
+                Assert.Equal("AngularUnboundProviderIdentity", gap.Properties["gapKind"]);
+                Assert.Equal("Scripts/" + adapter, gap.Evidence.FilePath);
+                Assert.Equal(EvidenceTiers.Tier4Unknown, gap.EvidenceTier);
+                Assert.Contains(facts, f => f.FactType == FactTypes.WebFormsScriptBundleMemberCandidate
+                    && gap.Properties["supportingFactIds"].Split(',').Contains(f.FactId));
+            });
         }
     }
 
@@ -132,13 +137,14 @@ public sealed class WebFormsAngularServicePostTests
         Assert.Equal(2, edges.Length);
         foreach (var edge in edges)
         {
-            var gap = Assert.Single(facts, f => f.FactId == edge.Properties["unboundProviderGapIds"]);
+            var ids = edge.Properties["unboundProviderGapIds"].Split(',');
+            var gap = Assert.Single(facts, f => ids.Contains(f.FactId) && f.Properties.GetValueOrDefault("tokenKind") == "call-expression");
             Assert.Equal("AngularUnboundProviderIdentity", gap.Properties["gapKind"]);
             Assert.Equal("unsupported-receiver", gap.Properties["ownerFailure"]);
             Assert.Equal(name, gap.Properties["providerMember"]);
             Assert.Equal("0", gap.Properties["factoryCount"]);
             Assert.Equal("Scripts/adapter.js", gap.Evidence.FilePath);
-            Assert.Equal(2, gap.Evidence.StartLine);
+            Assert.Equal(3, gap.Evidence.StartLine);
         }
     }
 
@@ -169,7 +175,7 @@ public sealed class WebFormsAngularServicePostTests
             Assert.Equal("string-literal", gap.Properties["tokenKind"]);
             Assert.Equal("0", gap.Properties["factoryCount"]);
             Assert.Equal("Scripts/adapter.js", gap.Evidence.FilePath);
-            Assert.Equal(2, gap.Evidence.StartLine);
+            Assert.Equal(3, gap.Evidence.StartLine);
             Assert.Contains(facts, f => f.FactType == FactTypes.WebFormsAngularServiceCallCandidate
                 && gap.Properties["supportingFactIds"].Split(',').Contains(f.FactId));
         });
@@ -189,6 +195,26 @@ public sealed class WebFormsAngularServicePostTests
         var facts = Extract("Scripts/services.js", ".service(\"records\"", ".service(\"notRecords\"");
         Assert.DoesNotContain(facts, f => f.FactType is FactTypes.WebFormsAngularServiceRegistrationCandidate or FactTypes.WebFormsAngularPostHandlerCandidate);
         Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceOnlyUnboundProviders");
+    }
+
+    [Theory]
+    [InlineData("unknownOwner.value()", "AngularServiceModuleUnavailable")]
+    [InlineData("exampleApp.value()", "UnsupportedAngularServiceRegistration")]
+    public void Zero_arguments_do_not_bypass_other_owner_checks(string call, string reason)
+    {
+        var facts = Extract("Scripts/adapter.js", "this.value()", call);
+        Assert.DoesNotContain(facts, f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate);
+        Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == reason);
+    }
+
+    [Theory]
+    [InlineData(15, 2)]
+    [InlineData(16, 0)]
+    public void Absent_and_computed_tokens_share_the_observation_limit(int absentCount, int endpoints)
+    {
+        var facts = Extract("Scripts/adapter.js", "this.value();", string.Concat(Enumerable.Repeat("this.value(); ", absentCount)));
+        Assert.Equal(endpoints, facts.Count(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate));
+        Assert.Equal(endpoints == 0, facts.Any(f => f.Properties.GetValueOrDefault("gapKind") == "AngularUnboundProviderLimit"));
     }
 
     [Fact]

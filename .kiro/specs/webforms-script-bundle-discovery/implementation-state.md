@@ -476,3 +476,13 @@ registration can reach a POST declaration. Positive results remain unverified.
 Implementation `534dc6706346d2181549c9b89d9c0054112073fb` compiled via
 `dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
 with zero warnings/errors. No local tests or scans ran.
+
+### Zero-argument provider observations
+
+On codex/workspace-scope-preflight, 0.29.0 handles zero arguments at the same
+unsupported-this-receiver failure as computed call-expression tokens. The
+gap records the actual token kind and source location. Both kinds count
+toward the 16-observation limit and neither can establish the target service.
+The public fixture contains both shapes and regressions cover order, the
+shared limit and competing owners. The reported 0.28.0 public validation
+passed 41/41 focused cases. Tests and scans for 0.29.0 remain deferred.

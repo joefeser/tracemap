@@ -35,11 +35,8 @@ registration. Its supporting IDs include the factory at Scripts/services.js:2,
 which in turn references the external module declaration. The service site
 starts at its own property on line 3.
 
-An external adapter also calls `this['service'](selectFeature(), ...)`.
-For each click the expected endpoint carries an unboundProviderGapIds entry.
-Follow it to the adapter's line 2 and verify that the member supports the
-same gap. The adapter cannot establish the module, service token or endpoint.
-
-For 0.28.0 the fixture uses bracket notation. The retained library gap should
-report providerMember `service`, ownerFailure `unsupported-receiver` and
-factoryCount `0` while both click candidates keep the same app registration.
+An external adapter calls `this.value()` and `this['service'](selectFeature(), ...)`.
+Each endpoint's `unboundProviderGapIds` references both observations: line 2
+has tokenKind `absent`, and line 3 has `call-expression`. Both have
+ownerFailure `unsupported-receiver` and factoryCount `0`. The member supports
+both gap IDs independently of the module/factory/service registration.
