@@ -1,3 +1,3 @@
 function configureAdapter() {
-    this.service(selectFeature(), function () {});
+    this['service'](selectFeature(), function () {});
 }

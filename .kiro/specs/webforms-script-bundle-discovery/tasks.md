@@ -41,3 +41,6 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 
 - [x] Distinguish provider owner lookup failures with parser locations and exact service-call support.
 - [ ] Validate the reported provider site and ownerFailure on the pinned diagnostic build.
+
+- [x] Classify unresolved library providers using the diagnosed receiver, token, factory depth and ownership predicate.
+- [ ] Validate 0.28.0 controls and private POST joins.

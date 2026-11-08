@@ -117,9 +117,35 @@ public sealed class WebFormsAngularServicePostTests
     }
 
     [Theory]
-    [InlineData("this.service(selectFeature()", "this.service('records'", "AngularServiceModuleUnavailable")]
-    [InlineData("this.service(selectFeature()", "unknownOwner.service(selectFeature()", "AngularServiceModuleUnavailable")]
-    [InlineData("this.service(selectFeature()", "exampleApp.service(selectFeature()", "UnsupportedAngularServiceRegistration")]
+    [InlineData("this.service", "service")]
+    [InlineData("this['service']", "service")]
+    [InlineData("this.factory", "factory")]
+    [InlineData("this['provider']", "provider")]
+    [InlineData("this.value", "value")]
+    [InlineData("this.constant", "constant")]
+    [InlineData("this.decorator", "decorator")]
+    [InlineData("this?.service", "service")]
+    public void Unbound_shape_preserves_the_actual_provider_member(string callee, string name)
+    {
+        var facts = Extract("Scripts/adapter.js", "this['service'](", callee + "(");
+        var edges = facts.Where(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate).ToArray();
+        Assert.Equal(2, edges.Length);
+        foreach (var edge in edges)
+        {
+            var gap = Assert.Single(facts, f => f.FactId == edge.Properties["unboundProviderGapIds"]);
+            Assert.Equal("AngularUnboundProviderIdentity", gap.Properties["gapKind"]);
+            Assert.Equal("unsupported-receiver", gap.Properties["ownerFailure"]);
+            Assert.Equal(name, gap.Properties["providerMember"]);
+            Assert.Equal("0", gap.Properties["factoryCount"]);
+            Assert.Equal("Scripts/adapter.js", gap.Evidence.FilePath);
+            Assert.Equal(2, gap.Evidence.StartLine);
+        }
+    }
+
+    [Theory]
+    [InlineData("this['service'](selectFeature()", "this['service']('records'", "AngularServiceModuleUnavailable")]
+    [InlineData("this['service'](selectFeature()", "unknownOwner.service(selectFeature()", "AngularServiceModuleUnavailable")]
+    [InlineData("this['service'](selectFeature()", "exampleApp.service(selectFeature()", "UnsupportedAngularServiceRegistration")]
     public void Other_potential_competitors_still_block_the_endpoint(string from, string to, string reason)
     {
         var facts = Extract("Scripts/adapter.js", from, to);
@@ -133,7 +159,7 @@ public sealed class WebFormsAngularServicePostTests
     [InlineData("this", "unsupported-receiver", "ThisExpression")]
     public void Failed_owner_check_retains_the_specific_provider_site(string receiver, string failure, string kind)
     {
-        var facts = Extract("Scripts/adapter.js", "this.service(selectFeature()", receiver + ".service('records'");
+        var facts = Extract("Scripts/adapter.js", "this['service'](selectFeature()", receiver + ".service('records'");
         var gaps = facts.Where(f => f.Properties.GetValueOrDefault("gapKind") == "AngularServiceModuleUnavailable").ToArray();
         Assert.Equal(2, gaps.Length);
         Assert.All(gaps, gap =>
@@ -168,7 +194,7 @@ public sealed class WebFormsAngularServicePostTests
     [Fact]
     public void Excess_unbound_calls_leave_a_limit_gap_without_a_partial_selection()
     {
-        const string call = "this.service(selectFeature(), function () {});";
+        const string call = "this['service'](selectFeature(), function () {});";
         var facts = Extract("Scripts/adapter.js", call, string.Concat(Enumerable.Repeat(call, 17)));
         Assert.DoesNotContain(facts, f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate);
         Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularUnboundProviderLimit");

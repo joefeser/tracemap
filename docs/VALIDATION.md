@@ -5518,7 +5518,7 @@ handler and review the recorded supporting IDs and parser/input digests.
 The prior bundle fixtures retain their four- and seven-fact bundle controls.
 
 This rule is `legacy.webforms.angularjs-click.v1`, extractor
-`legacy-webforms/0.27.0`. It parses included JavaScript using pinned Acornima
+`legacy-webforms/0.28.0`. It parses included JavaScript using pinned Acornima
 1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
 tracks .js source changes. The explicit ownership and resource boundaries are
 in the rule catalog. General plain onclick, runtime, backend and private
@@ -5596,3 +5596,8 @@ service call identifies the click being traced. For an inline provider the
 fact uses the call site; inlineInput and providerInputLine identify the
 separate parser input. The bundle-wide angular guard also applies to the
 controller lookup before any service-call candidate exists.
+
+On 0.28.0 verify the actual providerMember and source-located
+AngularUnboundProviderIdentity gap for the bracket-access library fixture.
+Only the unsupported-receiver predicate with an exact ThisExpression root,
+zero factories and a CallExpression token continues past the provider.

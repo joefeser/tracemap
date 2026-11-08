@@ -23,11 +23,13 @@ internal sealed partial class AngularJsScript
         FunctionExpression Body, FunctionExpression Constructor, ArrayExpression Annotation, IReadOnlyList<FactoryLink> Factories);
     internal sealed record Post(Site Site, string Url, int HttpSlot);
 
+    private static string? ProviderMember(MemberExpression member) => member.Computed
+        ? (member.Property as StringLiteral)?.Value : (member.Property as Identifier)?.Name;
+
     private static bool IsProviderCall(CallExpression call)
     {
         if (call.Callee is not MemberExpression member) return false;
-        var name = member.Computed ? (member.Property as StringLiteral)?.Value : (member.Property as Identifier)?.Name;
-        return name is "service" or "factory" or "provider" or "value" or "constant" or "decorator";
+        return ProviderMember(member) is "service" or "factory" or "provider" or "value" or "constant" or "decorator";
     }
 
     // Only the selected method's immediate statements supply call sites. An enclosing
@@ -107,7 +109,7 @@ internal sealed partial class AngularJsScript
             && annotated.Elements.SkipLast(1).All(item => item is StringLiteral);
 
     internal static ServiceMethod ResolveService(AngularJsScript[] sources, string module, ServiceCall target,
-        Action<AngularJsScript, Site> recordUnboundProvider)
+        Action<AngularJsScript, Site, string> recordUnboundProvider)
     {
         ServiceMethod? result = null;
         var checkedCalls = 0;
@@ -118,20 +120,22 @@ internal sealed partial class AngularJsScript
             if (++checkedCalls > 1024) throw new AngularClickGap("AngularProviderLimit");
             if (registration.Arguments.Count > 0 && registration.Arguments[0] is StringLiteral name && name.Value != target.Token) continue;
             var member = (MemberExpression)registration.Callee;
-            // A this-receiver and computed token establish neither module nor token identity.
-            // Preserve that uncertainty while searching for independently bound registrations.
-            if (!registration.Optional && member is { Optional: false, Computed: false, Object: ThisExpression, Property: Identifier { Name: "service" } }
-                && registration.Arguments.Count > 0 && registration.Arguments[0] is CallExpression)
-            {
-                if (++unboundCalls > 16) throw new AngularClickGap("AngularUnboundProviderLimit");
-                recordUnboundProvider(source, source.Location(registration));
-                continue;
-            }
             var (root, factories) = source.ServiceReceiver(member);
             var owner = ResolveModule(source, root, sources, out var failure);
             if (owner is null)
+            {
+                // Use the same parsed shapes reported by the owner diagnostic. All calls
+                // reaching here already have a recognized, statically named provider member.
+                if (failure == "unsupported-receiver" && factories.Count == 0 && root.Type == NodeType.ThisExpression
+                    && registration.Arguments.Count > 0 && registration.Arguments[0].Type == NodeType.CallExpression)
+                {
+                    if (++unboundCalls > 16) throw new AngularClickGap("AngularUnboundProviderLimit");
+                    recordUnboundProvider(source, source.Location(member.Property), ProviderMember(member)!);
+                    continue;
+                }
                 throw new ProviderOwnerGap(source.Location(member.Property), failure, root.Type.ToString(),
                     registration.Arguments.Count == 0 ? "absent" : registration.Arguments[0] is StringLiteral ? "string-literal" : registration.Arguments[0].Type.ToString(), factories.Count);
+            }
             if (owner.Name != module) continue;
             if (factories.Count != 0 && sources.Any(file => file.factoryMutations.Any(receiver =>
                 ResolveModule(file, receiver, sources)?.Name is not { } name || name == module)))

@@ -462,3 +462,13 @@ Tests and scans deferred per the local validation hold.
 Implementation `1d0a5408b601d4d203770c247baa360dfc91a124` compiled with
 `dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
 with zero warnings/errors. No local tests or scans ran.
+
+### Classify the observed provider AST shape
+
+On codex/workspace-scope-preflight, 0.28.0 moves the unbound-provider branch
+to the owner failure site. It uses the same AST types as the diagnostic,
+requires unsupported-receiver and no preceding factories, and records the
+actual recognized provider member. The fixture now exercises literal bracket
+access; new regressions cover optional access and other named provider members.
+An unbound call still supplies only a gap, and only an independent application
+registration can reach a POST declaration. Positive results remain unverified.
