@@ -137,3 +137,22 @@ and unverified command-instance status. This additive source rule does not
 join to compiled evidence. The sample report and SQLite query each produced
 the two expected hits and excluded the four controls. Hand review can use
 the sample source directly. Private verification is outside this slice.
+
+Validation on implementation `abe1b6284cb55564b66ae8c4e44fdf3ee966f3e2`:
+
+- Focused VB SQL argument, VB extraction and SQL wrapper tests passed 67/67.
+- Full Debug solution with warnings as errors passed 6,355 tests with three
+  skips. The separate SelfDiagnosticsTests pass added four. Total 6,359
+  passed, three skipped, zero failed.
+- The sample scan retained 47 facts with matching NDJSON and SQLite IDs,
+  SQLite integrity OK and exactly two review rows.
+- The pinned community-visual-basic smoke completed with expected reduced
+  coverage at `20d2a51dfc9f342848ad134952ceaa8d79302559`. Private-path
+  guard passed.
+
+Full gate commands:
+
+```sh
+dotnet test src/dotnet/TraceMap.sln -c Debug --no-restore -warnaserror --nologo --filter 'FullyQualifiedName!~TraceMap.Tests.SelfDiagnosticsTests'
+dotnet test src/dotnet/tests/TraceMap.Tests --no-build -c Debug -warnaserror --filter 'FullyQualifiedName~TraceMap.Tests.SelfDiagnosticsTests'
+```
