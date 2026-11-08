@@ -1,0 +1,10 @@
+# Trace the included click method to its service POST
+
+## Copy-ready instruction for Claude
+
+> Follow `prompts/trace-webforms-click-method-to-post-once.md`. Start from the two verified partial click candidates in the existing 0.23.0 private index. Inspect the service call inside their shared method and follow it to the POST and handler declaration as far as retained evidence permits. Return the first missing relationship and its synthetic source shape.
+
+1. Use the retained SQLite index and corresponding source revision from the successful terminal-catch run. Open the database read-only. The two click IDs already lead to one included method. Reuse those results and keep the dynamic-source and callback-invocation gaps attached.
+2. Inspect that method's source span locally. Locate its service call. Verify how the controller parameter binds to the injected service, including any positional injection annotation. Find the service registration, the implementation or returned object that exposes the called member, and the request expression inside it. Distinguish the service call that registers the fulfillment callback from the service call inside the click method.
+3. Check the index for the request and server endpoint, including WebFormsClientHttpRequestCandidate and AspNetHandlerDeclared facts. For each proposed relationship, inspect endpoints, spans and supporting fact IDs. An independently observed POST and a declaration can both exist while the relationship from the click method is missing. Record ambiguity or an unresolvable URL explicitly.
+4. Return a short stage table covering method call, service binding, service member, POST and handler declaration. Label each relationship as backed by retained facts, observed by local source inspection, or unresolved. For the first missing fact-backed relationship, give a small synthetic example using made-up names that preserves the registration and call syntax. This is a read-only evidence handoff using the existing scan. Keep private source, paths, endpoints, fact IDs and receipts local; no build, site execution, network request or scanner patch is needed.
