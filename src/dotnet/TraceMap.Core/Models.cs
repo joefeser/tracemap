@@ -375,6 +375,7 @@ public static class FactTypes
     public const string WebFormsLifecycleBranchCandidate = nameof(WebFormsLifecycleBranchCandidate);
     public const string WebFormsAngularOwnerCandidate = nameof(WebFormsAngularOwnerCandidate);
     public const string WebFormsAngularClickCandidate = nameof(WebFormsAngularClickCandidate);
+    public const string WebFormsAngularThenCallbackCandidate = nameof(WebFormsAngularThenCallbackCandidate);
     public const string WebFormsAngularPartialClickHandlerCandidate = nameof(WebFormsAngularPartialClickHandlerCandidate);
     public const string WebFormsAngularClickHandlerCandidate = nameof(WebFormsAngularClickHandlerCandidate);
     public const string WebFormsInlineServerStringCandidate = nameof(WebFormsInlineServerStringCandidate);
@@ -766,7 +767,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.21.0";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.22.0";
     public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.3";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";

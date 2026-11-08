@@ -26,3 +26,5 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 - [x] Accept one explicit IIS mount for a master-page script and bind the exact selected inventory file, mapping provenance, scan ID and authorized scope.
 
 - [x] Admit bounded quoted WebForms AppSettings expressions in classic IIFEs and report a gap-linked partial handler when dynamic script contents remain unknown.
+
+- [x] Retain a partial handler and unobserved-callback gap for a captured scope assignment directly inside a controller service-call fulfillment callback.

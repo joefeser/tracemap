@@ -7,7 +7,7 @@ namespace TraceMap.Core;
 internal sealed class AngularJsScript
 {
     internal sealed record Site(string File, int Start, int Line, int EndLine);
-    internal sealed record Handler(Site Method, Site Registration, Site Module);
+    internal sealed record Handler(Site Method, Site Registration, Site Module, Site? ThenCallback);
     private sealed record ModuleBinding(string Name, Site Declaration);
     private Site Location(Node node) => new(File, node.Start, node.Location.Start.Line, node.Location.End.Line);
     private readonly Dictionary<CallExpression, Expression> registrationRoots = new();
@@ -179,6 +179,33 @@ internal sealed class AngularJsScript
         return new(name, vars[0].File.Location(vars[0].Declaration));
     }
 
+    private static Dictionary<AssignmentExpression, CallExpression?> ScopeAssignmentSites(FunctionExpression controller, string scope)
+    {
+        var sites = new Dictionary<AssignmentExpression, CallExpression?>();
+        foreach (var statement in controller.Body.Body.OfType<ExpressionStatement>())
+        {
+            if (statement.Expression is AssignmentExpression direct)
+            {
+                sites.Add(direct, null);
+                continue;
+            }
+            if (statement.Expression is not CallExpression { Optional: false } then
+                || !Member(then.Callee, "then", out var receiver)
+                || receiver is not CallExpression { Optional: false, Callee: MemberExpression
+                    { Optional: false, Computed: false, Object: Identifier, Property: Identifier } }
+                || then.Arguments.Count != 1 || then.Arguments[0] is not FunctionExpression
+                    { Id: null, Async: false, Generator: false } callback
+                || scope == "arguments" || callback.Params.Any(p => p is not Identifier id || id.Name == scope))
+                continue;
+            // Even an uninitialized var in the callback shadows the controller parameter.
+            if (Walk(callback.Body).OfType<VariableDeclarator>().Any(v => Walk(v.Id).OfType<Identifier>().Any(id => id.Name == scope)))
+                continue;
+            foreach (var member in callback.Body.Body.OfType<ExpressionStatement>())
+                if (member.Expression is AssignmentExpression assignment) sites.Add(assignment, then);
+        }
+        return sites;
+    }
+
     internal static Handler Resolve(AngularJsScript[] scripts, string module, string controller, string method)
     {
         if (scripts.SelectMany(s => s.creations[module]).Take(2).Count() > 1)
@@ -225,6 +252,7 @@ internal sealed class AngularJsScript
             || dependencies.Count(d => d == "$scope") != 1)
             throw new AngularClickGap("AngularScopeInjectionUnavailable");
         var scope = parameters[index];
+        var sites = ScopeAssignmentSites(fn, scope);
         var candidates = new List<AssignmentExpression>();
         foreach (var node in Walk(fn.Body))
         {
@@ -249,7 +277,7 @@ internal sealed class AngularJsScript
             if (left.Property is not Identifier key || key.Name != method) continue;
             if (assignment.Operator != Operator.Assignment
                 || assignment.Right is not (FunctionExpression or ArrowFunctionExpression)
-                || !fn.Body.Body.OfType<ExpressionStatement>().Any(s => s.Expression == assignment))
+                || !sites.ContainsKey(assignment))
                 throw new AngularClickGap("UnsupportedAngularScopeAssignment");
             candidates.Add(assignment);
         }
@@ -262,7 +290,8 @@ internal sealed class AngularJsScript
         var registrationSite = file.registrationRoots[registration] == member.Object
             ? file.Location(registration)
             : file.Location(member.Property) with { EndLine = registration.Location.End.Line };
-        return new Handler(file.Location(binding), registrationSite, moduleSite);
+        return new Handler(file.Location(binding), registrationSite, moduleSite,
+            sites[binding] is { } then ? file.Location(then) : null);
     }
 }
 

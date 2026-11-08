@@ -145,9 +145,21 @@ public static partial class LegacyWebFormsExtractor
                         {
                             ["module"] = module, ["controller"] = controller, ["method"] = method, ["clickFactId"] = clickFact.FactId
                         };
-                        foreach (var reason in inline.Select(s => s.SettingsScriptGap).OfType<string>().Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+                        var gapSupports = surfaceSupportIds.Append(clickFact.FactId);
+                        var reasons = inline.Select(s => s.SettingsScriptGap).OfType<string>();
+                        if (handler.ThenCallback is { } site)
                         {
-                            var gap = Gap(page, position.Value.Line, id, reason, surfaceSupportIds.Append(clickFact.FactId).ToArray());
+                            var callback = Observe(FactTypes.WebFormsAngularThenCallbackCandidate,
+                                site.File, site.Line, site.EndLine, parsed[site.File].Hash, registration.TargetSymbol!,
+                                $"angular-then-callback:{FactFactory.Hash($"{site.File}|{site.Start}", 32)}", [registration.FactId],
+                                hashProvided: true, properties: new() { ["argumentIndex"] = "0", ["invocationStatus"] = "unobserved" });
+                            evidence = evidence.Append(callback.FactId);
+                            gapSupports = gapSupports.Append(callback.FactId);
+                            reasons = reasons.Append("AngularThenCallbackInvocationUnobserved");
+                        }
+                        foreach (var reason in reasons.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+                        {
+                            var gap = Gap(page, position.Value.Line, id, reason, gapSupports.ToArray());
                             evidence = evidence.Append(gap.FactId);
                             type = FactTypes.WebFormsAngularPartialClickHandlerCandidate;
                             properties["coverageStatus"] = "included-source-only";

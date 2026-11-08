@@ -345,3 +345,16 @@ inline settings fixture README query returned exactly one partial handler
 with the dynamic-source gap and zero ordinary handlers. The two unchanged
 controls each retained one ordinary handler and zero partial handlers.
 Separate C#/VB semantic OSS reruns are deferred on this syntax slice.
+
+### Captured scope method in a service callback on codex/workspace-scope-preflight
+
+Extractor 0.22.0 supports a bounded one-level registration. The controller
+body must contain a direct service-method call followed by then with exactly
+one anonymous function argument. Its direct scope assignment must use the
+same lexical binding as the controller parameter. A distinct callback fact
+supports each click's invocation gap. Partial candidate facts retain both
+callback and dynamic-source gaps when both apply. Direct assignments on an
+unshadowed callback scope, duplicate, reassigned, conditional, malformed,
+unsupported and nested callbacks are covered. The public fixture has two
+clicks with distinct IDs, one method and one callback location. Source calls
+from that method to a backend service are outside this slice.

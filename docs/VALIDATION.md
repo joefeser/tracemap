@@ -5518,7 +5518,7 @@ handler and review the recorded supporting IDs and parser/input digests.
 The prior bundle fixtures retain their four- and seven-fact bundle controls.
 
 This rule is `legacy.webforms.angularjs-click.v1`, extractor
-`legacy-webforms/0.21.0`. It parses included JavaScript using pinned Acornima
+`legacy-webforms/0.22.0`. It parses included JavaScript using pinned Acornima
 1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
 tracks .js source changes. The explicit ownership and resource boundaries are
 in the rule catalog. General plain onclick, runtime, backend and private
@@ -5558,3 +5558,11 @@ click, external registration, mounted script and dynamic-source gap. Require
 zero ordinary handler candidates for this fixture. An unused local data
 initializer has a positive regression; competing or unsupported registration
 syntax refuses both candidate types.
+
+### Scope assignment in a service callback
+
+Scan `samples/webforms-angularjs-then` with
+`--webforms-iis-mount /Portal/Desk=.`. Its two source clicks name the same
+method. Each partial candidate retains its own click, the same callback
+registration and method site, and separate gaps for dynamic code and callback
+invocation. Run the fixture README query; require four rows, two per click.
