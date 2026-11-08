@@ -262,3 +262,5 @@
 - [x] Project ordered symbolic operands with exact provenance and malformed/oversize/unknown snapshot controls; retain expression depth/node bounds.
 - [x] Add VB/C# compiler shapes and mutation/escape/alias/size/loop/metadata controls.
 - [x] Complete final focused/full Debug gate, public CLI smoke, documentation and one bounded work-machine prompt; push without PR/merge.
+
+- [x] Add a VB Tier 3 candidate for straight-line SQL text passed to a SQL-named wrapper and a public manual-review fixture.

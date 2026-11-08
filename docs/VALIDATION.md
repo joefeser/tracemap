@@ -5648,3 +5648,10 @@ handlers. The overflow control has zero and an AngularUnboundProviderLimit
 gap. Direct local parameter rebinding is covered for a standalone function
 and a closure. Global reassignment, property mutation and a provider receiver
 that is itself a parameter remain fail-closed controls.
+
+For VB SQL source argument candidates, run
+`dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --filter FullyQualifiedName~VisualBasicSqlArgumentTests`
+and scan `samples/vb-sql-argument`. Compare the Markdown results and SQLite
+rows against the two construction/call spans and four negative controls
+listed in the sample README. The compiled wrapper regression remains a separate
+test of command-instance binding.

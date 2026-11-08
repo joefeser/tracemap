@@ -5216,6 +5216,18 @@ rules:
       - Only explicit System.Data.SqlDbType enum syntax yields a type candidate. No overload/provider/compiler identity, direction default, command attachment, wrapper propagation, database declaration or runtime value is inferred.
       - Candidate facts are independent construction or collection-call evidence, not database execution calls or unique procedure parameters. Reports retain source/fact references for human review; absent candidates do not prove no parameters.
 
+  - id: vb.syntax.sql-text-argument.v1
+    name: Visual Basic SQL text argument
+    description: A SELECT or UPDATE text expression occupies the first positional argument of a SQL-named wrapper call.
+    evidenceTier: Tier3SyntaxOrTextual
+    emits:
+      - SqlTextArgumentCandidate
+      - AnalysisGap
+    limitations:
+      - The first literal must start with SELECT or UPDATE and whitespace. Syntax does not validate the SQL grammar, wrapper identity, command instance, parameter binding, safety or execution.
+      - Supports a simple receiver and an ExecSql or ExecuteSql method name, optionally followed by an underscore and suffix. Source and compiled facts have separate identities.
+      - A local requires an adjacent Dim initializer and simple appends in a top-level method body. Unsupported intervening statements clear the local. Inline operands may be string literals or identifier reads. SQL text and values are not retained.
+      - Conditional compilation, malformed methods, protected spans, unstructured flow and dynamic expressions are excluded. At most 256 hits per file; overflow emits a gap.
   - id: vb.syntax.database-operation.v1
     name: Visual Basic syntax database operation
     description: Bounded explicit-receiver SQL command, adapter and bulk API syntax candidates, including projectless App_Code Web Sites.

@@ -322,6 +322,7 @@ public static class FactTypes
     public const string DbContextDeclared = nameof(DbContextDeclared);
     public const string DbSetDeclared = nameof(DbSetDeclared);
     public const string DbChangeSaved = nameof(DbChangeSaved);
+    public const string SqlTextArgumentCandidate = nameof(SqlTextArgumentCandidate);
     public const string DatabaseOperationCandidate = nameof(DatabaseOperationCandidate);
     public const string DatabaseParameterCandidate = nameof(DatabaseParameterCandidate);
     public const string DapperCallDetected = nameof(DapperCallDetected);
@@ -546,6 +547,7 @@ public static class RuleIds
     public const string VisualBasicSyntaxCallGraph = "vb.syntax.callgraph.v1";
     public const string VisualBasicSyntaxObjectCreation = "vb.syntax.objectcreation.v1";
     public const string VisualBasicSyntaxEventWiring = "vb.syntax.event-wiring.v1";
+    public const string VisualBasicSqlArgument = "vb.syntax.sql-text-argument.v1";
     public const string VisualBasicSyntaxDatabaseOperation = "vb.syntax.database-operation.v1";
     public const string VisualBasicSyntaxDatabaseParameter = "vb.syntax.database-parameter.v1";
     public const string CSharpRazorSemanticModelBinding = "csharp.razor.semantic-model-binding.v1";
@@ -753,7 +755,7 @@ public static class ScannerVersions
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.4.1";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.22.23";
     public const string VisualBasicSemanticExtractor = "vb-semantic/0.10.26";
-    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.4.18";
+    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.4.19";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";

@@ -127,3 +127,13 @@ next action is the single bounded private verification prompt, not another setup
 wizard or an automatic series of scans. Complex parameter-loop command binding,
 transaction identity and unrelated array/StringBuilder/enumerable capabilities
 remain outside this change.
+
+### VB source argument review
+
+Branch `codex/workspace-scope-preflight`, rule `vb.syntax.sql-text-argument.v1`,
+extractor `vb-syntax/0.4.19`. The public sample is `samples/vb-sql-argument`.
+The scanner exports the SQL verb, construction and call spans, textual target
+and unverified command-instance status. This additive source rule does not
+join to compiled evidence. The sample report and SQLite query each produced
+the two expected hits and excluded the four controls. Hand review can use
+the sample source directly. Private verification is outside this slice.
