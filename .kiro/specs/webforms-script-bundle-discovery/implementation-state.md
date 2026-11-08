@@ -329,3 +329,19 @@ the click ID, handler location, settings support and typed gap ID. Ordinary
 handler facts stay absent on that path. The independent fixture uses public
 synthetic names. Encoded server expressions, arbitrary setting expressions,
 template strings and opaque identity-bearing uses remain unsupported.
+
+Pinned implementation `8b144e4652fb1cf56748d7ae0b98f77e85c1ee7c`
+built with zero warnings/errors. Focused Debug results were 202 passed,
+zero skipped and zero failed with this command:
+
+```sh
+dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --filter 'FullyQualifiedName~WebFormsInlineSettingsTests|FullyQualifiedName~WebFormsIisMountTests|FullyQualifiedName~WebFormsAngularClickTests|FullyQualifiedName~WebFormsScriptBundleTests|FullyQualifiedName~LegacyWebFormsExtractorTests|FullyQualifiedName~EvidenceDocsExportTests'
+```
+
+The three pinned CLI scans (inline settings with the mount mapped to dot,
+the IIS fixture mapped to Site, the chain fixture without a mapping) passed
+SQLite integrity, NDJSON/SQLite ID parity and five-artifact checks. The
+inline settings fixture README query returned exactly one partial handler
+with the dynamic-source gap and zero ordinary handlers. The two unchanged
+controls each retained one ordinary handler and zero partial handlers.
+Separate C#/VB semantic OSS reruns are deferred on this syntax slice.
