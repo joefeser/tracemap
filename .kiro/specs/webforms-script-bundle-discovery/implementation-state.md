@@ -545,3 +545,14 @@ The combined regression covers both file orders. Local validation is Debug
 compilation of the test project with warnings as errors and diff checking.
 Tests and scans await the pinned dispatch. Lexical resolution of injected
 provider parameters remains a separate scope-analysis task.
+
+### Member definition and POST within a registered service
+
+On `codex/workspace-scope-preflight`, `legacy-webforms/0.35.0` emits a
+Tier 3 member assignment supported by its registration and, when the
+existing HTTP parser succeeds, a literal POST supported by that assignment.
+Both are shared across clicks. A provider gap still blocks selection.
+Regressions cover two source orders and duplicate HTTP options. Local checks
+are Debug compilation with warnings as errors and diff checking. Tests
+and scans are deferred to the pinned dispatch. Runtime injection, request
+execution and a declaration-side POST-to-handler join remain unverified.

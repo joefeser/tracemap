@@ -64,11 +64,19 @@ public static partial class LegacyWebFormsExtractor
                         var registration = ServiceSite(FactTypes.WebFormsAngularServiceRegistrationCandidate, method.Registration, receiver.TargetSymbol!,
                             memberIds.Append(receiver.FactId), registrationDetails);
                         observedRegistration = registration;
-                        if (aliasGap is not null) throw aliasGap;
-                        if (truncated) continue;
+                        var definition = ServiceSite(FactTypes.WebFormsAngularServiceMemberDeclaredCandidate, method.Member,
+                            registration.TargetSymbol!, [registration.FactId], new() { ["module"] = module,
+                                ["serviceToken"] = call.Token, ["member"] = call.Member });
+                        if (aliasGap is not null || truncated)
+                        {
+                            try { ObserveMemberPost(method, definition); }
+                            catch (AngularClickGap ex) { ServiceGap(definition, ex.Kind); }
+                            if (aliasGap is not null) throw aliasGap;
+                            continue;
+                        }
                         last = ServiceSite(FactTypes.WebFormsAngularServiceMemberCandidate, method.Member, callFact.TargetSymbol!,
                             unboundIds.Append(callFact.FactId).Append(registration.FactId), new() { ["module"] = module, ["serviceToken"] = call.Token, ["member"] = call.Member });
-                        var post = AngularJsScript.ResolvePost(method);
+                        var post = ObserveMemberPost(method, definition);
                         var props = new SortedDictionary<string, string>(StringComparer.Ordinal)
                         {
                             ["httpMethod"] = "POST", ["behaviorKind"] = "client-http-request", ["eventName"] = "HTTP POST",
@@ -149,6 +157,15 @@ public static partial class LegacyWebFormsExtractor
                 }
             }
             catch (AngularClickGap ex) { ServiceGap(clickHandler, ex.Kind); }
+        }
+
+        private AngularJsScript.Post ObserveMemberPost(AngularJsScript.ServiceMethod method, CodeFact definition)
+        {
+            var post = AngularJsScript.ResolvePost(method);
+            ServiceSite(FactTypes.WebFormsAngularServiceMemberPostCandidate, post.Site, definition.TargetSymbol!, [definition.FactId],
+                new() { ["httpMethod"] = "POST", ["endpointPathHash"] = FactFactory.Hash(post.Url, 64),
+                    ["httpParameterSlot"] = post.HttpSlot.ToString(CultureInfo.InvariantCulture) });
+            return post;
         }
 
         private CodeFact ServiceSite(string type, AngularJsScript.Site site, string source, IEnumerable<string> ids,

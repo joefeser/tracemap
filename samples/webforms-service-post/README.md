@@ -44,3 +44,19 @@ The application registration has separate module and factory evidence.
 The service registration spans lines 3–8. Its moduleContinuations property
 records the four following calls at lines 9–12 in source order. The POST's
 source line stays 5.
+
+To inspect the POST inside the registered service by source evidence alone,
+follow the exact supporting IDs. Both clicks share one definition and POST.
+
+```sql
+SELECT reg.file_path, reg.start_line, member.start_line, post.start_line
+FROM facts post
+JOIN facts member ON member.fact_id = json_extract(post.properties_json, '$.supportingFactIds')
+JOIN facts reg ON reg.fact_id = json_extract(member.properties_json, '$.supportingFactIds')
+WHERE post.fact_type = 'WebFormsAngularServiceMemberPostCandidate'
+  AND member.fact_type = 'WebFormsAngularServiceMemberDeclaredCandidate'
+  AND reg.fact_type = 'WebFormsAngularServiceRegistrationCandidate';
+```
+
+Expected row: Scripts/services.js, 3, 4, 5. These syntax facts can also
+be retained when a provider gap prevents selection for a click.

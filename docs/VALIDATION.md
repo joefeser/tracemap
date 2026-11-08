@@ -5518,7 +5518,7 @@ handler and review the recorded supporting IDs and parser/input digests.
 The prior bundle fixtures retain their four- and seven-fact bundle controls.
 
 This rule is `legacy.webforms.angularjs-click.v1`, extractor
-`legacy-webforms/0.34.0`. It parses included JavaScript using pinned Acornima
+`legacy-webforms/0.35.0`. It parses included JavaScript using pinned Acornima
 1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
 tracks .js source changes. The explicit ownership and resource boundaries are
 in the rule catalog. General plain onclick, runtime, backend and private
@@ -5631,3 +5631,8 @@ Check the limit gap supports exactly 16 observation IDs and its own call.
 If a declaration is independently established, its ID also supports the
 limit gap. The alias gap can coexist with truncation. Neither ordering
 admits member selection or a POST on the truncated lookup.
+
+For 0.35.0 run the fixture's registration-to-member-to-POST query and
+require one shared source chain. Check the special truncation fixture
+retains the same declaration chain while both click endpoints stay absent.
+A duplicate HTTP method option must leave the definition and omit its POST.
