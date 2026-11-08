@@ -133,8 +133,9 @@ public sealed class WebFormsAngularServicePostTests
             var ids = request.Properties["unboundProviderGapIds"];
             Assert.Equal(ids, edge.Properties["unboundProviderGapIds"]);
             var gaps = ids.Split(',').Select(id => Assert.Single(facts, f => f.FactId == id)).OrderBy(f => f.Evidence.StartLine).ToArray();
-            Assert.Equal(new[] { "absent", "call-expression" }, gaps.Select(f => f.Properties["tokenKind"]));
-            Assert.Equal(new[] { 2, 3 }, gaps.Select(f => f.Evidence.StartLine));
+            Assert.Equal(new[] { "absent", "call-expression", "identifier" }, gaps.Select(f => f.Properties["tokenKind"]));
+            Assert.Equal(new[] { "this", "this", "member-expression" }, gaps.Select(f => f.Properties["receiverKind"]));
+            Assert.Equal(new[] { 2, 3, 4 }, gaps.Select(f => f.Evidence.StartLine));
             var member = Assert.Single(facts, f => f.FactId == request.Properties["supportingFactIds"]);
             Assert.All(gaps, gap =>
             {
@@ -190,6 +191,7 @@ public sealed class WebFormsAngularServicePostTests
     [InlineData("unknownOwner", "missing-alias-declaration", "Identifier")]
     [InlineData("obtainOwner()", "unsupported-receiver", "CallExpression")]
     [InlineData("this", "unsupported-receiver", "ThisExpression")]
+    [InlineData("registry.hooks", "unsupported-receiver", "MemberExpression")]
     public void Failed_owner_check_retains_the_specific_provider_site(string receiver, string failure, string kind)
     {
         var facts = Extract("Scripts/adapter.js", "this['service'](selectFeature()", receiver + ".service('records'");
@@ -235,8 +237,8 @@ public sealed class WebFormsAngularServicePostTests
     }
 
     [Theory]
-    [InlineData(15, 2)]
-    [InlineData(16, 0)]
+    [InlineData(14, 2)]
+    [InlineData(15, 0)]
     public void Absent_and_computed_tokens_share_the_observation_limit(int absentCount, int endpoints)
     {
         var facts = Extract("Scripts/adapter.js", "this.value();", string.Concat(Enumerable.Repeat("this.value(); ", absentCount)));

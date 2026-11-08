@@ -37,11 +37,11 @@ public static partial class LegacyWebFormsExtractor
                     {
                         ChargeServiceWork(sources.Sum(source => source.NodeCount));
                         var unboundIds = new List<string>();
-                        var method = AngularJsScript.ResolveService(sources, module, call, (source, site, providerMember, tokenKind) =>
+                        var method = AngularJsScript.ResolveService(sources, module, call, (source, site, providerMember, receiverKind, tokenKind) =>
                         {
                             if (!assets.TryGetValue(source.File, out var includes)) throw new AngularClickGap("AngularInlineProviderOwnerUnavailable");
                             var providerGap = ServiceSite(FactTypes.AnalysisGap, site, callFact.TargetSymbol!, includes.Append(callFact.FactId),
-                                new() { ["gapKind"] = "AngularUnboundProviderIdentity", ["receiverKind"] = "this", ["tokenKind"] = tokenKind,
+                                new() { ["gapKind"] = "AngularUnboundProviderIdentity", ["receiverKind"] = receiverKind, ["tokenKind"] = tokenKind,
                                     ["ownerFailure"] = "unsupported-receiver", ["factoryCount"] = "0", ["providerMember"] = providerMember });
                             unboundIds.Add(providerGap.FactId);
                         });

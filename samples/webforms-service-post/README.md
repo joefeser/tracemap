@@ -35,11 +35,10 @@ registration and precedes filter, directive, config and run calls. Its supportin
 which in turn references the external module declaration. The service site
 starts at its own property on line 3.
 
-An external adapter calls `this.value()` and `this['service'](selectFeature(), ...)`.
-Each endpoint's `unboundProviderGapIds` references both observations: line 2
-has tokenKind `absent`, and line 3 has `call-expression`. Both have
-ownerFailure `unsupported-receiver` and factoryCount `0`. The member supports
-both gap IDs independently of the module/factory/service registration.
+The external adapter has three unresolved providers. Its calls at lines 2 and 3
+use `this` with an absent or computed token. Line 4 uses a member receiver
+and an identifier token. Each endpoint carries all three `unboundProviderGapIds`.
+The application registration has separate module and factory evidence.
 
 The service registration spans lines 3–8. Its moduleContinuations property
 records the four following calls at lines 9–12 in source order. The POST's

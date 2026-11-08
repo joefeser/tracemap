@@ -50,3 +50,6 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 
 - [x] Admit a service inside a bounded top-level module receiver chain with literal filter, directive, config and run continuations.
 - [ ] Validate the 0.30.0 fixture and private service-to-handler joins.
+- [x] Verify the 0.30.0 public fixture. Operator reported 53 passing tests and 71 matching SQLite/NDJSON facts.
+- [x] Retain independently evidenced registrations across unresolved member-receiver providers with identifier tokens.
+- [ ] Verify 0.31.0 public and private endpoint evidence.

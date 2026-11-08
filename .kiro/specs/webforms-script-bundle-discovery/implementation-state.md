@@ -503,3 +503,13 @@ Updated public regressions and work-machine validation are pending.
 Implementation `1fb838773aca942446ef51f650a201f31b970c6e` compiled with
 `dotnet build src/dotnet/tests/TraceMap.Tests -c Debug --no-restore -warnaserror`
 with zero warnings/errors. No local tests or scans ran.
+
+### Unresolved provider on a member receiver
+
+Branch `codex/workspace-scope-preflight`, extractor `legacy-webforms/0.31.0`.
+The public control adds a member receiver and identifier token to the adapter.
+Each endpoint records the unresolved provider with its own source location.
+Tests cover both file orders, a matching literal token that still blocks
+selection, and the shared observation limit. Runtime callback execution and
+dynamic script content remain unknown. Local validation is compilation and
+diff checking only. Next run the focused tests and inspect both click IDs.
