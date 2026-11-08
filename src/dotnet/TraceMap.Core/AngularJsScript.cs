@@ -7,7 +7,7 @@ namespace TraceMap.Core;
 internal sealed class AngularJsScript
 {
     internal sealed record Site(string File, int Start, int Line, int EndLine);
-    internal sealed record Handler(Site Method, Site Registration, Site Module, Site? ThenCallback);
+    internal sealed record Handler(Site Method, Site Registration, Site Module, Site? ThenCallback, Site? RejectionCallback);
     private sealed record ModuleBinding(string Name, Site Declaration);
     private Site Location(Node node) => new(File, node.Start, node.Location.Start.Line, node.Location.End.Line);
     private readonly Dictionary<CallExpression, Expression> registrationRoots = new();
@@ -179,9 +179,11 @@ internal sealed class AngularJsScript
         return new(name, vars[0].File.Location(vars[0].Declaration));
     }
 
-    private static Dictionary<AssignmentExpression, CallExpression?> ScopeAssignmentSites(FunctionExpression controller, string scope)
+    private sealed record FulfillmentRegistration(CallExpression Then, FunctionExpression? Catch);
+
+    private static Dictionary<AssignmentExpression, FulfillmentRegistration?> ScopeAssignmentSites(FunctionExpression controller, string scope)
     {
-        var sites = new Dictionary<AssignmentExpression, CallExpression?>();
+        var sites = new Dictionary<AssignmentExpression, FulfillmentRegistration?>();
         foreach (var statement in controller.Body.Body.OfType<ExpressionStatement>())
         {
             if (statement.Expression is AssignmentExpression direct)
@@ -189,8 +191,18 @@ internal sealed class AngularJsScript
                 sites.Add(direct, null);
                 continue;
             }
-            if (statement.Expression is not CallExpression { Optional: false } then
-                || !Member(then.Callee, "then", out var receiver)
+            if (statement.Expression is not CallExpression { Optional: false } then) continue;
+            FunctionExpression? rejection = null;
+            if (Member(then.Callee, "catch", out var previous))
+            {
+                if (previous is not CallExpression { Optional: false } fulfillment || then.Arguments.Count != 1
+                    || then.Arguments[0] is not FunctionExpression { Async: false, Generator: false } handler
+                    || handler.Params.Count > 1 || handler.Params.Any(p => p is not Identifier))
+                    continue;
+                rejection = handler;
+                then = fulfillment;
+            }
+            if (!Member(then.Callee, "then", out var receiver)
                 || receiver is not CallExpression { Optional: false, Callee: MemberExpression
                     { Optional: false, Computed: false, Object: Identifier, Property: Identifier } }
                 || then.Arguments.Count != 1 || then.Arguments[0] is not FunctionExpression
@@ -200,8 +212,9 @@ internal sealed class AngularJsScript
             // Even an uninitialized var in the callback shadows the controller parameter.
             if (Walk(callback.Body).OfType<VariableDeclarator>().Any(v => Walk(v.Id).OfType<Identifier>().Any(id => id.Name == scope)))
                 continue;
+            var registration = new FulfillmentRegistration(then, rejection);
             foreach (var member in callback.Body.Body.OfType<ExpressionStatement>())
-                if (member.Expression is AssignmentExpression assignment) sites.Add(assignment, then);
+                if (member.Expression is AssignmentExpression assignment) sites.Add(assignment, registration);
         }
         return sites;
     }
@@ -290,8 +303,10 @@ internal sealed class AngularJsScript
         var registrationSite = file.registrationRoots[registration] == member.Object
             ? file.Location(registration)
             : file.Location(member.Property) with { EndLine = registration.Location.End.Line };
+        var fulfillment = sites[binding];
         return new Handler(file.Location(binding), registrationSite, moduleSite,
-            sites[binding] is { } then ? file.Location(then) : null);
+            fulfillment is null ? null : file.Location(fulfillment.Then),
+            fulfillment?.Catch is { } rejection ? file.Location(rejection) : null);
     }
 }
 

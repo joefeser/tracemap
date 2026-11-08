@@ -4,5 +4,7 @@ angular.module("example", []).controller("OtherPanel", function ($scope) {
     records.list().then(function (rows) {
         view.items = rows;
         view.save = function () { return view.items; };
+    }).catch(function (reason) {
+        view.notice = reason;
     });
 }]);

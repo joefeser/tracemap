@@ -371,3 +371,13 @@ and required-output checks. The callback fixture's README query returned
 four rows for two clicks, one method and two independent gaps per click.
 The three prior controls retained their ordinary/partial classifications.
 Separate C#/VB semantic OSS reruns are deferred for this syntax slice.
+
+### Fulfillment assignment followed by a rejection callback
+
+On codex/workspace-scope-preflight, extractor 0.23.0 accepts one terminal
+catch with one literal regular function on the existing bounded service-call
+then registration. The registration evidence keeps the fulfillment span and
+the rejection callback's physical offset and lines. The whole controller is
+still checked for scope reassignment and competing method definitions.
+Standalone then registrations retain their previous evidence shape. The
+callback and dynamic-source gaps remain separate.

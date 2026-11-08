@@ -149,10 +149,20 @@ public static partial class LegacyWebFormsExtractor
                         var reasons = inline.Select(s => s.SettingsScriptGap).OfType<string>();
                         if (handler.ThenCallback is { } site)
                         {
+                            var details = new SortedDictionary<string, string>(StringComparer.Ordinal)
+                            {
+                                ["argumentIndex"] = "0", ["invocationStatus"] = "unobserved"
+                            };
+                            if (handler.RejectionCallback is { } rejection)
+                            {
+                                details["rejectionCallbackOffset"] = rejection.Start.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                                details["rejectionCallbackStartLine"] = rejection.Line.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                                details["rejectionCallbackEndLine"] = rejection.EndLine.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                            }
                             var callback = Observe(FactTypes.WebFormsAngularThenCallbackCandidate,
                                 site.File, site.Line, site.EndLine, parsed[site.File].Hash, registration.TargetSymbol!,
                                 $"angular-then-callback:{FactFactory.Hash($"{site.File}|{site.Start}", 32)}", [registration.FactId],
-                                hashProvided: true, properties: new() { ["argumentIndex"] = "0", ["invocationStatus"] = "unobserved" });
+                                hashProvided: true, properties: details);
                             evidence = evidence.Append(callback.FactId);
                             gapSupports = gapSupports.Append(callback.FactId);
                             reasons = reasons.Append("AngularThenCallbackInvocationUnobserved");

@@ -21,3 +21,8 @@ two gaps: AngularDynamicScriptSourceUnavailable and
 AngularThenCallbackInvocationUnobserved. Both candidates share the same
 callback fact at Scripts/panel.js:4–7. No ordinary handler or runtime
 dispatch is expected.
+
+The fulfillment callback is followed by one `.catch(function (reason) {...})`.
+The callback evidence records the rejection function at lines 7–9. Its source
+offset and lines remain distinct from the fulfillment span. Neither callback's
+execution is observed.

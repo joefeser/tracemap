@@ -26,6 +26,8 @@ public sealed class WebFormsAngularThenCallbackTests
             var callback = Assert.Single(support, f => f.FactType == FactTypes.WebFormsAngularThenCallbackCandidate);
             Assert.Equal((4, 7), (callback.Evidence.StartLine, callback.Evidence.EndLine));
             Assert.Equal("unobserved", callback.Properties["invocationStatus"]);
+            Assert.Equal("7", callback.Properties["rejectionCallbackStartLine"]);
+            Assert.Equal("9", callback.Properties["rejectionCallbackEndLine"]);
             Assert.Contains(support, f => f.FactId == callback.Properties["supportingFactIds"] && f.Properties.GetValueOrDefault("ownerName") == "Panel");
             var gap = Assert.Single(support, f => f.Properties.GetValueOrDefault("gapKind") == "AngularThenCallbackInvocationUnobserved");
             Assert.Contains(callback.FactId, gap.Properties["supportingFactIds"].Split(','));
@@ -44,7 +46,12 @@ public sealed class WebFormsAngularThenCallbackTests
     [InlineData("view.save = function", "if (ready) view.save = function", "UnsupportedAngularScopeAssignment")]
     [InlineData("view.items = rows;", "view.save = function () {};", "AmbiguousAngularScopeMethod")]
     [InlineData("view.items = rows;", "records.list().then(function () { view.save = function() {}; });", "UnsupportedAngularScopeAssignment")]
-    [InlineData("    });", "    }, function () {});", "UnsupportedAngularScopeAssignment")]
+    [InlineData("}).catch(", "}, function () {}).catch(", "UnsupportedAngularScopeAssignment")]
+    [InlineData("}).catch(", "}).finally(", "UnsupportedAngularScopeAssignment")]
+    [InlineData("}).catch(", "}).catch(forward).catch(", "UnsupportedAngularScopeAssignment")]
+    [InlineData("function (reason) {", "function (reason) { view.save = function () {};", "UnsupportedAngularScopeAssignment")]
+    [InlineData("view.notice = reason;", "view = replacement;", "AngularScopeReassigned")]
+    [InlineData("    });", "    }, extra);", "UnsupportedAngularScopeAssignment")]
     [InlineData("view.items = rows;", "view = other;", "AngularScopeReassigned")]
     [InlineData("records.list().then(", "view.save = function () {}; records.list().then(", "AmbiguousAngularScopeMethod")]
     [InlineData("records.list().then(", "records.list().then(;", "MalformedAngularScript")]
@@ -53,6 +60,16 @@ public sealed class WebFormsAngularThenCallbackTests
         var facts = Extract(from, to);
         Assert.DoesNotContain(facts, f => f.FactType is FactTypes.WebFormsAngularClickHandlerCandidate or FactTypes.WebFormsAngularPartialClickHandlerCandidate);
         Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == reason);
+    }
+
+    [Fact]
+    public void Direct_then_without_a_catch_keeps_its_original_callback_span()
+    {
+        var facts = Extract("}).catch(function (reason) {\n        view.notice = reason;\n    });", "});");
+        var callback = Assert.Single(facts, f => f.FactType == FactTypes.WebFormsAngularThenCallbackCandidate);
+        Assert.Equal((4, 7), (callback.Evidence.StartLine, callback.Evidence.EndLine));
+        Assert.False(callback.Properties.ContainsKey("rejectionCallbackStartLine"));
+        Assert.Equal(2, facts.Count(f => f.FactType == FactTypes.WebFormsAngularPartialClickHandlerCandidate));
     }
 
     private static IReadOnlyList<CodeFact> Extract(string? from = null, string? to = null, bool loader = true)
@@ -66,7 +83,7 @@ public sealed class WebFormsAngularThenCallbackTests
             File.Copy(file, destination);
         }
         var script = Path.Combine(temp.Path, "Scripts/panel.js");
-        if (from is not null) File.WriteAllText(script, File.ReadAllText(script).Replace(from, to));
+        if (from is not null) File.WriteAllText(script, File.ReadAllText(script).ReplaceLineEndings("\n").Replace(from, to));
         if (!loader)
         {
             var master = Path.Combine(temp.Path, "Layout.master");

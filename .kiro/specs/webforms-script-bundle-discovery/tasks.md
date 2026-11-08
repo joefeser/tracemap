@@ -28,3 +28,5 @@ The AngularJS continuation uses its own rule and synthetic fixture. Private veri
 - [x] Admit bounded quoted WebForms AppSettings expressions in classic IIFEs and report a gap-linked partial handler when dynamic script contents remain unknown.
 
 - [x] Retain a partial handler and unobserved-callback gap for a captured scope assignment directly inside a controller service-call fulfillment callback.
+
+- [x] Admit one literal terminal catch on the fulfillment registration, preserving the two source spans and partial evidence.
