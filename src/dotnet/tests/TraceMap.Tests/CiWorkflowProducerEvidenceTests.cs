@@ -398,6 +398,67 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
     }
 
+    [Fact] // 2026-11-09 live estate finding: two pack doors, one project, two identities — the
+    // declared id wins and the filename default demotes to a named gap (one producer, not two)
+    public void One_project_claiming_two_identities_keeps_the_declared_id_and_names_the_suppression()
+    {
+        const string workflow = "jobs:\n  build:\n    steps:\n" +
+            "      - run: dotnet pack src/TestingApp/TestingApp.csproj -c Release -p:PackageId=Corp.Messaging.TestingApp -o out\n" +
+            "      - run: dotnet pack src/TestingApp/TestingApp.csproj -c Release -o out\n";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/TestingApp/TestingApp.csproj", BareSdkProject);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Corp.Messaging.TestingApp", row.Package);
+        Assert.Equal("declared", row.IdProvenance);
+        Assert.Equal("src/TestingApp/TestingApp.csproj", row.ProjectPath);
+        var gap = Assert.Single(result.Gaps.Where(g => g.Kind == "ci-producer-identity-conflict"));
+        Assert.Contains("kept Corp.Messaging.TestingApp (declared)", gap.Detail);
+        Assert.Contains("suppressed TestingApp (derived-default)", gap.Detail);
+    }
+
+    [Fact] // the live estate shape: a direct declared-id step AND the hint sweep reaching the same
+    // repo — the guard holds when paths match; if it ever misses again, the collapse still bounds
+    // the damage: one project yields exactly one producer
+    public void Hint_sweep_and_direct_step_coexist_without_second_sourcing_identity()
+    {
+        const string workflow = "on:\n  workflow_dispatch:\njobs:\n" +
+            "  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main\n" +
+            "  build:\n    steps:\n      - run: dotnet pack src/App/TestingApp/TestingApp.csproj -c Release -p:PackageId=Corp.Messaging.TestingApp -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", workflow);
+        WriteProject(temp.Path, "src/App/TestingApp/TestingApp.csproj", BareSdkProject);
+        WriteProject(temp.Path, "src/Domain/Domain.csproj", BareSdkProject);
+
+        var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap")) { IndexCiProducers = true, CiHintWorkflows = new[] { "org/shared-ci/.github/workflows/dotnet-release-library.yml" } };
+        var result = CiWorkflowProducerExtractor.Read(options, [], InventProjects(temp.Path), CancellationToken.None);
+
+        Assert.Equal(2, result.Rows.Count); // the declared app + the swept Domain; nothing else
+        Assert.Contains(result.Rows, row => row.Package == "Corp.Messaging.TestingApp" && row.IdProvenance == "declared");
+        Assert.Contains(result.Rows, row => row.Package == "Domain" && row.IdProvenance == "derived-default");
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-identity-conflict");
+    }
+
+    [Fact] // SAME-TIER declared-vs-declared variance across workflows is deliberate evidence: every
+    // explicit claim survives (the parse-variant contract) — only the derived-default fallback demotes
+    public void Two_declared_identities_for_one_project_both_survive_as_explicit_evidence()
+    {
+        const string workflow = "jobs:\n  build:\n    steps:\n" +
+            "      - run: dotnet pack src/TestingApp/TestingApp.csproj -c Release -p:PackageId=Corp.Messaging.TestingApp -o out\n" +
+            "      - run: dotnet pack src/TestingApp/TestingApp.csproj -c Release -p:PackageId=Corp.Messaging.AppHost -o out\n";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/TestingApp/TestingApp.csproj", BareSdkProject);
+
+        var result = Read(temp.Path);
+
+        Assert.Equal(2, result.Rows.Count);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-identity-conflict");
+    }
+
     private const string BareSdkProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n</Project>";
     private const string HintedReleaseWorkflow = "on:\n  workflow_dispatch:\njobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main\n    with:\n      nuget_publication_path: 'Some/Path/'";
 

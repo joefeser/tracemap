@@ -101,7 +101,7 @@ internal static class CiWorkflowProducerExtractor
             gaps = OrderGaps(gaps),
             limits = new { maxFiles = MaxFiles, maxDiscoveryEntries = MaxDiscoveryEntries, maxFileBytes = MaxFileBytes, maxTotalBytes = MaxTotalBytes }
         });
-        return new(ResolveConflicts(rows, gaps), OrderGaps(gaps).ToArray(),
+        return new(ResolveConflicts(rows, gaps, comparer), OrderGaps(gaps).ToArray(),
             Convert.ToHexString(SHA256.HashData(generator)).ToLowerInvariant(), FactFactory.Hash(signature, 64));
     }
 
@@ -419,9 +419,57 @@ internal static class CiWorkflowProducerExtractor
 
     /// Same package claimed by CI at one effective version collapses to the first deterministic
     /// occurrence; two different versions are a self-contradiction gap with no fact (a human resolves).
+    /// ONE PROJECT, ONE IDENTITY (live 2026-11-09 estate finding, first): a physical project claimed
+    /// with two package identities — a -p:PackageId step's declared id alongside the filename default
+    /// from another step or the hint sweep — boarded TWO registry producers for one project, and the
+    /// estate carried a package that never ships. Identity is a property of the PROJECT: the strongest
+    /// tier wins (declared evidence over derived-default — the tier rule is "never weaker"); the
+    /// suppressed claim demotes to a typed gap, never silence. SAME-TIER declared-vs-declared
+    /// variance across workflows is deliberate evidence and passes through untouched (the parse-variant
+    /// contract: every explicit claim survives; narrowing that is a lane conversation, not a drive-by).
+    /// Rows without a project path cannot be attributed and pass through untouched.
     private static IReadOnlyList<CiWorkflowProducerRow> ResolveConflicts(
-        List<CiWorkflowProducerRow> rows, List<CiWorkflowGap> gaps)
+        List<CiWorkflowProducerRow> rows, List<CiWorkflowGap> gaps, StringComparer comparer)
     {
+        var perProjectIdentity = new List<CiWorkflowProducerRow>();
+        foreach (var projectGroup in rows.Where(row => row.ProjectPath is not null)
+            .GroupBy(row => row.ProjectPath!, comparer))
+        {
+            var distinctIds = projectGroup.Select(row => row.Package)
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (distinctIds.Count <= 1)
+            {
+                perProjectIdentity.AddRange(projectGroup);
+                continue;
+            }
+            var ordered = projectGroup
+                .OrderBy(row => row.IdProvenance is "derived-default" ? 1 : 0) // declared evidence outranks the filename chain — the tier rule: never weaker
+                .ThenBy(row => row.WorkflowPath, StringComparer.Ordinal)
+                .ThenBy(row => row.StartLine)
+                .ThenBy(row => row.Package, StringComparer.Ordinal)
+                .ToList();
+            var kept = ordered[0];
+            if (kept.IdProvenance != "derived-default")
+            {
+                // the strongest claim is DECLARED: every derived-default claim for this project is a
+                // weaker fallback (the filename chain) and demotes; sibling DECLARED ids pass through
+                // (same-tier variance is deliberate evidence).
+                perProjectIdentity.Add(kept);
+                foreach (var suppressed in ordered.Skip(1).Where(row => row.IdProvenance == "derived-default"))
+                    gaps.Add(new(projectGroup.Key, "ci-producer-identity-conflict",
+                        $"kept {kept.Package} ({kept.IdProvenance}); suppressed {suppressed.Package} ({suppressed.IdProvenance})"));
+                perProjectIdentity.AddRange(ordered.Skip(1).Where(row => row.IdProvenance != "derived-default"));
+                continue;
+            }
+            perProjectIdentity.AddRange(projectGroup); // only derived claims here: the deterministic filename chain cannot disagree with itself
+
+            foreach (var suppressed in ordered.Skip(1))
+                gaps.Add(new(projectGroup.Key, "ci-producer-identity-conflict",
+                    $"kept {kept.Package} ({kept.IdProvenance}); suppressed {suppressed.Package} ({suppressed.IdProvenance})"));
+        }
+        perProjectIdentity.AddRange(rows.Where(row => row.ProjectPath is null));
+        rows = perProjectIdentity;
+
         var resolved = new List<CiWorkflowProducerRow>();
         foreach (var group in rows.GroupBy(row => row.Package, StringComparer.OrdinalIgnoreCase))
         {
