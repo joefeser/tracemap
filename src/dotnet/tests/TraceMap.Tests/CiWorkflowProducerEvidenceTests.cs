@@ -558,13 +558,41 @@ public sealed class CiWorkflowProducerEvidenceTests
         WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
         WriteProject(temp.Path, "src/DoorCodes.Common.csproj", metadataProject);
 
-        var result = ReadHinted(temp.Path, null, "dotnet-release-library.yml"); // ReadProducedPackages feeds the project-lane claim
+        var inventory = InventProjects(temp.Path).ToArray();
+        var produced = ProjectFileReader.ReadProducedPackages(temp.Path, inventory);
+        var project = Assert.Single(produced);
+        Assert.Equal("src/DoorCodes.Common.csproj", project.ProjectPath);
+        Assert.Equal("DoorCodes.Common", project.PackageId);
+        var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"))
+            { IndexCiProducers = true, CiHintWorkflows = ["dotnet-release-library.yml"] };
+        var result = CiWorkflowProducerExtractor.Read(options, produced, inventory, CancellationToken.None);
 
         var row = Assert.Single(result.Rows);
         Assert.Equal("DoorCodes.Common", row.Package);
         Assert.Equal("derived-default", row.IdProvenance);
         Assert.Equal("ci-hint-workflow", row.SignalsKind); // the ci claim now EXISTS beside the project claim
         Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-hint-no-projects");
+    }
+
+    [Theory]
+    [InlineData("a-hint.yml", "z-pack.yml")]
+    [InlineData("z-hint.yml", "a-pack.yml")]
+    public void Unattributed_pack_keeps_its_workflow_and_does_not_claim_a_project(string hint, string pack)
+    {
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, hint, HintedReleaseWorkflow);
+        WriteWorkflow(temp.Path, pack, "jobs:\n  build:\n    steps:\n      - run: dotnet pack -p:PackageId=SAMPLE");
+        WriteProject(temp.Path, "src/One.csproj", BareSdkProject.Replace("</PropertyGroup>", "<PackageId>Sample</PackageId></PropertyGroup>"));
+        WriteProject(temp.Path, "src/Other.csproj", BareSdkProject);
+
+        var result = ReadHinted(temp.Path, null, "dotnet-release-library.yml");
+        var direct = Assert.Single(result.Rows, row => row.Package.Equals("Sample", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("ci-pack-step", direct.SignalsKind);
+        Assert.Null(direct.ProjectPath);
+        Assert.Equal(".github/workflows/" + pack, direct.WorkflowPath);
+        var other = Assert.Single(result.Rows, row => row.Package == "Other");
+        Assert.Equal("ci-hint-workflow", other.SignalsKind);
+        Assert.Equal("src/Other.csproj", other.ProjectPath);
     }
 
     [Fact]

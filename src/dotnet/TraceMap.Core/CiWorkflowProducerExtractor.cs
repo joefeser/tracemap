@@ -91,7 +91,7 @@ internal static class CiWorkflowProducerExtractor
         }
         if (files == 0 && gaps.Count == 0) gaps.Add(new(".github/workflows", "ci-workflow-not-found"));
         if (options.CiHintWorkflows is { Count: > 0 })
-            SweepHintedProjects(options.CiHintWorkflows, jobCalls, inventoryProjects, producedByPath, comparer,
+            SweepHintedProjects(options.CiHintWorkflows, jobCalls, inventoryProjects, comparer,
                 context, rows, gaps, cancellationToken);
         using var generator = File.OpenRead(typeof(CiWorkflowProducerExtractor).Assembly.Location);
         // The signature includes bounded reads, categorical omissions, AND the identity-collapse
@@ -181,7 +181,6 @@ internal static class CiWorkflowProducerExtractor
         IReadOnlyList<string> hintWorkflows,
         IReadOnlyList<CiWorkflowJobCall> jobCalls,
         IReadOnlyList<string> inventoryProjects,
-        IReadOnlyDictionary<string, ProducedPackageInfo> producedByPath,
         StringComparer comparer,
         CiDerivationContext context,
         List<CiWorkflowProducerRow> rows,
@@ -199,28 +198,24 @@ internal static class CiWorkflowProducerExtractor
                 && hints.Any(hint => HintMatches(NormalizeUses(candidate.Uses), hint)));
         if (call is null) return;
         context.Observed.Add($"ci-hint-call\0{call.WorkflowPath}\0{call.Line}\0{call.Uses}");
-        // PARALLEL CLAIMS (live 2026-11-09, second wild hit): the sweep previously deferred to EVERY
-        // prior claim — project-lane AND direct CI rows — so a repo whose csproj carries pack metadata
-        // (Authors/Description, inconsistently kept in real estates) was claimed by the project lane
-        // and the hint's knowledge that the shared release workflow packs it was LOST before fusion:
-        // the registry labeled it project-declared forever, and the operator's convention ("the shared
-        // workflow packs everything it names") became invisible. The sweep now emits alongside
-        // PROJECT-LANE claims — both facts reach fusion, where the class precedence (operator > ci >
-        // project) labels the winner and the losing claim persists as the shadow entry (SPEC-020 §2b).
-        // DIRECT CI rows still defer: they carry ci-pack-step evidence, which is STRONGER ci signal
-        // than the operator assertion — re-emitting would downgrade provenance, not add a source.
-        var claimed = new HashSet<string>(
-            rows.Where(row => row.SignalsKind == "ci-pack-step")
-                .Select(row => row.ProjectPath)
-                .OfType<string>(), comparer);
+        // Keep independent project-file claims. Within the CI lane a direct pack takes precedence.
+        var directlyPackedPaths = new HashSet<string>(comparer);
+        var unattributedPackages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows.Where(row => row.SignalsKind == "ci-pack-step"))
+        {
+            if (row.ProjectPath is { } path) directlyPackedPaths.Add(path);
+            else unattributedPackages.Add(row.Package);
+        }
         var emitted = 0;
         foreach (var project in inventoryProjects)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (claimed.Contains(project)) continue;
+            if (directlyPackedPaths.Contains(project)) continue;
             var identity = DeriveCiIdentity(context, project);
             if (identity.PackageId is { } id)
             {
+                // Compare package identities only after derivation. A match supplies no project path to the direct claim.
+                if (unattributedPackages.Contains(id)) continue;
                 // declared-id: the chain resolved a DECLARED identity (PackageId/AssemblyName, bounded
                 // evaluation) under CI pack intent — a stronger claim than derived-default, never weaker
                 var provenance = identity.Decision == ProjectFileReader.CiDerivedIdentityDecisions.DeclaredId
