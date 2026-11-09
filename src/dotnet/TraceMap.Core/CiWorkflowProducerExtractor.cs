@@ -94,14 +94,18 @@ internal static class CiWorkflowProducerExtractor
             SweepHintedProjects(options.CiHintWorkflows, jobCalls, inventoryProjects, producedByPath, comparer,
                 context, rows, gaps, cancellationToken);
         using var generator = File.OpenRead(typeof(CiWorkflowProducerExtractor).Assembly.Location);
-        // The signature includes bounded reads and categorical omissions. It is not a source snapshot.
+        // The signature includes bounded reads, categorical omissions, AND the identity-collapse
+        // decisions — the collapse runs BEFORE the digest so changing a -p:PackageId claim changes
+        // the digest even when nothing else does (review 2026-11-09).
+        var resolvedRows = ResolveConflicts(rows, gaps, comparer);
         var signature = JsonSerializer.Serialize(new
         {
             observed = observed.Order(StringComparer.Ordinal),
             gaps = OrderGaps(gaps),
+            claims = resolvedRows,
             limits = new { maxFiles = MaxFiles, maxDiscoveryEntries = MaxDiscoveryEntries, maxFileBytes = MaxFileBytes, maxTotalBytes = MaxTotalBytes }
         });
-        return new(ResolveConflicts(rows, gaps), OrderGaps(gaps).ToArray(),
+        return new(resolvedRows, OrderGaps(gaps).ToArray(),
             Convert.ToHexString(SHA256.HashData(generator)).ToLowerInvariant(), FactFactory.Hash(signature, 64));
     }
 
@@ -417,11 +421,35 @@ internal static class CiWorkflowProducerExtractor
         }
     }
 
-    /// Same package claimed by CI at one effective version collapses to the first deterministic
-    /// occurrence; two different versions are a self-contradiction gap with no fact (a human resolves).
+    // Suppress only filename defaults contradicted by a declared identity on the same project.
+    // A matching default still contributes its version to the per-package conflict check below.
     private static IReadOnlyList<CiWorkflowProducerRow> ResolveConflicts(
-        List<CiWorkflowProducerRow> rows, List<CiWorkflowGap> gaps)
+        List<CiWorkflowProducerRow> rows, List<CiWorkflowGap> gaps, StringComparer comparer)
     {
+        var perProjectIdentity = new List<CiWorkflowProducerRow>();
+        foreach (var group in rows.Where(row => row.ProjectPath is not null).GroupBy(row => row.ProjectPath!, comparer))
+        {
+            var declaredIds = group.Where(row => row.IdProvenance != "derived-default")
+                .Select(row => row.Package).Order(StringComparer.Ordinal).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (declaredIds.Count == 0)
+            {
+                perProjectIdentity.AddRange(group);
+                continue;
+            }
+            var kept = declaredIds.Order(StringComparer.Ordinal).First();
+            var additional = declaredIds.Count > 1 ? $" and {declaredIds.Count - 1} other declared IDs" : "";
+            foreach (var row in group)
+            {
+                if (row.IdProvenance != "derived-default" || declaredIds.Contains(row.Package))
+                    perProjectIdentity.Add(row);
+                else
+                    gaps.Add(new(row.WorkflowPath, "ci-producer-identity-conflict",
+                        $"kept {kept} (declared){additional}; suppressed {row.Package} (derived-default)", row.StartLine));
+            }
+        }
+        perProjectIdentity.AddRange(rows.Where(row => row.ProjectPath is null));
+        rows = perProjectIdentity;
+
         var resolved = new List<CiWorkflowProducerRow>();
         foreach (var group in rows.GroupBy(row => row.Package, StringComparer.OrdinalIgnoreCase))
         {
@@ -433,7 +461,9 @@ internal static class CiWorkflowProducerExtractor
                     $"{group.Key}: {string.Join(" | ", versions)}"));
                 continue;
             }
-            var ordered = group.OrderBy(row => row.WorkflowPath, StringComparer.Ordinal)
+            var ordered = group
+                .OrderBy(row => row.IdProvenance is "derived-default" ? 1 : 0) // provenance outranks file position: a declared claim never loses its row to a derived twin (review 2026-11-09)
+                .ThenBy(row => row.WorkflowPath, StringComparer.Ordinal)
                 .ThenBy(row => row.StartLine)
                 .ThenBy(row => row.EndLine)
                 .ToList();
@@ -1481,12 +1511,37 @@ internal static class CiWorkflowProducerExtractor
         return tokens;
     }
 
+    private static bool HasUnverifiedProjectPath(string root, string relativePath)
+    {
+        if (Path.IsPathRooted(relativePath)) return true;
+        var current = root;
+        try
+        {
+            foreach (var segment in relativePath.Split('/'))
+            {
+                current = Path.Combine(current, segment);
+                if (File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint)) return true;
+            }
+        }
+        // A literal CI flag can supply identity for a project absent from this checkout.
+        catch (FileNotFoundException) { return false; }
+        catch (DirectoryNotFoundException) { return false; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return true; }
+        return false;
+    }
+
     private static void ResolveOccurrence(
         PackOccurrence occurrence,
         CiDerivationContext context,
         List<CiWorkflowProducerRow> rows,
         List<CiWorkflowGap> gaps)
     {
+        if (occurrence.ProjectTarget is { } projectPath && HasUnverifiedProjectPath(context.Root, projectPath))
+        {
+            gaps.Add(new(occurrence.WorkflowPath, "ci-producer-project-path-unavailable",
+                "linked or unverifiable project path", occurrence.StartLine));
+            return;
+        }
         string? packageId = null;
         var derivedId = false;
         string? derivedProvenance = null; // direct packs carry the decision's provenance, never a blanket derived-default (review round-6)
