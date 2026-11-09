@@ -195,11 +195,20 @@ internal static class CiWorkflowProducerExtractor
                 && hints.Any(hint => HintMatches(NormalizeUses(candidate.Uses), hint)));
         if (call is null) return;
         context.Observed.Add($"ci-hint-call\0{call.WorkflowPath}\0{call.Line}\0{call.Uses}");
-        // One fact per project: the project lane's local evidence and direct CI pack steps both
-        // outrank the operator assertion, so neither is relabeled ci-hint-workflow.
-        var claimed = new HashSet<string>(producedByPath.Keys, comparer);
-        foreach (var row in rows)
-            if (row.ProjectPath is { } projectPath) claimed.Add(projectPath);
+        // PARALLEL CLAIMS (live 2026-11-09, second wild hit): the sweep previously deferred to EVERY
+        // prior claim — project-lane AND direct CI rows — so a repo whose csproj carries pack metadata
+        // (Authors/Description, inconsistently kept in real estates) was claimed by the project lane
+        // and the hint's knowledge that the shared release workflow packs it was LOST before fusion:
+        // the registry labeled it project-declared forever, and the operator's convention ("the shared
+        // workflow packs everything it names") became invisible. The sweep now emits alongside
+        // PROJECT-LANE claims — both facts reach fusion, where the class precedence (operator > ci >
+        // project) labels the winner and the losing claim persists as the shadow entry (SPEC-020 §2b).
+        // DIRECT CI rows still defer: they carry ci-pack-step evidence, which is STRONGER ci signal
+        // than the operator assertion — re-emitting would downgrade provenance, not add a source.
+        var claimed = new HashSet<string>(
+            rows.Where(row => row.SignalsKind == "ci-pack-step")
+                .Select(row => row.ProjectPath)
+                .OfType<string>(), comparer);
         var emitted = 0;
         foreach (var project in inventoryProjects)
         {

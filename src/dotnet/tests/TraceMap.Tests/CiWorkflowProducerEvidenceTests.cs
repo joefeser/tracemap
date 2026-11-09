@@ -545,6 +545,28 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.DoesNotContain(result.Rows, row => row.Package == "OutOfScope"); // excluded from the scan scope
     }
 
+    [Fact] // 2026-11-09 SECOND wild hit: a repo whose csproj carries full pack metadata was claimed
+    // by the project lane, and the hint sweep DEFERRED — the registry labeled it project-declared
+    // forever while the shared release workflow packs it (the operator's convention: the shared
+    // workflow packs everything it names). The sweep now emits ALONGSIDE project-lane claims so
+    // fusion sees both sources: class precedence labels the winner, the losing claim persists as
+    // the shadow entry (SPEC-020 §2b). Direct ci-pack-step rows still defer — stronger ci signal.
+    public void Hint_sweep_emits_alongside_project_lane_claims_so_fusion_sees_both_sources()
+    {
+        const string metadataProject = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <Authors>Contoso IT</Authors>\n    <Company>Contoso</Company>\n    <Product>Codes</Product>\n    <Description>Domain Classes</Description>\n  </PropertyGroup>\n</Project>";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+        WriteProject(temp.Path, "src/DoorCodes.Common.csproj", metadataProject);
+
+        var result = ReadHinted(temp.Path, null, "dotnet-release-library.yml"); // ReadProducedPackages feeds the project-lane claim
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("DoorCodes.Common", row.Package);
+        Assert.Equal("derived-default", row.IdProvenance);
+        Assert.Equal("ci-hint-workflow", row.SignalsKind); // the ci claim now EXISTS beside the project claim
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-hint-no-projects");
+    }
+
     [Fact]
     public void Hint_sweep_gaps_unprovable_identities_and_skips_non_producers()
     {
