@@ -224,6 +224,22 @@ public sealed class WebFormsAngularServicePostTests
     }
 
     [Theory]
+    [InlineData("for (var exampleApp = other; false;) {}", false)]
+    [InlineData("if (flag) { var exampleApp = other; }", false)]
+    [InlineData("{ var { binding: [exampleApp] } = packet; }", false)]
+    [InlineData("{ var exampleApp; }", true)]
+    [InlineData("{ let exampleApp = other; }", true)]
+    [InlineData("{ var { exampleApp: local } = packet; }", true)]
+    [InlineData("function local() { var exampleApp = other; }", true)]
+    [InlineData("class Local { static { var exampleApp = other; } }", true)]
+    public void Only_initialized_script_scoped_var_redeclarations_invalidate_the_module(string code, bool valid)
+    {
+        var facts = Extract("Scripts/adapter.js", "function configureAdapter()", code + "\nfunction configureAdapter()");
+        Assert.Equal(valid ? 2 : 0, facts.Count(f => f.FactType == FactTypes.WebFormsAngularPostHandlerCandidate));
+        if (!valid) Assert.Contains(facts, f => f.Properties.GetValueOrDefault("gapKind") == "AngularModuleOwnershipUnavailable");
+    }
+
+    [Theory]
     [InlineData("for (exampleApp of replacements) {}", false)]
     [InlineData("for ([exampleApp.service] of replacements) {}", false)]
     [InlineData("for (var exampleApp in replacements) {}", false)]

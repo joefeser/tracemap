@@ -134,10 +134,12 @@ internal sealed partial class AngularJsScript
         }
     }
 
+    private enum DeclarationContext { ScriptBody, NestedScript, Local }
+
     private static IEnumerable<Node> Walk(Node root, AngularJsScript? index = null)
     {
-        var stack = new Stack<(Node Node, ImmutableHashSet<string> Parameters, bool InsideWith)>();
-        stack.Push((root, ImmutableHashSet<string>.Empty, false));
+        var stack = new Stack<(Node Node, ImmutableHashSet<string> Parameters, bool InsideWith, DeclarationContext Context)>();
+        stack.Push((root, ImmutableHashSet<string>.Empty, false, root is Script ? DeclarationContext.ScriptBody : DeclarationContext.Local));
         var scheduled = 1;
         while (stack.TryPop(out var frame))
         {
@@ -146,6 +148,13 @@ internal sealed partial class AngularJsScript
             var insideWith = frame.InsideWith;
             if (index is not null)
             {
+                if (frame.Context == DeclarationContext.NestedScript && node is VariableDeclaration { Kind: VariableDeclarationKind.Var } vars)
+                {
+                    foreach (var declarator in vars.Declarations)
+                        if (declarator.Init is not null)
+                            foreach (var binding in BindingTargets(declarator.Id).OfType<Identifier>())
+                                index.writes.Add(binding.Name);
+                }
                 insideWith |= node is WithStatement;
                 parameters = node switch
                 {
@@ -166,10 +175,13 @@ internal sealed partial class AngularJsScript
                 }
             }
             yield return node;
+            var childContext = node is Script ? DeclarationContext.ScriptBody
+                : frame.Context == DeclarationContext.Local || node is IFunction or StaticBlock ? DeclarationContext.Local
+                : DeclarationContext.NestedScript;
             foreach (var child in node.ChildNodes)
             {
                 if (++scheduled > 100_000) throw new AngularClickGap("AngularScriptNodeLimit");
-                stack.Push((child, parameters, insideWith));
+                stack.Push((child, parameters, insideWith, childContext));
             }
         }
     }
