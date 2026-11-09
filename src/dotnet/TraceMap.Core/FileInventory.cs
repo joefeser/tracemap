@@ -55,6 +55,7 @@ public static class FileInventory
         ".cs",
         ".vb",
         ".cshtml",
+        ".js",
         ".sql",
         ".aspx",
         ".ascx",
@@ -155,7 +156,9 @@ public static class FileInventory
             .Select(path => NormalizeRelativePath(Path.GetDirectoryName(Path.GetRelativePath(root, path)) ?? "."))
             .ToHashSet(StringComparer.Ordinal);
 
+        var webForms = candidateFiles.Any(path => Path.GetExtension(path).ToLowerInvariant() is ".aspx" or ".ascx" or ".master");
         var items = candidateFiles
+            .Where(path => webForms || !Path.GetExtension(path).Equals(".js", StringComparison.OrdinalIgnoreCase))
             .Where(path => ShouldInclude(root, path, serviceReferenceFolders, webReferenceFolders))
             .Select(path => CreateItem(root, path, serviceReferenceFolders, webReferenceFolders))
             .OrderBy(item => item.RelativePath, StringComparer.Ordinal)
@@ -466,6 +469,7 @@ public static class FileInventory
             ".master" => "WebFormsMarkup",
             ".ashx" => "AspNetHandler",
             ".asax" => "AspNetApplication",
+            ".js" => "JavaScript",
             ".sitemap" => "AspNetSiteMap",
             ".svc" => "ServiceHost",
             ".asmx" => "AsmxServiceHost",

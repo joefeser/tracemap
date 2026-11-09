@@ -1,0 +1,2 @@
+<%@ Master Language="VB" %>
+<%: Scripts.Render("~/bundles/first", "~/bundles/second") %>

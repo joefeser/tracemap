@@ -5479,3 +5479,179 @@ SQLite readback and output preservation. These are not compiled application test
 Replay the actual pinned DNN five-method path against the selected SQL scenario;
 all unresolved compiler, dispatch, external PetaPoco, event/hydration, result and
 runtime boundaries must remain. No SQL execution or raw index mutation.
+
+## Regular WebForms script-bundle discovery
+
+`WebFormsScriptBundleTests` covers C#/VB explicit literal `ScriptBundle.Include`
+syntax and ASPX/master server-output `Scripts.Render`, including member/source/
+declaration/render limits, malformed input, dynamic paths, wildcard refusal,
+comments, same-path declarations, VB case handling and same-line fact identity.
+The public `samples/webforms-script-bundles` fixture retains one declaration,
+two members and one reference. Its click and external function are a downstream
+coverage boundary: standalone JavaScript, registration execution, rendered bundles
+and HTTP reachability require separate evidence. The AngularJS click rule below has its own control.
+
+Run the focused bundle and LegacyWebFormsExtractorTests families, full Debug
+`-warnaserror` for this shared-core change, and the CLI against the sample. Verify
+the four new facts in both NDJSON and SQLite and run `PRAGMA integrity_check`.
+Pinned source OSS smokes are explicitly deferred for this bounded configuration
+syntax slice; no source symbol, metadata, PDB, rewrite or runtime claim is widened.
+Exact local results and any platform failures belong in
+`.kiro/specs/webforms-script-bundle-discovery/implementation-state.md`.
+
+The VB startup control in `samples/webforms-script-bundle-startup` exercises
+two local bundles in one inline ASAX method. Verify seven bundle-rule facts.
+Join the three member facts to their declaration fact IDs and check source lines
+7, 8 and 9 against ordinals 0, 0 and 1. Two independent master-page render
+references remain candidates. The focused test families also exercise refusal
+for aliases, reassignment, duplicate names, conditional use, malformed markup
+and a member count above the limit.
+
+## AngularJS click to included JavaScript method
+
+Run the WebFormsAngularClickTests, WebFormsScriptBundleTests,
+LegacyWebFormsExtractorTests and EvidenceDocsExportTests families in Debug with
+`-warnaserror`, followed by the full Debug gate for the shared Core changes.
+Scan `samples/webforms-angularjs-click` and compare the new rule’s fact IDs in
+NDJSON and SQLite. Verify the fixture README query returns its one expected
+handler and review the recorded supporting IDs and parser/input digests.
+The prior bundle fixtures retain their four- and seven-fact bundle controls.
+
+This rule is `legacy.webforms.angularjs-click.v1`, extractor
+`legacy-webforms/0.38.6`. It parses included JavaScript using pinned Acornima
+1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
+tracks .js source changes. The explicit ownership and resource boundaries are
+in the rule catalog. General plain onclick, runtime, backend and private
+verification remain separate.
+
+The public AngularJS click fixture also requires three physical inline server
+initializer spans on Page.aspx lines 7–9. Each value stays unknown. Their IDs
+must support the same unique external handler. A genuine empty initializer,
+unsupported server output or duplicate controller must retain a typed gap.
+
+The controller-chain fixture registers three named controllers with the same
+method name. Tests select each controller in turn and check its registration
+span, method span and owner identity. Duplicate names, unknown intermediates,
+malformed syntax and chains longer than 32 keep the join unresolved.
+
+### Explicit IIS mount for a master-page script
+
+Use fresh outputs for these two static controls:
+
+```sh
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/webforms-iis-mount --out "$out/unmapped"
+dotnet run --project src/dotnet/TraceMap.Cli -- scan --repo samples/webforms-iis-mount --webforms-iis-mount '/Portal/Desk=Site' --out "$out/mapped"
+```
+
+The first scan reports UnsupportedAngularScriptPath on the content-page click.
+The second records a master-page include with resolutionSource operator-iis-mount
+and an inventoried JS target. The handler must retain the include fact ID.
+Compare receipt fingerprints, scan IDs and SQLite integrity. Relative URL
+resolution remains unchanged. No IIS process or host configuration is read.
+
+### Unknown server settings in inline JavaScript strings
+
+Scan `samples/webforms-inline-settings` with `--webforms-iis-mount /Portal/Desk=.`.
+Require one master-page server string fact with unknown value and one
+included-source-only partial click-handler candidate supporting the exact
+click, external registration, mounted script and dynamic-source gap. Require
+zero ordinary handler candidates for this fixture. An unused local data
+initializer has a positive regression; competing or unsupported registration
+syntax refuses both candidate types.
+
+### Scope assignment in a service callback
+
+Scan `samples/webforms-angularjs-then` with
+`--webforms-iis-mount /Portal/Desk=.`. Its two source clicks name the same
+method. Each partial candidate retains its own click, the same callback
+registration and method site, and separate gaps for dynamic code and callback
+invocation. Run the fixture README query; require four rows, two per click.
+
+The same fixture now ends the service call with one literal rejection callback.
+The fulfillment span remains lines 4–7. Require rejectionCallbackStartLine and
+rejectionCallbackEndLine 7 and 9 on the callback fact. The known method stays
+at line 6 and the two click identities and two gaps per click are unchanged.
+
+### AngularJS click method to injected service POST
+
+The public sample `samples/webforms-service-post` contains two clicks, a
+same-named member on a competing service, and a separate callback setup
+request. The fixture README supplies the scan mapping, expected source spans
+and exact-ID SQLite query. The focused lane is WebFormsAngularServicePostTests.
+
+The same fixture includes a factory before the selected service. Check that
+the service registration references the factory fact and that the factory
+references the module declaration. The standalone and 32-registration boundary
+cases are in WebFormsAngularServicePostTests.
+
+The 0.26.0 service fixture includes a library-style this.service call with a
+computed token. Require the source-located uncertainty gap on the member,
+request and endpoint chain. Regressions vary script order, remove the
+application registration, introduce a possible module competitor and exceed
+the 16-observation limit.
+
+For an AngularServiceModuleUnavailable gap on 0.27.0, inspect ownerFailure,
+receiverKind, tokenKind, factoryCount and the provider location. The supporting
+service call identifies the click being traced. For an inline provider the
+fact uses the call site; inlineInput and providerInputLine identify the
+separate parser input. The bundle-wide angular guard also applies to the
+controller lookup before any service-call candidate exists.
+
+On 0.28.0 verify the actual providerMember and source-located
+AngularUnboundProviderIdentity gap for the bracket-access library fixture.
+Only the unsupported-receiver predicate with an exact ThisExpression root,
+zero factories and a CallExpression token continues past the provider.
+
+For 0.29.0 the fixture has two external adapter gaps per endpoint. Verify
+both absent and computed token kinds and their distinct source spans. Both
+count toward the same 16-observation limit. Zero arguments on a known module
+or an unknown identifier do not qualify for this exception.
+
+For 0.30.0 inspect moduleContinuations on the service registration from the
+public fixture. Its four entries are filter, directive, config and run.
+Require lines 9–12 in order, the service's own span 3–8, both exact-ID POST
+rows and the inherited provider gaps. Also check the direct-service control.
+
+For 0.31.0 check all three adapter gap IDs on both candidate endpoints.
+Line 4 has receiverKind `member-expression` and tokenKind `identifier`.
+The same lookup must retain the endpoint and gaps with either source ordering.
+
+For 0.32.0 the same fixture adds a fourth unresolved provider. Check the
+line 5 gap reports receiverKind `this` and tokenKind `member-expression`
+and appears by ID on each request and endpoint. A member token on the known
+application module still blocks selection.
+
+For 0.33.0 run the service POST tests including both orderings of the
+shadowed provider. Follow observedRegistrationFactId from the blocking gap
+to the independently declared registration. Require no service member,
+Angular POST request or endpoint for the affected click.
+
+For 0.34.0 exercise 16 and 17 unresolved observations in a single lookup.
+Check the limit gap supports exactly 16 observation IDs and its own call.
+If a declaration is independently established, its ID also supports the
+limit gap. The alias gap can coexist with truncation. Neither ordering
+admits member selection or a POST on the truncated lookup.
+
+For 0.35.0 run the fixture's registration-to-member-to-POST query and
+require one shared source chain. Check the special truncation fixture
+retains the same declaration chain while both click endpoints stay absent.
+A duplicate HTTP method option must leave the definition and omit its POST.
+
+For private Windows scans, use the existing job-object guard and phase checkpoint
+described in [Bounded scan diagnostics](validation/BOUNDED_SCAN_DIAGNOSTICS.md).
+The 0.37.0 fixture also checks the registration-side handler edge by exact
+request and declaration IDs, including when click selection remains blocked.
+
+For 0.38.0 check ordinary and overflow outputs separately. The independent
+handler count is one in both. The ordinary fixture has two click-selected
+handlers. The overflow control has zero and an AngularUnboundProviderLimit
+gap. Direct local parameter rebinding is covered for a standalone function
+and a closure. Global reassignment, property mutation and a provider receiver
+that is itself a parameter remain fail-closed controls.
+
+For VB SQL source argument candidates, run
+`dotnet test src/dotnet/tests/TraceMap.Tests -c Debug -warnaserror --filter FullyQualifiedName~VisualBasicSqlArgumentTests`
+and scan `samples/vb-sql-argument`. Compare the Markdown results and SQLite
+rows against the two construction/call spans and four negative controls
+listed in the sample README. The compiled wrapper regression remains a separate
+test of command-instance binding.

@@ -989,8 +989,8 @@ edges or claim that an unknown external method has been resolved.
 ### Framework string composition
 
 Rule `combined.paths.framework-string-composition.v1` recognizes only direct
-`call` member references to the two- and three-string `System.String.Concat`
-overloads in `mscorlib, Version=4.0.0.0, Culture=neutral,
+`call` member references to the two-, three-, four-string and String[] `System.String.Concat`
+overloads in `mscorlib, Version=2.0.0.0 or 4.0.0.0, Culture=neutral,
 PublicKeyToken=b77a5c561934e089`. Exact retained call/body/operand provenance and
 ordered operand evidence are required. The command binding reports
 `symbolic-string-composition` with the producer, operand fact, body, and ordered
@@ -1000,8 +1000,17 @@ gap. Ordered `operandBindings` trace each operand backwards along that retained
 path, preserving exact hop facts and the final method identity. Each operand has
 the existing 64-work bound. Nested composition and scalar alternatives share a
 32-node expression budget and four-level depth bound per command property;
-each concatenation has at most three operands and each alternative set at most
-four members. Exhaustion emits `IlCommandExpressionLimit`. A root argument, non-IL bridge, missing evidence,
+scalar concatenations have at most four operands, array concatenations at most
+16 elements, and each alternative set at most four members. Array snapshots require
+exact string[] allocation type, constant length/index, explicit initialization of
+every element, and method-local allocation identity. At most 16 arrays are tracked,
+charged to the existing slot/work bounds. Escapes, repeated/unknown/out-of-range
+writes, incomplete initialization, conflicting joins, missing metadata and bodies
+with back edges refuse contents. Object arrays, enumerable overloads,
+StringBuilder and general heap reads are not interchangeable. The operand snapshot
+is additive to il-call-values.v1; IL extractor 0.2.70 / evidence policy v71 identifies
+the changed semantics. Missing snapshots emit IlCommandCompositionArrayUnavailable;
+Core records IlValueStringArray* refusal reasons. No cleartext SQL is stored. Exhaustion emits `IlCommandExpressionLimit`. A root argument, non-IL bridge, missing evidence,
 or uncertain dispatch remains an explicit operand-level gap. The private HTML
 shows a readable route, expression and operand summaries above exact evidence.
 Parameter names are not retained in these scans: labels use IL argument slots

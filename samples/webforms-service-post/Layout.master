@@ -1,0 +1,12 @@
+<%@ Master Language="VB" %>
+<html ng-app="example"><body>
+  <asp:ContentPlaceHolder ID="Main" runat="server"></asp:ContentPlaceHolder>
+  <%: Scripts.Render("~/bundles/client") %>
+  <script>
+    (function () {
+      var tag = document.createElement("script");
+      tag.src = '/assets/<%= AppSettings("SampleKey") %>/optional.js';
+      document.head.appendChild(tag);
+    }());
+  </script>
+</body></html>

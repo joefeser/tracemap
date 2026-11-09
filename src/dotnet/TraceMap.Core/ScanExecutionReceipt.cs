@@ -167,6 +167,8 @@ public sealed class ScanReceiptRecorder
                     ? options.CiHintWorkflows.Order(StringComparer.Ordinal).ToArray()
                     : null
             }));
+        if (options.WebFormsIisMount is { } mount)
+            scopeFingerprint = Hash(JsonSerializer.Serialize(new { baseScopeSha256 = scopeFingerprint, iisMount = mount }));
         if (!string.IsNullOrWhiteSpace(options.WebFormsVbImportContextPath))
             scopeFingerprint = Hash(JsonSerializer.Serialize(new
             {

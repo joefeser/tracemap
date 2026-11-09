@@ -569,6 +569,12 @@ public static class TraceMapCommand
             IlCompiledScalarBoundary = values.HasFlag("--il-compiled-scalar-boundary"),
             IlInfoMessageBoundary = values.HasFlag("--il-info-message-boundary"),
             CompiledOnly = values.HasFlag("--compiled-only"),
+            WebFormsIisMount = values.GetMany("--webforms-iis-mount") switch
+            {
+                [] => null,
+                [var mapping] => WebFormsIisMount.Parse(mapping),
+                _ => throw new ArgumentException("Specify only one --webforms-iis-mount.")
+            },
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
             CiHintWorkflows = ReadCiHintsOption(values),
@@ -2610,7 +2616,7 @@ public static class TraceMapCommand
             }
 
             var rawValue = args[++index];
-            if (preserveOptionValues || arg is "--surface-list" or "--from-symbol") list.Add(rawValue);
+            if (preserveOptionValues || arg is "--surface-list" or "--from-symbol" or "--webforms-iis-mount") list.Add(rawValue);
             else list.AddRange(rawValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 
@@ -3094,6 +3100,8 @@ public static class TraceMapCommand
               --source-snapshot-max-roster-bytes <count>
                                        Retention admission limits (defaults: 1000000 files, 64 GiB raw source, 64 MiB streamed roster); requires --retain-source-snapshot.
               --target-framework <tfm> MSBuild TargetFramework property for semantic load.
+              --webforms-iis-mount <URL-prefix=repo-relative-root>
+                                       Map one IIS application mount for root-relative WebForms script includes.
               --index-deps-json        Read existing bin/**/*.deps.json as stale-qualified build-output evidence; does not build.
               --index-ci-producers     Read .github/workflows/*.yml|*.yaml dotnet pack definitions as ci-defined producer evidence.
               --ci-hints <file>         Operator hints JSON (ci-hints.v1: packWorkflows[].uses) — a job-level reusable-workflow call to a hinted workflow means this repo publishes; unclaimed SDK projects become ci producers (derived ids).

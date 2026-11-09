@@ -186,6 +186,7 @@ public sealed record ScanOptions(
     public bool IlCompiledScalarBoundary { get; init; }
     public bool IlInfoMessageBoundary { get; init; }
     public bool CompiledOnly { get; init; }
+    public WebFormsIisMount? WebFormsIisMount { get; init; }
     public bool IndexDepsJson { get; init; }
     public DepsJsonLimits? DepsJsonLimits { get; init; }
     public string? WebFormsVbImportContextPath { get; init; }
@@ -321,6 +322,7 @@ public static class FactTypes
     public const string DbContextDeclared = nameof(DbContextDeclared);
     public const string DbSetDeclared = nameof(DbSetDeclared);
     public const string DbChangeSaved = nameof(DbChangeSaved);
+    public const string SqlTextArgumentCandidate = nameof(SqlTextArgumentCandidate);
     public const string DatabaseOperationCandidate = nameof(DatabaseOperationCandidate);
     public const string DatabaseParameterCandidate = nameof(DatabaseParameterCandidate);
     public const string DapperCallDetected = nameof(DapperCallDetected);
@@ -372,6 +374,25 @@ public static class FactTypes
     public const string WebFormsEventFlowProjected = nameof(WebFormsEventFlowProjected);
     public const string WebFormsLogicSignalDetected = nameof(WebFormsLogicSignalDetected);
     public const string WebFormsLifecycleBranchCandidate = nameof(WebFormsLifecycleBranchCandidate);
+    public const string WebFormsAngularOwnerCandidate = nameof(WebFormsAngularOwnerCandidate);
+    public const string WebFormsAngularClickCandidate = nameof(WebFormsAngularClickCandidate);
+    public const string WebFormsAngularServiceCallCandidate = nameof(WebFormsAngularServiceCallCandidate);
+    public const string WebFormsAngularFactoryRegistrationCandidate = nameof(WebFormsAngularFactoryRegistrationCandidate);
+    public const string WebFormsAngularServiceRegistrationCandidate = nameof(WebFormsAngularServiceRegistrationCandidate);
+    public const string WebFormsAngularServiceMemberDeclaredCandidate = nameof(WebFormsAngularServiceMemberDeclaredCandidate);
+    public const string WebFormsAngularServiceMemberPostHandlerCandidate = nameof(WebFormsAngularServiceMemberPostHandlerCandidate);
+    public const string WebFormsAngularServiceMemberPostCandidate = nameof(WebFormsAngularServiceMemberPostCandidate);
+    public const string WebFormsAngularServiceMemberCandidate = nameof(WebFormsAngularServiceMemberCandidate);
+    public const string WebFormsAngularPostHandlerCandidate = nameof(WebFormsAngularPostHandlerCandidate);
+    public const string WebFormsAngularThenCallbackCandidate = nameof(WebFormsAngularThenCallbackCandidate);
+    public const string WebFormsAngularPartialClickHandlerCandidate = nameof(WebFormsAngularPartialClickHandlerCandidate);
+    public const string WebFormsAngularClickHandlerCandidate = nameof(WebFormsAngularClickHandlerCandidate);
+    public const string WebFormsInlineServerStringCandidate = nameof(WebFormsInlineServerStringCandidate);
+    public const string WebFormsInlineServerInitializerCandidate = nameof(WebFormsInlineServerInitializerCandidate);
+    public const string WebFormsExternalScriptReferenceCandidate = nameof(WebFormsExternalScriptReferenceCandidate);
+    public const string WebFormsScriptBundleDeclaredCandidate = nameof(WebFormsScriptBundleDeclaredCandidate);
+    public const string WebFormsScriptBundleMemberCandidate = nameof(WebFormsScriptBundleMemberCandidate);
+    public const string WebFormsScriptBundleReferenceCandidate = nameof(WebFormsScriptBundleReferenceCandidate);
     public const string WebFormsClientScriptRegistrationCandidate = nameof(WebFormsClientScriptRegistrationCandidate);
     public const string WebFormsClientEventBindingCandidate = nameof(WebFormsClientEventBindingCandidate);
     public const string WebFormsClientUiMutationCandidate = nameof(WebFormsClientUiMutationCandidate);
@@ -526,6 +547,7 @@ public static class RuleIds
     public const string VisualBasicSyntaxCallGraph = "vb.syntax.callgraph.v1";
     public const string VisualBasicSyntaxObjectCreation = "vb.syntax.objectcreation.v1";
     public const string VisualBasicSyntaxEventWiring = "vb.syntax.event-wiring.v1";
+    public const string VisualBasicSqlArgument = "vb.syntax.sql-text-argument.v1";
     public const string VisualBasicSyntaxDatabaseOperation = "vb.syntax.database-operation.v1";
     public const string VisualBasicSyntaxDatabaseParameter = "vb.syntax.database-parameter.v1";
     public const string CSharpRazorSemanticModelBinding = "csharp.razor.semantic-model-binding.v1";
@@ -606,6 +628,9 @@ public static class RuleIds
     public const string LegacyWebFormsEventFlow = "legacy.webforms.event-flow.v1";
     public const string LegacyWebFormsLogicSignal = "legacy.webforms.logic-signal.v1";
     public const string LegacyWebFormsLifecycleContext = "legacy.webforms.lifecycle-context.v1";
+    public const string LegacyWebFormsAngularServiceHttp = "legacy.webforms.angularjs-service-http.v1";
+    public const string LegacyWebFormsAngularClick = "legacy.webforms.angularjs-click.v1";
+    public const string LegacyWebFormsScriptBundles = "legacy.webforms.script-bundles.v1";
     public const string LegacyWebFormsClientScript = "legacy.webforms.client-script.v1";
     public const string LegacyWebFormsInlineClientBehavior = "legacy.webforms.inline-client-behavior.v1";
     public const string LegacyWebFormsInlineClientHttpRequest = "legacy.webforms.inline-client-http-request.v1";
@@ -730,14 +755,14 @@ public static class ScannerVersions
     public const string CSharpIntegrationSyntaxExtractor = "csharp-integration-syntax/0.4.1";
     public const string CSharpSemanticExtractor = "csharp-semantic/0.22.23";
     public const string VisualBasicSemanticExtractor = "vb-semantic/0.10.26";
-    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.4.18";
+    public const string VisualBasicSyntaxExtractor = "vb-syntax/0.4.21";
     public const string CSharpPropertyMappingExtractor = "csharp-property-mapping/0.1.0";
     public const string FrameworkMigrationEvidenceExtractor = "framework-migration/0.1.0";
     public const string FrameworkMigrationSyntaxFallbackExtractor = "framework-migration-syntax-fallback/0.1.0";
     public const string ManagedMetadataExtractor = "managed-metadata/0.2.0+cecil-0.11.6"; // 0.2.0: ManagedAssemblyDeclared gains runtimeFloor* properties (#853)
     public const string SourceMetadataReconciliationExtractor = "source-metadata-reconciliation/0.1.0";
     public const string PortablePdbExtractor = "portable-pdb/0.1.0+srm-10.0.0+cecil-0.11.6";
-    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.69+srm-10.0.0+cecil-0.11.6"; // 0.2.69: diagnostic-only root work accounting and work-limit fork census; budgets and interpreter outcomes unchanged. 0.2.68 review follow-up: literal-literal equality compares digests (identical digests are the same interned literal — never fold unequal), and the VB both-literal fold is binary-only (Option Compare Text keeps the hypothetical marker; extends the #928 class). 0.2.68: string-compare markers key forks by their carried provenance (independent values keep independent decisions; the marker kind fell to "site" and under-keyed), and the census-driven capacity raise 128->256 paths / 12->16 sites (the two-string root shape carries ~8 genuine runtime binaries). 0.2.67: review round 5 — concatenations containing digest-only literals stay unbound, ToArray validates every element against the requested type, and the equality-only nonzero marker resolves solely against zero. 0.2.66: review round 4 — unbound-int comparison polarity (every strict relation vs 0/1 negates the equal-assumption), digest-mismatched string comparisons return an equality-only nonzero marker (ordering consumers refuse), and array casts validate the element type (tok:/t: prefixes compared bare). 0.2.65: review round 3 — unsigned ordering honored in short branch forms (.un.s), IsNothing returns the raw null-equality test (never negated), same-form plain-string equality compares texts, and concrete checked-overflow arithmetic refuses by name. 0.2.64: review round 2 — merges of written sources refuse, executed output parameters read back unknown, boxed booleans retain their runtime type, and derived-exact strings compare against ldstr digests by digest reconstruction (the ordinal shortcut never crosses the plain/digest forms — it had silently mis-folded the type-name dispatch). 0.2.63: review fixes — per-opcode strict integer comparisons (cgt is x>y, never !(x<y); .un compares unsigned) and the Fill count stays an unbound integer (fork on 0/1 compares, refuse equality, discard fine). 0.2.62: external-detach unsubscribe (an unmatched InfoMessage remove_InfoMessage of a tracked-shape handler records unsubscribe-external instead of refusing; the external subscription stays unproven). 0.2.61: both-null fold in the reference non-null test (cgt.un/clt.un with both operands proven null resolves to the is-null constant; pinned by the Cecil-rewritten Release-shape pin). 0.2.56: indexed For battery (sub/sub.ovf, length-k bounds, full .s/.un branch family, backward counted loops, get_Count/get_Item, IsNothing/IsDBNull)
+    public const string IlBodyEvidenceExtractor = "il-body-evidence/0.2.70+srm-10.0.0+cecil-0.11.6"; // 0.2.70: bounded local string-array snapshots for exact framework Concat(String[]) with fail-closed escape/mutation/merge handling. 0.2.69: diagnostic-only root work accounting and work-limit fork census; budgets and interpreter outcomes unchanged. 0.2.68 review follow-up: literal-literal equality compares digests (identical digests are the same interned literal — never fold unequal), and the VB both-literal fold is binary-only (Option Compare Text keeps the hypothetical marker; extends the #928 class). 0.2.68: string-compare markers key forks by their carried provenance (independent values keep independent decisions; the marker kind fell to "site" and under-keyed), and the census-driven capacity raise 128->256 paths / 12->16 sites (the two-string root shape carries ~8 genuine runtime binaries). 0.2.67: review round 5 — concatenations containing digest-only literals stay unbound, ToArray validates every element against the requested type, and the equality-only nonzero marker resolves solely against zero. 0.2.66: review round 4 — unbound-int comparison polarity (every strict relation vs 0/1 negates the equal-assumption), digest-mismatched string comparisons return an equality-only nonzero marker (ordering consumers refuse), and array casts validate the element type (tok:/t: prefixes compared bare). 0.2.65: review round 3 — unsigned ordering honored in short branch forms (.un.s), IsNothing returns the raw null-equality test (never negated), same-form plain-string equality compares texts, and concrete checked-overflow arithmetic refuses by name. 0.2.64: review round 2 — merges of written sources refuse, executed output parameters read back unknown, boxed booleans retain their runtime type, and derived-exact strings compare against ldstr digests by digest reconstruction (the ordinal shortcut never crosses the plain/digest forms — it had silently mis-folded the type-name dispatch). 0.2.63: review fixes — per-opcode strict integer comparisons (cgt is x>y, never !(x<y); .un compares unsigned) and the Fill count stays an unbound integer (fork on 0/1 compares, refuse equality, discard fine). 0.2.62: external-detach unsubscribe (an unmatched InfoMessage remove_InfoMessage of a tracked-shape handler records unsubscribe-external instead of refusing; the external subscription stays unproven). 0.2.61: both-null fold in the reference non-null test (cgt.un/clt.un with both operands proven null resolves to the is-null constant; pinned by the Cecil-rewritten Release-shape pin). 0.2.56: indexed For battery (sub/sub.ovf, length-k bounds, full .s/.un branch family, backward counted loops, get_Count/get_Item, IsNothing/IsDBNull)
     public const string IlRewriteEvidenceExtractor = "il-rewrite-evidence/0.1.1+srm-10.0.0+cecil-0.11.6";
     public const string IlRewritePdbEvidenceExtractor = "il-rewrite-pdb-evidence/0.1.0+srm-10.0.0+cecil-0.11.6";
     public const string ConfigExtractor = "config/0.1.0";
@@ -753,7 +778,7 @@ public static class ScannerVersions
     public const string LegacyWcfExtractor = "legacy-wcf/0.3.1";
     public const string LegacyAsmxExtractor = "legacy-asmx/0.2.0";
     public const string LegacyRemotingExtractor = "legacy-remoting/0.1.0";
-    public const string LegacyWebFormsExtractor = "legacy-webforms/0.14.3";
+    public const string LegacyWebFormsExtractor = "legacy-webforms/0.38.6";
     public const string WebFormsPublishMapExtractor = "webforms-publish-map/0.1.3";
     public const string LegacyWinFormsExtractor = "legacy-winforms/0.1.0";
     public const string LegacyAspNetExtractor = "legacy-aspnet/0.2.0";

@@ -1,0 +1,5 @@
+<%@ Master Language="VB" %>
+<html ng-app="example"><body>
+  <asp:ContentPlaceHolder ID="Main" runat="server"></asp:ContentPlaceHolder>
+  <script src="/Portal/Desk/scripts/panel.js"></script>
+</body></html>

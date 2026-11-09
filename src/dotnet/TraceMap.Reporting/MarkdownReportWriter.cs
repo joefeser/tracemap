@@ -157,6 +157,15 @@ public static class MarkdownReportWriter
 
         lines.Add("The Database Calls section lists selected fact families, not all operation candidates. Empty results do not prove absence; see Database Operation Candidates below and Analysis Coverage above.");
         AddDatabaseOperationCandidates(lines, result);
+        var sqlArguments = result.Facts.Where(f => f.FactType == FactTypes.SqlTextArgumentCandidate)
+            .OrderBy(f => f.Evidence.FilePath, StringComparer.Ordinal).ThenBy(f => f.Evidence.StartLine).ThenBy(f => f.FactId, StringComparer.Ordinal).ToArray();
+        if (sqlArguments.Length > 0)
+        {
+            lines.AddRange(["", "## VB SQL text passed to wrapper calls", "",
+                $"Showing {Math.Min(50, sqlArguments.Length)} of {sqlArguments.Length} source candidates. Command instance binding is unverified by this rule.", ""]);
+            foreach (var fact in sqlArguments.Take(50))
+                lines.Add($"- Candidate {fact.Properties["sqlOperation"]} constructed at `{fact.Evidence.FilePath}:{fact.Properties["constructionStartLine"]}–{fact.Properties["constructionEndLine"]}` and passed to `{fact.TargetSymbol}` as argument 1 at `{fact.Evidence.FilePath}:{fact.Evidence.StartLine}` ({fact.EvidenceTier}, `{fact.RuleId}`).");
+        }
         IntegratedMigrationReport.Append(lines, result);
         var parameterCandidates = result.Facts.Where(f => f.FactType == FactTypes.DatabaseParameterCandidate)
             .OrderBy(f => f.Evidence.FilePath, StringComparer.Ordinal).ThenBy(f => f.Evidence.StartLine)

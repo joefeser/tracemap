@@ -1,0 +1,5 @@
+<%@ Master Language="VB" %>
+<form runat="server">
+    <asp:ContentPlaceHolder ID="MainContent" runat="server" />
+    <%: Scripts.Render("~/bundles/app") %>
+</form>
