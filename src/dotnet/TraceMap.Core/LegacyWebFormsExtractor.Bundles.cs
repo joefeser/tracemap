@@ -222,6 +222,7 @@ public static partial class LegacyWebFormsExtractor
     {
         var properties = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
+            ["generatorSha256"] = EntryGeneratorSha256.Value,
             ["coverageLabel"] = "bounded-static-webforms-bundle-discovery",
             ["ruleLimitations"] = BundleLimitations,
             ["sourceSymbolId"] = source ?? $"file:{path}",
@@ -229,6 +230,7 @@ public static partial class LegacyWebFormsExtractor
             ["relationshipKind"] = kind,
             ["resolution"] = "declared-syntax-only"
         };
+        if (inputHash.Length != 0) properties["boundedInputSha256"] = inputHash;
         if (type == FactTypes.AnalysisGap) properties["gapKind"] = kind;
         if (offset is not null) properties["sourceOffset"] = offset.Value.ToString(CultureInfo.InvariantCulture);
         if (declaration is not null) properties["bundleDeclarationFactId"] = declaration;

@@ -8238,7 +8238,7 @@ rules:
       - ASAX requires an Application directive, explicit VB language and a single inline server script surrounded only by Application/Import directives and whitespace. Unsupported markup, malformed VB or a parsing timeout produces a gap when ScriptBundle text is present. Fact locations refer to the original ASAX source.
       - Literal Scripts.Render calls in server output blocks are supported; ScriptManager, Bundle.config and other rendering forms are deferred. ASP.NET comments are masked. No optimization/minification step or external script load executes.
       - Input is bounded to 1 MiB inventory bytes and 1048576 decoded characters per actual read, 256 declarations or output blocks per file, 128 members or render arguments, and 1024 characters per virtual path. Source read failures and bounded refusals remain explicit gaps. Whole-file parse diagnostics refuse bundle declarations.
-      - Declared include order is retained but runtime bundle ordering and debug/release file selection are not inferred. Source evidence retains a decoded-file text hash, never the raw body. Angular support is not implied.
+      - Declared include order is retained but runtime bundle ordering and debug/release file selection are not inferred. Each bundle fact identifies the extractor binary by SHA-256. When bounded source was available, boundedInputSha256 and the evidence snippet hash identify the decoded file text. Size and read failures retain the generator digest and omit the unavailable input hash. Angular support is not implied.
 
   - id: legacy.webforms.angularjs-click.v1
     name: AngularJS WebForms click to included scope method

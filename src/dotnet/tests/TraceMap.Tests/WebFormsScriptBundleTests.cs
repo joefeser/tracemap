@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using TraceMap.Core;
 
@@ -29,12 +31,18 @@ public sealed class WebFormsScriptBundleTests
         Assert.Equal(2, reference.Evidence.StartLine);
         Assert.Equal("~/bundles/app", reference.TargetSymbol);
         Assert.NotEqual(reference.Properties["targetSymbolId"], declaration.Properties["targetSymbolId"]);
+        using var binary = File.OpenRead(typeof(LegacyWebFormsExtractor).Assembly.Location);
+        var generator = Convert.ToHexStringLower(SHA256.HashData(binary));
         Assert.All(facts, fact =>
         {
             Assert.Equal(Manifest.CommitSha, fact.CommitSha);
             Assert.Equal(ScannerVersions.LegacyWebFormsExtractor, fact.Evidence.ExtractorVersion);
             Assert.Equal(EvidenceTiers.Tier3SyntaxOrTextual, fact.EvidenceTier);
-            Assert.NotNull(fact.Evidence.SnippetHash);
+            Assert.Equal(generator, fact.Properties["generatorSha256"]);
+            var source = File.ReadAllText(Path.Combine(temp.Path, fact.Evidence.FilePath));
+            var expectedHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(source)));
+            Assert.Equal(expectedHash, fact.Properties["boundedInputSha256"]);
+            Assert.Equal(expectedHash, fact.Evidence.SnippetHash);
         });
         Assert.Contains(inventory, item => item.RelativePath == "Scripts/main.js" && item.Kind == "JavaScript");
         Assert.Equal(JsonSerializer.Serialize(facts), JsonSerializer.Serialize(Extract(temp.Path, inventory.Reverse().ToArray())));
@@ -114,7 +122,13 @@ public sealed class WebFormsScriptBundleTests
         Write(temp.Path, "Large.cs", new string(' ', 1_048_577));
         var facts = Extract(temp.Path);
         Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedBundleRender");
-        Assert.Contains(facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "BundleSourceLimit");
+        var limit = Assert.Single(facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "BundleSourceLimit");
+        var unsupported = Assert.Single(facts, fact => fact.Properties.GetValueOrDefault("gapKind") == "UnsupportedBundleRender");
+        Assert.NotNull(unsupported.Evidence.SnippetHash);
+        Assert.Equal(unsupported.Evidence.SnippetHash, unsupported.Properties["boundedInputSha256"]);
+        Assert.Equal(unsupported.Properties["generatorSha256"], limit.Properties["generatorSha256"]);
+        Assert.Null(limit.Evidence.SnippetHash);
+        Assert.False(limit.Properties.ContainsKey("boundedInputSha256"));
         Assert.DoesNotContain(facts, fact => fact.FactType != FactTypes.AnalysisGap);
     }
 
