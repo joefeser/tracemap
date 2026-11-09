@@ -415,7 +415,7 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Equal("Corp.Messaging.TestingApp", row.Package);
         Assert.Equal("declared", row.IdProvenance);
         Assert.Equal("src/TestingApp/TestingApp.csproj", row.ProjectPath);
-        var gap = Assert.Single(result.Gaps.Where(g => g.Kind == "ci-producer-identity-conflict"));
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-identity-conflict");
         Assert.Contains("kept Corp.Messaging.TestingApp (declared)", gap.Detail);
         Assert.Contains("suppressed TestingApp (derived-default)", gap.Detail);
     }
@@ -543,6 +543,105 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.Equal("ci-pack-step", packed.SignalsKind); // direct evidence outranks the operator assertion
         Assert.Equal(".github/workflows/pack.yml", packed.WorkflowPath);
         Assert.DoesNotContain(result.Rows, row => row.Package == "OutOfScope"); // excluded from the scan scope
+    }
+
+    [Fact]
+    public void Matching_derived_version_conflict_is_retained_with_a_second_declared_identity()
+    {
+        using var temp = new TempDirectory();
+        WriteProject(temp.Path, "Core.csproj", BareSdkProject);
+        WriteWorkflow(temp.Path, "pack.yml", """
+            jobs:
+              build:
+                steps:
+                  - run: dotnet pack Core.csproj -p:PackageVersion=1.0.0
+                  - run: dotnet pack Core.csproj -p:PackageId=Core -p:PackageVersion=2.0.0
+                  - run: dotnet pack Core.csproj -p:PackageId=Other
+            """);
+        var result = Read(temp.Path);
+        Assert.Equal("Other", Assert.Single(result.Rows).Package);
+        Assert.Contains(result.Gaps, g => g.Kind == "ci-producer-version-conflict");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Explicit_claim_cannot_attribute_a_linked_project_or_parent(bool directory)
+    {
+        if (OperatingSystem.IsWindows()) return; // link creation requires privileges on Windows
+        using var temp = new TempDirectory();
+        WriteProject(temp.Path, "src/Core.csproj", BareSdkProject);
+        var alias = directory ? "Alias/Core.csproj" : "Alias.csproj";
+        if (directory)
+            Directory.CreateSymbolicLink(Path.Combine(temp.Path, "Alias"), Path.Combine(temp.Path, "src"));
+        else
+            File.CreateSymbolicLink(Path.Combine(temp.Path, alias), Path.Combine(temp.Path, "src/Core.csproj"));
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n" +
+            "      - run: dotnet pack src/Core.csproj -p:PackageId=Core\n" +
+            $"      - run: dotnet pack {alias} -p:PackageId=Other\n");
+        var result = Read(temp.Path);
+        Assert.Equal("Core", Assert.Single(result.Rows).Package);
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-project-path-unavailable");
+        Assert.Equal(".github/workflows/pack.yml", gap.Path);
+        Assert.Equal(5, gap.Line);
+    }
+
+    [Fact] // review 2026-11-09 (PR #941): a derived claim whose id MATCHES a declared claim survives
+    // with its version evidence, and the per-package pass ranks provenance over file position — the
+    // declared twin wins the row even when the derived row sorts first
+    public void Matching_id_derived_claim_survives_and_declared_twin_wins_the_row()
+    {
+        const string workflow = "jobs:\n  build:\n    steps:\n" +
+            "      - run: dotnet pack src/Core/Core.csproj -c Release -o out\n" +
+            "      - run: dotnet pack src/Core/Core.csproj -c Release -p:PackageId=Core -o out\n";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/Core/Core.csproj", BareSdkProject);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Core", row.Package);
+        Assert.Equal("declared", row.IdProvenance); // not the derived twin that sorts first by workflow+line
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-identity-conflict");
+    }
+
+    [Fact] // review 2026-11-09 (PR #941): conflict gaps cite the SUPPRESSED claim's workflow + line —
+    // the workflow IS the evidence; the .csproj-at-line-1 shape was a fabricated location
+    public void Conflict_gap_cites_the_suppressed_workflow_claim()
+    {
+        const string workflow = "jobs:\n  build:\n    steps:\n" +
+            "      - run: dotnet pack src/TestingApp/TestingApp.csproj -c Release -p:PackageId=Corp.Messaging.TestingApp -o out\n" +
+            "      - run: dotnet pack src/TestingApp/TestingApp.csproj -c Release -o out\n";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/TestingApp/TestingApp.csproj", BareSdkProject);
+
+        var result = Read(temp.Path);
+
+        var gap = Assert.Single(result.Gaps, g => g.Kind == "ci-producer-identity-conflict");
+        Assert.Equal(".github/workflows/pack.yml", gap.Path); // the same repo-relative form the hint gaps cite
+        Assert.Equal(5, gap.Line); // the bare (suppressed) step's line — the second run: block
+    }
+
+    [Fact] // review 2026-11-09 (PR #941): the identity-collapse decisions ride the bounded digest —
+    // changing a declared -p:PackageId must move the digest even when nothing else does
+    public void Digest_moves_when_a_declared_identity_changes()
+    {
+        const string workflowTemplate = "jobs:\n  build:\n    steps:\n" +
+            "      - run: dotnet pack src/TestingApp/TestingApp.csproj -c Release -p:PackageId={0} -o out\n" +
+            "      - run: dotnet pack src/TestingApp/TestingApp.csproj -c Release -o out\n";
+        using var tempA = new TempDirectory();
+        WriteWorkflow(tempA.Path, "pack.yml", string.Format(workflowTemplate, "Corp.One"));
+        WriteProject(tempA.Path, "src/TestingApp/TestingApp.csproj", BareSdkProject);
+        using var tempB = new TempDirectory();
+        WriteWorkflow(tempB.Path, "pack.yml", string.Format(workflowTemplate, "Corp.Two"));
+        WriteProject(tempB.Path, "src/TestingApp/TestingApp.csproj", BareSdkProject);
+
+        var resultA = Read(tempA.Path);
+        var resultB = Read(tempB.Path);
+
+        Assert.NotEqual(resultA.BoundedInputSha256, resultB.BoundedInputSha256);
     }
 
     [Fact]
