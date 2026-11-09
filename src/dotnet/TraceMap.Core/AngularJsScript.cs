@@ -43,13 +43,7 @@ internal sealed partial class AngularJsScript
         }
         if (settings is { Count: > 0 })
             SettingsScriptGap = CheckSettingsStrings(script, nodes, settings);
-        factoryMutations = nodes.Select(node => node switch
-        {
-            AssignmentExpression assignment => assignment.Left,
-            UpdateExpression update => update.Argument,
-            UnaryExpression { Operator: Operator.Delete } delete => delete.Argument,
-            _ => null
-        }).OfType<MemberExpression>().Where(member => Member(member, "factory", out _)).Select(member => member.Object).ToArray();
+        factoryMutations = nodes.SelectMany(WriteTargets).OfType<MemberExpression>().Where(member => Member(member, "factory", out _)).Select(member => member.Object).ToArray();
         providers = nodes.OfType<CallExpression>().Where(IsProviderCall).ToArray();
         IndexServiceStatements(script);
         controllerCalls = nodes.OfType<CallExpression>().Where(call => Member(call.Callee, "controller", out _)).ToArray();
@@ -142,13 +136,12 @@ internal sealed partial class AngularJsScript
 
     private static IEnumerable<Node> Walk(Node root, AngularJsScript? index = null)
     {
-        var stack = new Stack<(Node Node, bool InsideAssignmentPattern, ImmutableHashSet<string> Parameters, bool InsideWith)>();
-        stack.Push((root, false, ImmutableHashSet<string>.Empty, false));
+        var stack = new Stack<(Node Node, ImmutableHashSet<string> Parameters, bool InsideWith)>();
+        stack.Push((root, ImmutableHashSet<string>.Empty, false));
         var scheduled = 1;
         while (stack.TryPop(out var frame))
         {
             var node = frame.Node;
-            Node? pattern = null;
             var parameters = frame.Parameters;
             var insideWith = frame.InsideWith;
             if (index is not null)
@@ -163,28 +156,20 @@ internal sealed partial class AngularJsScript
                 };
                 if (node is Identifier reference && parameters.Contains(reference.Name)) index.parameterReferences.Add(reference);
 
-                if (frame.InsideAssignmentPattern && node is Identifier id) index.writes.Add(id.Name);
-                if (node is AssignmentExpression { Left: ArrayPattern or ObjectPattern } assignment)
-                    pattern = assignment.Left;
-                var name = node switch
+                foreach (var target in WriteTargets(node))
                 {
-                    AssignmentExpression { Left: Identifier target } => target.Name,
-                    AssignmentExpression { Left: MemberExpression { Object: Identifier receiver, Computed: true } } => receiver.Name,
-                    AssignmentExpression { Left: MemberExpression { Object: Identifier receiver, Property: Identifier { Name: "module" or "controller" or "service" } } } => receiver.Name,
-                    UpdateExpression { Argument: Identifier target } => target.Name,
-                    _ => null
-                };
-                if (name is not null)
-                {
-                    bool directRebind = node is AssignmentExpression { Left: Identifier } or UpdateExpression { Argument: Identifier };
-                    if (!directRebind || insideWith || !parameters.Contains(name)) index.writes.Add(name);
+                    if (target is Identifier id && (insideWith || !parameters.Contains(id.Name)))
+                        index.writes.Add(id.Name);
+                    if (target is MemberExpression { Object: Identifier receiver } member
+                        && (member.Computed || member.Property is Identifier { Name: "module" or "controller" or "service" }))
+                        index.writes.Add(receiver.Name);
                 }
             }
             yield return node;
             foreach (var child in node.ChildNodes)
             {
                 if (++scheduled > 100_000) throw new AngularClickGap("AngularScriptNodeLimit");
-                stack.Push((child, frame.InsideAssignmentPattern || ReferenceEquals(child, pattern), parameters, insideWith));
+                stack.Push((child, parameters, insideWith));
             }
         }
     }
@@ -233,7 +218,7 @@ internal sealed partial class AngularJsScript
     }
 
     // Follow binding positions only. Property keys and default values are expressions.
-    private static bool BindsName(Node pattern, string name)
+    private static IEnumerable<Node> BindingTargets(Node pattern)
     {
         var pending = new Stack<Node>();
         pending.Push(pattern);
@@ -241,7 +226,10 @@ internal sealed partial class AngularJsScript
         {
             switch (node)
             {
-                case Identifier id when id.Name == name: return true;
+                case Identifier or MemberExpression: yield return node; break;
+                case VariableDeclaration { Kind: VariableDeclarationKind.Var } vars:
+                    foreach (var declarator in vars.Declarations) pending.Push(declarator.Id);
+                    break;
                 case ArrayPattern array:
                     foreach (var element in array.Elements)
                         if (element is not null) pending.Push(element);
@@ -254,13 +242,21 @@ internal sealed partial class AngularJsScript
                 case AssignmentPattern assignment: pending.Push(assignment.Left); break;
             }
         }
-        return false;
     }
 
-    private static bool LoopRebindsScope(Node target, string scope) =>
-        target is VariableDeclaration declaration
-            ? declaration.Kind == VariableDeclarationKind.Var && declaration.Declarations.Any(d => BindsName(d.Id, scope))
-            : BindsName(target, scope);
+    private static IEnumerable<Node> WriteTargets(Node node)
+    {
+        var target = node switch
+        {
+            AssignmentExpression assignment => assignment.Left,
+            UpdateExpression update => update.Argument,
+            UnaryExpression { Operator: Operator.Delete } delete => delete.Argument,
+            ForInStatement loop => loop.Left,
+            ForOfStatement loop => loop.Left,
+            _ => null
+        };
+        return target is null ? [] : BindingTargets(target);
+    }
 
     private sealed record FulfillmentRegistration(CallExpression Then, FunctionExpression? Catch);
 
@@ -353,25 +349,24 @@ internal sealed partial class AngularJsScript
         foreach (var node in Walk(fn.Body))
         {
             if (node is VariableDeclarator { Id: Identifier redeclared, Init: not null } && redeclared.Name == scope
-                || node is VariableDeclarator { Id: ArrayPattern or ObjectPattern } declaration && BindsName(declaration.Id, scope)
-                || node is ForOfStatement ofLoop && LoopRebindsScope(ofLoop.Left, scope)
-                || node is ForInStatement inLoop && LoopRebindsScope(inLoop.Left, scope)
+                || node is VariableDeclarator { Id: ArrayPattern or ObjectPattern } declaration && BindingTargets(declaration.Id).OfType<Identifier>().Any(id => id.Name == scope)
                 || node is FunctionDeclaration { Id: { } fnName } && fnName.Name == scope
-                || node is ClassDeclaration { Id: { } clsName } && clsName.Name == scope
-                || node is AssignmentExpression pattern && pattern.Left is ArrayPattern or ObjectPattern
-                    && BindsName(pattern.Left, scope))
+                || node is ClassDeclaration { Id: { } clsName } && clsName.Name == scope)
                 throw new AngularClickGap("AngularScopeReassigned");
             if (node is VariableDeclarator { Init: Identifier alias } && alias.Name == scope
                 || node is AssignmentExpression { Right: Identifier stored } && stored.Name == scope
                 || node is CallExpression invocation && invocation.Arguments.Any(a => a is Identifier passed && passed.Name == scope))
                 throw new AngularClickGap("AngularScopeEscaped");
-            if (node is UpdateExpression { Argument: MemberExpression { Object: Identifier changed } } && changed.Name == scope
-                || node is UnaryExpression { Operator: Operator.Delete, Argument: MemberExpression { Object: Identifier removed } } && removed.Name == scope)
-                throw new AngularClickGap("AngularScopeMemberMutation");
+            foreach (var target in WriteTargets(node))
+            {
+                if (target is Identifier rebound && rebound.Name == scope)
+                    throw new AngularClickGap("AngularScopeReassigned");
+                if (target is MemberExpression { Object: Identifier owner } && owner.Name == scope
+                    && !(node is AssignmentExpression direct && ReferenceEquals(direct.Left, target)))
+                    throw new AngularClickGap("AngularScopeMemberMutation");
+            }
             if (node is not AssignmentExpression assignment) continue;
-            if (assignment.Left is Identifier variable && variable.Name == scope)
-                throw new AngularClickGap("AngularScopeReassigned");
-            if (assignment.Left is not MemberExpression { Object: Identifier target } left || target.Name != scope) continue;
+            if (assignment.Left is not MemberExpression { Object: Identifier receiver } left || receiver.Name != scope) continue;
             if (left.Computed) throw new AngularClickGap("DynamicAngularScopeMember");
             if (left.Property is not Identifier key || key.Name != method) continue;
             if (assignment.Operator != Operator.Assignment

@@ -224,6 +224,14 @@ public sealed class WebFormsAngularServicePostTests
     }
 
     [Theory]
+    [InlineData("for (exampleApp of replacements) {}", false)]
+    [InlineData("for ([exampleApp.service] of replacements) {}", false)]
+    [InlineData("for (var exampleApp in replacements) {}", false)]
+    [InlineData("for ({nested: [exampleApp]} of replacements) {}", false)]
+    [InlineData("for (const exampleApp of replacements) {}", true)]
+    [InlineData("for ({exampleApp: local} of replacements) {}", true)]
+    [InlineData("function f(exampleApp) { for (exampleApp of replacements) {} }", true)]
+    [InlineData("function f(exampleApp) { with (settings) { for (exampleApp in replacements) {} } }", false)]
     [InlineData("function local(exampleApp) { exampleApp = null; }", true)]
     [InlineData("function local(exampleApp) { return () => { exampleApp++; }; }", true)]
     [InlineData("function local() { exampleApp = null; }", false)]

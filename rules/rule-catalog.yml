@@ -8255,7 +8255,7 @@ rules:
       - WebFormsAngularClickHandlerCandidate
       - AnalysisGap
     limitations:
-      - Scope rebinding through destructuring or for-in/for-of loop targets and generator handler functions leave the click unresolved. Angular fact input digests include the source evidence hash and ordered supporting fact evidence digests.
+      - Assignments, identifier updates and for-in/for-of writes to the injected scope leave the click unresolved. Loop writes to a module alias invalidate its ownership. Generator handlers leave the click unresolved. Angular fact input digests include the source evidence hash and ordered supporting fact evidence digests.
       - Clicks inside noscript or template markup are excluded before the per-surface click limit.
       - Parses literal ng-click and data-ng-click calls to a bare method with zero or more simple identifier or dotted-path arguments. DOM ancestry must identify a literal ng-controller and named ng-app. Master scope requires a retained UsesMasterPage relationship and a unique matching content placeholder. Non-bindable content, duplicate attributes, unsupported expressions, unknown scope and nested masters remain gaps.
       - Sources come from direct page-relative classic script includes or existing Scripts.Render, ScriptBundle declaration and exact declaration-linked member facts within the same nearest inventoried Global.asax application root. These are static candidate relationships. Rendering, deployment paths, framework identity, conditional content, scope inheritance and execution remain unproven. Unmapped origin-relative URLs, base overrides, directory traversal, module scripts, missing or filtered files and ambiguous bundle roots or declarations are gaps.

@@ -5518,7 +5518,7 @@ handler and review the recorded supporting IDs and parser/input digests.
 The prior bundle fixtures retain their four- and seven-fact bundle controls.
 
 This rule is `legacy.webforms.angularjs-click.v1`, extractor
-`legacy-webforms/0.38.3`. It parses included JavaScript using pinned Acornima
+`legacy-webforms/0.38.4`. It parses included JavaScript using pinned Acornima
 1.9.1 and markup using AngleSharp 1.10.0. An admitted WebForms inventory now
 tracks .js source changes. The explicit ownership and resource boundaries are
 in the rule catalog. General plain onclick, runtime, backend and private
