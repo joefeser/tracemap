@@ -257,6 +257,11 @@ internal sealed partial class AngularJsScript
         return false;
     }
 
+    private static bool LoopRebindsScope(Node target, string scope) =>
+        target is VariableDeclaration declaration
+            ? declaration.Kind == VariableDeclarationKind.Var && declaration.Declarations.Any(d => BindsName(d.Id, scope))
+            : BindsName(target, scope);
+
     private sealed record FulfillmentRegistration(CallExpression Then, FunctionExpression? Catch);
 
     private static Dictionary<AssignmentExpression, FulfillmentRegistration?> ScopeAssignmentSites(FunctionExpression controller, string scope)
@@ -349,6 +354,8 @@ internal sealed partial class AngularJsScript
         {
             if (node is VariableDeclarator { Id: Identifier redeclared, Init: not null } && redeclared.Name == scope
                 || node is VariableDeclarator { Id: ArrayPattern or ObjectPattern } declaration && BindsName(declaration.Id, scope)
+                || node is ForOfStatement ofLoop && LoopRebindsScope(ofLoop.Left, scope)
+                || node is ForInStatement inLoop && LoopRebindsScope(inLoop.Left, scope)
                 || node is FunctionDeclaration { Id: { } fnName } && fnName.Name == scope
                 || node is ClassDeclaration { Id: { } clsName } && clsName.Name == scope
                 || node is AssignmentExpression pattern && pattern.Left is ArrayPattern or ObjectPattern

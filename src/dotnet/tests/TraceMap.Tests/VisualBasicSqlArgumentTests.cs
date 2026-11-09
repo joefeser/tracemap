@@ -7,6 +7,22 @@ public sealed class VisualBasicSqlArgumentTests
     private static readonly ScanManifest Manifest = new("public", "synthetic", null, "test", "abc123", "test/1",
         DateTimeOffset.UnixEpoch, "Level3SyntaxAnalysis", "NotRun", [], [], [], []);
 
+    [Theory]
+    [InlineData("db.ExecSql(\"SELECT x FROM table_a\")", "table_a", "table_b", true)]
+    [InlineData("Dim sql = \"SELECT x FROM table_a\"\ndb.ExecSql(sql)", "table_a", "table_b", false)]
+    [InlineData("Dim sql = \"UPDATE table_a \"\nsql &= \"SET x = 1\"\ndb.ExecSql(sql)", "x = 1", "x = 2", false)]
+    [InlineData("Dim sql = \"SELECT x FROM table_a\"\ndb.ExecSql(sql, part)", "part", "item", true)]
+    public void Digest_tracks_construction_and_call_source(string source, string from, string to, bool callChanged)
+    {
+        CodeFact Hit(string statements) => Assert.Single(Extract(statements), f => f.FactType == FactTypes.SqlTextArgumentCandidate);
+        var initial = Hit(source);
+        var changed = Hit(source.Replace(from, to));
+        Assert.NotNull(initial.Evidence.SnippetHash);
+        Assert.Equal(callChanged, initial.Evidence.SnippetHash != changed.Evidence.SnippetHash);
+        Assert.NotEqual(initial.Properties["boundedInputSha256"], changed.Properties["boundedInputSha256"]);
+        Assert.Equal(initial.Properties["boundedInputSha256"], Hit(source).Properties["boundedInputSha256"]);
+    }
+
     [Fact]
     public void Missing_source_after_semantic_analysis_reports_sql_coverage_gap()
     {

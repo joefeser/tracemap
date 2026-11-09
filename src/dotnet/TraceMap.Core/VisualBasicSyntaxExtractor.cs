@@ -1470,7 +1470,8 @@ public static partial class VisualBasicSyntaxExtractor
         SortedDictionary<string, string> properties,
         FactBudget budget,
         string? sourceSymbol = null,
-        string? contractElement = null)
+        string? contractElement = null,
+        string? snippetHash = null)
     {
         if (!TryReserveFactBudget(manifest, facts, filePath, budget))
         {
@@ -1487,7 +1488,7 @@ public static partial class VisualBasicSyntaxExtractor
                 FileInventory.NormalizeRelativePath(filePath),
                 span.StartLinePosition.Line + 1,
                 Math.Max(span.StartLinePosition.Line + 1, span.EndLinePosition.Line + 1),
-                null,
+                snippetHash,
                 "VisualBasicSyntaxExtractor",
                 ScannerVersions.VisualBasicSyntaxExtractor),
             sourceSymbol: sourceSymbol,

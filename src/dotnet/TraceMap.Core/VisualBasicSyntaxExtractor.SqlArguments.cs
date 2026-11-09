@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.CodeAnalysis.VisualBasic;
 using Microsoft.CodeAnalysis.VisualBasic.Syntax;
 
@@ -12,7 +13,7 @@ public static partial class VisualBasicSyntaxExtractor
     private static readonly Lazy<string> SqlArgumentGenerator = new(() => Convert.ToHexStringLower(
         SHA256.HashData(GeneratorBinaryIdentity.ReadBytes(typeof(VisualBasicSyntaxExtractor).Assembly))));
 
-    private sealed record SqlTextOrigin(string Verb, int Start, int End, bool HasVariable);
+    private sealed record SqlTextOrigin(string Verb, int Start, int End, bool HasVariable, TextSpan Construction);
 
     // Only adjacent, explicit construction steps contribute to the argument.
     // A control-flow block, call, or other intervening statement kills tracked values.
@@ -43,7 +44,7 @@ public static partial class VisualBasicSyntaxExtractor
                 if (stmt is LocalDeclarationStatementSyntax decl && decl.Modifiers.Count == 1
                     && decl.Modifiers[0].IsKind(SyntaxKind.DimKeyword) && decl.Declarators.Count == 1
                     && decl.Declarators[0] is { Names.Count: 1, Initializer.Value: { } init } variable
-                    && SqlTextExpression(init, start, end) is { } seed)
+                    && SqlTextExpression(init, start, end, stmt.Span) is { } seed)
                 {
                     local = variable.Names[0].Identifier.ValueText;
                     origin = seed;
@@ -52,13 +53,13 @@ public static partial class VisualBasicSyntaxExtractor
                 if (origin is not null && stmt is AssignmentStatementSyntax assignment
                     && SameLocal(assignment.Left, local) && AppendedLiteral(assignment, local))
                 {
-                    origin = origin with { End = end };
+                    origin = origin with { End = end, Construction = TextSpan.FromBounds(origin.Construction.Start, stmt.Span.End) };
                     continue;
                 }
 
                 if (local is not null && stmt is AssignmentStatementSyntax replacement
                     && replacement.IsKind(SyntaxKind.SimpleAssignmentStatement) && SameLocal(replacement.Left, local)
-                    && SqlTextExpression(replacement.Right, start, end) is { } reset)
+                    && SqlTextExpression(replacement.Right, start, end, stmt.Span) is { } reset)
                 {
                     origin = reset;
                     continue;
@@ -78,7 +79,7 @@ public static partial class VisualBasicSyntaxExtractor
                     && args.Arguments[0] is SimpleArgumentSyntax { NameColonEquals: null } arg)
                 {
                     var value = SameLocal(arg.Expression, local) ? origin : SqlTextExpression(arg.Expression,
-                        arg.GetLocation().GetLineSpan().StartLinePosition.Line + 1, arg.GetLocation().GetLineSpan().EndLinePosition.Line + 1);
+                        arg.GetLocation().GetLineSpan().StartLinePosition.Line + 1, arg.GetLocation().GetLineSpan().EndLinePosition.Line + 1, arg.Expression.Span);
                     if (value is not null)
                     {
                         var target = owner.Identifier.ValueText + "." + name.Identifier.ValueText;
@@ -92,8 +93,10 @@ public static partial class VisualBasicSyntaxExtractor
                             ["argumentOrdinal"] = "1", ["callOffset"] = call.SpanStart.ToString(CultureInfo.InvariantCulture),
                             ["generatorSha256"] = SqlArgumentGenerator.Value
                         };
+                        var constructionHash = FactFactory.Hash(root.SyntaxTree.GetText().ToString(value.Construction), 64);
+                        var callHash = FactFactory.Hash(call.ToString(), 64);
                         props["boundedInputSha256"] = FactFactory.Hash(JsonSerializer.Serialize(new { manifest.CommitSha,
-                            file, target, properties = props.ToArray() }), 64);
+                            file, target, constructionHash, callHash, properties = props.ToArray() }), 64);
                         if (budget.Remaining == 0)
                         {
                             facts.Add(FactFactory.Create(manifest, FactTypes.AnalysisGap, RuleIds.VisualBasicSqlArgument,
@@ -103,7 +106,7 @@ public static partial class VisualBasicSyntaxExtractor
                             return;
                         }
                         if (!TryAddSyntaxFact(manifest, facts, FactTypes.SqlTextArgumentCandidate, RuleIds.VisualBasicSqlArgument,
-                            file, call, target, props, budget, GetContainingMemberName(call))) return;
+                            file, call, target, props, budget, GetContainingMemberName(call), snippetHash: callHash)) return;
                     }
                 }
                 local = null;
@@ -128,7 +131,7 @@ public static partial class VisualBasicSyntaxExtractor
     private static bool IsSqlConcat(BinaryExpressionSyntax expr) =>
         expr.IsKind(SyntaxKind.ConcatenateExpression) || expr.IsKind(SyntaxKind.AddExpression);
 
-    private static SqlTextOrigin? SqlTextExpression(ExpressionSyntax expr, int start, int end)
+    private static SqlTextOrigin? SqlTextExpression(ExpressionSyntax expr, int start, int end, TextSpan construction)
     {
         bool variable = false;
         while (expr is BinaryExpressionSyntax binary && IsSqlConcat(binary))
@@ -142,7 +145,7 @@ public static partial class VisualBasicSyntaxExtractor
         foreach (var verb in new[] { "SELECT", "UPDATE" })
             if (words.Length > verb.Length && char.IsWhiteSpace(words[verb.Length])
                 && words.StartsWith(verb, StringComparison.OrdinalIgnoreCase))
-                return new(verb, start, end, variable);
+                return new(verb, start, end, variable, construction);
         return null;
     }
 }

@@ -8,6 +8,17 @@ public sealed class WebFormsAngularClickTests
     private static readonly ScanManifest Manifest = new("angular", "synthetic", null, "test", "abc123", "test/1.0",
         DateTimeOffset.UnixEpoch, "Level3SyntaxAnalysis", "NotRun", [], [], [], []);
 
+    [Theory]
+    [InlineData("for (let view of replacements) {}")]
+    [InlineData("for ({view: other} of replacements) {}")]
+    public void Loop_with_separate_binding_preserves_scope(string loop)
+    {
+        using var temp = Fixture();
+        var path = Path.Combine(temp.Path, "Scripts/editor.js");
+        File.WriteAllText(path, File.ReadAllText(path).Replace("view.save =", loop + " view.save ="));
+        Assert.Single(Extract(temp.Path), f => f.FactType == FactTypes.WebFormsAngularClickHandlerCandidate);
+    }
+
     [Fact]
     public void Click_in_page_resolves_through_master_slot_bundle_module_and_correct_controller()
     {
@@ -199,6 +210,10 @@ public sealed class WebFormsAngularClickTests
     [InlineData("Scripts/other.js", "OtherController", "EditorController", "AmbiguousAngularController")]
     [InlineData("Scripts/editor.js", "view.save =", "view.save = function () {}; view.save =", "AmbiguousAngularScopeMethod")]
     [InlineData("Scripts/editor.js", "view.save =", "view = other; view.save =", "AngularScopeReassigned")]
+    [InlineData("Scripts/editor.js", "view.save =", "for (view of replacements) {} view.save =", "AngularScopeReassigned")]
+    [InlineData("Scripts/editor.js", "view.save =", "for (view in replacements) {} view.save =", "AngularScopeReassigned")]
+    [InlineData("Scripts/editor.js", "view.save =", "for (var view of replacements) {} view.save =", "AngularScopeReassigned")]
+    [InlineData("Scripts/editor.js", "view.save =", "for ({row: [view]} of replacements) {} view.save =", "AngularScopeReassigned")]
     [InlineData("Scripts/editor.js", "view.save =", "var [view] = replacements; view.save =", "AngularScopeReassigned")]
     [InlineData("Scripts/editor.js", "view.save =", "var {nested: [view]} = replacements; view.save =", "AngularScopeReassigned")]
     [InlineData("Scripts/editor.js", "view.save = function", "view.save = function*", "UnsupportedAngularScopeAssignment")]
