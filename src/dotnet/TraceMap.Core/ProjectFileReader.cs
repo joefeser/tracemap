@@ -329,7 +329,87 @@ public static class ProjectFileReader
     /// unreadable/linked files, conditioned or non-literal IsPackable, and Microsoft.NET.Test.Sdk
     /// projects (directly or via Directory.Build; conditioned references gap) without a literal
     /// IsPackable=true all yield typed unevidenced decisions — a gap, never a wrong id.
-    internal static CiDerivedIdentity ReadCiDerivedIdentity(string repoPath, string relativePath)
+    /// One identity assignment seen in the project body, in document order. Unconditional
+    /// assignments carry ConditionTexts = null (they always win their position); conditioned
+    /// assignments carry EVERY condition text on their path (own + ancestors) — all must hold
+    /// for the assignment to be the pack-time winner.
+    internal sealed record BodyIdentityClaim(string PropertyKind, string Value, List<string>? ConditionTexts, bool TargetScoped, bool StructuralSticky = false, bool InChooseBranch = false, List<(System.Xml.Linq.XElement ChooseNode, System.Xml.Linq.XElement BranchNode)>? ChoosePath = null);
+
+    /// Bounded evaluation of a Condition string against the known pack configuration. Handles the
+    /// '|'-separated string equality forms MSBuild properties compare with
+    /// ('$(Configuration)|$(Platform)'=='Release|AnyCPU', either operand order, != included).
+    /// $(Configuration) substitutes the known configuration; $(Platform) stays sticky unless a
+    /// known platform is threaded (it never is today). Any other $(...) token, property function,
+    /// or unrecognized shape is unevaluable. Returns: true / false / null = STICKY (never guessed —
+    /// the tier contract; configuration-aware release, review 2026-11-09: the workflow's
+    /// `--configuration release` makes a ReleaseBench-conditioned branch provably false, so the
+    /// resolvable head declaration is no longer poisoned by it).
+    internal static bool? EvaluateBoundedConfigurationCondition(string conditionText, string? knownConfiguration)
+    {
+        var text = conditionText.Trim();
+        // COMPOUND conditions (And/Or, multiple comparisons) are OUTSIDE the bounded grammar:
+        // evaluating the first comparison and ignoring the rest could return a provable-false
+        // that the untold second comparison overturns — the safe answer is STICKY (review
+        // 2026-11-10: a compound shape evaluated as false and dropped a valid identity claim).
+        if (System.Text.RegularExpressions.Regex.IsMatch(text, "\\b(and|or)\\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+            return null;
+        var firstEq = text.IndexOf("==", StringComparison.Ordinal);
+        var firstNe = text.IndexOf("!=", StringComparison.Ordinal);
+        var sep = firstEq >= 0 && (firstNe < 0 || firstEq < firstNe) ? firstEq : firstNe;
+        if (sep < 0) return null;
+        var rest = text[(sep + 2)..];
+        if (rest.Contains("==", StringComparison.Ordinal) || rest.Contains("!=", StringComparison.Ordinal))
+            return null; // a second comparison: compound — sticky
+        var invert = firstEq < 0;
+        var left = text[..sep].Trim(); var right = text[(sep + 2)..].Trim();
+        if (left.Length < 2 || right.Length < 2 || left[0] != '\'' || left[^1] != '\'' || right[0] != '\'' || right[^1] != '\'')
+            return null;
+        var leftSegments = left[1..^1].Split('|');
+        var rightSegments = right[1..^1].Split('|');
+        string? Substitute(string raw)
+        {
+            var t = raw.Trim();
+            if (t == "$(Configuration)") return knownConfiguration;
+            if (t == "$(Platform)") return null; // platform is never threaded today: segment stays sticky
+            // an EMBEDDED reference (A$(X)B shapes) is not a literal: the property could expand to
+            // anything at build time, so comparing the raw text would fabricate a provable-false
+            // (review 2026-11-10: embedded references compared as literals). Sticky.
+            if (t.Contains("$(")) return null;
+            return t;
+        }
+        // MSBuild configuration comparisons are case-insensitive.
+        var result = true;
+        var seenSticky = false;
+        for (var i = 0; i < Math.Max(leftSegments.Length, rightSegments.Length); i++)
+        {
+            var l = i < leftSegments.Length ? Substitute(leftSegments[i]) : "";
+            var r = i < rightSegments.Length ? Substitute(rightSegments[i]) : "";
+            if (l is null || r is null)
+            {
+                // One side is a known literal, the other sticky: if the KNOWN segments at this
+                // position already differ, the whole condition is provably false regardless of
+                // what the sticky segment holds. Otherwise the position is genuinely sticky.
+                var lKnown = l ?? (leftSegments[i].Contains("$(Configuration)") && knownConfiguration is not null ? knownConfiguration : null);
+                var rKnown = r ?? (rightSegments[i].Contains("$(Configuration)") && knownConfiguration is not null ? knownConfiguration : null);
+                if (lKnown is not null && rKnown is not null)
+                {
+                    if (!string.Equals(lKnown, rKnown, StringComparison.OrdinalIgnoreCase)) { result = false; break; }
+                    seenSticky = true; continue;
+                }
+                // a MIXED segment (one side known, one side a non-Configuration token): the known
+                // side cannot contradict itself here, but the unknown side could match anything —
+                // sticky (review round-4: this return must not be skipped by later loop iterations
+                // that then hit the seenSticky collapse — it IS the correct sticky verdict for the
+                // mixed segment shape).
+                return null;
+            }
+            if (!string.Equals(l, r, StringComparison.OrdinalIgnoreCase)) { result = false; break; }
+        }
+        if (result && seenSticky) return null; // equality held so far but a sticky segment never resolved
+        return invert ? !result : result;
+    }
+
+    internal static CiDerivedIdentity ReadCiDerivedIdentity(string repoPath, string relativePath, string? knownConfiguration = null)
     {
         var root = Path.GetFullPath(repoPath);
         var projectName = Path.GetFileNameWithoutExtension(relativePath);
@@ -354,6 +434,49 @@ public static class ProjectFileReader
         bool? packable = null; var packableLiteralTrue = false; var packableUnprovable = false;
         string? packageIdValue = null; string? assemblyNameValue = null; // last-wins raw values — the CI chain evaluates them below
         var packageIdConditioned = false; var assemblyNameConditioned = false;
+        // configuration-aware identity (2026-11-09): conditioned assignments keep their condition
+        // TEXTS (own + ancestors — ALL must hold for the claim to win) so a known pack configuration
+        // can release the stickiness for provably-false branches and crown provably-true ones.
+        // Target-scoped claims stay sticky always (a pack-time Target cannot be reasoned from a
+        // configuration); inherited-phase claims stay conservative (see the inherited block below).
+        var packageIdClaims = new List<BodyIdentityClaim>();
+        var assemblyNameClaims = new List<BodyIdentityClaim>();
+        var allBodyClaims = new List<BodyIdentityClaim>(); // DOCUMENT ORDER across both properties — Choose selection must see non-assigning branches (review round-5)
+        void CollectClaim(string kind, string value, System.Collections.Generic.IEnumerable<System.Xml.Linq.XElement> path)
+        {
+            var conditions = path.Select(e => e.Attribute("Condition")?.Value).Where(t => t is not null).Select(t => t!).ToList();
+            var targetScoped = path.Any(a => a.Name.LocalName == "Target");
+            // STRUCTURAL conditionality (review 2026-11-10): an Otherwise branch fires only when no
+            // When matched, and a When without its own Condition depends on the earlier Whens —
+            // neither is expressible as a condition TEXT, so the claim is sticky-always (the old
+            // IsConditioned boolean caught this; the texts-based path must not lose it).
+            var structural = path.Any(a => a.Name.LocalName == "Otherwise"
+                || (a.Name.LocalName == "When" && a.Attribute("Condition") is null));
+            var inChoose = path.Any(a => a.Name.LocalName is "Choose" or "When");
+            // the FULL enclosing Choose path, NEAREST FIRST (review round-5: nested Chooses — the
+            // last-ancestor tagging associated nested claims with only the outermost branch):
+            // each pair = (the enclosing Choose, the direct branch child of that Choose containing
+            // the element). A claim applies only when EVERY enclosing Choose fired the branch on
+            // the claim's path.
+            List<(System.Xml.Linq.XElement ChooseNode, System.Xml.Linq.XElement BranchNode)>? choosePath = null;
+            if (inChoose)
+            {
+                choosePath = new List<(System.Xml.Linq.XElement, System.Xml.Linq.XElement)>();
+                System.Xml.Linq.XElement? currentBranch = null;
+                foreach (var ancestor in path) // nearest ancestor first
+                {
+                    if (ancestor.Name.LocalName is "When" or "Otherwise") currentBranch = ancestor;
+                    else if (ancestor.Name.LocalName == "Choose" && currentBranch is not null)
+                    {
+                        choosePath.Add((ancestor, currentBranch));
+                        currentBranch = null;
+                    }
+                }
+            }
+            var claim = new BodyIdentityClaim(kind, value, conditions, targetScoped, structural, inChoose, choosePath);
+            (kind == "PackageId" ? packageIdClaims : assemblyNameClaims).Add(claim);
+            allBodyClaims.Add(claim);
+        }
         var inherited = InspectNearestDirectoryBuildFiles(root, Path.GetDirectoryName(fullPath));
         if (inherited.Unreadable) return new(CiDerivedIdentityDecisions.InheritedIdentity, null);
         // Imports can introduce higher-priority properties or pack-time targets, regardless
@@ -378,10 +501,12 @@ public static class ProjectFileReader
                     case "PACKAGEID":
                         packageIdValue = element.Value.Trim();
                         packageIdConditioned |= CiDerivedIdentityDecisions.IsConditioned(element) || element.Ancestors().Any(a => a.Name.LocalName == "Target"); // sticky: a pack-time Target can replace even a later value
+                        CollectClaim("PackageId", packageIdValue, new[] { element }.Concat(element.Ancestors()));
                         break;
                     case "ASSEMBLYNAME":
                         assemblyNameValue = element.Value.Trim();
                         assemblyNameConditioned |= CiDerivedIdentityDecisions.IsConditioned(element) || element.Ancestors().Any(a => a.Name.LocalName == "Target");
+                        CollectClaim("AssemblyName", assemblyNameValue, new[] { element }.Concat(element.Ancestors()));
                         break;
                     case "ISPACKABLE":
                         var value = element.Value.Trim();
@@ -427,29 +552,173 @@ public static class ProjectFileReader
         // A CONDITIONED winning assignment's branch is never a proven id (round-6: a Release-only
         // AssemblyName is not a Debug build's identity); a winning value the bounded evaluator
         // cannot resolve remains a typed gap — the guards' honesty is preserved.
-        var packageIdConditionedAnyPhase = inherited.PropsPackageIdConditioned | packageIdConditioned | inherited.TargetsPackageIdConditioned;
-        var assemblyNameConditionedAnyPhase = inherited.PropsAssemblyNameConditioned | assemblyNameConditioned | inherited.TargetsAssemblyNameConditioned;
         string? finalPackageId = inherited.PropsPackageId;
         if (packageIdValue is not null) finalPackageId = packageIdValue;
         if (inherited.TargetsPackageId is not null) finalPackageId = inherited.TargetsPackageId; // targets is imported AFTER the body: its assignments win (review: targets PackageId ignored)
         string? finalAssemblyName = inherited.PropsAssemblyName;
         if (assemblyNameValue is not null) finalAssemblyName = assemblyNameValue;
         if (inherited.TargetsAssemblyName is not null) finalAssemblyName = inherited.TargetsAssemblyName;
-        var chainSource = finalPackageId is not null ? "PackageId" : finalAssemblyName is not null ? "AssemblyName" : null;
-        var chainValue = finalPackageId ?? finalAssemblyName;
-        // Sticky uncertainty: a Target-scoped or Conditioned assignment in ANY phase can be the
-        // pack-time winner (BeforeTargets=GenerateNuspec runs AFTER evaluation and can replace even
-        // a later evaluation-time value) — never proven while any phase's assignment was conditioned
-        var chainConditioned = finalPackageId is not null ? packageIdConditionedAnyPhase : assemblyNameConditionedAnyPhase;
-        if (!sdkStyle && finalPackageId is null) return new(CiDerivedIdentityDecisions.NotSdkStyle, null);
-        if (chainValue is not null)
+        var usePackageIdChain = inherited.PropsPackageId is not null || packageIdValue is not null || inherited.TargetsPackageId is not null;
+        var chainSource = usePackageIdChain ? "PackageId" : "AssemblyName";
+        if (!sdkStyle && !usePackageIdChain) return new(CiDerivedIdentityDecisions.NotSdkStyle, null);
+
+        // ---- configuration-aware identity resolution (2026-11-09, live estate finding) ----
+        // Phases in MSBuild evaluation order: props (0) -> body claims (1, document order) ->
+        // targets (2); the LAST claim that is LIVE — unconditional, or whose conditions ALL
+        // evaluate true under the known pack configuration — is the winner. Three-verbatim refusals
+        // preserved: Target-scoped claims (a pack-time Target cannot be reasoned from a
+        // configuration) and inherited-phase conditioned claims (their condition texts are not
+        // retained in this change) are sticky ALWAYS; a body claim with an unevaluable condition
+        // or an unknown configuration is sticky. Provably-FALSE body claims are simply dropped —
+        // they cannot win and must not poison the chain (the ReleaseBench Alt.* group no longer
+        // hides a resolvable head when the workflow packs -c release).
+        // the chain walks BOTH properties when needed (review 2026-11-10): a PackageId whose
+        // claims are ALL provably false at this configuration assigns NOTHING at pack time —
+        // MSBuild falls through to the AssemblyName, and so must the bounded model. Phase order
+        // inside each property: props (inherited, no texts — conditioned = sticky, unchanged) ->
+        // body claims (document order, configuration-aware) -> targets (inherited).
+        IEnumerable<BodyIdentityClaim> BodyClaimsOf(string property) =>
+            property == "PackageId" ? packageIdClaims : assemblyNameClaims;
+        // ---- Choose resolution FIRST, across ALL properties (review round-5, the structure pass;
+        // round-5b: IDENTITY-RELEVANT Chooses only + full nested-path matching) ----
+        // A Choose fires EXACTLY ONE branch: the FIRST When whose conditions provably hold under
+        // the known configuration (document order); an Otherwise fires only when no When did. A
+        // branch that assigns NO identity still FIRES and suppresses its siblings (the
+        // Base/When#1-Optimize/When#2-Other shape: the identity stays Base — filtering branches by
+        // property before selection crowned a When MSBuild never fired). An unevaluable branch
+        // condition makes which branch fires unknowable — sticky. Chooses that assign no identity
+        // property anywhere (Optimize-only shapes) are IDENTITY-IRRELEVANT: skipped, never
+        // blocking a provable head (review round-5b: an unrelated unknown Choose must not strip a
+        // previously-working producer).
+        var identityChooseNodes = allBodyClaims
+            .Where(c2 => c2.InChooseBranch && c2.ChoosePath is not null)
+            .SelectMany(c2 => c2.ChoosePath!)
+            .Select(pair => pair.ChooseNode)
+            .Distinct()
+            .ToList();
+        var chooseFiredBranch = new Dictionary<System.Xml.Linq.XElement, int>();
+        var chooseSticky = false;
+        foreach (var chooseNode in identityChooseNodes)
         {
-            if (chainConditioned
-                || EvaluateBoundedIdentity(chainValue, projectName, out var _) is not { } evaluated
+            var branches = chooseNode.Elements()
+                .Where(child => child.Name.LocalName is "When" or "Otherwise")
+                .Select((child, index) => (Child: child, Index: index, IsOtherwise: child.Name.LocalName == "Otherwise"))
+                .ToList();
+            var firedIndex = -1;
+            var sawLiveWhen = false;
+            foreach (var branch in branches)
+            {
+                if (branch.IsOtherwise)
+                {
+                    if (!sawLiveWhen) firedIndex = branch.Index; // Otherwise fires when no When matched
+                    break;
+                }
+                var conditionText = branch.Child.Attribute("Condition")?.Value;
+                bool? verdict;
+                if (conditionText is null) verdict = true;
+                else verdict = EvaluateBoundedConfigurationCondition(conditionText, knownConfiguration);
+                if (verdict is null) { chooseSticky = true; break; } // which branch fires is unknowable
+                if (verdict == true) { firedIndex = branch.Index; sawLiveWhen = true; break; } // the FIRST live When fires; later Whens never evaluate
+                // false: not the fired branch — next When
+            }
+            if (chooseSticky) break;
+            chooseFiredBranch[chooseNode] = firedIndex;
+        }
+        if (chooseSticky)
+            return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
+        string? winner = null; string? winnerSource = null;
+        foreach (var property in new[] { "PackageId", "AssemblyName" })
+        {
+            var hasAny = property == "PackageId"
+                ? inherited.PropsPackageId is not null || inherited.TargetsPackageId is not null || packageIdClaims.Count > 0 || packageIdConditioned
+                : inherited.PropsAssemblyName is not null || inherited.TargetsAssemblyName is not null || assemblyNameClaims.Count > 0 || assemblyNameConditioned;
+            if (!hasAny) continue;
+            var inheritedConditioned = property == "PackageId" ? inherited.PropsPackageIdConditioned : inherited.PropsAssemblyNameConditioned;
+            var inheritedValue = property == "PackageId" ? inherited.PropsPackageId : inherited.PropsAssemblyName;
+            var targetsConditioned = property == "PackageId" ? inherited.TargetsPackageIdConditioned : inherited.TargetsAssemblyNameConditioned;
+            var targetsValue = property == "PackageId" ? inherited.TargetsPackageId : inherited.TargetsAssemblyName;
+            string? propertyWinner = null; var propertySticky = false;
+            // phase 0 — props (inherited; conditioned = sticky, unchanged: no condition texts retained)
+            if (inheritedConditioned) propertySticky = true;
+            else if (inheritedValue is not null) propertyWinner = inheritedValue;
+            // phase 1 — body claims, document order (configuration-aware: provably-false branches
+            // drop, provably-true branches win, unevaluable/Target-scoped/structural stick)
+            if (!propertySticky)
+                foreach (var claim in BodyClaimsOf(property))
+                {
+                    // Choose claims apply ONLY when EVERY enclosing Choose fired the claim's own
+                    // branch (review round-5b: nested Chooses — the claim's ChoosePath lists every
+                    // enclosing pair nearest-first; one mismatched pair = the claim's position was
+                    // never evaluated by MSBuild). The claim's OWN condition texts still gate it
+                    // even inside a fired branch (review round-5b: a fired When containing a
+                    // conditioned AssemblyName does not bypass that inner condition). Non-fired
+                    // claims contribute nothing; a LATER plain PropertyGroup assignment still
+                    // last-wins over the Choose's evaluation-time result.
+                    if (claim.InChooseBranch)
+                    {
+                        var pathApplies = true;
+                        if (claim.ChoosePath is not null)
+                            foreach (var (chooseNode, branchNode) in claim.ChoosePath)
+                            {
+                                if (!chooseFiredBranch.TryGetValue(chooseNode, out var firedIndex)) { pathApplies = false; break; }
+                                var branchIsFired = chooseNode.Elements()
+                                    .Where(child => child.Name.LocalName is "When" or "Otherwise")
+                                    .ElementAtOrDefault(firedIndex) is { } firedChild
+                                    && ReferenceEquals(firedChild, branchNode);
+                                if (!branchIsFired) { pathApplies = false; break; }
+                            }
+                        if (!pathApplies) continue;
+                        // the fired branch carries the claim: its OWN condition texts still gate it
+                        bool? innerVerdict;
+                        if (claim.ConditionTexts is not { Count: > 0 }) innerVerdict = true;
+                        else
+                        {
+                            innerVerdict = true;
+                            foreach (var conditionText in claim.ConditionTexts)
+                            {
+                                var one = EvaluateBoundedConfigurationCondition(conditionText, knownConfiguration);
+                                if (one is null) { innerVerdict = null; break; }
+                                if (one == false) { innerVerdict = false; break; }
+                            }
+                        }
+                        if (innerVerdict is null) { propertySticky = true; break; }
+                        if (innerVerdict == true) propertyWinner = claim.Value;
+                        continue;
+                    }
+                    if (claim.TargetScoped || claim.StructuralSticky) { propertySticky = true; break; }
+                    bool? verdict; // null = unknown: a possible pack-time winner, never guessed
+                    if (claim.ConditionTexts is not { Count: > 0 }) verdict = true; // unconditional: always wins its position
+                    else
+                    {
+                        verdict = true; // ALL condition texts must hold
+                        foreach (var conditionText in claim.ConditionTexts)
+                        {
+                            var one = EvaluateBoundedConfigurationCondition(conditionText, knownConfiguration);
+                            if (one is null) { verdict = null; break; }
+                            if (one == false) { verdict = false; break; }
+                        }
+                    }
+                    if (verdict is null) { propertySticky = true; break; }
+                    if (verdict == true) propertyWinner = claim.Value; // document order: the last provable winner wins (MSBuild last-wins)
+                }
+            // phase 2 — targets (inherited AFTER the body: its unconditional assignment wins; conditioned = sticky, unchanged)
+            if (!propertySticky && targetsConditioned) propertySticky = true;
+            else if (!propertySticky && targetsValue is not null) propertyWinner = targetsValue;
+            if (propertySticky) return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
+            if (propertyWinner is not null)
+            {
+                winner = propertyWinner; winnerSource = property; break; // the property with a provable winner decides (PackageId first; AssemblyName only when PackageId proved empty at this configuration)
+            }
+            // no live claim for this property: fall through to the next property (review 2026-11-10: a PackageId whose claims are ALL provably false assigns NOTHING — MSBuild falls through to the AssemblyName)
+        }
+        if (winner is not null)
+        {
+            if (EvaluateBoundedIdentity(winner, projectName, out var _) is not { } evaluated
                 || !IsSafeNuGetPackageId(evaluated))
                 return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
-            return new(CiDerivedIdentityDecisions.DeclaredId, evaluated, chainSource!);
+            return new(CiDerivedIdentityDecisions.DeclaredId, evaluated, winnerSource!);
         }
+        // no live identity assignment at this configuration: the MSBuild default (the filename) applies
         if (!IsSafeNuGetPackageId(projectName)) return new(CiDerivedIdentityDecisions.UnsafeFileName, null);
         return new(CiDerivedIdentityDecisions.Derived, projectName, "MSBuildProjectName");
     }

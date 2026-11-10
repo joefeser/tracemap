@@ -91,7 +91,7 @@ internal static class CiWorkflowProducerExtractor
         }
         if (files == 0 && gaps.Count == 0) gaps.Add(new(".github/workflows", "ci-workflow-not-found"));
         if (options.CiHintWorkflows is { Count: > 0 })
-            SweepHintedProjects(options.CiHintWorkflows, jobCalls, inventoryProjects, comparer,
+            SweepHintedProjects(options.CiHintWorkflows, options.CiHintConfigurations, jobCalls, inventoryProjects, comparer,
                 context, rows, gaps, cancellationToken);
         using var generator = File.OpenRead(typeof(CiWorkflowProducerExtractor).Assembly.Location);
         // The signature includes bounded reads, categorical omissions, AND the identity-collapse
@@ -136,21 +136,25 @@ internal static class CiWorkflowProducerExtractor
 
     /// Filename-default identity for a project CI packs (or a hint sweeps). Every decision rides the
     /// bounded digest so editing a project/Directory.Build file that flips the decision moves it.
-    private static ProjectFileReader.CiDerivedIdentity DeriveCiIdentity(CiDerivationContext context, string relativeProject)
+    private static ProjectFileReader.CiDerivedIdentity DeriveCiIdentity(CiDerivationContext context, string relativeProject, string? knownConfiguration = null)
     {
-        if (!context.IdentityCache.TryGetValue(relativeProject, out var decision))
+        // the cache key CARRIES the configuration (review 2026-11-10): two pack occurrences of one
+        // project at different configurations derive DIFFERENT identities — sharing one entry would
+        // let the second occurrence ride the first's answer. Explicit null markers keep
+        // absent/empty distinct and deterministic.
+        var cacheKey = relativeProject + "\0" + (knownConfiguration ?? "\0null");
+        if (!context.IdentityCache.TryGetValue(cacheKey, out var decision))
         {
             decision = context.InventoryProjects.Contains(relativeProject)
-                ? ProjectFileReader.ReadCiDerivedIdentity(context.Root, relativeProject)
+                ? ProjectFileReader.ReadCiDerivedIdentity(context.Root, relativeProject, knownConfiguration)
                 : new ProjectFileReader.CiDerivedIdentity(NotInInventoryDecision, null);
-            context.IdentityCache[relativeProject] = decision;
+            context.IdentityCache[cacheKey] = decision;
         }
-        // The resolved id and its source ride the digest too: changing an evaluated
-        // AssemblyName changes the emitted row, so it must move the bounded digest
-        // (review: digest omitted the identity value). Explicit null markers keep
-        // null/empty/changed values unambiguous and deterministic.
+        // The resolved id, its source, AND the known configuration ride the digest: changing a
+        // -c value changes the emitted row, so it must move the bounded digest (review 2026-11-10).
         context.Observed.Add("ci-derived-identity\0" + relativeProject + "\0" + decision.Decision
-            + "\0" + (decision.PackageId ?? "\0null") + "\0" + (decision.IdSource ?? "\0null"));
+            + "\0" + (decision.PackageId ?? "\0null") + "\0" + (decision.IdSource ?? "\0null")
+            + "\0" + (knownConfiguration ?? "\0null"));
         return decision;
     }
 
@@ -179,6 +183,7 @@ internal static class CiWorkflowProducerExtractor
     /// whose filename default is provable becomes a derived-default ci producer.
     private static void SweepHintedProjects(
         IReadOnlyList<string> hintWorkflows,
+        IReadOnlyDictionary<string, string>? hintConfigurations,
         IReadOnlyList<CiWorkflowJobCall> jobCalls,
         IReadOnlyList<string> inventoryProjects,
         StringComparer comparer,
@@ -190,6 +195,26 @@ internal static class CiWorkflowProducerExtractor
         var hints = hintWorkflows.Select(NormalizeUses).Where(hint => hint.Length > 0)
             .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         if (hints.Length == 0) return;
+        // the operator-asserted pack configuration per hint (ci-hints optional field, 2026-11-09):
+        // the shared workflow's pack call lives in an unscanned repo, so the configuration is
+        // operator knowledge — the only honest channel. Absent → derivation sees no known
+        // configuration and the conditioned-identity refusals stand.
+        // ref-variants of one workflow (@main/@v2) normalize to the SAME key (review 2026-11-10):
+        // group tolerantly; disagreeing configurations for one normalized workflow make the
+        // assertion ambiguous — the match resolves to unknown rather than aborting the scan.
+        // the operator assertion gets the SAME literal-grammar validation as a direct -c value
+        // (review round-4): a non-identifier token (%VAR%, 'Release|AnyCPU', ${{ }}) is UNKNOWABLE —
+        // dropped to unknown (sticky stands), never accepted as a known configuration.
+        var configByHint = hintConfigurations?
+            .GroupBy(kv => NormalizeUses(kv.Key), StringComparer.Ordinal)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Select(kv => kv.Value)
+                    .Where(v => System.Text.RegularExpressions.Regex.IsMatch(v.Trim(), "^[A-Za-z0-9][A-Za-z0-9._-]*$"))
+                    .Select(v => v.Trim())
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                StringComparer.Ordinal);
         context.Observed.Add("ci-hints\0" + string.Join('\0', hints));
         var call = jobCalls
             .OrderBy(candidate => candidate.WorkflowPath, StringComparer.Ordinal)
@@ -197,6 +222,13 @@ internal static class CiWorkflowProducerExtractor
             .FirstOrDefault(candidate => candidate.Uses.Contains(".github/workflows/", StringComparison.Ordinal)
                 && hints.Any(hint => HintMatches(NormalizeUses(candidate.Uses), hint)));
         if (call is null) return;
+        // ALL matching hints speak: an aliased call can match several hints (review 2026-11-10) —
+        // a single configuration wins; two distinct configurations for one call are AMBIGUOUS
+        // (unknown — the stickiness stands) rather than ordinal-first-wins.
+        var assertedConfigurations = configByHint?
+            .Where(kv => HintMatches(NormalizeUses(call.Uses), kv.Key))
+            .SelectMany(kv => kv.Value).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var sweepConfiguration = assertedConfigurations is { Length: 1 } ? assertedConfigurations[0] : null;
         context.Observed.Add($"ci-hint-call\0{call.WorkflowPath}\0{call.Line}\0{call.Uses}");
         // Keep independent project-file claims. Within the CI lane a direct pack takes precedence.
         var directlyPackedPaths = new HashSet<string>(comparer);
@@ -211,7 +243,7 @@ internal static class CiWorkflowProducerExtractor
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (directlyPackedPaths.Contains(project)) continue;
-            var identity = DeriveCiIdentity(context, project);
+            var identity = DeriveCiIdentity(context, project, sweepConfiguration);
             if (identity.PackageId is { } id)
             {
                 // Compare package identities only after derivation. A match supplies no project path to the direct claim.
@@ -1244,7 +1276,7 @@ internal static class CiWorkflowProducerExtractor
     private sealed record PackOccurrence(
         string WorkflowPath, string? RawPackageId, string? RawVersion,
         string? ProjectTarget, bool TargetUnresolvable, int StartLine, int EndLine,
-        IReadOnlyDictionary<string, string> Env);
+        IReadOnlyDictionary<string, string> Env, string? Configuration = null);
 
     private static readonly string[] ValueTakingFlags =
     [
@@ -1266,6 +1298,7 @@ internal static class CiWorkflowProducerExtractor
             string? packageId = null;
             string? packageVersion = null;
             string? plainVersion = null;
+            string? configuration = null; // the known pack configuration — configuration-aware identity (2026-11-09)
             string? target = null;
             var unresolvableTarget = false;
             for (var i = 2; i < tokens.Count; i++)
@@ -1281,6 +1314,7 @@ internal static class CiWorkflowProducerExtractor
                     if (name.Equals("PackageId", StringComparison.OrdinalIgnoreCase)) packageId = assignedValue;
                     else if (name.Equals("PackageVersion", StringComparison.OrdinalIgnoreCase)) packageVersion = assignedValue;
                     else if (name.Equals("Version", StringComparison.OrdinalIgnoreCase)) plainVersion = assignedValue;
+                    else if (name.Equals("Configuration", StringComparison.OrdinalIgnoreCase)) configuration = assignedValue;
                     continue;
                 }
                 if (token.StartsWith('-'))
@@ -1289,14 +1323,30 @@ internal static class CiWorkflowProducerExtractor
                     // flag can never invent a wrong target (targets must end in a project or
                     // solution extension).
                     var flag = token.Split(':', '=')[0];
-                    if (token == flag && ValueTakingFlags.Contains(flag, StringComparer.OrdinalIgnoreCase)) i++;
+                    if (token == flag && ValueTakingFlags.Contains(flag, StringComparer.OrdinalIgnoreCase))
+                    {
+                        i++; // the value is the next token
+                        if (i < tokens.Count && (flag.Equals("-c", StringComparison.OrdinalIgnoreCase) || flag.Equals("--configuration", StringComparison.OrdinalIgnoreCase)))
+                            configuration = tokens[i];
+                        continue;
+                    }
+                    if ((flag.Equals("-c", StringComparison.OrdinalIgnoreCase) || flag.Equals("--configuration", StringComparison.OrdinalIgnoreCase))
+                        && token.Length > flag.Length + 1)
+                        configuration = token[(flag.Length + 1)..]; // the ':'-attached form: -c:Release
                     continue;
                 }
                 if (target is null && unresolvableTarget == false && IsProjectOrSolutionPath(token))
                     target = ResolveTarget(root, script.WorkingDir, token, ref unresolvableTarget);
             }
+            // a configuration is KNOWLEDGE only when it is a plain identifier literal: matrix
+            // expressions (${{ }}), env references ($VAR), percent-variables (%VAR% — shell:cmd
+            // expands them, review 2026-11-10), or anything non-identifier-shaped is UNKNOWABLE —
+            // recorded as null so the conditioned-identity stickiness stands instead of a guessed match.
+            var knownConfiguration = string.IsNullOrWhiteSpace(configuration)
+                || !System.Text.RegularExpressions.Regex.IsMatch(configuration.Trim(), "^[A-Za-z0-9][A-Za-z0-9._-]*$")
+                ? null : configuration.Trim();
             yield return new PackOccurrence(workflowPath, packageId, packageVersion ?? plainVersion,
-                target, unresolvableTarget, startLine, endLine, script.Env);
+                target, unresolvableTarget, startLine, endLine, script.Env, knownConfiguration);
         }
     }
 
@@ -1572,7 +1622,7 @@ internal static class CiWorkflowProducerExtractor
             // PackageId/AssemblyName in the project or its nearest Directory.Build.props/.targets,
             // SDK-style, packable, not a test project), the filename default IS the package id.
             // Anything that could override it is a typed gap — never a filename guess.
-            var derived = DeriveCiIdentity(context, fileTarget);
+            var derived = DeriveCiIdentity(context, fileTarget, occurrence.Configuration);
             if (derived.PackageId is { } fileDerived)
             {
                 packageId = fileDerived;

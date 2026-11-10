@@ -580,6 +580,7 @@ public static class ScanEngine
         if (options.IndexDepsJson) optionSignature += $"|depsjson={depsJsonInputSignature}";
         if (options.IndexCiProducers) optionSignature += $"|ciproducers={ciProducersInputSignature}";
         if (options.CiHintWorkflows is { Count: > 0 }) optionSignature += $"|cihints={FrameValues(options.CiHintWorkflows)}";
+        if (options.CiHintConfigurations is { Count: > 0 }) optionSignature += $"|cihintconfigs={FrameValues(options.CiHintConfigurations.Select(kv => $"{kv.Key}={kv.Value}"))}";
         var repoIdentity = string.IsNullOrWhiteSpace(git.RemoteUrl) ? git.RepoName : git.RemoteUrl;
         return "scan-" + FactFactory.Hash($"{repoIdentity}|{git.CommitSha}|{sourceSnapshotDigest}|{signature}|{optionSignature}|{binlogSignature}", 20);
     }
