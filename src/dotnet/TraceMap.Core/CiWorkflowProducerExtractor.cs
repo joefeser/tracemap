@@ -91,7 +91,7 @@ internal static class CiWorkflowProducerExtractor
         }
         if (files == 0 && gaps.Count == 0) gaps.Add(new(".github/workflows", "ci-workflow-not-found"));
         if (options.CiHintWorkflows is { Count: > 0 })
-            SweepHintedProjects(options.CiHintWorkflows, jobCalls, inventoryProjects, producedByPath, comparer,
+            SweepHintedProjects(options.CiHintWorkflows, jobCalls, inventoryProjects, comparer,
                 context, rows, gaps, cancellationToken);
         using var generator = File.OpenRead(typeof(CiWorkflowProducerExtractor).Assembly.Location);
         // The signature includes bounded reads, categorical omissions, AND the identity-collapse
@@ -181,7 +181,6 @@ internal static class CiWorkflowProducerExtractor
         IReadOnlyList<string> hintWorkflows,
         IReadOnlyList<CiWorkflowJobCall> jobCalls,
         IReadOnlyList<string> inventoryProjects,
-        IReadOnlyDictionary<string, ProducedPackageInfo> producedByPath,
         StringComparer comparer,
         CiDerivationContext context,
         List<CiWorkflowProducerRow> rows,
@@ -199,19 +198,24 @@ internal static class CiWorkflowProducerExtractor
                 && hints.Any(hint => HintMatches(NormalizeUses(candidate.Uses), hint)));
         if (call is null) return;
         context.Observed.Add($"ci-hint-call\0{call.WorkflowPath}\0{call.Line}\0{call.Uses}");
-        // One fact per project: the project lane's local evidence and direct CI pack steps both
-        // outrank the operator assertion, so neither is relabeled ci-hint-workflow.
-        var claimed = new HashSet<string>(producedByPath.Keys, comparer);
-        foreach (var row in rows)
-            if (row.ProjectPath is { } projectPath) claimed.Add(projectPath);
+        // Keep independent project-file claims. Within the CI lane a direct pack takes precedence.
+        var directlyPackedPaths = new HashSet<string>(comparer);
+        var unattributedPackages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in rows.Where(row => row.SignalsKind == "ci-pack-step"))
+        {
+            if (row.ProjectPath is { } path) directlyPackedPaths.Add(path);
+            else unattributedPackages.Add(row.Package);
+        }
         var emitted = 0;
         foreach (var project in inventoryProjects)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (claimed.Contains(project)) continue;
+            if (directlyPackedPaths.Contains(project)) continue;
             var identity = DeriveCiIdentity(context, project);
             if (identity.PackageId is { } id)
             {
+                // Compare package identities only after derivation. A match supplies no project path to the direct claim.
+                if (unattributedPackages.Contains(id)) continue;
                 // declared-id: the chain resolved a DECLARED identity (PackageId/AssemblyName, bounded
                 // evaluation) under CI pack intent — a stronger claim than derived-default, never weaker
                 var provenance = identity.Decision == ProjectFileReader.CiDerivedIdentityDecisions.DeclaredId
