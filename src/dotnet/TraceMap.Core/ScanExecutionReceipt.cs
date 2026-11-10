@@ -165,7 +165,10 @@ public sealed class ScanReceiptRecorder
                 indexCiProducers = options.IndexCiProducers,
                 ciHintWorkflows = options.IndexCiProducers && options.CiHintWorkflows is { Count: > 0 }
                     ? options.CiHintWorkflows.Order(StringComparer.Ordinal).ToArray()
-                    : null
+                    : null,
+                ciHintConfigurations = options.IndexCiProducers && options.CiHintConfigurations is { Count: > 0 }
+                    ? options.CiHintConfigurations.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Key + "=" + kv.Value).ToArray()
+                    : null // review 2026-11-10: receipts must not be reused across different hint configuration assertions
             }));
         if (options.WebFormsIisMount is { } mount)
             scopeFingerprint = Hash(JsonSerializer.Serialize(new { baseScopeSha256 = scopeFingerprint, iisMount = mount }));

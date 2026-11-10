@@ -694,6 +694,533 @@ public sealed class CiWorkflowProducerEvidenceTests
         Assert.NotEqual(resultA.BoundedInputSha256, resultB.BoundedInputSha256);
     }
 
+    [Fact] // 2026-11-09 live estate finding (the five-gap shape): a ReleaseBench-conditioned Alt.*
+    // identity no longer poisons a resolvable head declaration when the pack configuration is
+    // KNOWN — the direct pack step carries -c release, the condition is provably false, and the
+    // head resolves to the declared id
+    public void Known_pack_configuration_releases_a_false_conditioned_identity_branch()
+    {
+        // the EXACT estate shape: head AssemblyName = Contoso.Scheduling.$(MSBuildProjectName);
+        // ReleaseBench-conditioned Alt.* group; pack step carries -c release
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Scheduling.App", row.Package);
+        Assert.Equal("declared-id", row.IdProvenance);
+        Assert.Equal("AssemblyName", row.IdSource);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // the mirror boundary: a pack AT the conditioned configuration does NOT crown the
+    // branch — the condition's $(Platform) segment is unknown (the tool never guesses platforms),
+    // so the condition stays sticky. Only provably-FALSE release works; the true-crown would need
+    // platform knowledge the bounded model deliberately lacks.
+    public void Pack_at_the_conditioned_configuration_stays_sticky_without_a_known_platform()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c ReleaseBench -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // NO known configuration: every conditioned claim is unknown-verdict — byte-for-byte
+    // today's refusal (the back-compat contract)
+    public void Unknown_configuration_keeps_the_conditioned_identity_refusal()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        // a pack step with NO -c: the configuration is unknown
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // the sweep door: the operator-asserted configuration (ci-hints v1 optional
+    // 'configuration' field) releases the stickiness for the hinted repo's conditioned identity
+    public void Hint_configuration_assertion_releases_the_sweep_identity_refusal()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+        WriteProject(temp.Path, "src/Lib/Lib.csproj", project);
+
+        var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"))
+        {
+            IndexCiProducers = true,
+            CiHintWorkflows = new[] { "org/shared-ci/.github/workflows/dotnet-release-library.yml" },
+            CiHintConfigurations = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["org/shared-ci/.github/workflows/dotnet-release-library.yml"] = "Release"
+            }
+        };
+        var result = CiWorkflowProducerExtractor.Read(options, [], InventProjects(temp.Path), CancellationToken.None);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Scheduling.Lib", row.Package);
+        Assert.Equal("declared-id", row.IdProvenance);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-hint-id-unevidenced");
+    }
+
+    [Fact] // and WITHOUT the assertion, the sweep refusal stands (the honest default)
+    public void Sweep_without_configuration_assertion_keeps_the_refusal()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+        WriteProject(temp.Path, "src/Lib/Lib.csproj", project);
+
+        var result = ReadHinted(temp.Path, null, "dotnet-release-library.yml");
+
+        Assert.Empty(result.Rows);
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-hint-id-unevidenced");
+    }
+
+    [Fact] // review 2026-11-10 P1: a matrix expression / env reference as -c is UNKNOWABLE, not a
+    // literal configuration — recording it would let a condition "match" a guess (sticky stands)
+    public void Matrix_and_env_configuration_values_are_unknown_never_literals()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        foreach (var configurationToken in new[] { "${{ matrix.conf }}", "$CONFIGURATION" })
+        {
+            using var temp = new TempDirectory();
+            WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c " + configurationToken + " -o out");
+            WriteProject(temp.Path, "src/App/App.csproj", project);
+            var result = Read(temp.Path);
+            Assert.Empty(result.Rows); // an unknowable configuration cannot release the stickiness
+            Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+        }
+    }
+
+    [Fact] // review 2026-11-10: compound conditions are OUTSIDE the bounded grammar — the safe
+    // answer is sticky (a possible pack-time winner, never guessed), even under a known
+    // configuration: the first comparison alone must not turn an unknown into a provable-false
+    public void Compound_conditions_stay_sticky_even_under_a_known_configuration()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)' == 'Release' And '$(Platform)' == 'AnyCPU'\">\n    <AssemblyName>Contoso.R2</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // the compound branch is unknown — it could win at pack time, so the identity refuses rather than guessing the head survives
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review 2026-11-10: an identity claim inside an Otherwise branch is STRUCTURALLY
+    // conditional (fires only when no When matched) — no condition text to evaluate, so sticky
+    public void Otherwise_branch_identity_claims_are_sticky()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(IsSpecial)' == 'true'\">\n      <PropertyGroup>\n        <AssemblyName>Contoso.Special</AssemblyName>\n      </PropertyGroup>\n    </When>\n    <Otherwise>\n      <PropertyGroup>\n        <AssemblyName>Contoso.Fallback</AssemblyName>\n      </PropertyGroup>\n    </Otherwise>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // structural conditionality: sticky, never guessed
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review 2026-11-10: a PackageId whose claims are ALL provably false at this
+    // configuration assigns NOTHING — MSBuild falls through to the AssemblyName, and so must the
+    // bounded model (the chain used to stay on PackageId and refuse)
+    public void All_false_package_id_claims_fall_through_to_the_assembly_name()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n    <PackageId Condition=\"'$(Configuration)' == 'Debug'\">Contoso.Debug.Only</PackageId>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Scheduling.App", row.Package); // the Debug-only PackageId is false at Release; AssemblyName carries the id
+        Assert.Equal("declared-id", row.IdProvenance);
+    }
+
+    [Fact] // review 2026-11-10: the derivation digest carries the known configuration — two pack
+    // occurrences of one project at different configurations must move the bounded digest
+    public void Digest_moves_when_the_pack_configuration_differs()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        using var tempA = new TempDirectory();
+        WriteWorkflow(tempA.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out");
+        WriteProject(tempA.Path, "src/App/App.csproj", project);
+        using var tempB = new TempDirectory();
+        WriteWorkflow(tempB.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c ReleaseBench -o out");
+        WriteProject(tempB.Path, "src/App/App.csproj", project);
+
+        var resultA = Read(tempA.Path);
+        var resultB = Read(tempB.Path);
+
+        Assert.NotEqual(resultA.BoundedInputSha256, resultB.BoundedInputSha256);
+    }
+
+    [Fact] // review 2026-11-10: ref-variant hint entries (@main/@v2 normalize together) with
+    // DISAGREEING configurations make the assertion ambiguous for a matching call — unknown, not
+    // ordinal-first, and never a scan-aborting dictionary collision
+    public void Ref_variant_hints_with_disagreeing_configurations_are_ambiguous_not_aborting()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "on:\n  workflow_dispatch:\njobs:\n  release:\n    uses: org/shared-ci/.github/workflows/dotnet-release-library.yml@main";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "release.yml", workflow);
+        WriteProject(temp.Path, "src/Lib/Lib.csproj", project);
+
+        var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"))
+        {
+            IndexCiProducers = true,
+            CiHintWorkflows = new[]
+            {
+                "org/shared-ci/.github/workflows/dotnet-release-library.yml@main",
+                "org/shared-ci/.github/workflows/dotnet-release-library.yml@v2"
+            },
+            CiHintConfigurations = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["org/shared-ci/.github/workflows/dotnet-release-library.yml@main"] = "Release",
+                ["org/shared-ci/.github/workflows/dotnet-release-library.yml@v2"] = "Debug"
+            }
+        };
+        var result = CiWorkflowProducerExtractor.Read(options, [], InventProjects(temp.Path), CancellationToken.None);
+
+        // the ambiguous assertion resolves to unknown: the derived-default claim still emits
+        // (no configuration needed for the filename chain), and no exception aborted the scan
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-hint-id-unevidenced");
+    }
+
+    [Fact] // review round-2: an EMBEDDED property reference inside a literal segment is not a
+    // literal — the property could expand to anything, so the condition stays sticky (never a
+    // fabricated provable-false from comparing the raw text)
+    public void Embedded_property_references_stay_sticky()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)$(Suffix)'=='Release'\">\n    <AssemblyName>Contoso.R2</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // the embedded reference is unknowable — the branch could win
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review round-2: Choose semantics — only ONE When fires, the FIRST whose condition
+    // holds; sibling Whens both true under our bounded view cannot both fire at build time
+    public void Sibling_choose_branches_pick_the_first_live_when()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(Configuration)' == 'Release'\">\n      <PropertyGroup>\n        <AssemblyName>Contoso.First</AssemblyName>\n      </PropertyGroup>\n    </When>\n    <When Condition=\"'$(Configuration)' == 'Release'\">\n      <PropertyGroup>\n        <AssemblyName>Contoso.Second</AssemblyName>\n      </PropertyGroup>\n    </When>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.First", row.Package); // the FIRST live When — Choose never last-wins
+    }
+
+    [Fact] // review round-2: percent-variables (%VAR%) expand in shell:cmd — they are UNKNOWABLE
+    // configurations, never literals (the $-check alone let them ride as known values)
+    public void Percent_variable_configurations_are_unknown_never_literals()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c %CONFIGURATION% -o out");
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // the percent-variable is unknowable — the stickiness stands
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review round-4: hint configuration assertions get the SAME literal-grammar validation
+    // as direct -c values — a non-identifier token (%VAR%, 'Release|AnyCPU') is UNKNOWABLE and the
+    // stickiness stands (the sweep previously accepted them as known configurations)
+    public void Non_literal_hint_configurations_are_unknown_and_stay_sticky()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        foreach (var badConfiguration in new[] { "%CONFIGURATION%", "Release|AnyCPU" })
+        {
+            using var temp = new TempDirectory();
+            WriteWorkflow(temp.Path, "release.yml", HintedReleaseWorkflow);
+            WriteProject(temp.Path, "src/Lib/Lib.csproj", project);
+            var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"))
+            {
+                IndexCiProducers = true,
+                CiHintWorkflows = new[] { "org/shared-ci/.github/workflows/dotnet-release-library.yml" },
+                CiHintConfigurations = new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["org/shared-ci/.github/workflows/dotnet-release-library.yml"] = badConfiguration
+                }
+            };
+            var result = CiWorkflowProducerExtractor.Read(options, [], InventProjects(temp.Path), CancellationToken.None);
+            Assert.Empty(result.Rows); // the invalid assertion is unknown — the conditioned branch stays sticky
+            Assert.Contains(result.Gaps, gap => gap.Kind == "ci-hint-id-unevidenced");
+        }
+    }
+
+    [Fact] // review round-4: a selected Choose branch suppresses only SIBLING Choose claims — a
+    // later plain PropertyGroup assignment still last-wins over the Choose's evaluation-time result
+    public void Later_body_assignment_overrides_a_selected_choose_branch()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(Configuration)' == 'Release'\">\n      <PropertyGroup>\n        <AssemblyName>Contoso.FromWhen</AssemblyName>\n      </PropertyGroup>\n    </When>\n  </Choose>\n  <PropertyGroup>\n    <AssemblyName>Contoso.After</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.After", row.Package); // MSBuild last-wins: the later plain assignment wins over the Choose result
+    }
+
+    [Fact] // review round-5: Choose selection happens BEFORE per-property filtering — a When that
+    // does NOT assign the property still FIRES (and contributes nothing), so a later sibling When
+    // must never be crowned. Head Base + When#1 (Release, only Optimize) + When#2 (Release,
+    // AssemblyName=Contoso.Other): MSBuild fires When#1 — the identity stays Contoso.Base
+    public void Choose_selection_sees_non_assigning_branches_before_property_filtering()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(Configuration)' == 'Release'\">\n      <PropertyGroup>\n        <Optimize>True</Optimize>\n      </PropertyGroup>\n    </When>\n    <When Condition=\"'$(Configuration)' == 'Release'\">\n      <PropertyGroup>\n        <AssemblyName>Contoso.Other</AssemblyName>\n      </PropertyGroup>\n    </When>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Base", row.Package); // When#1 fired (Optimize only) — When#2 NEVER evaluates
+    }
+
+    [Fact] // review round-5b: an identity-IRRELEVANT unknown Choose (Optimize-only, unevaluable
+    // condition) must not strip a previously-working producer — the head resolves
+    public void Unrelated_unknown_choose_does_not_block_a_provable_head()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(SomeUnknown)' == 'x'\">\n      <PropertyGroup>\n        <Optimize>True</Optimize>\n      </PropertyGroup>\n    </When>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Base", row.Package); // the unrelated unknown Choose never blocks the head
+    }
+
+    [Fact] // review round-5b: the fired When's OWN inner condition still gates its assignment —
+    // a fired When containing a conditioned AssemblyName does not bypass that inner condition
+    public void Inner_condition_inside_a_fired_when_still_gates_the_assignment()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(Configuration)' == 'Release'\">\n      <PropertyGroup>\n        <AssemblyName Condition=\"'$(Configuration)' == 'Debug'\">Contoso.Wrong</AssemblyName>\n        <AssemblyName>Contoso.Base</AssemblyName>\n      </PropertyGroup>\n    </When>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Base", row.Package); // the inner Debug-conditioned Wrong assignment cannot fire at Release; the later unconditional one wins
+    }
+
+    [Theory] // review 2026-11-10: MSBuild compares the EXPANDED FULL strings — operands with
+    // different '|' segment counts can never be equal once the shorter side is fully known.
+    // Padding the shorter side with an empty segment made 'Release' == 'Release|' provably TRUE
+    // (crowning a branch MSBuild never fires) and its != provably false (dropping one it always fires)
+    [InlineData("'$(Configuration)' == 'Release|'", "Contoso.Base")]
+    [InlineData("'$(Configuration)' != 'Release|'", "Contoso.Conditioned")]
+    [InlineData("'$(Configuration)|' == 'Release'", "Contoso.Base")]
+    // the longer side's sticky segment cannot remove its literal separator: still provably unequal
+    [InlineData("'$(Configuration)' == 'Release|$(Platform)'", "Contoso.Base")]
+    public void Different_segment_counts_never_compare_equal_through_padding(string condition, string expectedPackage)
+    {
+        var project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"" + condition + "\">\n    <AssemblyName>Contoso.Conditioned</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal(expectedPackage, row.Package);
+    }
+
+    [Fact] // the boundary of the same rule: when the SHORTER side carries a sticky segment it could
+    // expand to supply the missing separators ('$(Suffix)' could be 'Release|AnyCPU') — unknowable
+    public void Different_segment_counts_stay_sticky_when_the_shorter_side_is_unresolved()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Suffix)' == 'Release|AnyCPU'\">\n    <AssemblyName>Contoso.Conditioned</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // the unresolved shorter side could still match — never guessed
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review 2026-11-10: ONE pack command asserting TWO different configurations is
+    // AMBIGUOUS — which assignment the build honors is not provable from the command text, so
+    // the configuration is unknown and the conditioned identity stays sticky (token order used
+    // to crown the last one and emit a producer row while hiding the gap)
+    public void Conflicting_configuration_literals_on_one_pack_command_are_ambiguous()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        foreach (var arguments in new[] { "-c Release -p:Configuration=Debug", "-p:Configuration=Debug -c Release", "--configuration Release -c:Debug" })
+        {
+            using var temp = new TempDirectory();
+            WriteWorkflow(temp.Path, "pack.yml", "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj " + arguments + " -o out");
+            WriteProject(temp.Path, "src/App/App.csproj", project);
+            var result = Read(temp.Path);
+            Assert.Empty(result.Rows); // an ambiguous configuration cannot release the stickiness
+            Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+        }
+    }
+
+    [Fact] // ...and repeating ONE configuration (any token form, any casing) is not a conflict:
+    // the value is still known and still releases the provably-false branch
+    public void Repeated_identical_configuration_literals_stay_known()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)|$(Platform)'=='ReleaseBench|AnyCPU'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -p:Configuration=release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Scheduling.App", row.Package);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // review 2026-11-10: Choose uncertainty is scoped to the property it can affect — an
+    // unevaluable Choose that only assigns AssemblyName must not suppress a producer whose
+    // PackageId is unconditional and proven (PackageId is the chain head wherever assigned)
+    public void Unknown_choose_on_the_assembly_name_does_not_invalidate_a_proven_package_id()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <PackageId>Contoso.Package</PackageId>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(SomeUnknown)' == 'x'\">\n      <PropertyGroup>\n        <AssemblyName>Contoso.Choice</AssemblyName>\n      </PropertyGroup>\n    </When>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Package", row.Package); // the proven chain head stands; the AssemblyName uncertainty is irrelevant
+        Assert.Equal("PackageId", row.IdSource);
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // ...but the uncertainty still binds the property it CAN affect: an unevaluable Choose
+    // assigning PackageId leaves the chain head unknowable (it may or may not be assigned), so a
+    // live AssemblyName cannot be crowned in its place
+    public void Unknown_choose_on_the_package_id_stays_sticky_over_a_live_assembly_name()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(SomeUnknown)' == 'x'\">\n      <PropertyGroup>\n        <PackageId>Contoso.Choice</PackageId>\n      </PropertyGroup>\n    </When>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        Assert.Empty(result.Rows); // PackageId may or may not be assigned — two possible identities, never guessed
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-producer-id-unevidenced");
+    }
+
+    [Fact] // per-BRANCH precision of the same rule: a When that is provably false at the known
+    // configuration definitely does not fire, even beside an unevaluable sibling — its claim
+    // contributes nothing rather than poisoning the property
+    public void Provably_false_when_is_excluded_even_beside_an_unknown_sibling()
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Base</AssemblyName>\n  </PropertyGroup>\n  <Choose>\n    <When Condition=\"'$(Configuration)' == 'Debug'\">\n      <PropertyGroup>\n        <PackageId>Contoso.DebugOnly</PackageId>\n      </PropertyGroup>\n    </When>\n    <When Condition=\"'$(SomeUnknown)' == 'x'\">\n      <PropertyGroup>\n        <Optimize>True</Optimize>\n      </PropertyGroup>\n    </When>\n  </Choose>\n</Project>";
+        const string workflow = "jobs:\n  build:\n    steps:\n      - run: dotnet pack src/App/App.csproj -c Release -o out";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "pack.yml", workflow);
+        WriteProject(temp.Path, "src/App/App.csproj", project);
+
+        var result = Read(temp.Path);
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Base", row.Package); // the Debug-only When cannot fire at Release, whatever the unknown sibling does
+    }
+
+    [Fact] // review 2026-11-10: a repo can call SEVERAL hinted shared workflows with different
+    // asserted configurations — deriving under only the ordinal-first call's assertion silently
+    // mis-derives the other pack. Disagreement across the matching calls is AMBIGUOUS: unknown,
+    // the conditioned identity stays sticky and the gap names the project
+    public void Disagreeing_configurations_across_matching_calls_are_ambiguous()
+    {
+        var result = ReadTwoHintedCalls(releaseLineConfiguration: "Release", debugLineConfiguration: "Debug");
+
+        Assert.Empty(result.Rows); // neither call's assertion may speak for the other
+        Assert.Contains(result.Gaps, gap => gap.Kind == "ci-hint-id-unevidenced"
+            && gap.Detail is { } detail && detail.Contains("src/Lib/Lib.csproj", StringComparison.Ordinal));
+    }
+
+    [Fact] // ...and matching calls that AGREE keep the configuration known
+    public void Agreeing_configurations_across_matching_calls_stay_known()
+    {
+        var result = ReadTwoHintedCalls(releaseLineConfiguration: "Release", debugLineConfiguration: "Release");
+
+        var row = Assert.Single(result.Rows);
+        Assert.Equal("Contoso.Scheduling.Lib", row.Package); // the Debug-conditioned branch is provably false at Release
+        Assert.DoesNotContain(result.Gaps, gap => gap.Kind == "ci-hint-id-unevidenced");
+    }
+
+    private static CiWorkflowResult ReadTwoHintedCalls(string releaseLineConfiguration, string debugLineConfiguration)
+    {
+        const string project = "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <PropertyGroup>\n    <TargetFramework>net10.0</TargetFramework>\n    <AssemblyName>Contoso.Scheduling.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n  <PropertyGroup Condition=\"'$(Configuration)' == 'Debug'\">\n    <AssemblyName>Alt.$(MSBuildProjectName)</AssemblyName>\n  </PropertyGroup>\n</Project>";
+        const string releaseLine = "org/shared-ci/.github/workflows/dotnet-release-library.yml";
+        const string debugLine = "org/shared-ci/.github/workflows/dotnet-debug-library.yml";
+        using var temp = new TempDirectory();
+        WriteWorkflow(temp.Path, "a-release.yml", "on:\n  workflow_dispatch:\njobs:\n  release:\n    uses: " + releaseLine + "@main");
+        WriteWorkflow(temp.Path, "b-debug.yml", "on:\n  workflow_dispatch:\njobs:\n  debug:\n    uses: " + debugLine + "@main");
+        WriteProject(temp.Path, "src/Lib/Lib.csproj", project);
+        var options = new ScanOptions(temp.Path, Path.Combine(temp.Path, ".tracemap"))
+        {
+            IndexCiProducers = true,
+            CiHintWorkflows = new[] { releaseLine, debugLine },
+            CiHintConfigurations = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [releaseLine] = releaseLineConfiguration,
+                [debugLine] = debugLineConfiguration
+            }
+        };
+        return CiWorkflowProducerExtractor.Read(options, [], InventProjects(temp.Path), CancellationToken.None);
+    }
+
     [Fact]
     public void Hint_sweep_gaps_unprovable_identities_and_skips_non_producers()
     {

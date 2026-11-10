@@ -14,10 +14,15 @@ public static class Program
 
     internal const long MaxCiHintsBytes = 1_048_576;
 
-    /// ci-hints.v1: { "packWorkflows": [ { "uses": "<owner>/<repo>/.github/workflows/<file>" }, ... ] }.
+    /// ci-hints.v1: { "packWorkflows": [ { "uses": "<owner>/<repo>/.github/workflows/<file>", "configuration": "<pack configuration>" }, ... ] }.
+    /// The optional 'configuration' field (0.4.10+) asserts the configuration the shared workflow
+    /// packs at — operator knowledge the scanned tree cannot carry (the shared workflow lives in
+    /// another repo); it releases configuration-conditioned identity branches for hinted repos.
     /// A malformed or misspelled hints file fails the command instead of silently disabling hints
     /// (a typo would otherwise be indistinguishable from "this estate has no hinted workflows").
-    internal static IReadOnlyList<string> ReadCiHints(string path)
+    internal sealed record CiHintEntry(string Uses, string? Configuration);
+
+    internal static IReadOnlyList<CiHintEntry> ReadCiHints(string path)
     {
         if (!File.Exists(path)) throw new ArgumentException($"--ci-hints file not found: {path}");
         if (new FileInfo(path).Length > MaxCiHintsBytes)
@@ -52,7 +57,8 @@ public static class Program
                     throw new ArgumentException("--ci-hints packWorkflows must be an ARRAY; found a single object — the PowerShell single-element collapse. Rebuild the file with the runbook census block.");
                 throw new ArgumentException($"--ci-hints packWorkflows must be an ARRAY; found {packWorkflows.ValueKind}.");
             }
-            var hints = new List<string>();
+            var hints = new List<CiHintEntry>();
+            var configurationByUses = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var entry in packWorkflows.EnumerateArray())
             {
                 if (entry.ValueKind != System.Text.Json.JsonValueKind.Object)
@@ -65,7 +71,24 @@ public static class Program
                     || uses.ValueKind != System.Text.Json.JsonValueKind.String
                     || string.IsNullOrWhiteSpace(uses.GetString()))
                     throw new ArgumentException("--ci-hints packWorkflows entries must be objects with a non-empty string 'uses'.");
-                hints.Add(uses.GetString()!.Trim());
+                var usesValue = uses.GetString()!.Trim();
+                // the optional pack configuration (2026-11-09): operator assertion of the execution
+                // shape the shared workflow runs at — the only channel for knowledge the scanned
+                // tree cannot carry (the shared workflow lives in another repo). Present + non-string
+                // or blank = typed refusal; two entries asserting DIFFERENT configurations for the
+                // same uses: is a contradiction, never a last-wins.
+                string? configuration = null;
+                if (entry.TryGetProperty("configuration", out var configurationElement))
+                {
+                    if (configurationElement.ValueKind != System.Text.Json.JsonValueKind.String
+                        || string.IsNullOrWhiteSpace(configurationElement.GetString()))
+                        throw new ArgumentException("--ci-hints packWorkflows entry 'configuration' must be a non-empty string (the pack configuration the shared workflow runs at, e.g. \"Release\").");
+                    configuration = configurationElement.GetString()!.Trim();
+                    if (configurationByUses.TryGetValue(usesValue, out var existing) && !existing.Equals(configuration, StringComparison.OrdinalIgnoreCase))
+                        throw new ArgumentException($"--ci-hints packWorkflows has two entries for '{usesValue}' asserting different configurations ('{existing}' vs '{configuration}') — a contradiction; assert one configuration per workflow.");
+                    configurationByUses[usesValue] = configuration;
+                }
+                hints.Add(new CiHintEntry(usesValue, configuration));
             }
             return hints;
         }
@@ -578,6 +601,9 @@ public static class TraceMapCommand
             IndexDepsJson = values.HasFlag("--index-deps-json"),
             IndexCiProducers = values.HasFlag("--index-ci-producers"),
             CiHintWorkflows = ReadCiHintsOption(values),
+            CiHintConfigurations = ReadCiHintsEntries(values)?.Where(entry => entry.Configuration is not null)
+                .GroupBy(entry => entry.Uses, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First().Configuration!, StringComparer.Ordinal),
             WebFormsVbImportContextPath = values.GetValueOrDefault("--webforms-vb-import-context"),
             VisualBasicCompilationContextPath = values.GetValueOrDefault("--vb-compilation-context")
         };
@@ -2625,6 +2651,12 @@ public static class TraceMapCommand
 
     private static IReadOnlyList<string>? ReadCiHintsOption(ParsedOptions values)
     {
+        var entries = ReadCiHintsEntries(values);
+        return entries?.Select(entry => entry.Uses).ToArray();
+    }
+
+    private static IReadOnlyList<Program.CiHintEntry>? ReadCiHintsEntries(ParsedOptions values)
+    {
         if (!values.TryGetValue("--ci-hints", out var raw) || raw is not { } path) return null;
         // Hints are inputs to the CI producer lane only; accepting them with the lane off would
         // silently ignore an operator assertion.
@@ -3104,7 +3136,7 @@ public static class TraceMapCommand
                                        Map one IIS application mount for root-relative WebForms script includes.
               --index-deps-json        Read existing bin/**/*.deps.json as stale-qualified build-output evidence; does not build.
               --index-ci-producers     Read .github/workflows/*.yml|*.yaml dotnet pack definitions as ci-defined producer evidence.
-              --ci-hints <file>         Operator hints JSON (ci-hints.v1: packWorkflows[].uses) — a job-level reusable-workflow call to a hinted workflow means this repo publishes; unclaimed SDK projects become ci producers (derived ids).
+              --ci-hints <file>         Operator hints JSON (ci-hints.v1: packWorkflows[].uses, optional per-entry "configuration": the pack configuration the shared workflow runs at — operator knowledge the scanned tree cannot carry; 0.4.10 releases configuration-conditioned identity branches under it) — a job-level reusable-workflow call to a hinted workflow means this repo publishes; unclaimed SDK projects become ci producers (derived ids).
               --restore                Run dotnet restore for selected solution/project targets before semantic load.
               --binlog <path>          Explicit local MSBuild binary log to ingest offline. Repeatable; never discovered.
               --binlog-commit-sha <sha>
