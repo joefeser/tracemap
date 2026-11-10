@@ -15,6 +15,9 @@ TraceMap can also combine multiple indexes into one provenance-preserving SQLite
 Start here:
 
 - [Collection workspace](docs/WORKSPACE_GETTING_STARTED.md): configure source repositories once, verify, then collect and report; links to compiled Web Forms publication and offline SQL guides.
+- [Human evidence review worksheet](docs/HUMAN_EVIDENCE_REVIEW.md) for a printable review of one conversion question.
+- [Evidence discovery runbook](docs/EVIDENCE_DISCOVERY_RUNBOOK.md) for tracing a claim and recording the first missing link.
+- [SQLite queries and report commands](docs/SQLITE_REVIEW_RUNBOOK.md) for reviewing a retained index and rebuilding reports and JSON.
 - [Product requirements](docs/PRD.md)
 - [Acceptance plan](docs/ACCEPTANCE.md)
 - [Validation guide](docs/VALIDATION.md)

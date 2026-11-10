@@ -4,6 +4,8 @@ This workflow gives an authorized Claude Code session the retained TraceMap
 evidence before asking it to assess a legacy Web Forms conversion. It does not
 make Claude output scanner evidence and does not permit source changes.
 
+For a single conversion question, use the [retained evidence discovery runbook and copyable prompt](EVIDENCE_DISCOVERY_RUNBOOK.md).
+
 ## Choose the allowed inputs
 
 Use the private application workbench only inside the authorized environment.
