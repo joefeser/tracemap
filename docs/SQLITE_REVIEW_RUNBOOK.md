@@ -1,5 +1,7 @@
 # Review a conversion question from a TraceMap index
 
+For a paper review, print the [human evidence review worksheet](HUMAN_EVIDENCE_REVIEW.md).
+
 Give the reviewer three things: the completed run's `START-HERE.md` (or scan manifest), its SQLite file, and one question such as “Where does the update text enter the wrapper?” The database here is TraceMap's local evidence index. An application database connection is unnecessary.
 
 ## Start with an existing run

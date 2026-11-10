@@ -1,5 +1,7 @@
 # Investigate one conversion question from a completed TraceMap run
 
+For a paper review, print the [human evidence review worksheet](HUMAN_EVIDENCE_REVIEW.md).
+
 Start with the completed run folder and a question about one behavior. For example, “Which handler receives this button's request?” or “Which command receives the SQL assembled here?” A human or an agent can follow the same steps.
 
 ## 1. Read the human handoff

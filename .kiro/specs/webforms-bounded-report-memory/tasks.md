@@ -1,5 +1,7 @@
 # Web Forms bounded report memory
 
+The historical one-run diagnostic prompts were retired. For a new investigation, use the [retained evidence discovery runbook](../../../docs/EVIDENCE_DISCOVERY_RUNBOOK.md) and its public control queries.
+
 - [x] Replace manual investigation replay with a public local CLI operator regression workflow (2026-10-01 follow-up; native UI clicks are not covered).
   - [x] Exercise source plus compiled website, separately scanned provider DLL, combine and report through public command entry points.
   - [x] Compare attached-provider, separate-provider, DLL-only and reversed-input routes; retain negative missing-provider, cap, Fill-only, repeatability and scope tests.
