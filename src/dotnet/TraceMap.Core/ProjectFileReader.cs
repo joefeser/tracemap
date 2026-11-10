@@ -377,13 +377,27 @@ public static class ProjectFileReader
             if (t.Contains("$(")) return null;
             return t;
         }
+        // MSBuild compares the EXPANDED FULL strings, so operands with DIFFERENT segment counts
+        // are decided by their separators, never by padding: padding the shorter side with empty
+        // segments made 'Release' == 'Release|' provably TRUE (and its != provably false),
+        // crowning a branch MSBuild never fires (review 2026-11-10). The provable rule: a known
+        // segment never contains '|' (literals are split on it; a known configuration is
+        // identifier-shaped), so a FULLY KNOWN shorter side has exactly its literal separators —
+        // strictly fewer than the longer side carries, whatever its sticky segments expand to.
+        // The strings can never be equal: == is provably false, != provably true.
+        var differentShapes = leftSegments.Length != rightSegments.Length;
+        if (differentShapes)
+        {
+            var shorter = leftSegments.Length < rightSegments.Length ? leftSegments : rightSegments;
+            if (shorter.All(segment => Substitute(segment) is not null)) return invert;
+        }
         // MSBuild configuration comparisons are case-insensitive.
         var result = true;
         var seenSticky = false;
-        for (var i = 0; i < Math.Max(leftSegments.Length, rightSegments.Length); i++)
+        for (var i = 0; i < Math.Min(leftSegments.Length, rightSegments.Length); i++)
         {
-            var l = i < leftSegments.Length ? Substitute(leftSegments[i]) : "";
-            var r = i < rightSegments.Length ? Substitute(rightSegments[i]) : "";
+            var l = Substitute(leftSegments[i]);
+            var r = Substitute(rightSegments[i]);
             if (l is null || r is null)
             {
                 // One side is a known literal, the other sticky: if the KNOWN segments at this
@@ -405,6 +419,9 @@ public static class ProjectFileReader
             }
             if (!string.Equals(l, r, StringComparison.OrdinalIgnoreCase)) { result = false; break; }
         }
+        // different shapes with no contradiction among the shared positions: the shorter side
+        // carries a sticky segment that could expand to supply the missing separators — sticky
+        if (result && differentShapes) return null;
         if (result && seenSticky) return null; // equality held so far but a sticky segment never resolved
         return invert ? !result : result;
     }
@@ -580,52 +597,54 @@ public static class ProjectFileReader
         IEnumerable<BodyIdentityClaim> BodyClaimsOf(string property) =>
             property == "PackageId" ? packageIdClaims : assemblyNameClaims;
         // ---- Choose resolution FIRST, across ALL properties (review round-5, the structure pass;
-        // round-5b: IDENTITY-RELEVANT Chooses only + full nested-path matching) ----
+        // round-5b: IDENTITY-RELEVANT Chooses only + full nested-path matching; 2026-11-10:
+        // per-BRANCH fire state, stickiness scoped per property) ----
         // A Choose fires EXACTLY ONE branch: the FIRST When whose conditions provably hold under
         // the known configuration (document order); an Otherwise fires only when no When did. A
         // branch that assigns NO identity still FIRES and suppresses its siblings (the
         // Base/When#1-Optimize/When#2-Other shape: the identity stays Base — filtering branches by
-        // property before selection crowned a When MSBuild never fired). An unevaluable branch
-        // condition makes which branch fires unknowable — sticky. Chooses that assign no identity
-        // property anywhere (Optimize-only shapes) are IDENTITY-IRRELEVANT: skipped, never
-        // blocking a provable head (review round-5b: an unrelated unknown Choose must not strip a
-        // previously-working producer).
+        // property before selection crowned a When MSBuild never fired). Chooses that assign no
+        // identity property anywhere (Optimize-only shapes) are IDENTITY-IRRELEVANT: skipped,
+        // never blocking a provable head (review round-5b: an unrelated unknown Choose must not
+        // strip a previously-working producer).
+        // Under three-valued conditions each branch has its OWN fire state: it DEFINITELY fires
+        // when its condition provably holds and every earlier When is provably false; it
+        // DEFINITELY does not fire when its condition is provably false or an earlier When
+        // provably holds (whichever earlier branch wins, a later one cannot); otherwise whether
+        // it fires is unknowable. There is NO global refusal: an unknowable branch is sticky only
+        // for the properties whose claims sit on it — enforced in the claim walk below. A Choose
+        // that only ever assigns AssemblyName must not invalidate a proven PackageId (the chain
+        // head wherever assigned), and a claim on a branch that definitely did not fire
+        // contributes nothing however uncertain its siblings are.
         var identityChooseNodes = allBodyClaims
             .Where(c2 => c2.InChooseBranch && c2.ChoosePath is not null)
             .SelectMany(c2 => c2.ChoosePath!)
             .Select(pair => pair.ChooseNode)
             .Distinct()
             .ToList();
-        var chooseFiredBranch = new Dictionary<System.Xml.Linq.XElement, int>();
-        var chooseSticky = false;
+        var branchFireState = new Dictionary<System.Xml.Linq.XElement, bool?>(); // true = fired, false = not fired, null = unknowable
         foreach (var chooseNode in identityChooseNodes)
         {
-            var branches = chooseNode.Elements()
-                .Where(child => child.Name.LocalName is "When" or "Otherwise")
-                .Select((child, index) => (Child: child, Index: index, IsOtherwise: child.Name.LocalName == "Otherwise"))
-                .ToList();
-            var firedIndex = -1;
-            var sawLiveWhen = false;
-            foreach (var branch in branches)
+            var sawLiveWhen = false;    // an earlier When provably holds: no later branch can fire
+            var sawUnknownWhen = false; // an earlier When is unevaluable: a later branch is uncertain at best
+            foreach (var branch in chooseNode.Elements().Where(child => child.Name.LocalName is "When" or "Otherwise"))
             {
-                if (branch.IsOtherwise)
-                {
-                    if (!sawLiveWhen) firedIndex = branch.Index; // Otherwise fires when no When matched
-                    break;
-                }
-                var conditionText = branch.Child.Attribute("Condition")?.Value;
                 bool? verdict;
-                if (conditionText is null) verdict = true;
-                else verdict = EvaluateBoundedConfigurationCondition(conditionText, knownConfiguration);
-                if (verdict is null) { chooseSticky = true; break; } // which branch fires is unknowable
-                if (verdict == true) { firedIndex = branch.Index; sawLiveWhen = true; break; } // the FIRST live When fires; later Whens never evaluate
-                // false: not the fired branch — next When
+                if (branch.Name.LocalName == "Otherwise") verdict = true; // no condition: fires exactly when no When did
+                else
+                {
+                    var conditionText = branch.Attribute("Condition")?.Value;
+                    verdict = conditionText is null ? true : EvaluateBoundedConfigurationCondition(conditionText, knownConfiguration);
+                }
+                bool? fireState;
+                if (sawLiveWhen || verdict == false) fireState = false;
+                else if (verdict == true && !sawUnknownWhen) fireState = true; // the FIRST live When fires; later Whens never evaluate
+                else fireState = null;
+                branchFireState[branch] = fireState;
+                if (verdict == true) sawLiveWhen = true;
+                else if (verdict is null) sawUnknownWhen = true;
             }
-            if (chooseSticky) break;
-            chooseFiredBranch[chooseNode] = firedIndex;
         }
-        if (chooseSticky)
-            return new(CiDerivedIdentityDecisions.DeclaresIdentity, null);
         string? winner = null; string? winnerSource = null;
         foreach (var property in new[] { "PackageId", "AssemblyName" })
         {
@@ -646,28 +665,30 @@ public static class ProjectFileReader
             if (!propertySticky)
                 foreach (var claim in BodyClaimsOf(property))
                 {
-                    // Choose claims apply ONLY when EVERY enclosing Choose fired the claim's own
-                    // branch (review round-5b: nested Chooses — the claim's ChoosePath lists every
-                    // enclosing pair nearest-first; one mismatched pair = the claim's position was
-                    // never evaluated by MSBuild). The claim's OWN condition texts still gate it
-                    // even inside a fired branch (review round-5b: a fired When containing a
-                    // conditioned AssemblyName does not bypass that inner condition). Non-fired
+                    // Choose claims apply ONLY when EVERY enclosing branch fired (review round-5b:
+                    // nested Chooses — the claim's ChoosePath lists every enclosing pair
+                    // nearest-first). A branch that DEFINITELY did not fire excludes the claim
+                    // outright — MSBuild never evaluates the position, however uncertain the other
+                    // enclosing Chooses are — so an exclusion anywhere on the path wins. Otherwise
+                    // an unknowable branch leaves the claim's applicability unknowable: sticky for
+                    // THIS property only (review 2026-11-10). The claim's OWN condition texts still
+                    // gate it even inside a fired branch (review round-5b: a fired When containing
+                    // a conditioned AssemblyName does not bypass that inner condition). Non-fired
                     // claims contribute nothing; a LATER plain PropertyGroup assignment still
                     // last-wins over the Choose's evaluation-time result.
                     if (claim.InChooseBranch)
                     {
                         var pathApplies = true;
+                        var pathSticky = false;
                         if (claim.ChoosePath is not null)
-                            foreach (var (chooseNode, branchNode) in claim.ChoosePath)
+                            foreach (var (_, branchNode) in claim.ChoosePath)
                             {
-                                if (!chooseFiredBranch.TryGetValue(chooseNode, out var firedIndex)) { pathApplies = false; break; }
-                                var branchIsFired = chooseNode.Elements()
-                                    .Where(child => child.Name.LocalName is "When" or "Otherwise")
-                                    .ElementAtOrDefault(firedIndex) is { } firedChild
-                                    && ReferenceEquals(firedChild, branchNode);
-                                if (!branchIsFired) { pathApplies = false; break; }
+                                branchFireState.TryGetValue(branchNode, out var fireState); // unrecorded = unknowable, never a silent skip
+                                if (fireState == false) { pathApplies = false; break; }
+                                if (fireState is null) pathSticky = true;
                             }
-                        if (!pathApplies) continue;
+                        if (!pathApplies) continue; // definitely never evaluated: contributes nothing
+                        if (pathSticky) { propertySticky = true; break; }
                         // the fired branch carries the claim: its OWN condition texts still gate it
                         bool? innerVerdict;
                         if (claim.ConditionTexts is not { Count: > 0 }) innerVerdict = true;

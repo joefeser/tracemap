@@ -216,20 +216,31 @@ internal static class CiWorkflowProducerExtractor
                     .ToList(),
                 StringComparer.Ordinal);
         context.Observed.Add("ci-hints\0" + string.Join('\0', hints));
-        var call = jobCalls
+        var matchingCalls = jobCalls
+            .Where(candidate => candidate.Uses.Contains(".github/workflows/", StringComparison.Ordinal)
+                && hints.Any(hint => HintMatches(NormalizeUses(candidate.Uses), hint)))
             .OrderBy(candidate => candidate.WorkflowPath, StringComparer.Ordinal)
             .ThenBy(candidate => candidate.Line)
-            .FirstOrDefault(candidate => candidate.Uses.Contains(".github/workflows/", StringComparison.Ordinal)
-                && hints.Any(hint => HintMatches(NormalizeUses(candidate.Uses), hint)));
-        if (call is null) return;
-        // ALL matching hints speak: an aliased call can match several hints (review 2026-11-10) —
-        // a single configuration wins; two distinct configurations for one call are AMBIGUOUS
-        // (unknown — the stickiness stands) rather than ordinal-first-wins.
-        var assertedConfigurations = configByHint?
-            .Where(kv => HintMatches(NormalizeUses(call.Uses), kv.Key))
-            .SelectMany(kv => kv.Value).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            .ToArray();
+        if (matchingCalls.Length == 0) return;
+        var call = matchingCalls[0]; // the provenance witness: deterministic ordinal-first
+        // ALL matching hints speak, across EVERY matching call: an aliased call can match several
+        // hints, and a repo can call several hinted shared workflows (a Release line and a Debug
+        // line) — deriving under only the ordinal-first call's assertion silently mis-derives the
+        // other pack (review 2026-11-10). A single configuration wins; two distinct
+        // configurations anywhere across the matching calls are AMBIGUOUS (unknown — the
+        // stickiness stands and the gap names the project) rather than ordinal-first-wins.
+        var assertedConfigurations = configByHint is null
+            ? Array.Empty<string>()
+            : matchingCalls
+                .SelectMany(matched => configByHint
+                    .Where(kv => HintMatches(NormalizeUses(matched.Uses), kv.Key))
+                    .SelectMany(kv => kv.Value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         var sweepConfiguration = assertedConfigurations is { Length: 1 } ? assertedConfigurations[0] : null;
-        context.Observed.Add($"ci-hint-call\0{call.WorkflowPath}\0{call.Line}\0{call.Uses}");
+        foreach (var matched in matchingCalls) // every matching call shapes the derivation: all ride the digest
+            context.Observed.Add($"ci-hint-call\0{matched.WorkflowPath}\0{matched.Line}\0{matched.Uses}");
         // Keep independent project-file claims. Within the CI lane a direct pack takes precedence.
         var directlyPackedPaths = new HashSet<string>(comparer);
         var unattributedPackages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -1299,6 +1310,18 @@ internal static class CiWorkflowProducerExtractor
             string? packageVersion = null;
             string? plainVersion = null;
             string? configuration = null; // the known pack configuration — configuration-aware identity (2026-11-09)
+            // ONE command asserting TWO different configurations (-c Release /p:Configuration=Debug)
+            // is AMBIGUOUS: which assignment the build honors is not provable from the command
+            // text, so the configuration is unknown — the conditioned-identity stickiness stands
+            // rather than token order crowning a branch (review 2026-11-10; the same rule the
+            // hint sweep applies to disagreeing assertions). Repeating ONE value is not a conflict.
+            var configurationAmbiguous = false;
+            void AssertConfiguration(string value)
+            {
+                if (configuration is not null && !string.Equals(configuration.Trim(), value.Trim(), StringComparison.OrdinalIgnoreCase))
+                    configurationAmbiguous = true;
+                configuration = value;
+            }
             string? target = null;
             var unresolvableTarget = false;
             for (var i = 2; i < tokens.Count; i++)
@@ -1314,7 +1337,7 @@ internal static class CiWorkflowProducerExtractor
                     if (name.Equals("PackageId", StringComparison.OrdinalIgnoreCase)) packageId = assignedValue;
                     else if (name.Equals("PackageVersion", StringComparison.OrdinalIgnoreCase)) packageVersion = assignedValue;
                     else if (name.Equals("Version", StringComparison.OrdinalIgnoreCase)) plainVersion = assignedValue;
-                    else if (name.Equals("Configuration", StringComparison.OrdinalIgnoreCase)) configuration = assignedValue;
+                    else if (name.Equals("Configuration", StringComparison.OrdinalIgnoreCase)) AssertConfiguration(assignedValue);
                     continue;
                 }
                 if (token.StartsWith('-'))
@@ -1327,12 +1350,12 @@ internal static class CiWorkflowProducerExtractor
                     {
                         i++; // the value is the next token
                         if (i < tokens.Count && (flag.Equals("-c", StringComparison.OrdinalIgnoreCase) || flag.Equals("--configuration", StringComparison.OrdinalIgnoreCase)))
-                            configuration = tokens[i];
+                            AssertConfiguration(tokens[i]);
                         continue;
                     }
                     if ((flag.Equals("-c", StringComparison.OrdinalIgnoreCase) || flag.Equals("--configuration", StringComparison.OrdinalIgnoreCase))
                         && token.Length > flag.Length + 1)
-                        configuration = token[(flag.Length + 1)..]; // the ':'-attached form: -c:Release
+                        AssertConfiguration(token[(flag.Length + 1)..]); // the ':'-attached form: -c:Release
                     continue;
                 }
                 if (target is null && unresolvableTarget == false && IsProjectOrSolutionPath(token))
@@ -1342,7 +1365,8 @@ internal static class CiWorkflowProducerExtractor
             // expressions (${{ }}), env references ($VAR), percent-variables (%VAR% — shell:cmd
             // expands them, review 2026-11-10), or anything non-identifier-shaped is UNKNOWABLE —
             // recorded as null so the conditioned-identity stickiness stands instead of a guessed match.
-            var knownConfiguration = string.IsNullOrWhiteSpace(configuration)
+            var knownConfiguration = configurationAmbiguous
+                || string.IsNullOrWhiteSpace(configuration)
                 || !System.Text.RegularExpressions.Regex.IsMatch(configuration.Trim(), "^[A-Za-z0-9][A-Za-z0-9._-]*$")
                 ? null : configuration.Trim();
             yield return new PackOccurrence(workflowPath, packageId, packageVersion ?? plainVersion,
