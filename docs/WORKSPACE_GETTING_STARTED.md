@@ -6,6 +6,8 @@ walkthrough covers **source repositories**. To include an existing compiled
 publication, use [the compiled workspace guide](WORKSPACE_COMPILED_GETTING_STARTED.md).
 SQL definitions remain a separate evidence channel.
 
+Already have a completed run? Follow the [evidence discovery runbook](EVIDENCE_DISCOVERY_RUNBOOK.md) to investigate one conversion question, or use the [SQLite and report recipes](SQLITE_REVIEW_RUNBOOK.md) to regenerate review artifacts.
+
 ## 1. Prepare TraceMap
 
 From the TraceMap checkout, with PowerShell 7 and the SDK required by the current
