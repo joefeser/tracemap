@@ -986,6 +986,99 @@ public sealed class IlSqlClosureShapeTests
         Assert.Contains(census.ForkCensus, entry => entry.Contains("/1 x", StringComparison.Ordinal)); // the state guards
     }
 
+    [Fact]
+    public void Boxed_false_branches_as_non_null()
+    {
+        byte[]? boxedRewrite = null;
+        var boxedBodies = IlSqlLifecycleExtractorTests.Bodies("csharp", bytes =>
+        {
+            var rewritten = RewriteBoxedFalseBranch(bytes, boxedFalse: true);
+            if (!ReferenceEquals(bytes, rewritten)) boxedRewrite = rewritten;
+            return rewritten;
+        });
+        Assert.NotNull(boxedRewrite);
+        AssertEmptyDataSetFallThrough(boxedRewrite!, boxedFalse: true);
+
+        var producerCompletions = Completing(boxedBodies, "ClosureBoxedTypeProduce");
+        Assert.Contains(producerCompletions, completion => completion.Entry is
+            { Kind: "dataset-return", Commands.Count: 1 } && completion.Executions.Count == 1);
+
+        // A null reference does not branch. The same original producer entry is
+        // retained as the branch destination, while fall-through returns a new,
+        // empty DataSet; extraction therefore sees no SQL execution on this path.
+        byte[]? nullRewrite = null;
+        var nullBodies = IlSqlLifecycleExtractorTests.Bodies("csharp", bytes =>
+        {
+            var rewritten = RewriteBoxedFalseBranch(bytes, boxedFalse: false);
+            if (!ReferenceEquals(bytes, rewritten)) nullRewrite = rewritten;
+            return rewritten;
+        });
+        Assert.NotNull(nullRewrite);
+        AssertEmptyDataSetFallThrough(nullRewrite!, boxedFalse: false);
+        var fallThrough = Extract(nullBodies, "ClosureBoxedTypeProduce");
+        Assert.Equal("lifecycle-entry-no-sql-execution", Assert.Single(fallThrough.Gaps));
+    }
+
+    private static byte[] RewriteBoxedFalseBranch(byte[] bytes, bool boxedFalse)
+    {
+        using var input = new System.IO.MemoryStream(bytes);
+        using var assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(input);
+        var method = assembly.MainModule.Types.SelectMany(type => type.Methods)
+            .SingleOrDefault(candidate => candidate.Name == "ClosureBoxedTypeProduce");
+        if (method is null) return bytes;
+
+        var firstProducerInstruction = method.Body.Instructions.First();
+        var dataSetConstructor = method.Body.Instructions
+            .Select(instruction => instruction.Operand as Mono.Cecil.MethodReference)
+            .FirstOrDefault(candidate => candidate is
+                { Name: ".ctor", HasThis: true, Parameters.Count: 0 }
+                && candidate.DeclaringType.FullName == "System.Data.DataSet");
+        Assert.NotNull(dataSetConstructor);
+
+        var il = method.Body.GetILProcessor();
+        var branch = il.Create(Mono.Cecil.Cil.OpCodes.Brtrue, firstProducerInstruction);
+        if (boxedFalse)
+        {
+            il.InsertBefore(firstProducerInstruction, il.Create(Mono.Cecil.Cil.OpCodes.Ldc_I4_0));
+            il.InsertBefore(firstProducerInstruction, il.Create(Mono.Cecil.Cil.OpCodes.Box, assembly.MainModule.TypeSystem.Boolean));
+        }
+        else
+        {
+            il.InsertBefore(firstProducerInstruction, il.Create(Mono.Cecil.Cil.OpCodes.Ldnull));
+        }
+        il.InsertBefore(firstProducerInstruction, branch);
+        il.InsertBefore(firstProducerInstruction, il.Create(Mono.Cecil.Cil.OpCodes.Newobj, dataSetConstructor!));
+        il.InsertBefore(firstProducerInstruction, il.Create(Mono.Cecil.Cil.OpCodes.Ret));
+
+        using var output = new System.IO.MemoryStream();
+        assembly.Write(output);
+        return output.ToArray();
+    }
+
+    private static void AssertEmptyDataSetFallThrough(byte[] bytes, bool boxedFalse)
+    {
+        using var input = new System.IO.MemoryStream(bytes);
+        using var assembly = Mono.Cecil.AssemblyDefinition.ReadAssembly(input);
+        var method = assembly.MainModule.Types.SelectMany(type => type.Methods)
+            .Single(candidate => candidate.Name == "ClosureBoxedTypeProduce");
+        var instructions = method.Body.Instructions;
+        var branchIndex = boxedFalse ? 2 : 1;
+        Assert.Equal(boxedFalse ? Mono.Cecil.Cil.OpCodes.Ldc_I4_0 : Mono.Cecil.Cil.OpCodes.Ldnull,
+            instructions[0].OpCode);
+        if (boxedFalse)
+        {
+            Assert.Equal(Mono.Cecil.Cil.OpCodes.Box, instructions[1].OpCode);
+            Assert.Equal("System.Boolean", ((Mono.Cecil.TypeReference)instructions[1].Operand).FullName);
+        }
+        Assert.Equal(Mono.Cecil.Cil.OpCodes.Brtrue, instructions[branchIndex].OpCode);
+        Assert.Same(instructions[branchIndex + 3], instructions[branchIndex + 2].Next);
+        Assert.Equal(Mono.Cecil.Cil.OpCodes.Newobj, instructions[branchIndex + 1].OpCode);
+        var constructor = Assert.IsAssignableFrom<Mono.Cecil.MethodReference>(instructions[branchIndex + 1].Operand);
+        Assert.Equal("System.Data.DataSet", constructor.DeclaringType.FullName);
+        Assert.Equal(Mono.Cecil.Cil.OpCodes.Ret, instructions[branchIndex + 2].OpCode);
+        Assert.Same(instructions[branchIndex + 3], instructions[branchIndex].Operand);
+    }
+
     [Theory]
     [InlineData("csharp")]
     [InlineData("vb")]
