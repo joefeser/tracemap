@@ -1256,7 +1256,7 @@ internal static partial class IlSqlLifecycleExtractor
                             throw new Refusal("lifecycle-connection-state-dependent-control", MetadataFailure(body, "connection-state"));
                         }
                         var truth = value.Kind == "object" || value.Kind == "int" && Number(value) != 0
-                            || value.Kind == "boxed-bool" && value.Text == "1"
+                            || value.Kind == "boxed-bool"
                             || value.Kind == "int-nonzero"
                             || value.Kind is "loop-test" or "collection-test" && value.Text == "1";
                         if (value.Kind is not ("object" or "int" or "null" or "boxed-bool" or "int-nonzero" or "loop-test" or "collection-test")) throw new Refusal("lifecycle-guard-unresolved");
