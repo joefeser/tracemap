@@ -601,7 +601,9 @@ python3 scripts/test_validate_adapter_artifacts.py
 
 ## WITS-reviewed merges
 
-Wait for all GitHub checks to pass and ACK to report `merge_ready` on the PR head. The owner signs the reviewed head, base and check evidence with a passkey in WITS. Immediately before merging, the laptop runner reads those values again and stops if they differ. It passes the approved head SHA to `gh pr merge --merge --match-head-commit` so GitHub also rejects a head change during dispatch. A changed head requires fresh ACK evidence and a new passkey approval.
+Wait for all GitHub checks to pass and ACK to report `merge_ready` on the PR head. The owner signs the reviewed head SHA, base SHA and check evidence with a passkey in WITS. Immediately before dispatch, the laptop runner rereads all three. If the head, base or checks have changed, it stops. Capture fresh evidence, rerun ACK and obtain a new passkey approval before trying again.
+
+GitHub enforces the approved head SHA with `gh pr merge --merge --match-head-commit`. The base and checks can still change between the laptop’s final read and GitHub creating the merge commit. The owner accepts that window for this workflow. After the merge, WITS checks both parents and rereads the checks so it can flag a different base or a non-green result for investigation. This detects a discrepancy after the commit already exists.
 
 Verify the merge by comparing the commit in the WITS receipt with GitHub’s merge commit and its parents with the approved base and head. If the runner loses contact after dispatch, it reads the existing GitHub merge on recovery and reconciles the receipt. An open PR with uncertain dispatch or a mismatched receipt requires owner investigation.
 
