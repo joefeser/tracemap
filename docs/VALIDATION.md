@@ -599,6 +599,10 @@ python3 scripts/test_validate_adapter_artifacts.py
 ./scripts/check-private-paths.sh
 ```
 
+## WITS-reviewed merges
+
+For a PR routed through WITS, wait for all GitHub checks to pass and ACK to report `merge_ready` on the reviewed head. The owner approves the PR with a passkey in WITS. The laptop runner checks the head, base and check results again before merging and records the merge commit in WITS.
+
 ## Pull Request Test Lane (change-impact v1)
 
 The `.NET adapter` job in `adapter-validation.yml` selects its lane from the pull
