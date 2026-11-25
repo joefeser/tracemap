@@ -216,14 +216,33 @@ internal static class WebFormsReviewReportExecution
             W("<p>Recovered local report bundle: original run remains failed. This is not parity or runtime proof. <a href=\"report-recovery.local.json\">Recovery provenance</a></p><p>For bounded machine review, use <code>tracemap webforms-review query-recovery --bundle &lt;this recovery bundle&gt;</code>. Do not load the entire handoff to inspect one page or chain.</p>");
         else W("<p>For bounded machine review, use <code>tracemap webforms-review query --run &lt;this durable run root&gt;</code>. The checkpoint owns the read-only evidence index; do not load the entire handoff to inspect one page or chain.</p>");
         W("<p>Call accounting: P = retained chain-associated call projections; F = distinct retained fact/scan/commit identities; S = retained normalized site identities. Missing site IDs are reported separately, not guessed.</p><table><thead><tr><th>Page / controls</th><th>Calls P / F / S</th><th>Retained page-chain verdicts</th></tr></thead><tbody>");
-        foreach (var surface in handoff.Packet.Surfaces)
+        var pages = handoff.Packet.Surfaces
+            .Select(surface =>
+            {
+                var normalizedPath = surface.Evidence.FilePath.Replace('\\', '/');
+                var separator = normalizedPath.LastIndexOf('/');
+                return (Surface: surface,
+                    Folder: separator < 0 ? "" : normalizedPath[..separator],
+                    Filename: normalizedPath[(separator + 1)..]);
+            })
+            .OrderBy(page => page.Folder, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(page => page.Folder, StringComparer.Ordinal)
+            .ThenBy(page => page.Filename, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(page => page.Filename, StringComparer.Ordinal);
+        foreach (var page in pages)
         {
+            var surface = page.Surface;
             var events = handoff.Packet.EventChains.Where(chain => chain.SurfaceId == surface.SurfaceId).ToArray();
             var calls = events.SelectMany(chain => chain.CallEvidence).ToArray();
             var facts = calls.Select(call => (call.Evidence.FactId, call.Evidence.ScanId, call.Evidence.CommitSha)).Distinct().Count();
             var sites = calls.Where(call => !string.IsNullOrEmpty(call.CallSiteId)).Select(call => call.CallSiteId).Distinct(StringComparer.Ordinal).Count();
             W($"<tr><td data-label=\"Page / controls\">{H(surface.Evidence.FilePath)}<br>{surface.Controls.Count} controls; {events.Length} chains<details><summary>Retained control identities</summary><ul>");
-            foreach (var control in surface.Controls) W($"<li>{H(control.DeclaredId)} ({H(control.ControlType)})</li>");
+            foreach (var control in surface.Controls
+                .OrderBy(control => control.DeclaredId, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(control => control.DeclaredId, StringComparer.Ordinal)
+                .ThenBy(control => control.ControlType, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(control => control.ControlType, StringComparer.Ordinal))
+                W($"<li>{H(control.DeclaredId)} ({H(control.ControlType)})</li>");
             W($"</ul></details></td><td data-label=\"Calls P / F / S\">{calls.Length} / {facts} / {sites}<br>{calls.Count(call => string.IsNullOrEmpty(call.CallSiteId))} missing site IDs</td><td data-label=\"Retained page-chain verdicts\"><ul>");
             foreach (var chain in events) W($"<li>{H(chain.HandlerSymbol ?? chain.HandlerResolution)}: {H(chain.Classification)}<br>{H(string.Join(", ", chain.RuleIds))}; {H(string.Join(", ", chain.EvidenceTiers))}</li>");
             W("</ul></td></tr>");

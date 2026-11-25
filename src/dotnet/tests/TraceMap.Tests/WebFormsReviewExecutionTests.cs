@@ -178,6 +178,57 @@ internal static class WebFormsReviewExecutionShared
 public sealed class WebFormsReviewExecutionTests
 {
     [Fact]
+    public async Task Render_sorts_pages_by_normalized_folder_and_filename_and_controls_by_identifier()
+    {
+        using var fixture = new Fixture();
+        fixture.AddPublicEventFixture();
+        await fixture.Preflight();
+        Assert.Equal(0, await fixture.Execute("run", Scan));
+        Assert.Equal(0, await fixture.ExecuteReports("resume", WebFormsReviewReportExecution.WriteAsync));
+
+        var checkpoint = fixture.LastCheckpoint();
+        var reportPath = Path.Combine(fixture.Run, checkpoint.Reports!.ReportAttempt);
+        var handoff = JsonSerializer.Deserialize<NativeWebFormsReviewHandoff>(
+            File.ReadAllText(Path.Combine(reportPath, "handoff.local.json")), JsonOptions)!;
+        var original = handoff.Packet.Surfaces.First(surface => surface.Controls.Count > 0);
+        var controls = new[]
+        {
+            original.Controls[0] with { DeclaredId = "z" },
+            original.Controls[0] with { DeclaredId = "a" },
+            original.Controls[0] with { DeclaredId = "A" }
+        };
+        var shuffledPaths = new[] { "folder/b.aspx", "z.aspx", "Folder\\a.aspx", "A.aspx", "Folder/A.aspx" };
+        var surfaces = shuffledPaths.Select(path => original with
+        {
+            Evidence = original.Evidence with { FilePath = path },
+            Controls = controls
+        }).ToArray();
+        var renderedHandoff = handoff with
+        {
+            Packet = handoff.Packet with { Surfaces = surfaces }
+        };
+        using var writer = new StringWriter();
+        WebFormsReviewReportExecution.Render(writer, renderedHandoff, 0, 0, 0, CancellationToken.None);
+        var html = writer.ToString();
+
+        var expectedPageOrder = new[] { "A.aspx", "z.aspx", "Folder/A.aspx", "Folder\\a.aspx", "folder/b.aspx" };
+        var pagePositions = expectedPageOrder.Select(path => html.IndexOf(path, StringComparison.Ordinal)).ToArray();
+        Assert.All(pagePositions, position => Assert.True(position >= 0));
+        Assert.Equal(pagePositions.Order().ToArray(), pagePositions);
+        Assert.Contains("Folder\\a.aspx", html, StringComparison.Ordinal);
+        Assert.Contains("folder/b.aspx", html, StringComparison.Ordinal);
+
+        var firstRowStart = html.IndexOf("<tr><td data-label=\"Page / controls\">A.aspx", StringComparison.Ordinal);
+        var nextRowStart = html.IndexOf("<tr><td data-label=\"Page / controls\">z.aspx", StringComparison.Ordinal);
+        Assert.True(firstRowStart >= 0);
+        Assert.True(nextRowStart > firstRowStart);
+        var firstRow = html[firstRowStart..nextRowStart];
+        var controlPositions = new[] { "<li>A (", "<li>a (", "<li>z (" }
+            .Select(identifier => firstRow.IndexOf(identifier, StringComparison.Ordinal)).ToArray();
+        Assert.All(controlPositions, position => Assert.True(position >= 0));
+        Assert.Equal(controlPositions.Order().ToArray(), controlPositions);
+    }
+    [Fact]
     public async Task Fresh_executes_one_normal_scan_and_resume_keeps_retained_evidence_unchanged()
     {
         using var fixture = new Fixture();
