@@ -110,3 +110,20 @@ test('TraceMap authorizes only the bounded exact-head Opus fallback contract', (
   assert.match(runbook, /--owner-authorized-local-review/)
   assert.match(runbook, /node "\$ACK_ROOT\/dist\/cli\.js" pr-loop/)
 })
+
+test('WITS publication opt-in substitutes only Baz and retains owner and CI gates', () => {
+  const policy = JSON.parse(readFileSync(new URL('../.agent-control/lanes/wits-publication-review.json', import.meta.url), 'utf8'))
+  assert.deepEqual(policy, {
+    version: 1,
+    repository: 'joefeser/tracemap',
+    publisher: 'wits-shopout-publisher[bot]',
+    requireVerifiedWitsPublication: true,
+    replaceReviewer: 'baz',
+    requiredReviewer: 'codex',
+    requireCleanExactHeadReview: true,
+    requireGreenChecks: true,
+    requireGitHubApproval: true,
+    requireOwnerPasskeyMerge: true,
+  })
+  assert.match(baz, /authority:\s*trusted_exact_head\b/)
+})

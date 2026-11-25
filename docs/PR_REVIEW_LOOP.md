@@ -130,3 +130,11 @@ and does not install software, call GitHub or invoke local reviewers. It covers
 pr-loop policy, not manual use of the separate request-review CLI: operators
 must still never explicitly request retired Qodo. Keep the lightweight lane-text
 tests as configuration assertions, not substitutes for consumer behavior.
+
+## WITS-published pull requests
+
+The owner authorizes a clean Codex code review of the exact head to satisfy the Baz requirement for a PR opened by the WITS publisher app with a verified WITS publication receipt. The publisher lacks a Baz seat. The trusted base records this opt-in in `.agent-control/lanes/wits-publication-review.json`.
+
+The review consumer must verify the WITS publication record independently of PR text and bind it to the GitHub repository, PR, app author, source branch, target branch, original base commit, published head and tree. A branch prefix or a digest copied into a PR description is insufficient. The consumer must verify the Codex reviewer identity and its completed, finding-free review of that same head. A head change invalidates both bindings.
+
+Apply only the Baz substitution. Keep the ordinary checks for actionable findings, unresolved threads, green CI and repository approval. Merge still requires the owner's WITS passkey decision over the current base, head and checks. Recheck eligibility immediately before dispatch. The PR introducing this policy is reviewed under the existing base policy. Consumers that cannot verify these conditions continue to use the ordinary lane.
